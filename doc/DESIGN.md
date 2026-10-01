@@ -135,17 +135,22 @@ Git repository
 │   ├── content.config.ts   可渲染内容的集合定义
 │   ├── components/
 │   │   ├── CourseTree.astro
-│   │   └── mdx/            课时可用的显式组件
-│   ├── content-model/
+│   │   └── mdx/            课时可用的显式组件（Term、CrossRef、LabRef、CodeLab）
+│   ├── content-model/      课程模型：加载、校验、导航、单元格元数据
+│   ├── integrations/       构建集成（内容校验、实验夹具产出）
 │   ├── layouts/
-│   ├── markdown/
-│   ├── runtime/
-│   ├── workers/
+│   ├── markdown/           构建期插件：标题锚点、可执行 fence 改写
+│   ├── runtime/            单元格 UI、运行时客户端、worker 协议、Python 侧运行时
+│   ├── workers/            Pyodide worker
 │   ├── styles/
 │   └── pages/
 │
-├── scripts/
-└── tests/
+├── public/
+│   ├── pyodide/            自托管运行时资产（生成物，不入版本库）
+│   └── labs/               实验夹具（构建产出）
+│
+├── scripts/                内容校验、运行时资产取回
+└── tests/                  纯 TS 单元测试
 ```
 
 文件系统按人的方便组织相关工作；身份来自稳定 ID，而不是路径。
@@ -279,8 +284,8 @@ interface ExecutableCell {
   packages?: string[];
   fixture?: string;            // SQL lab fixture ID
   editable?: boolean;
-  outputMode?: "auto" | "text" | "table";
-  expectedOutput?: string;     // optional documentation snapshot, not grading
+  /** Optional documentation snapshot of expected output. Never used for grading. */
+  expectedOutput?: string;
 }
 ```
 
@@ -318,31 +323,39 @@ session 状态只作用于当前页面运行时，页面刷新后不保留。
 
 ### 8.2 Worker 协议
 
-使用显式带版本的报文协议，例如：
+使用显式带版本的报文协议：
 
 ```ts
 type RuntimeRequest =
   | { type: "init"; requestId: string }
   | { type: "run-python"; requestId: string; cellId: string; source: string; session?: string; packages: string[] }
-  | { type: "run-sql"; requestId: string; cellId: string; source: string; session?: string; fixture?: string }
+  | { type: "run-sql"; requestId: string; cellId: string; source: string; session?: string; fixtureUrl: string; maxResultRows: number }
   | { type: "reset-session"; requestId: string; session: string };
 
 type RuntimeResponse =
-  | { type: "ready"; requestId: string }
-  | { type: "stdout"; requestId: string; chunk: string }
-  | { type: "stderr"; requestId: string; chunk: string }
+  | { type: "ready"; requestId: string; protocolVersion: number; pyodideVersion: string }
+  | { type: "stdout"; requestId: string; chunk: string; truncated?: boolean }
+  | { type: "stderr"; requestId: string; chunk: string; truncated?: boolean }
   | { type: "result"; requestId: string; value: RuntimeValue }
   | { type: "error"; requestId: string; error: RuntimeError }
   | { type: "done"; requestId: string; elapsedMs: number };
 ```
 
-不要在 UI 与 worker 代码之间传递无结构的临时对象。
+约定：
+
+- `requestId` 由 UI 侧生成，响应必须原样带回；不匹配的报文一律丢弃。
+- 每条请求最终都必须以 `done` 结束，`error` 只是结论的一部分，不是终止信号。这样"输出 + 报错 + 耗时"三者在 UI 侧总能同时拿到。
+- `ready` 表示解释器已可用，而不是"worker 已创建"：初始化失败（运行时资产缺失、无法加载）同样以 `error` + `done` 上报，UI 必须把它当作启动失败处理，否则握手永不落定。
+- SQL 的夹具以 URL 下发，由 worker 自行取用并缓存；`maxResultRows` 由页面决定，不由 worker 猜。
+- 不要在 UI 与 worker 代码之间传递无结构的临时对象。
 
 ### 8.3 Python 命名空间
 
 隔离单元格使用只含预期基线环境的全新 globals 字典执行。具名 session 每个 session 维护一个 globals 字典。
 
 这既避免了朴素嵌入式 REPL"所有东西永远共享 `__main__`"的意外行为，又允许讲授有状态工作流。
+
+运行时的辅助代码位于自己的模块命名空间，单元格代码不在其中执行，因此既读不到也遮蔽不了运行时自身的名字。JS 侧只暴露一个入口函数。
 
 ### 8.4 包加载
 
@@ -354,6 +367,23 @@ type RuntimeResponse =
 - 返回明确的"该包在本课程运行时不可用"错误。
 
 不要承诺任意 PyPI 或网络安装。可复现性比包的数量更重要。
+
+### 8.5 实现状态
+
+已实现：
+
+- 每个课时页一个惰性 worker，首次 Run 时创建；不含可执行单元格的页面不加载任何脚本。
+- 运行时自托管（`public/pyodide/`，由 `bun run setup:runtime` 取回），不依赖 CDN。
+- 若课时声明了可执行单元格而自托管运行时缺失，构建直接失败并给出应执行的命令，而不是产出单元格全部失效的站点。
+- 单元格默认隔离命名空间；`session="..."` 共享一个命名空间，SQL 的 session 共享一个连接。
+- Stop 与硬超时都通过终止 worker 实现；随后一次执行重建 worker，并按需重建夹具与 session。
+- 硬超时的计时从单元格开始执行算起，不包含解释器加载；加载期间 Run 已可被 Stop 中止。
+- stdout/stderr 字节上限与 SQL 结果行数上限，两者都在 UI 上显式标注已截断。
+
+尚未实现：
+
+- 空闲预取（8.1 第 2 条）。首次 Run 承担全部加载成本。
+- 单元格输出中的图像与图表（10 节列出的类型中，目前只有文本、表格、受影响行数）。
 
 ## 9. SQL 运行时
 

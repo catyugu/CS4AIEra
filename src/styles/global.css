@@ -381,19 +381,29 @@ a {
 
 /* --- term references --------------------------------------------------- */
 
-.term-ref {
+/* The popover's containing block is the content column, not the term. A
+   popover anchored to an inline box cannot be kept inside the viewport in pure
+   CSS — its horizontal offset inside the column is not knowable — so one
+   anchored to a term near the right edge would give the page a horizontal
+   scrollbar. Anchored to the column it can never overflow, and the vertical
+   position still comes from the term: `top: auto` resolves to the box's static
+   position, which is the line the term sits on. */
+.prose {
   position: relative;
+}
+
+.term-ref {
   text-decoration: underline dotted;
   text-underline-offset: 0.2em;
 }
 
 .term-tip {
   position: absolute;
+  top: auto;
   left: 0;
-  top: 100%;
   z-index: 10;
-  width: max-content;
-  max-width: min(22rem, 80vw);
+  width: min(22rem, 100%);
+  margin-top: 1.6em;
   padding: 0.5rem 0.7rem;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -404,12 +414,14 @@ a {
   line-height: 1.6;
   color: var(--fg);
   text-decoration: none;
-  visibility: hidden;
+  /* Out of layout until it is shown: a hidden popover that still occupies its
+     box would make the page scroll sideways on a narrow screen. */
+  display: none;
 }
 
 .term-ref:hover .term-tip,
 .term-ref:focus-visible .term-tip {
-  visibility: visible;
+  display: block;
 }
 
 /* --- course index ------------------------------------------------------ */
@@ -441,6 +453,213 @@ a {
   color: var(--muted);
   font-size: 0.8em;
   font-weight: 400;
+}
+
+/* --- code cells -------------------------------------------------------- */
+
+.codelab {
+  margin: 1.4rem 0;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  overflow: hidden;
+}
+
+.codelab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8rem;
+}
+
+.codelab-id {
+  font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, monospace;
+  color: var(--muted);
+}
+
+.codelab-session {
+  color: var(--accent);
+}
+
+.codelab-modified {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.codelab-hint {
+  color: var(--muted);
+}
+
+.codelab.has-editor .codelab-hint {
+  display: none;
+}
+
+.codelab-actions {
+  display: flex;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.codelab-actions button {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.2rem 0.6rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+
+.codelab-actions button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.codelab-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.codelab-code {
+  cursor: text;
+}
+
+.codelab-code pre {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--code-bg);
+}
+
+.codelab-code .cm-editor {
+  font-size: 0.88rem;
+}
+
+.codelab-code .cm-editor.cm-focused {
+  outline: none;
+}
+
+.codelab-status {
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.codelab-status:empty {
+  display: none;
+}
+
+.codelab-status[data-kind="error"] {
+  color: #b3261e;
+}
+
+.codelab-status[data-kind="ok"] {
+  color: #1c6b3c;
+}
+
+@media (prefers-color-scheme: dark) {
+  .codelab-status[data-kind="error"] {
+    color: #f2b8b5;
+  }
+
+  .codelab-status[data-kind="ok"] {
+    color: #8fd6a6;
+  }
+}
+
+.codelab-output {
+  border-top: 1px solid var(--line);
+}
+
+.codelab-output:empty {
+  display: none;
+}
+
+.cell-stream,
+.cell-stdout,
+.cell-stderr,
+.cell-value,
+.cell-traceback {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  overflow-x: auto;
+  border: 0;
+  border-radius: 0;
+  background: var(--code-bg);
+  font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.cell-stream:empty {
+  display: none;
+}
+
+.cell-stderr,
+.cell-traceback {
+  color: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cell-stderr,
+  .cell-traceback {
+    color: #f2b8b5;
+  }
+}
+
+.cell-error {
+  border-top: 1px solid var(--line);
+}
+
+.cell-note {
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.cell-table {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  overflow-x: auto;
+}
+
+.cell-table table {
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.cell-table th,
+.cell-table td {
+  border: 1px solid var(--line);
+  padding: 0.25rem 0.55rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.cell-table thead th {
+  background: var(--panel);
+}
+
+/* NULL is marked by text and by style, so the distinction does not depend on
+   colour alone (DESIGN.md sections 9.4 and 20). */
+.cell-null {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.cell-blob {
+  color: var(--muted);
+}
+
+.cell-number {
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- glossary ---------------------------------------------------------- */

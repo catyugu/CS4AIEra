@@ -16,9 +16,6 @@
  */
 export const PYODIDE_VERSION = "314.0.7";
 
-/** Python version provided by the pinned distribution (from the lock file info block). */
-export const PYODIDE_PYTHON_VERSION = "3.14";
-
 /** Package name to the version shipped by the pinned distribution. */
 export const PINNED_PACKAGES: Readonly<Record<string, string>> = Object.freeze({
   numpy: "2.4.6",

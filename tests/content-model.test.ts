@@ -100,7 +100,6 @@ describe("frontmatter and body scanning", () => {
       timeoutMs: 2500,
       packages: ["numpy"],
       editable: true,
-      outputMode: "auto",
     });
     expect(lesson.cells[0]!.source).toBe("print(1)");
     expect(lesson.staticBlocks).toHaveLength(1);
@@ -278,7 +277,7 @@ describe("identity and references", () => {
 
 describe("executable cells", () => {
   it("parses cell options and reports malformed ones", () => {
-    const ok = parseCellMeta('run id="a" session="s" timeout=1500 packages="numpy, pandas" output=table editable=false');
+    const ok = parseCellMeta('run id="a" session="s" timeout=1500 packages="numpy, pandas" editable=false');
     expect(ok.problems).toEqual([]);
     expect(ok.meta).toMatchObject({
       run: true,
@@ -286,15 +285,16 @@ describe("executable cells", () => {
       session: "s",
       timeoutMs: 1500,
       packages: ["numpy", "pandas"],
-      outputMode: "table",
       editable: false,
     });
 
-    const bad = parseCellMeta('run id="a" timeout=soon output=chart session="isolated" colour="red"');
+    const bad = parseCellMeta('run id="a" timeout=soon output=table session="isolated" colour="red"');
     expect(bad.problems).toEqual(
       expect.arrayContaining([
         "timeout must be a positive integer number of milliseconds",
-        "output must be auto, text or table",
+        // `output` is not an option: output rendering follows the value, so an
+        // author who writes it gets an error rather than a silent no-op.
+        "unknown cell option 'output'",
         'session="isolated" is the default; omit it',
         "unknown cell option 'colour'",
       ]),

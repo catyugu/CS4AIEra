@@ -2,7 +2,6 @@ import type {
   ContentReference,
   ExecutableCell,
   Heading,
-  OutputMode,
   ReferenceKind,
   StaticCodeBlock,
 } from "./types";
@@ -168,7 +167,6 @@ export interface CellMeta {
   packages: string[];
   fixture?: string;
   editable?: boolean;
-  outputMode?: OutputMode;
   expected?: string;
 }
 
@@ -197,7 +195,6 @@ export function parseCellMeta(meta: string): CellMetaParse {
     "packages",
     "fixture",
     "editable",
-    "output",
     "expect",
   ]);
 
@@ -242,10 +239,6 @@ export function parseCellMeta(meta: string): CellMetaParse {
         if (value === "true") result.editable = true;
         else if (value === "false") result.editable = false;
         else problems.push(`editable must be true or false`);
-        break;
-      case "output":
-        if (value === "auto" || value === "text" || value === "table") result.outputMode = value;
-        else problems.push(`output must be auto, text or table`);
         break;
       case "expect":
         result.expected = value;
@@ -332,7 +325,6 @@ export function toExecutableCell(
     packages: meta.packages,
     fixture: meta.fixture,
     editable: meta.editable ?? true,
-    outputMode: meta.outputMode ?? "auto",
     expectedOutput: meta.expected,
   };
 }

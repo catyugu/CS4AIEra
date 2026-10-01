@@ -12,7 +12,6 @@
 export type LessonStatus = "draft" | "review" | "published" | "archived";
 export type SectionStatus = "draft" | "active" | "archived";
 export type CellLanguage = "python" | "sql";
-export type OutputMode = "auto" | "text" | "table";
 
 /** A fenced code block that carries no `run` flag. Rendered as static code. */
 export interface StaticCodeBlock {
@@ -36,7 +35,6 @@ export interface ExecutableCell {
   /** SQL lab fixture id; SQL cells only. */
   fixture?: string;
   editable: boolean;
-  outputMode: OutputMode;
   /** Optional documentation snapshot of expected output. Never used for grading. */
   expectedOutput?: string;
 }

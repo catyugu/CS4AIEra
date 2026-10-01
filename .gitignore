@@ -142,5 +142,8 @@ vite.config.ts.timestamp-*
 # Astro generated types
 .astro/
 
+# Self-hosted browser runtime, restored by `bun run setup:runtime`
+public/pyodide/
+
 # Turbo Repo
 .turbo

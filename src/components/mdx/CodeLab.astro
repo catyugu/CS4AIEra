@@ -1,0 +1,80 @@
+---
+import { getCourseModel } from "../../content-model/instance";
+import { DEFAULT_CELL_TIMEOUT_MS } from "../../content-model/runtime-config";
+
+/**
+ * An executable code cell (DESIGN.md section 7).
+ *
+ * The author writes a fenced block with `run`; `src/markdown/codelab-cells.ts`
+ * turns it into this component at build time, so the author never writes
+ * component markup.
+ *
+ * The markup is complete without JavaScript: the wrapped fence renders as
+ * highlighted code. The editor, the runtime and the output region are activated
+ * by `src/runtime/codelab.ts`, which is loaded only by pages that contain cells.
+ */
+interface Props {
+  /** Cell id, unique within the lesson. */
+  id: string;
+  language: "python" | "sql";
+  /** Author source. Rendered as text and used as the Reset target. */
+  source: string;
+  session?: string;
+  fixture?: string;
+  timeoutMs?: number;
+  packages?: string;
+  editable?: string;
+}
+
+const { id, language, source, session, fixture, timeoutMs, packages, editable } = Astro.props;
+
+let fixtureUrl: string | undefined;
+if (fixture) {
+  const model = await getCourseModel();
+  const lab = model.labs.find((candidate) => candidate.id === fixture);
+  if (!lab) throw new Error(`<CodeLab> references fixture '${fixture}', which has no lab`);
+  // Served by the lab-assets integration under the fixture's stable id.
+  fixtureUrl = `/labs/${lab.id}/${lab.source}`;
+}
+---
+
+<figure
+  class="codelab"
+  data-codelab
+  data-cell-id={id}
+  data-language={language}
+  data-source={source}
+  data-session={session}
+  data-fixture={fixture}
+  data-fixture-url={fixtureUrl}
+  data-timeout-ms={timeoutMs ?? DEFAULT_CELL_TIMEOUT_MS}
+  data-packages={packages}
+  data-editable={editable ?? "true"}
+>
+  <figcaption class="codelab-bar">
+    <span class="codelab-id">{id}</span>
+    {session && <span class="codelab-session">session: {session}</span>}
+    <span class="codelab-modified" data-cell-modified></span>
+    {editable !== "false" && <span class="codelab-hint">点击代码可编辑</span>}
+    <span class="codelab-actions">
+      <button type="button" data-action="run">运行</button>
+      <button type="button" data-action="stop" disabled>停止</button>
+      <button type="button" data-action="reset-code">恢复代码</button>
+      {session && <button type="button" data-action="reset-state">重置 session</button>}
+    </span>
+  </figcaption>
+
+  {/*
+    The fence itself is the slot: the authoring syntax stays a code block, so
+    this renders highlighted source with no JavaScript, and the runtime replaces
+    it with the editor on demand.
+  */}
+  <div class="codelab-code" data-cell-code><slot /></div>
+
+  <p class="codelab-status" data-cell-status role="status" aria-live="polite"></p>
+  <div class="codelab-output" data-cell-output aria-live="polite"></div>
+</figure>
+
+<script>
+  import "../../runtime/codelab";
+</script>

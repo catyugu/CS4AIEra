@@ -2,6 +2,7 @@
 import { getCollection, render, type CollectionEntry } from "astro:content";
 
 import CrossRef from "../components/mdx/CrossRef.astro";
+import CodeLab from "../components/mdx/CodeLab.astro";
 import LabRef from "../components/mdx/LabRef.astro";
 import Term from "../components/mdx/Term.astro";
 import { getCourseModel } from "../content-model/instance";
@@ -105,7 +106,7 @@ const prerequisites = lesson.prerequisites
     </header>
 
     <div class="prose">
-      <Content components={{ Term, LabRef, CrossRef }} />
+      <Content components={{ Term, LabRef, CrossRef, CodeLab }} />
     </div>
 
     <nav class="lesson-nav" aria-label="课时导航">

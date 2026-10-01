@@ -1,4 +1,5 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AstroIntegration } from "astro";
 
 import { loadCourseModel } from "../content-model/load";
@@ -21,7 +22,7 @@ export function contentValidation(): AstroIntegration {
     name: "cs4ai:content-validation",
     hooks: {
       "astro:config:done": ({ config }) => {
-        projectRoot = path.resolve(config.root.pathname.replace(/^\/([A-Za-z]:)/, "$1"));
+        projectRoot = fileURLToPath(config.root);
       },
       "astro:build:start": async () => {
         const contentRoot = path.join(projectRoot, "content");

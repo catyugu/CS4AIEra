@@ -3,16 +3,24 @@ import { satteri } from "@astrojs/markdown-satteri";
 import mdx from "@astrojs/mdx";
 
 import { contentValidation } from "./src/integrations/content-validation";
+import { labAssets } from "./src/integrations/lab-assets";
+import { runtimeAssets } from "./src/integrations/runtime-assets";
+import { codelabCells } from "./src/markdown/codelab-cells";
 import { headingAnchors } from "./src/markdown/heading-anchors";
 
 // The site is static by construction: no adapter, no server routes, no runtime
 // execution on the host. See doc/DESIGN.md sections 13 and 21.
 export default defineConfig({
   output: "static",
-  integrations: [mdx(), contentValidation()],
+  integrations: [mdx(), contentValidation(), labAssets(), runtimeAssets()],
   markdown: {
-    // Headings carry the anchors the content validator checks (DESIGN.md 17.10).
-    processor: satteri({ hastPlugins: [headingAnchors()] }),
+    processor: satteri({
+      // An executable fence becomes a <CodeLab> element (DESIGN.md section 7);
+      // it must be rewritten before highlighting sees it.
+      mdastPlugins: [codelabCells()],
+      // Headings carry the anchors the content validator checks (DESIGN.md 17.10).
+      hastPlugins: [headingAnchors()],
+    }),
     shikiConfig: { themes: { light: "github-light", dark: "github-dark" } },
   },
   build: {
