@@ -1,0 +1,34 @@
+{
+  "name": "cs4ai-era",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.12",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "validate": "tsx scripts/validate-content.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "check": "tsx scripts/validate-content.ts && tsc --noEmit && vitest run"
+  },
+  "devDependencies": {
+    "@astrojs/mdx": "^8.0.2",
+    "@types/node": "^26.6.3",
+    "astro": "^7.3.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
+  },
+  "trustedDependencies": [
+    "esbuild",
+    "sharp"
+  ]
+}

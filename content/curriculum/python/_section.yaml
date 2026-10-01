@@ -1,0 +1,5 @@
+id: python
+label: Python 语言
+order: 20
+summary: 名称与对象、可变性与别名、迭代协议、作用域与闭包、异常与资源生命周期。
+status: active

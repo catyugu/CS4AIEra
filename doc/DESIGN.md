@@ -95,7 +95,7 @@ Git repository
 ├── DESIGN.md
 ├── CONTENT_GUIDE.md
 ├── package.json
-├── pnpm-lock.yaml
+├── bun.lock
 ├── astro.config.*
 │
 ├── content/
@@ -184,7 +184,7 @@ estimated_reading_minutes: 55
 ---
 ```
 
-必填元数据保持精简；可选编辑元数据可日后增长，而不影响路由。
+必填元数据保持精简；可选编辑元数据可日后增长，而不影响路由。已实现的可选字段包括 `estimated_reading_minutes` 与 `allow_draft_prerequisites`：后者显式列出本课允许依赖的未发布课时 id，用于在构建校验中为有意的例外开一个具名出口。
 
 ### 5.3 稳定 ID 与 slug
 
@@ -541,7 +541,7 @@ related:
 9. 被引用的资产存在；
 10. 标题不产生重复锚点；
 11. 术语的 `related` 引用可解析；
-12. 没有已发布课时依赖缺失的草稿，除非有显式例外；
+12. 没有已发布课时依赖缺失的草稿，除非在课时的 `allow_draft_prerequisites` 中显式声明例外；
 13. frontmatter 符合 schema。
 
 警告可以覆盖孤立术语、异常大的资产这类编辑问题，但断开的引用必须是硬失败。
@@ -619,7 +619,7 @@ merge to main
 
 Git 是正文与代码的权威历史。
 
-**版本策略**：固定重要的教学运行时：Node/pnpm 工具链；Astro 与 UI 依赖；Pyodide 发行版；可执行课时显式使用的任何包。会改变课时可观察行为的依赖升级是影响内容的变更，应按此评审。课时正文应区分规范级论断与实现或版本相关论断。例如"Python 语言语义"与"CPython 3.x 实现行为"不可互换。
+**版本策略**：固定重要的教学运行时：Node/bun 工具链；Astro 与 UI 依赖；Pyodide 发行版；可执行课时显式使用的任何包。会改变课时可观察行为的依赖升级是影响内容的变更，应按此评审。课时正文应区分规范级论断与实现或版本相关论断。例如"Python 语言语义"与"CPython 3.x 实现行为"不可互换。
 
 ## 22. AI 时代课程的编辑架构
 

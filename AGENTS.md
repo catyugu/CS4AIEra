@@ -30,7 +30,7 @@ Unless an accepted design change says otherwise:
 - Pyodide in a dedicated Web Worker for Python and SQLite-backed SQL.
 - Static full-text search generated at build time.
 - Vitest for pure TypeScript tests and Playwright for browser/runtime integration tests.
-- `pnpm` as the JavaScript package manager.
+- `bun` as the JavaScript package manager and script runner. `tsx` and `vitest` still execute under Node, because SQL fixture validation and the test suite use `node:sqlite`, which Bun does not implement.
 
 Do not replace these technologies merely because another library is fashionable. A replacement must reduce complexity or satisfy a concrete unmet requirement.
 

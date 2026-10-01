@@ -1,0 +1,5 @@
+id: sql.orders.basic
+engine: sqlite
+source: seed.sql
+reset: recreate
+max_result_rows: 200
