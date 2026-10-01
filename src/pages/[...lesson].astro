@@ -1,0 +1,116 @@
+---
+import { getCollection, render, type CollectionEntry } from "astro:content";
+
+import CrossRef from "../components/mdx/CrossRef.astro";
+import LabRef from "../components/mdx/LabRef.astro";
+import Term from "../components/mdx/Term.astro";
+import { getCourseModel } from "../content-model/instance";
+import {
+  buildCourseTree,
+  isVisibleLesson,
+  lessonNeighbors,
+  readingOrder,
+  sectionTrail,
+} from "../content-model/navigation";
+import CourseLayout from "../layouts/CourseLayout.astro";
+
+/**
+ * Lesson pages.
+ *
+ * The route comes from the collection (which owns the rendered body); the
+ * lesson's identity, section and prerequisites come from the course model,
+ * joined on the stable lesson id. Unpublished lessons are routable in dev only.
+ */
+export async function getStaticPaths() {
+  const includeUnpublished = import.meta.env.DEV;
+  const entries = await getCollection("lessons");
+  return entries
+    .filter((entry) => isVisibleLesson(entry.data, includeUnpublished))
+    .map((entry) => ({
+      params: { lesson: entry.data.slug.replace(/^\//, "") },
+      props: { entry },
+    }));
+}
+
+interface Props {
+  entry: CollectionEntry<"lessons">;
+}
+
+const { entry } = Astro.props;
+const { Content, headings } = await render(entry);
+
+const model = await getCourseModel();
+const lesson = model.lessons.find((candidate) => candidate.id === entry.id);
+if (!lesson) throw new Error(`lesson '${entry.id}' is in the content collection but not in the course model`);
+
+const order = readingOrder(buildCourseTree(model, { includeUnpublished: import.meta.env.DEV }));
+const { previous, next } = lessonNeighbors(order, lesson.id);
+const trail = sectionTrail(model, lesson.sectionId).slice(1);
+const prerequisites = lesson.prerequisites
+  .map((id) => model.lessons.find((candidate) => candidate.id === id))
+  .filter((candidate) => candidate !== undefined);
+---
+
+<CourseLayout
+  title={lesson.title}
+  description={lesson.objectives[0]}
+  activeLessonId={lesson.id}
+  headings={headings}
+>
+  <article>
+    <header class="lesson-header">
+      <nav class="breadcrumbs" aria-label="位置">
+        <ol>
+          <li><a href="/">课程</a></li>
+          {trail.map((section) => <li>{section.label}</li>)}
+          <li aria-current="page">{lesson.title}</li>
+        </ol>
+      </nav>
+      <h1>{lesson.title}</h1>
+      <p class="lesson-meta">
+        {
+          [
+            lesson.estimatedReadingMinutes ? `约 ${lesson.estimatedReadingMinutes} 分钟` : undefined,
+            `${lesson.cells.length} 个可运行单元格`,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        }
+      </p>
+      {
+        prerequisites.length > 0 && (
+          <p class="lesson-meta">
+            前置：
+            {prerequisites.map((prerequisite, index) => (
+              <>
+                {index > 0 && "、"}
+                <a href={`${prerequisite.slug}/`}>{prerequisite.title}</a>
+              </>
+            ))}
+          </p>
+        )
+      }
+      {
+        lesson.objectives.length > 0 && (
+          <section class="objectives" aria-labelledby="objectives-heading">
+            <h2 id="objectives-heading">学习目标</h2>
+            <ul>
+              {lesson.objectives.map((objective) => (
+                <li>{objective}</li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+    </header>
+
+    <div class="prose">
+      <Content components={{ Term, LabRef, CrossRef }} />
+    </div>
+
+    <nav class="lesson-nav" aria-label="课时导航">
+      <span>{previous && <a href={`${previous.slug}/`}>← {previous.title}</a>}</span>
+      <span>{next && <a href={`${next.slug}/`}>{next.title} →</a>}</span>
+    </nav>
+  </article>
+</CourseLayout>

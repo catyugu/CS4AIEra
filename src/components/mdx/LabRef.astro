@@ -1,0 +1,19 @@
+---
+import { getCourseModel } from "../../content-model/instance";
+
+/**
+ * Reference to a SQL lab fixture. Fixture pages do not exist yet, so this
+ * renders the stable fixture id rather than a dead link.
+ */
+interface Props {
+  /** Lab fixture id from `content/labs/<dir>/lab.yaml`. */
+  id: string;
+}
+
+const { id } = Astro.props;
+const model = await getCourseModel();
+const lab = model.labs.find((candidate) => candidate.id === id);
+if (!lab) throw new Error(`<LabRef id="${id}"> has no lab fixture`);
+---
+
+<code class="lab-ref">{lab.id}</code>

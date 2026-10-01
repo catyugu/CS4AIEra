@@ -1,0 +1,92 @@
+---
+import CourseTree from "../components/CourseTree.astro";
+import { getCourseModel } from "../content-model/instance";
+import {
+  allSectionIds,
+  buildCourseTree,
+  buildToc,
+  sectionPathIds,
+  type TocEntry,
+} from "../content-model/navigation";
+import "../styles/global.css";
+
+/**
+ * Reading shell: course tree, lesson body, page contents.
+ *
+ * Everything here is static HTML. The only client script on a lesson page will
+ * be the code-cell runtime, which loads lazily and only when a lesson declares
+ * executable cells (DESIGN.md sections 15 and 19).
+ */
+interface Props {
+  title: string;
+  description?: string;
+  /** Lesson id, when a lesson page is being rendered. */
+  activeLessonId?: string;
+  /** Rendered headings of the lesson body. */
+  headings?: TocEntry[];
+}
+
+const { title, description, activeLessonId, headings = [] } = Astro.props;
+
+const model = await getCourseModel();
+const includeUnpublished = import.meta.env.DEV;
+const tree = buildCourseTree(model, { includeUnpublished });
+
+const activeLesson = activeLessonId
+  ? model.lessons.find((lesson) => lesson.id === activeLessonId)
+  : undefined;
+const openSectionIds = activeLesson
+  ? sectionPathIds(model, activeLesson.sectionId)
+  : allSectionIds(tree);
+
+const toc = buildToc(headings);
+const siteTitle = "AI 时代的计算机科学";
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title === siteTitle ? siteTitle : `${title} · ${siteTitle}`}</title>
+    {description && <meta name="description" content={description} />}
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳到正文</a>
+    <header class="site-header">
+      <a class="site-title" href="/">{siteTitle}</a>
+      <nav aria-label="站点">
+        <a href="/glossary/">术语表</a>
+      </nav>
+    </header>
+    <div class="shell">
+      <nav class="sidebar" aria-label="课程树">
+        <CourseTree nodes={tree} openSectionIds={openSectionIds} activeLessonId={activeLessonId} />
+      </nav>
+      <main id="main">
+        <slot />
+      </main>
+      {
+        toc.length > 0 && (
+          <nav class="page-toc" aria-label="本页目录">
+            <h2>本页目录</h2>
+            <ol>
+              {toc.map((entry) => (
+                <li class:list={[`depth-${entry.depth}`]}>
+                  <a href={`#${entry.slug}`}>{entry.text}</a>
+                </li>
+              ))}
+            </ol>
+          </nav>
+        )
+      }
+    </div>
+    <footer class="site-footer">
+      <p>
+        {model.sections.length} 章节 · {model.lessons.length} 课时 · {model.glossary.length} 术语 · {
+          model.labs.length
+        } 实验
+      </p>
+    </footer>
+  </body>
+</html>

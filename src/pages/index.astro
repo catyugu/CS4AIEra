@@ -1,74 +1,51 @@
 ---
-import path from "node:path";
+import { getCourseModel } from "../content-model/instance";
+import { buildCourseTree, readingOrder, type CourseTreeNode } from "../content-model/navigation";
+import CourseLayout from "../layouts/CourseLayout.astro";
 
-import { loadCourseModel } from "../content-model/load";
-import { validateContent } from "../content-model/validate";
-import type { Section } from "../content-model/types";
+const model = await getCourseModel();
+const tree = buildCourseTree(model, { includeUnpublished: import.meta.env.DEV });
+const first = readingOrder(tree)[0];
 
-const contentRoot = path.resolve(process.cwd(), "content");
-const { model, issues } = await loadCourseModel(contentRoot);
-const errors = [...issues, ...validateContent(model)].filter((issue) => issue.severity === "error");
-
-// The build fails on content errors, so this page can assume a valid tree.
-if (errors.length > 0) {
-  throw new Error(`content has ${errors.length} error(s); run \`bun run validate\``);
+function flatten(nodes: CourseTreeNode[]): CourseTreeNode[] {
+  return nodes.flatMap((node) => [node, ...flatten(node.children)]);
 }
 
-interface Row {
-  depth: number;
-  section: Section;
-}
-
-function flatten(parentId: string | null, depth: number): Row[] {
-  const children = model.sections
-    .filter((section) => section.parentId === parentId)
-    .sort((a, b) => a.order - b.order);
-  return children.flatMap((section) => [{ depth, section }, ...flatten(section.id, depth + 1)]);
-}
-
-const rows = flatten(null, 0);
-const lessonsOf = (sectionId: string) =>
-  model.lessons.filter((lesson) => lesson.sectionId === sectionId).sort((a, b) => a.order - b.order);
+const sections = flatten(tree);
 ---
 
-<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AI 时代的计算机科学</title>
-  </head>
-  <body>
-    <main>
-      <h1>AI 时代的计算机科学</h1>
-      <p>
-        课程树索引。课时路由与阅读界面尚未实现；本页由构建期加载的内容模型生成，用于验证课程树、术语表与实验夹具的一致性。
-      </p>
-      <ul>
-        {
-          rows.map(({ depth, section }) => (
-            <li>
-              <h2 style={`margin-left: ${depth}rem`}>{section.label}</h2>
-              {section.summary && <p style={`margin-left: ${depth}rem`}>{section.summary}</p>}
-              <ul>
-                {lessonsOf(section.id).map((lesson) => (
-                  <li>
-                    {lesson.title} <code>{lesson.slug}</code>
-                    {lesson.status !== "published" && <em> ({lesson.status})</em>}
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))
-        }
-      </ul>
-      <footer>
-        <p>
-          {model.sections.length} 章节 · {model.lessons.length} 课时 · {model.glossary.length} 术语 · {
-            model.labs.length
-          } 实验
-        </p>
-      </footer>
-    </main>
-  </body>
-</html>
+<CourseLayout
+  title="AI 时代的计算机科学"
+  description="面向专业自学者的计算机科学课程：内容优先，可在浏览器内运行 Python 与 SQL 实验。"
+>
+  <article class="prose course-index">
+    <h1>AI 时代的计算机科学</h1>
+    <p>
+      一门面向专业自学者的计算机科学课程。课程假定读者具备专业级技术推理能力，但不假定有正式 CS
+      背景；前置知识在被依赖之前显式引入。
+    </p>
+    <p>课程不判分、不需要账号。可执行示例在浏览器内运行，服务端只分发静态文件。</p>
+    {first && <p><a href={`${first.slug}/`}>开始阅读：{first.title}</a></p>}
+
+    {
+      sections.map((node) => (
+        <section class:list={["course-section", `depth-${node.depth}`]}>
+          <h2>{node.section.label}</h2>
+          {node.section.summary && <p>{node.section.summary}</p>}
+          {node.lessons.length > 0 && (
+            <ul>
+              {node.lessons.map((lesson) => (
+                <li>
+                  <a href={`${lesson.slug}/`}>{lesson.title}</a>
+                  {lesson.estimatedReadingMinutes && (
+                    <span class="lesson-meta"> · 约 {lesson.estimatedReadingMinutes} 分钟</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ))
+    }
+  </article>
+</CourseLayout>

@@ -138,7 +138,10 @@ function parseAttributes(raw: string): Record<string, string> {
 
 function stripInlineMarkup(text: string): string {
   return text
-    .replace(INLINE_CODE, "")
+    // Keep inline code content: the renderer puts it in the heading text, so the
+    // anchor is computed from it too. Deleting it here would make the validator
+    // and the rendered page disagree about what the heading says.
+    .replace(/`([^`]*)`/g, "$1")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/[*_~]/g, "")
     .trim();

@@ -1,0 +1,26 @@
+---
+import { getCourseModel } from "../../content-model/instance";
+
+/**
+ * Cross-reference to a lesson or a section. Lessons have pages; sections are
+ * navigation-only for now, so a section reference renders its label as text.
+ */
+interface Props {
+  /** Lesson id or section id. */
+  id: string;
+}
+
+const { id } = Astro.props;
+const model = await getCourseModel();
+const lesson = model.lessons.find((candidate) => candidate.id === id);
+const section = lesson ? undefined : model.sections.find((candidate) => candidate.id === id);
+if (!lesson && !section) throw new Error(`<CrossRef id="${id}"> resolves to neither a lesson nor a section`);
+---
+
+{
+  lesson ? (
+    <a href={`${lesson.slug}/`}>{lesson.title}</a>
+  ) : (
+    <span>{section!.label}</span>
+  )
+}

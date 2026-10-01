@@ -5,6 +5,7 @@
     "": {
       "name": "cs4ai-era",
       "devDependencies": {
+        "@astrojs/markdown-satteri": "^0.4.2",
         "@astrojs/mdx": "^8.0.2",
         "@types/node": "^26.6.3",
         "astro": "^7.3.5",

@@ -1,0 +1,41 @@
+---
+import { getCourseModel } from "../../content-model/instance";
+import CourseLayout from "../../layouts/CourseLayout.astro";
+
+const model = await getCourseModel();
+const entries = [...model.glossary].sort((a, b) => a.term.localeCompare(b.term, "zh"));
+const lessonTitle = new Map(model.lessons.map((lesson) => [lesson.id, lesson.title]));
+const lessonSlug = new Map(model.lessons.map((lesson) => [lesson.id, lesson.slug]));
+---
+
+<CourseLayout title="术语表" description="课程术语的快速定义，以及指向完整词条的稳定链接。">
+  <article class="prose glossary-index">
+    <h1>术语表</h1>
+    <p>
+      快速定义用于回忆，不替代正文中的形式定义。术语引用由作者显式标注，不做自动链接。
+    </p>
+    {
+      entries.map((entry) => (
+        <section class="entry">
+          <h2>
+            <a href={`/glossary/${entry.id}/`}>{entry.term}</a>
+            {entry.english && <span class="english"> {entry.english}</span>}
+          </h2>
+          <p>{entry.short}</p>
+          {entry.aliases.length > 0 && <p class="aliases">别名：{entry.aliases.join("、")}</p>}
+          {entry.usedBy.length > 0 && (
+            <p class="used-by">
+              出现于：
+              {entry.usedBy.map((lessonId, index) => (
+                <>
+                  {index > 0 && "、"}
+                  <a href={`${lessonSlug.get(lessonId)}/`}>{lessonTitle.get(lessonId) ?? lessonId}</a>
+                </>
+              ))}
+            </p>
+          )}
+        </section>
+      ))
+    }
+  </article>
+</CourseLayout>

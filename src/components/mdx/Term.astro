@@ -1,0 +1,25 @@
+---
+import { getCourseModel } from "../../content-model/instance";
+
+/**
+ * Inline term reference (DESIGN.md section 14).
+ *
+ * The quick definition is rendered in the DOM and revealed on hover or focus,
+ * so it is reachable by keyboard and by screen readers without client script.
+ * The full entry lives at a stable URL.
+ */
+interface Props {
+  /** Glossary entry id. */
+  id: string;
+}
+
+const { id } = Astro.props;
+const model = await getCourseModel();
+const entry = model.glossary.find((candidate) => candidate.id === id);
+if (!entry) throw new Error(`<Term id="${id}"> has no glossary entry`);
+---
+
+<a class="term-ref" href={`/glossary/${entry.id}/`}>
+  <slot />
+  <span class="term-tip">{entry.short}</span>
+</a>

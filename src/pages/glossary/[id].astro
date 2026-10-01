@@ -1,0 +1,101 @@
+---
+import { getCollection, render, type CollectionEntry } from "astro:content";
+
+import CrossRef from "../../components/mdx/CrossRef.astro";
+import LabRef from "../../components/mdx/LabRef.astro";
+import Term from "../../components/mdx/Term.astro";
+import { getCourseModel } from "../../content-model/instance";
+import CourseLayout from "../../layouts/CourseLayout.astro";
+
+/**
+ * Full glossary entries: the third layer of the term system (DESIGN.md
+ * section 14) at a stable URL. The short definition stays on the index and in
+ * the inline popover; this page carries the definition, scope and misuse notes.
+ */
+export async function getStaticPaths() {
+  const entries = await getCollection("glossary");
+  return entries.map((entry) => ({ params: { id: entry.id }, props: { entry } }));
+}
+
+interface Props {
+  entry: CollectionEntry<"glossary">;
+}
+
+const { entry } = Astro.props;
+const { Content, headings } = await render(entry);
+
+const model = await getCourseModel();
+const modelEntry = model.glossary.find((candidate) => candidate.id === entry.id);
+if (!modelEntry) throw new Error(`glossary entry '${entry.id}' is in the content collection but not in the course model`);
+
+const related = modelEntry.related
+  .map((id) => model.glossary.find((candidate) => candidate.id === id))
+  .filter((candidate) => candidate !== undefined);
+const usedBy = modelEntry.usedBy
+  .map((id) => model.lessons.find((lesson) => lesson.id === id))
+  .filter((lesson) => lesson !== undefined);
+---
+
+<CourseLayout title={modelEntry.term} description={modelEntry.short} headings={headings}>
+  <article class="prose glossary-entry">
+    <nav class="breadcrumbs" aria-label="位置">
+      <ol>
+        <li><a href="/">课程</a></li>
+        <li><a href="/glossary/">术语表</a></li>
+        <li aria-current="page">{modelEntry.term}</li>
+      </ol>
+    </nav>
+    <h1>{modelEntry.term}{modelEntry.english && <span class="english"> {modelEntry.english}</span>}</h1>
+    <dl>
+      <dt>简述</dt>
+      <dd>{modelEntry.short}</dd>
+      {
+        modelEntry.aliases.length > 0 && (
+          <>
+            <dt>别名</dt>
+            <dd>{modelEntry.aliases.join("、")}</dd>
+          </>
+        )
+      }
+      {
+        modelEntry.domains.length > 0 && (
+          <>
+            <dt>领域</dt>
+            <dd>{modelEntry.domains.join("、")}</dd>
+          </>
+        )
+      }
+      {
+        related.length > 0 && (
+          <>
+            <dt>相关</dt>
+            <dd>
+              {related.map((term, index) => (
+                <>
+                  {index > 0 && "、"}
+                  <a href={`/glossary/${term.id}/`}>{term.term}</a>
+                </>
+              ))}
+            </dd>
+          </>
+        )
+      }
+      {
+        usedBy.length > 0 && (
+          <>
+            <dt>出现于</dt>
+            <dd>
+              {usedBy.map((lesson, index) => (
+                <>
+                  {index > 0 && "、"}
+                  <a href={`${lesson.slug}/`}>{lesson.title}</a>
+                </>
+              ))}
+            </dd>
+          </>
+        )
+      }
+    </dl>
+    <Content components={{ Term, LabRef, CrossRef }} />
+  </article>
+</CourseLayout>

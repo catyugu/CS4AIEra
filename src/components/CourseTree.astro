@@ -1,0 +1,47 @@
+---
+import type { CourseTreeNode } from "../content-model/navigation";
+import CourseTree from "./CourseTree.astro";
+
+/**
+ * Course tree navigation. Sections are `<details>` elements so collapsing works
+ * by keyboard with no client script; the branch containing the current lesson
+ * starts open.
+ */
+interface Props {
+  nodes: CourseTreeNode[];
+  openSectionIds: Set<string>;
+  activeLessonId?: string;
+}
+
+const { nodes, openSectionIds, activeLessonId } = Astro.props;
+---
+
+<ul class="tree">
+  {
+    nodes.map((node) => (
+      <li>
+        <details open={openSectionIds.has(node.section.id)}>
+          <summary>{node.section.label}</summary>
+          {node.lessons.length > 0 && (
+            <ul class="tree-lessons">
+              {node.lessons.map((lesson) => (
+                <li>
+                  <a
+                    href={`${lesson.slug}/`}
+                    aria-current={lesson.id === activeLessonId ? "page" : undefined}
+                    class:list={["tree-lesson", { unpublished: lesson.status !== "published" }]}
+                  >
+                    {lesson.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+          {node.children.length > 0 && (
+            <CourseTree nodes={node.children} openSectionIds={openSectionIds} activeLessonId={activeLessonId} />
+          )}
+        </details>
+      </li>
+    ))
+  }
+</ul>
