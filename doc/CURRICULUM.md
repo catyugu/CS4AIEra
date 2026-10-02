@@ -102,7 +102,7 @@
 | --- | --- | --- | --- | --- |
 | `algorithms.complexity` | 10 | `algorithms.cost-model` | 操作成本与渐进记号 | 草稿 |
 | | 20 | `algorithms.amortized` | 摊还分析 | 草稿 |
-| | 30 | `algorithms.average-and-randomized` | 平均情形与随机化 | — |
+| | 30 | `algorithms.average-and-randomized` | 平均情形与随机化 | 草稿 |
 | | 40 | `algorithms.lower-bounds` | 下界与不可近似 | — |
 | `algorithms.sequences` | 10 | `algorithms.arrays-and-lists` | 数组、动态数组与局部性 | 草稿 |
 | | 20 | `algorithms.stacks-and-queues` | 栈、队列与 deque | 草稿 |
@@ -318,7 +318,7 @@
 | 7 | `python.representation`：数值与浮点、文本与 bytes | 已落盘待审核 |
 | 8 | `python.program`：语言保证与实现细节、导入边界、类型标注 | 已落盘待审核 |
 | 9 | `python.async`：coroutine 与调度、取消与超时清理 | 计划 |
-| 10 | `algorithms.complexity`、`algorithms.sequences` | 已落盘待审核（`average-and-randomized`、`lower-bounds`、`strings` 待写） |
+| 10 | `algorithms.complexity`、`algorithms.sequences` | 已落盘待审核（`lower-bounds`、`strings` 待写） |
 | 11 | `algorithms.maps`：哈希表、有序映射、堆 | `hash-tables` 已落盘；其余计划 |
 | 12 | `algorithms.graphs` | 计划 |
 | 13 | `algorithms.techniques`、`algorithms.selection` | 计划 |
