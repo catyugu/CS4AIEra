@@ -1,0 +1,178 @@
+---
+id: python.typing
+slug: /python/typing
+order: 30
+title: 类型标注与静态契约
+status: draft
+objectives:
+  - 说明标注在什么时刻求值、存在哪里，以及解释器为什么不检查它
+  - 区分标注能表达的约束（结构、名称、可空性）与它无法表达的约束（取值范围、不变量）
+  - 判断一段代码里的标注是被工具检查的契约，还是无人验证的注释
+  - 说明库读取标注时（`dataclasses`、`get_type_hints`）标注如何变成可执行行为
+---
+
+## 目的
+
+标注是 Python 里唯一的静态约束手段：`def parse(text: str) -> list[int]` 写下了「这个函数期望什么、返回什么」。但它由解释器以外的工具检查，运行时的行为与标注是否准确无关。
+
+本课回答三个问题：标注在运行时是什么、它约束了谁、它约束不到什么。判断一段代码的可靠性依赖对这个边界的准确把握——把标注当成运行时保证，与把它当成装饰性注释，是两种同类的误判。
+
+## 模型
+
+- 标注是**表达式**，在函数或类定义执行时求值一次，结果存放在 `__annotations__` 里；解释器此后不再看它。
+- 因此**运行时不做任何类型检查**：传错类型的实参不会因为标注而失败，只有函数调用本身的机制（参数个数、名称）仍然生效。
+- 检查标注的是静态分析工具，它在运行前读源码、按标注推理并报告不一致。默认配置下未标注的代码不受检查，`Any` 会让检查在该处停止。
+- 标注描述的是**类型层面的约束**：参数的类别、返回值的类别、类属性名、可空性、容器元素类型。它无法表达取值范围、非空、互斥状态、单位或任何需要条件判断的不变量。
+- `list[int]`、`int | None` 这类写法是标注专用语法：`list[int]` 不是类，不能用于 `isinstance`，运行时它只是一个记录了下标的对象。
+- 标注变成**可执行行为**只发生在有库读取它的时候：`dataclasses` 用注解生成 `__init__` 与 `repr`，`typing.get_type_hints` 解析字符串形式的注解，序列化与参数校验库按注解生成运行时检查。这些场景里标注错了会改变程序行为，而不只是让检查器报警。
+
+**静态契约与运行时契约的区别**在这里最清楚：静态契约由工具在运行前验证，回答「按类型看这段代码是否自洽」；运行时契约由代码在失败点抛出，回答「这次调用的实际数据是否满足前提」。两者检查的是不同命题，互不替代。
+
+## 标注在运行时不生效
+
+```python run id="py.typing.not-enforced"
+def resize(width: int, height: int) -> int:
+    return width * height
+
+
+print("with the annotated types:", resize(3, 4))
+print("with the wrong types:", resize("abc", 4))
+print("annotations are stored, not enforced:", resize.__annotations__)
+
+try:
+    resize(3)
+except TypeError as failure:
+    print("the call itself is still checked:", failure)
+```
+
+`resize("abc", 4)` 正常返回 `"abcabcabcabc"`：标注不参与调用，解释器只关心实参与形参能否绑定。参数个数不匹配仍然抛 `TypeError`，那条错误来自调用机制，与标注无关。
+
+这一条对高阶函数同样成立：一个接收回调并调用它的函数，无法通过标注保证回调遵守自己的标注；不一致只能由静态工具在运行前发现。
+
+```python run id="py.typing.annotation-objects"
+import typing
+
+
+def parse(text: str) -> list[int]:
+    return [int(part) for part in text.split()]
+
+
+print("the annotations are objects:", parse.__annotations__)
+print("they are resolved by the tooling:", typing.get_type_hints(parse))
+print("a generic alias is not a class:", type(list[int]).__name__)
+print("aliases are equal by value, not identical:", list[int] == list[int], list[int] is list[int])
+
+try:
+    isinstance([1], list[int])
+except TypeError as failure:
+    print("isinstance rejects it:", failure)
+```
+
+`parse.__annotations__` 里的值是类型对象（`str`、`list[int]`），`list[int]` 的类型是 `types.GenericAlias`——它是标注语法的一部分，不是 `list` 的子类，因此 `isinstance` 拒绝它。需要运行时判断元素类型时必须自己遍历，或用带 `@runtime_checkable` 的协议。
+
+## 标注存放在哪个命名空间
+
+```python run id="py.typing.class-annotations"
+class Config:
+    count: int = 0
+    label: str
+
+
+def local_scope() -> None:
+    temporary: int = 3
+    never_evaluated: print("  the annotation expression never runs") = temporary
+    print("  inside the function:", temporary)
+
+
+print("the class body collects its annotations:", Config.__annotations__)
+print("annotating without assigning creates no attribute:", hasattr(Config, "label"))
+
+try:
+    Config.label
+except AttributeError as failure:
+    print("reading it fails:", failure)
+
+local_scope()
+```
+
+标注存放在**执行它的那个命名空间**里：模块顶层的进入模块的 `__annotations__`，类体里的进入类的 `__annotations__`，函数内部的既不存储也不求值——单元格里那个写在标注位置上的 `print` 从未执行，运行时连求值痕迹都没有，它们只对静态工具可见。
+
+`label: str` 只有标注没有赋值，因此类上没有这个属性，读取抛 `AttributeError`：标注不是声明，它不创建变量。本课程的单元格顶层不是模块命名空间，因此下面用类体观察存储位置。
+
+## 结构类型与它的检查边界
+
+```python run id="py.typing.protocol"
+from typing import Protocol, runtime_checkable
+
+
+@runtime_checkable
+class Reader(Protocol):
+    def read(self) -> str: ...
+
+
+class FileReader:
+    def read(self) -> str:
+        return "contents"
+
+
+class WrongSignature:
+    def read(self, size: int = 0) -> str:
+        return "contents"
+
+
+print("structural: no inheritance is needed:", isinstance(FileReader(), Reader))
+print("the check only looks for the method:", isinstance(WrongSignature(), Reader))
+print("it does not compare signatures:", WrongSignature().read(10), FileReader().read())
+```
+
+`Protocol` 把「有哪些方法」写成可检查的契约，对象不需要继承它就能通过 `isinstance`——这与基础课里的抽象基类检查是同一件事，区别在于 `Protocol` 同时可以被静态工具读取。`@runtime_checkable` 的运行时检查只验证**方法是否存在**，不验证签名：`WrongSignature.read(size)` 同样通过检查。静态工具会报告这个不一致，运行时不会。
+
+**有意识地使用这一点**：结构类型描述能力，不描述身份；用协议表达「需要能读」，用类表达「是一个」。两者都表达了什么，也就都隐含地排除了什么。
+
+## 库读取标注时
+
+```python run id="py.typing.dataclass-consumer"
+from dataclasses import dataclass, fields
+
+
+@dataclass
+class Sensor:
+    name: str
+    reading: float = 0.0
+
+    def describe(self) -> str:
+        return f"{self.name}={self.reading}"
+
+
+sensor = Sensor("inlet", 21.5)
+print("the generated repr uses the annotations:", sensor)
+print("the field list comes from the annotations:", [field.name for field in fields(Sensor)])
+print("comparison was generated too:", sensor == Sensor("inlet", 21.5))
+print("annotations are still not enforced on construction:")
+print("  ", Sensor("inlet", "not a number").reading)
+```
+
+`dataclass` 读取 `__annotations__` 决定字段名与顺序，据此生成 `__init__`、`__repr__` 与相等比较。注解在这里是**可执行的**：漏写一个字段的注解，它就不会成为构造参数。同时它仍然不检查值的类型——`Sensor("inlet", "not a number")` 照常构造，只有使用这个字段的代码才会失败。库把注解从注释变成了规格，但没有把它变成守卫。
+
+## 边界与失败情形
+
+- **标注不影响运行时行为**（除了被库读取的场景）：不准确的标注在运行时不会报错，只会误导阅读者与工具。
+- **`Any` 与未标注的边界会让检查停止**：从 JSON、环境变量、数据库读入的数据通常是 `Any`，检查器对它们不做推理；静态契约在边界处必须手工恢复（转换 + 校验）。
+- **不可表达的约束要写在代码里并在运行时检查**：取值范围、非空、状态互斥、单位一致性都属于运行时校验，标注无法替代；写错的地方是「以为标注管住了」。
+- **`bool` 是 `int` 的子类型**：`x: int` 接受 `True`；需要排除布尔值时显式判断。
+- **可空性是标注的一部分**：`x: int` 与 `x: int | None` 在检查器看来不同，前者下使用 `x` 是安全的，后者必须判空；漏写 `| None` 会让检查器放过一个真实的空值缺陷。
+- **容器元素的方差**：`list[int]` 不接受 `list[bool]` 的赋值（可变容器既不协变也不逆变），只读的序列类型才允许协变；这类规则由检查器实现，运行时没有对应机制。
+- **字符串形式的注解需要解析**：使用 `from __future__ import annotations` 时注解以字符串保存，`typing.get_type_hints` 负责求值；本运行时的行为可以直接在单元格里看到。
+- **单元格顶层不是模块命名空间**：本课程的可执行单元格没有模块级 `__annotations__`，要观察标注存放的位置时用类体或函数。
+- **循环引用与前置声明**：类型之间互相引用时，字符串注解与 `if TYPE_CHECKING:` 块是常规写法；导入开销与运行时的循环导入问题因此与标注有关。
+- **检查器是工具链的一部分**：选定检查器、严格程度与是否在 CI 中阻断提交属于交付流程，本课只界定标注的语义与它的失效方式。
+- **标注错误的代价不对称**：遗漏标注只损失检查覆盖；写错的标注会让检查器放过缺陷并让读者相信它，比不写更糟。
+
+## 小结
+
+- 标注是定义时求值一次的表达式，存放在 `__annotations__` 里，解释器运行时不再检查。
+- 函数内部的标注不存储；只有标注没有赋值不创建名字。
+- `list[int]`、`int | None` 是标注语法，不是运行时类型；`isinstance` 只接受类与少数特殊形式。
+- `Protocol` 加 `@runtime_checkable` 提供结构检查，但只检查方法是否存在，不检查签名。
+- 库读取标注时它变成可执行规格（`dataclasses`、`get_type_hints`），但仍然是规格而不是守卫。
+- 类型层面的约束交给静态工具，取值范围与不变量必须由运行时校验承担；未标注的边界数据会静默地让检查失效。
