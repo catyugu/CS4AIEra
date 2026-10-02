@@ -45,9 +45,9 @@
 
 定位：课程的编程基础与唯一的在线实验载体。本模块建立后续模块反复使用的程序语义模型，使它们可以直接给出 Python 实验而不必再解释语言。
 
-范围与重点：语言的基本使用（程序、值、控制流、函数、类、内置容器）；程序语义模型（求值、绑定、对象与共享状态、调用、作用域、迭代协议、异常与资源生命周期、属性查找）；数据表示与语言保证的边界；协作式异步的调度与取消。重点是把「能写出程序」推进到「能精确预测程序的行为」：对象、调用、迭代三条语义线占据模块主体，语法与标准库清单不进正文。验收标准是：给定一段陌生的 Python，读者能预测其状态变化、控制流与失败行为；不能预测时，知道该构造什么实验来验证。
+范围与重点：语言的基本使用（程序、值、控制流、函数、类、内置容器）；程序语义模型（求值、绑定、对象与共享状态、调用、作用域、迭代协议、异常与资源生命周期、属性查找）；数据表示与语言保证的边界；协作式异步的调度模型、异步迭代与异步上下文协议、取消与清理、超时与结构化任务生命周期。重点是把「能写出程序」推进到「能精确预测程序的行为」：对象、调用、迭代三条语义线占据模块主体，语法与标准库清单不进正文。验收标准是：给定一段陌生的 Python，读者能预测其状态变化、控制流与失败行为；不能预测时，知道该构造什么实验来验证。
 
-排除并指定去处：线程、GIL 与共享内存归 `operating-systems`（线程是操作系统的执行模型，本模块只讲语言的协作式异步语义）；剖析与数据驱动的性能调查归 `software-engineering`，它需要成本模型与 I/O 知识在前；`venv`、依赖声明与锁文件归 `software-engineering`，本模块只说明依赖属于环境而不属于源码；异常层次与失败契约设计归 `software-engineering`，语言机制在本模块讲完。
+排除并指定去处：线程、GIL 与共享内存归 `operating-systems`（线程是操作系统的执行模型，本模块只讲语言的协作式异步语义）；剖析与数据驱动的性能调查归 `software-engineering`，它需要成本模型与 I/O 知识在前；`venv`、依赖声明与锁文件归 `software-engineering`，本模块只说明依赖属于环境而不属于源码；异常层次与失败契约设计归 `software-engineering`，语言机制在本模块讲完；结构化并发在本模块只讲它与取消的关系，真实并发与 I/O 下的任务生命周期由 `operating-systems` 与 `networks` 重新连接。
 
 深度：`python.basics` 以识别与正确使用为主（B）；`python.objects`、`functions`、`iteration` 覆盖语义、不变量与失败行为（C/D）；`python.data-model`、`representation`、`program`、`async` 以 C 级为主，个别主题到 D。
 
@@ -84,7 +84,9 @@
 | | 20 | `python.modules-and-imports` | 模块、包与导入边界 | ✓ |
 | | 30 | `python.typing` | 类型标注与静态契约 | ✓ |
 | `python.async` | 10 | `python.asyncio-scheduling` | coroutine、task 与调度 | ✓ |
-| | 20 | `python.cancellation-and-timeouts` | 取消、超时与清理 | ✓ |
+| | 20 | `python.async-iteration-and-context` | 异步迭代与异步上下文 | ✓ |
+| | 30 | `python.cancellation-and-timeouts` | 取消与清理 | ✓ |
+| | 40 | `python.timeout-and-task-lifecycle` | 超时与结构化任务生命周期 | ✓ |
 
 ### 3.2 数据结构、算法与复杂度（`algorithms`，order 20）
 
@@ -317,7 +319,7 @@
 | 6 | `python.data-model`：属性查找、特殊方法、继承与 MRO | 完成 |
 | 7 | `python.representation`：数值与浮点、文本与 bytes | 完成 |
 | 8 | `python.program`：语言保证与实现细节、导入边界、类型标注 | 完成 |
-| 9 | `python.async`：coroutine 与调度、取消与超时清理 | 完成 |
+| 9 | `python.async`：coroutine 与调度、异步迭代与上下文、取消与清理、超时与任务生命周期 | 完成 |
 | 10 | `algorithms.complexity`、`algorithms.sequences` | 已落盘待审核（`lower-bounds`、`strings` 待写） |
 | 11 | `algorithms.maps`：哈希表、有序映射、堆 | `hash-tables` 已落盘；其余计划 |
 | 12 | `algorithms.graphs` | 计划 |

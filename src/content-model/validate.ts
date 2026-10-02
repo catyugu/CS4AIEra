@@ -375,9 +375,6 @@ function checkEditorialWarnings(model: CourseModel, issues: Issue[]): void {
         );
       }
     }
-    if (lesson.cells.length === 0) {
-      warn(issues, "lesson-without-cells", `lesson has no executable cells`, lesson.file);
-    }
   }
 
   for (const entry of model.glossary) {

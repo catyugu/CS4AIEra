@@ -15,7 +15,7 @@ objectives:
 
 本课使用夹具 <LabRef id="sql.orders.basic" />。`customers.country` 与 `orders.discount_cents` 允许为空，其余列由约束保证非空。
 
-## 模型
+## 三值逻辑与未知的传播
 
 SQL 的比较建立在 <Term id="null-logic">NULL 三值逻辑</Term> 上：布尔表达式有三个真值 `TRUE`、`FALSE`、`UNKNOWN`。`WHERE` 保留结果为真的行，假与未知都被丢弃。
 

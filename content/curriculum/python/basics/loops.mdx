@@ -12,7 +12,7 @@ objectives:
 
 对一批数据做同样的处理需要循环。循环的正确性依赖两件事：终止条件与每次迭代累积的状态。
 
-## 模型：for 与 while
+## for 与 while
 
 - `for name in sequence:` 依次把序列中的每个元素绑定到 `name`，对每个元素执行一次循环体。
 - `range(stop)`、`range(start, stop)`、`range(start, stop, step)` 描述一个不含 `stop` 的整数区间。`range` 对象是惰性、不可变的：它按需产生元素，写成 `list(range(...))` 才会把区间展开成列表。

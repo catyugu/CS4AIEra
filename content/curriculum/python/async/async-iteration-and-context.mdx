@@ -1,0 +1,252 @@
+---
+id: python.async-iteration-and-context
+slug: /python/async-iteration-and-context
+order: 20
+title: 异步迭代与异步上下文
+status: published
+objectives:
+  - 说明 `async for` 展开成哪几步，以及迭代在哪一步结束
+  - 实现 `__aiter__` 与 `__anext__`，并判断一个对象能否用于 `async for`
+  - 用异步生成器写异步迭代器，并说明它为什么是一次性的
+  - 说明 `async with` 的三条退出路径，以及它与 `with` 的对应关系
+---
+
+`async for` 与 `async with` 是迭代协议与上下文管理器协议的异步版本：取下一个元素、进入资源、退出资源都可能需要等待，于是等待点被写进了语法本身。把它们与 <CrossRef id="python.iteration-protocol" />、<CrossRef id="python.context-managers" /> 的两套同步约定对照着读，差别只有一处——哪一步可以挂起。
+
+## async for 的展开
+
+`async for` 要求对象提供 `__aiter__`，它直接返回一个异步迭代器；异步迭代器提供 `__anext__`，返回一个可等待对象，取完时抛 `StopAsyncIteration`（见[数据模型](https://docs.python.org/3/reference/datamodel.html#asynchronous-iterators)）。语句的展开是固定的：
+
+```text
+iterator = iterable.__aiter__()
+while True:
+    try: item = await iterator.__anext__()
+    except StopAsyncIteration: break
+    ... 循环体 ...
+```
+
+与同步展开的两处差别是实质性的：取下一个元素要 `await`，因此**每次取元素都是一个挂起点**；结束信号是 `StopAsyncIteration`，不是 `StopIteration`。展开式的每一步都是普通属性查找加一次 `await`，因此可以手工执行：
+
+```python run id="py.async.async-for-expansion"
+import asyncio
+
+
+class Countdown:
+    def __init__(self, start):
+        self.current = start
+
+    def __aiter__(self):
+        print("__aiter__ ran")
+        return self
+
+    async def __anext__(self):
+        if self.current == 0:
+            raise StopAsyncIteration
+        self.current -= 1
+        await asyncio.sleep(0)
+        return self.current + 1
+
+
+async def main():
+    async for value in Countdown(3):
+        print("took", value)
+
+    iterator = Countdown(1).__aiter__()
+    print("manual first element:", await iterator.__anext__())
+    try:
+        await iterator.__anext__()
+    except StopAsyncIteration:
+        print("the second call raised StopAsyncIteration")
+
+
+await main()
+```
+
+`__aiter__` 打印一次就返回了迭代器自身，`async for` 随后只调用 `__anext__`。手工展开给出同样的结果：第一次取值拿到 1，第二次抛出 `StopAsyncIteration`。
+
+两个方向的不匹配都会在运行时报错，而不是静默降级：
+
+```python run id="py.async.iteration-protocols-are-separate"
+class AsyncOnly:
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        raise StopAsyncIteration
+
+
+try:
+    for value in AsyncOnly():
+        print("never reached", value)
+except TypeError as failure:
+    print("async iterable used with for:", type(failure).__name__, "-", failure)
+
+try:
+    async for value in ["a", "b"]:
+        print("never reached", value)
+except TypeError as failure:
+    print("list used with async for:", type(failure).__name__, "-", failure)
+
+try:
+    compile("async for item in data: pass", "<cell>", "exec")
+except SyntaxError as failure:
+    print("outside a coroutine function:", type(failure).__name__, "-", failure.msg)
+```
+
+一个可迭代对象不会因为「看起来像」就能用于 `async for`，反过来也一样：两套协议的名字与方法互不替代。最后一条说明 `async for` 与 `async with` 只能出现在协程函数体内，写在别处是语法错误——这条限制由语法检查执行，与对象是否有 `__aiter__` 无关（见[语言参考](https://docs.python.org/3/reference/compound_stmts.html#the-async-for-statement)）。
+
+## 异步生成器
+
+函数体里同时出现 `async def` 与 `yield` 时得到的是异步生成器函数：调用它不执行函数体，返回一个异步生成器对象，该对象同时是异步迭代器。它的作用是让上面那对手写方法不必逐个写出：
+
+```python run id="py.async.async-generator"
+import asyncio
+
+
+async def ticker(limit):
+    for value in range(limit):
+        await asyncio.sleep(0)
+        yield value
+
+
+async def main():
+    print("calling it returns:", type(ticker(2)).__name__)
+    async for value in ticker(3):
+        print("value", value)
+
+    generator = ticker(2)
+    print("first:", await generator.__anext__())
+    print("second:", await generator.__anext__())
+    try:
+        await generator.__anext__()
+    except StopAsyncIteration:
+        print("the third call raised StopAsyncIteration")
+
+
+await main()
+```
+
+生成器的状态同样保存在挂起的帧里，因此取值之间函数体不进不退；与同步生成器一样，它是**一次性**的：`__aiter__` 返回自身，耗尽之后不能重来（<CrossRef id="python.generators" />）。异步生成器还有 `asend` 与 `athrow`，语义分别对应同步生成器的 `send` 与 `throw`。
+
+收尾的差别更值得注意：同步生成器被回收时由解释器在挂起点抛 `GeneratorExit`，异步生成器的收尾要经过事件循环，因此显式关闭才是可控的做法：
+
+```python run id="py.async.async-generator-close"
+import asyncio
+
+
+async def stream():
+    try:
+        while True:
+            await asyncio.sleep(0)
+            yield "item"
+    finally:
+        print("the finally inside the generator ran")
+
+
+async def main():
+    generator = stream()
+    print("first:", await generator.__anext__())
+    print("second:", await generator.__anext__())
+    await generator.aclose()
+    try:
+        await generator.__anext__()
+    except StopAsyncIteration:
+        print("a closed generator stays exhausted")
+
+
+await main()
+```
+
+`aclose()` 在挂起点把 `GeneratorExit` 送进生成器，`finally` 因此运行，关闭之后的取值立即结束迭代。不显式关闭时，收尾取决于引用何时被回收，而回收要经过事件循环的异步生成器终结流程——与「对象被回收就释放资源」一样不可依赖，资源仍应交给 `async with`。
+
+## async with 的展开
+
+`async with` 的展开与 `with` 逐条对应，区别只在进入与退出都是 `await`（见[语言参考](https://docs.python.org/3/reference/compound_stmts.html#the-async-with-statement)）：
+
+```text
+manager = expression
+aenter = manager.__aenter__
+aexit = manager.__aexit__
+value = await aenter()
+try:
+    body
+except:
+    if not await aexit(*sys.exc_info()):
+        raise
+finally:
+    if not hit_except:
+        await aexit(None, None, None)
+```
+
+由此继承同步版本的全部不变量：`__aenter__` 的返回值绑定给 `as` 的名字；`__aexit__` 在所有路径上恰好调用一次，参数是异常三元组；返回真值时异常被吞掉。三条路径都可以直接观察：
+
+```python run id="py.async.async-with-paths"
+import asyncio
+
+
+class Traced:
+    def __init__(self, suppress):
+        self.suppress = suppress
+
+    async def __aenter__(self):
+        await asyncio.sleep(0)
+        print("__aenter__ ran")
+        return "resource"
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        print("__aexit__ ran with:", exc_type.__name__ if exc_type else None)
+        return self.suppress
+
+
+async def main():
+    async with Traced(suppress=False) as value:
+        print("normal exit, bound to:", value)
+
+    try:
+        async with Traced(suppress=False):
+            raise ValueError("boom")
+    except ValueError as failure:
+        print("the exception kept propagating:", failure)
+
+    async with Traced(suppress=True):
+        raise ValueError("swallowed")
+    print("a true return value suppressed the exception")
+
+
+await main()
+```
+
+正常退出时异常三元组是 `None`；块内抛出 `ValueError` 时 `__aexit__` 拿到它，返回假值让异常继续传播；返回真值时它被吞掉，控制流在 `async with` 之后继续。抑制的代价与同步版本相同：调用方看不到失败，因此只在协议约定如此时使用。
+
+`contextlib.asynccontextmanager` 把异步生成器直接变成上下文管理器，进入部分停在 `yield` 之前，退出部分写在 `yield` 之后的 `finally` 里：
+
+```python run id="py.async.asynccontextmanager"
+import asyncio
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def connected(name):
+    print("acquiring", name)
+    try:
+        await asyncio.sleep(0)
+        yield name
+    finally:
+        print("releasing", name)
+
+
+async def main():
+    async with connected("db") as handle:
+        print("inside the block:", handle)
+
+    try:
+        async with connected("other"):
+            raise RuntimeError("body failed")
+    except RuntimeError as failure:
+        print("the release ran before the failure surfaced:", failure)
+
+
+await main()
+```
+
+`@asynccontextmanager` 装饰的函数只能有一个 `yield`，`yield` 的值绑定给 `as` 的名字，异常路径同样经过 `yield` 之后的代码——写在这里的释放逻辑与手写 `__aexit__` 等价，代价是不能抑制异常（生成器上下文管理器在异常路径上重新抛出，`try` 只负责收尾）。

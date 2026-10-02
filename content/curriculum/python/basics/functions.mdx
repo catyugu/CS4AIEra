@@ -8,11 +8,12 @@ objectives:
   - 定义并调用函数，说明参数与返回值的对应关系
   - 判断一个没有 return 的函数返回什么
   - 用默认参数与关键字参数让调用意图更清楚
+  - 用 `lambda` 表达式把短小的回调就地传给接收函数的 API，并说明它与 `def` 的区别
 ---
 
 函数把一段可重复使用的计算命名，也是划分程序结构的最小单位：接口由参数与返回值构成。形参与实参之间的完整绑定规则由 <CrossRef id="python.call-semantics" /> 建立，这里只保留读懂调用语法所需的部分。
 
-## 模型
+## 定义与调用
 
 - `def name(parameters):` 定义函数，函数体靠缩进界定。
 - 调用 `name(arguments)` 时，每个实参先求值得到一个对象，形参名称绑定到该对象；函数体执行，`return` 的值成为调用的结果。实参个数与形参不匹配抛 `TypeError`，消息里给出函数签名。形参指向的对象被原地修改时，调用方看见的是同一个对象（见 <CrossRef id="python.names-and-objects" />）。
@@ -39,6 +40,20 @@ print(add(2), add(2, 5), add(2, right=10))
 ```
 
 `right` 有默认值，调用时可以省略。`add(2, right=10)` 指定参数名，读起来更清楚，也避免长参数列表中的位置错误。
+
+## 匿名函数
+
+`lambda parameters: expression` 是一个表达式，求值得到一个函数对象，与 `def` 定义的函数行为相同，区别在写法：它没有名字，函数体只能是这一个表达式，不能有语句，也不能有注解。
+
+```python run id="py.functions.lambda"
+double = lambda value: value * 2
+print(double(4), double.__name__)
+
+rows = [("b", 2), ("a", 1)]
+print(sorted(rows, key=lambda row: row[1]))
+```
+
+`double` 只是一个普通名称，指向 `lambda` 产生的那个函数对象；它没有定义时的名字，`__name__` 是 `"<lambda>"`。本课程用它把短小的回调就地写进调用里：`sorted` 的 `key` 需要接收一个单参数函数，写成 `lambda` 就不必在别处为它定义一个名字。需要多行逻辑、文档字符串或语句时用 `def`；`lambda` 没有引入新的调用语义，实参绑定与 `def` 相同（见 <CrossRef id="python.call-semantics" />）。
 
 ## 返回值与副作用
 

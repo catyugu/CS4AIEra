@@ -1,19 +1,19 @@
 ---
 id: python.cancellation-and-timeouts
 slug: /python/cancellation-and-timeouts
-order: 20
-title: 取消、超时与清理
+order: 30
+title: 取消与清理
 status: published
 objectives:
   - 说明一次取消请求在什么时候、以什么形式到达被取消的协程
   - 判断一段代码在被取消时能否交出控制权，并预测 CancelledError 出现的位置
-  - 用 try/finally 写出在取消路径上也执行的清理，并说明吞掉取消会破坏什么
-  - 解释超时、屏蔽与 TaskGroup 各自在取消谁
+  - 用 try/finally 写出在取消路径上也执行的清理
+  - 说明吞掉 CancelledError 之后调用方看到什么，以及这为什么破坏调用方对任务生命周期的控制
 ---
 
 取消是一条控制流：请求从哪里发出、以什么形式到达、会经过哪些清理代码、在谁那里结束。协作式模型里没有从外部掐断一个任务的操作。取消是一次注入到执行流里的异常，因此它出现的位置、能否被观察到、被吞掉之后调用方看到什么，全部由代码结构决定。
 
-## 模型
+## 取消请求与它的到达时刻
 
 - `task.cancel()` 是**向事件循环发出的请求**：它立即返回，并把该 task 标记为待取消，不对正在运行的协程做任何事。
 - 请求在协程**下一次被调度到挂起点**时生效，`CancelledError` 在那个 `await` 处抛出。三条直接后果：
@@ -23,13 +23,10 @@ objectives:
 - `CancelledError` 继承 `BaseException`，不是 `Exception`（见 <CrossRef id="python.exceptions" />）。因此 `except Exception` 不会接住取消，而裸 `except:` 会。
 - 取消也是控制流：`try/finally` 会运行，这是执行清理的位置，清理里仍可以使用挂起点。取消不会回滚已经完成的部分，某个挂起点之前产生的状态变化保持不变，收尾逻辑要按这个前提写。资源释放的完整模型由 <CrossRef id="python.context-managers" /> 建立。
 - 吞掉 `CancelledError` 而不重新抛出，会让调用方收到「正常结束」：`task.done()` 为真、`task.cancelled()` 为假。调用方因此失去了对任务生命周期的控制。
-- **超时**是取消的一种应用：`asyncio.timeout(seconds)` 到期时取消当前正在被等待的工作，并把 `TimeoutError` 抛给 `with` 所在的调用者。
-- **屏蔽** `asyncio.shield(awaitable)` 把内部任务从外部的这次取消中隔离出来：外部等待仍然超时，内部任务继续运行到结束。
-- **结构化并发**：`asyncio.TaskGroup` 在一个子任务失败时取消其余子任务，并等待它们全部结束；父任务被取消时，它创建但**没有等待**的子任务不会被自动取消。
 
-未被取回的异常与取消由事件循环报告，报告位置是 worker 控制台而不是调用处，具体形式随实现变化。取消通过 `CancelledError` 表现，这是语言参考里异常层次的规定；`cancel`、`timeout`、`shield` 与 `TaskGroup` 是标准库 `asyncio` 的契约，随标准库版本演进。
+未被取回的异常与取消由事件循环报告，报告位置是 worker 控制台而不是调用处，具体形式随实现变化。取消通过 `CancelledError` 表现，这是语言参考里异常层次的规定；`cancel` 是标准库 `asyncio` 的契约，随标准库版本演进。
 
-本课用到的 `async with` 是 `with` 的异步形式：进入与退出由 `__aenter__` 与 `__aexit__` 驱动，退出逻辑同样在所有路径上运行，包括取消路径。同步版本的完整模型（进入、正常退出、异常退出三条路径，以及抑制的代价）见 <CrossRef id="python.context-managers" />。
+本课用到的 `async with` 是 `with` 的异步形式，展开与三条退出路径见 <CrossRef id="python.async-iteration-and-context" />；同步版本的完整模型见 <CrossRef id="python.context-managers" />。取消的两类应用——给一段等待设定期限、给一组任务划定共同生命周期——由 <CrossRef id="python.timeout-and-task-lifecycle" /> 处理。
 
 ## 取消在挂起点出现
 
@@ -209,155 +206,3 @@ await main()
 ```
 
 10 秒的等待被取消了，但那个等待被当作「已处理」，于是协程继续执行、正常返回，`cancelled()` 为假。请求取消的一方——无论是超时、上层框架还是关闭流程——都会继续等待一个它以为已经停下的任务。这就是「取消也是控制流」的实际含义：截住它要么完成等价的收尾，要么重新抛出。
-
-## 超时
-
-```python run id="py.async.timeout"
-import asyncio
-
-
-async def slow():
-    try:
-        await asyncio.sleep(10)
-    except asyncio.CancelledError:
-        print("the deadline cancelled this task")
-        raise
-
-
-async def main():
-    try:
-        async with asyncio.timeout(0.001):
-            await slow()
-    except TimeoutError as failure:
-        print("the deadline reported:", type(failure).__name__)
-
-    print("the loop is still usable:", await asyncio.sleep(0, result="yes"))
-
-
-await main()
-```
-
-到期时 `timeout` 做两件事：取消正在被等待的工作，并把 `TimeoutError` 抛给 `with` 的调用者。被等待的协程看到的是普通的取消，因此它的清理路径照常运行。到期时间由循环的时钟决定：`timeout` 保证的是「不会早于」意义上的边界，不保证毫秒级的准时（见 <CrossRef id="python.asyncio-scheduling" />）。传入一个已经就绪的等待时不会触发取消：
-
-```python run id="py.async.timeout-not-expired"
-import asyncio
-
-
-async def main():
-    async with asyncio.timeout(10):
-        value = await asyncio.sleep(0, result="finished in time")
-    print("within the deadline:", value)
-
-    try:
-        async with asyncio.timeout(0.001):
-            await asyncio.sleep(10)
-    except TimeoutError:
-        print("past the deadline: TimeoutError reached the caller")
-
-
-await main()
-```
-
-## 屏蔽
-
-`shield` 把内部任务从这次取消中隔离出来，代价是「谁负责收尾」转移给了调用方。
-
-```python run id="py.async.shield"
-import asyncio
-
-
-async def important():
-    await asyncio.sleep(0.02)
-    return "finished anyway"
-
-
-async def main():
-    task = asyncio.create_task(important())
-    try:
-        async with asyncio.timeout(0.001):
-            await asyncio.shield(task)
-    except TimeoutError:
-        print("the caller timed out | the shielded task is finished:", task.done())
-    print("and it still produces its result:", await task)
-
-
-await main()
-```
-
-调用方的等待被取消了，`task` 没有被取消——它继续运行并给出结果。屏蔽不是保留控制权，而是把这次取消挡在外部：调用方仍要在超时之后决定那个还在运行的任务怎么办，或者等待它。
-
-## 结构化并发
-
-`TaskGroup` 让一组任务共享一个生命周期：任何一个失败，其余被取消，并且全部结束之后才退出 `async with` 块。
-
-```python run id="py.async.task-group"
-import asyncio
-
-
-async def failing():
-    await asyncio.sleep(0)
-    raise ValueError("boom")
-
-
-async def waiting(name):
-    try:
-        await asyncio.sleep(10)
-    finally:
-        print("cleanup of the sibling:", name)
-
-
-async def main():
-    try:
-        async with asyncio.TaskGroup() as group:
-            group.create_task(waiting("a"))
-            group.create_task(waiting("b"))
-            group.create_task(failing())
-    except Exception as failure:
-        print("the group reported:", type(failure).__name__)
-
-    print("the block is over only after every sibling has finished")
-
-
-await main()
-```
-
-两个等待 10 秒的子任务都收到了取消并运行了清理，失败被聚合成一个异常交给调用方。这正是 `create_task` 单独使用时不具备的保证：`TaskGroup` 会等待它创建的全部任务。
-
-`create_task` 与 `TaskGroup` 的差别在父任务被取消时最明显。
-
-```python run id="py.async.orphan-child"
-import asyncio
-
-
-async def child():
-    try:
-        await asyncio.sleep(0.01)
-    finally:
-        print("the child's cleanup ran")
-
-
-async def parent():
-    inner = asyncio.create_task(child())
-    try:
-        await asyncio.sleep(10)
-    finally:
-        print("the parent's cleanup ran | the child is finished:", inner.done())
-    return inner
-
-
-async def main():
-    task = asyncio.create_task(parent())
-    await asyncio.sleep(0)
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        print("the parent was cancelled while its child was still running")
-    await asyncio.sleep(0.1)
-    print("the child outlived its parent and finished on its own")
-
-
-await main()
-```
-
-取消只作用于被取消的那个 task。`parent` 里创建但没有等待的 `child` 不在取消范围内：父任务的清理已经跑完，子任务仍在自己推进，并独立地走完自己的收尾。要在取消时收走整棵子树，就必须用会等待所有子任务的结构（`TaskGroup`）或显式地取消并等待它们。

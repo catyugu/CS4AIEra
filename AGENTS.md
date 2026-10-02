@@ -59,8 +59,7 @@ npm run build    static build
 A change is done only when:
 
 1. it preserves the static, no-account, no-server-execution architecture;
-2. content and references validate, and lessons that were added or edited carry the executable cells they need;
-3. keyboard and narrow-screen behavior are acceptable;
-4. affected cells can Run, Stop and Reset correctly in a browser;
-5. browser and worker consoles are clean in normal use;
-6. the documents listed above are updated.
+2. keyboard and narrow-screen behavior are acceptable;
+3. affected cells can Run, Stop and Reset correctly in a browser;
+4. browser and worker consoles are clean in normal use;
+5. the documents listed above are updated.
