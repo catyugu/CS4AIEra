@@ -65,16 +65,7 @@ const trail = sectionTrail(model, lesson.sectionId).slice(1);
         </ol>
       </nav>
       <h1>{lesson.title}</h1>
-      <p class="lesson-meta">
-        {
-          [
-            lesson.estimatedReadingMinutes ? `约 ${lesson.estimatedReadingMinutes} 分钟` : undefined,
-            `${lesson.cells.length} 个可运行单元格`,
-          ]
-            .filter(Boolean)
-            .join(" · ")
-        }
-      </p>
+      <p class="lesson-meta">{lesson.tokens} tokens · {lesson.cells.length} 个可运行单元格</p>
       {
         lesson.objectives.length > 0 && (
           <section class="objectives" aria-labelledby="objectives-heading">

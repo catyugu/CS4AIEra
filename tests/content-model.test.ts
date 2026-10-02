@@ -68,6 +68,37 @@ describe("frontmatter and body scanning", () => {
     expect(splitFrontmatter("# no frontmatter\n")).toBeUndefined();
   });
 
+  it("counts the body tokens of a lesson, not its frontmatter", async () => {
+    const body = "## 目的\n\n本课解释赋值与名字的使用规则，并给出可运行的示例。\n";
+    const lesson = (extra: Record<string, unknown>) =>
+      mdx(
+        {
+          id: "topic.lesson",
+          slug: "/topic/lesson",
+          order: 10,
+          title: "课时",
+          status: "published",
+          objectives: ["说明某事"],
+          ...extra,
+        },
+        body,
+      );
+    const tokensIn = async (file: string) => {
+      const { model } = await validateTree(baseTree({ "content/curriculum/topic/lesson.mdx": file }));
+      return model.lessons.find((entry) => entry.id === "topic.lesson")!.tokens;
+    };
+
+    const plain = await tokensIn(lesson({}));
+    const verboseMetadata = await tokensIn(
+      lesson({ title: "一个明显更长的标题".repeat(5), objectives: ["用可观察的推理动作表述目标".repeat(5)] }),
+    );
+    const longerBody = await tokensIn(lesson({}).replace("并给出可运行的示例。", "并给出可运行的示例，逐条对账每个模型的后果。".repeat(3)));
+
+    expect(plain).toBeGreaterThan(0);
+    expect(verboseMetadata).toBe(plain);
+    expect(longerBody).toBeGreaterThan(plain);
+  });
+
   it("turns a run fence into a cell and leaves plain fences static", async () => {
     const { model } = await validateTree(
       baseTree({
@@ -120,7 +151,7 @@ describe("frontmatter and body scanning", () => {
           title: "课时",
           status: "published",
           objectives: ["说明某事"],
-          estimated_reading_minute: 30,
+          invalidTerm: "foo",
         }),
       }),
     );

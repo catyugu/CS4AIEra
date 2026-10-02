@@ -4,6 +4,7 @@ import { parse as parseYaml } from "yaml";
 
 import { formatZodError, glossaryFrontmatterSchema, labSchema, lessonFrontmatterSchema, sectionSchema } from "./schema";
 import { isExecutableFence, parseCellMeta, scanMdx, toExecutableCell, toStaticBlock } from "./mdx-scan";
+import { countTokens } from "./tokens";
 import type { CourseModel, GlossaryEntry, Issue, LabFixture, Lesson, Section } from "./types";
 
 /**
@@ -187,7 +188,7 @@ async function loadLesson(
     title: parsed.data.title,
     status: parsed.data.status,
     objectives: parsed.data.objectives,
-    estimatedReadingMinutes: parsed.data.estimated_reading_minutes,
+    tokens: countTokens(split.body),
     sectionId,
     file: relativeFile,
     cells,

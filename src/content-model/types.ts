@@ -63,7 +63,8 @@ export interface Lesson {
   title: string;
   status: LessonStatus;
   objectives: string[];
-  estimatedReadingMinutes?: number;
+  /** BPE tokens of the lesson body, frontmatter excluded; shown in the header. */
+  tokens: number;
   /** Owning section id. */
   sectionId: string;
   /** Repo-relative path, for diagnostics only. */
