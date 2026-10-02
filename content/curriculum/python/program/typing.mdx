@@ -5,71 +5,136 @@ order: 30
 title: 类型标注与静态契约
 status: published
 objectives:
-  - 说明标注表达哪些约束，以及它无法表达哪些约束
-  - 说明检查器读什么、能证明什么，以及 `Any` 在哪里打断推理
-  - 判断一段代码里的标注是被工具检查的契约，还是无人验证的注释
-  - 说明 `dataclasses` 这类库读取标注时，标注如何变成可执行行为
-  - 说明 3.14 起标注求值时机与更早版本的差别，以及同一段代码为什么在两个版本上表现不同
+  - 区分静态类型契约、运行时标注对象与实际数据校验
+  - 说明 Any 与 object 对静态推理的不同影响
+  - 用分支收窄 union，并追踪泛型保留的输入输出关系
+  - 用别名与写入构造可变容器不能协变的反例
+  - 区分 Protocol 的静态结构检查与运行时成员检查
 ---
 
-标注是 Python 里唯一的静态约束手段：`def parse(text: str) -> list[int]` 写下了「这个函数期望什么、返回什么」。解释器不看它，检查它的是另一个进程，因此标注的价值取决于有没有东西在读它：被检查器读的标注是契约，没人读的标注只是注释。本课按四条边界展开——标注能表达什么、检查器能证明什么、标注在哪里变成可执行行为、运行时数据为什么仍需单独验证。求值时机随版本改变，放在最后一节单独处理。
+`def parse(text: str) -> list[int]` 写下参数与返回值的类型契约。静态检查器在运行前读取源码，依据标注和类型推断发现不一致；解释器不据此检查实参或容器元素。读代码时需要分开三个问题：类型契约是否自洽、运行时工具怎样读取标注、这次输入是否满足业务约束。
 
-## 标注写的是一份契约
+## 标注与运行时对象
 
-- 标注描述的是**类型层面的约束**：参数的类别、返回值的类别、类属性名、可空性、容器元素类型。
-- 它无法表达取值范围、非空、互斥状态、单位或任何需要条件判断的不变量。可空性属于标注：`x: int` 与 `x: int | None` 在检查器看来不同，漏写 `| None` 会让检查器放过一个真实的空值缺陷；`bool` 是 `int` 的子类型，`x: int` 接受 `True`，需要排除布尔值时显式判断。
-- `list[int]`、`int | None` 这类写法是标注专用语法：`list[int]` 不是类，不能用于 `isinstance`，运行时它只是一个记录了下标的对象。可变容器既不协变也不逆变，`list[int]` 不接受 `list[bool]` 的赋值，只有只读的序列类型允许协变；这类规则由检查器实现，运行时没有对应机制。
-- 标注是**表达式**，不是声明：它不创建变量、不做转换、不改变运行时行为。`label: str` 只有标注没有赋值，类上因此没有这个属性。
-
-只要有人读，标注就是对象：
-
-```python run id="py.typing.annotation-objects"
-import typing
-
-
-def parse(text: str) -> list[int]:
-    return [int(part) for part in text.split()]
-
-
-print("the annotations are objects:", parse.__annotations__)
-print("they are resolved by the tooling:", typing.get_type_hints(parse))
-print("a generic alias is not a class:", type(list[int]).__name__)
-print("aliases are equal by value, not identical:", list[int] == list[int], list[int] is list[int])
-
-try:
-    isinstance([1], list[int])
-except TypeError as failure:
-    print("isinstance rejects it:", failure)
-```
-
-`parse.__annotations__` 里的值是类型对象（`str`、`list[int]`），`list[int]` 的类型是 `types.GenericAlias`——它是标注语法的一部分，不是 `list` 的子类，因此 `isinstance` 拒绝它。需要运行时判断元素类型时必须自己遍历，或用带 `@runtime_checkable` 的协议。
-
-## 检查器能证明什么
-
-标注由解释器以外的静态分析工具检查：它在运行前读源码、按标注推理并报告不一致。它证明的是「按标注看这段代码是否自洽」，不证明「这次调用的数据满足前提」。默认配置下未标注的代码不受检查；`Any` 让推理在该处停止，从 JSON、环境变量或数据库读入的数据通常是 `Any`，静态契约在这些边界上必须手工恢复，否则检查器对这条数据流不再作任何判断（见 [typing](https://docs.python.org/3/library/typing.html)）。选定检查器、严格程度与是否在 CI 中阻断提交属于交付流程。
-
-运行时一侧完全不参与：
+类型契约可以描述参数、返回值、容器元素与可空性。普通的 `int` 标注不限制取值范围，也不排除 `bool`：`bool` 是 `int` 的子类型。正数、非空、单位一致等业务不变量仍需另外建立。
 
 ```python run id="py.typing.not-enforced"
 def resize(width: int, height: int) -> int:
     return width * height
 
 
-print("with the annotated types:", resize(3, 4))
-print("with the wrong types:", resize("abc", 4))
-print("annotations are stored, not enforced:", resize.__annotations__)
-
+print(resize(3, 4))
+print(resize("abc", 4))
 try:
     resize(3)
-except TypeError as failure:
-    print("the call itself is still checked:", failure)
+except TypeError:
+    print("missing argument: call binding failed")
 ```
 
-`resize("abc", 4)` 正常返回 `"abcabcabcabc"`：标注不参与调用，解释器只关心实参与形参能否绑定。参数个数不匹配仍然抛 `TypeError`，那条错误来自调用机制，与标注无关。
+检查器应拒绝 `resize("abc", 4)`，运行时却返回重复的字符串。少传参数仍抛 `TypeError`，这来自 <CrossRef id="python.call-semantics" /> 的参数绑定规则，与标注无关。这里及下文标出的静态错误是类型契约的推导；浏览器单元格运行 Python，不运行静态检查器。
 
-这一条对高阶函数同样成立：一个接收回调并调用它的函数，无法通过标注保证回调遵守自己的标注；不一致只能由静态工具在运行前发现。
+`list[int]` 是运行时存在的参数化泛型对象，类型为 `types.GenericAlias`；类型检查器把它解释为列表元素契约，运行时不检查元素（见 [内置类型：GenericAlias](https://docs.python.org/3.14/library/stdtypes.html#types-genericalias)）。`int | None` 同样可在运行时求值得到联合类型对象。
 
-## 结构类型与它的检查边界
+```python run id="py.typing.annotation-objects"
+alias = list[int]
+print(type(alias).__name__)
+print(alias.__origin__, alias.__args__)
+print(alias(["unchecked"]))
+print(isinstance(None, int | None))
+try:
+    isinstance([1], alias)
+except TypeError:
+    print("isinstance rejects a parameterized generic")
+```
+
+别名可以保存和调用，却不能把 `isinstance(values, list[int])` 当成元素校验。标注也不负责赋值：类体中单写 `label: str` 不会创建一个已有值的属性。
+
+## Any 与 object
+
+`object` 表示任意 Python 对象，但只允许依赖所有对象共有的操作。`Any` 允许检查器接受任意操作与类型赋值，因而在该处放弃类型保证（见 [typing：Any](https://docs.python.org/3.14/library/typing.html#the-any-type)）。两者都能接收字符串，之后的推理能力不同：
+
+```python
+from typing import Any
+
+
+def unchecked(value: Any) -> int:
+    return value + 1      # Any 使检查器接受这条数据流
+
+
+def unknown(value: object) -> int:
+    return value + 1      # 静态错误：object 没有承诺数值加法
+```
+
+`unchecked("text")` 仍会在运行时失败。把未知数据记作 `object`，要求代码在使用前提供证据；把它记作 `Any`，允许代码跳过这一步。`Any` 常用于与缺少类型信息的代码交接，但需要知道保证在哪里中断。
+
+## union 与收窄
+
+联合类型（union）`int | None` 表示值可能属于两种情形。收窄（narrowing）是检查器依据分支条件缩小当前可能类型集合的过程：
+
+```python run id="py.typing.narrowing"
+def increment(value: int | None) -> int:
+    if value is None:
+        return 0
+    return value + 1
+
+
+def describe(value: object) -> str:
+    if isinstance(value, str):
+        return value.upper()
+    return "not text"
+
+
+print(increment(None), increment(4))
+print(describe("hello"), describe(4))
+```
+
+`None` 分支返回后，剩余路径上的 `value` 为 `int`，加法才有依据。`isinstance` 分支把 `object` 收窄为 `str`，于是字符串方法可用。分支既提供静态证据，也在运行时选择路径；单写标注或 `typing.cast` 不会执行这种验证。
+
+## 泛型保留类型关系
+
+把参数和返回值都写成 `object` 会丢掉二者之间的关系；都写成 `Any` 又会放弃检查。泛型（generic）用同一个类型参数表达这条关系：
+
+```python run id="py.typing.generic-relation"
+from collections.abc import Sequence
+from typing import TypeVar
+
+T = TypeVar("T")
+
+
+def first(values: Sequence[T]) -> T:
+    if not values:
+        raise ValueError("empty sequence")
+    return values[0]
+
+
+print(first([3, 4]), first(["a", "b"]))
+try:
+    first([])
+except ValueError as failure:
+    print(failure)
+```
+
+输入 `Sequence[int]` 时返回 `int`，输入 `Sequence[str]` 时返回 `str`，检查器沿调用保留这条关系（见 [typing：Generics](https://docs.python.org/3.14/library/typing.html#generics)）。`T` 不承诺序列非空；空输入的失败契约仍由函数体建立。
+
+## 可变容器与 invariance
+
+若 `S` 是 `T` 的子类型，容器类型也允许从 `Container[S]` 赋给 `Container[T]`，就称其在该参数上协变（covariant）。对允许写入的 `list`，这个规则会破坏共享对象的元素契约：
+
+```python run id="py.typing.mutable-alias"
+flags: list[bool] = [True]
+numbers: list[int] = flags  # 静态错误；运行时赋值照常建立别名
+numbers.append(2)
+print(flags)
+print(numbers is flags)
+```
+
+`bool` 是 `int` 的子类型，写入整数对 `numbers` 的契约合法，却破坏了 `flags` 只含布尔值的契约。两个名字指向同一个列表，后果来自 <CrossRef id="python.names-and-objects" /> 的别名模型。因此 `list` 的元素类型参数是不变的（invariant）：不能仅凭元素的子类型关系在两种列表类型间赋值（见 [类型规范：方差](https://typing.python.org/en/latest/spec/generics.html#variance)）。
+
+`Sequence[T]` 提供读取接口，不提供 `append` 这类写入操作，因此可以协变；接收 `Sequence[int]` 的函数可读取 `list[bool]`。这不保证底层对象永不变化，只限制通过当前接口可以做什么。
+
+## Protocol 的结构类型
+
+结构类型（structural typing）按成员与签名判断兼容性，不要求对象继承指定类。`Protocol` 可以表达「需要一个无参数、返回字符串的 read 方法」：
 
 ```python run id="py.typing.protocol"
 from typing import Protocol, runtime_checkable
@@ -86,144 +151,58 @@ class FileReader:
 
 
 class WrongSignature:
-    def read(self, size: int = 0) -> str:
+    def read(self, size: int) -> str:
         return "contents"
 
 
-print("structural: no inheritance is needed:", isinstance(FileReader(), Reader))
-print("the check only looks for the method:", isinstance(WrongSignature(), Reader))
-print("it does not compare signatures:", WrongSignature().read(10), FileReader().read())
+def consume(reader: Reader) -> str:
+    return reader.read()
+
+
+print(consume(FileReader()))
+print(isinstance(WrongSignature(), Reader))
+try:
+    consume(WrongSignature())  # 静态错误：read 要求额外实参
+except TypeError:
+    print("member exists, but the call contract fails")
 ```
 
-`Protocol` 把「有哪些方法」写成可检查的契约，对象不需要继承它就能通过 `isinstance`——这与 <CrossRef id="python.dunder-protocols" /> 里的抽象基类检查是同一件事，区别在于 `Protocol` 同时可以被静态工具读取。`@runtime_checkable` 的运行时检查只验证**方法是否存在**，不验证签名：`WrongSignature.read(size)` 同样通过检查。静态工具会报告这个不一致，运行时不会。
+`FileReader` 没有继承 `Reader`，仍满足静态契约。`WrongSignature` 有同名方法，却要求必传的 `size`，不能替代无参数调用。`@runtime_checkable` 只检查所需成员是否存在，不核对签名或返回类型，因此上面的 `isinstance` 为真；它不能校验列表元素，也不能证明业务行为（见 [typing：runtime_checkable](https://docs.python.org/3.14/library/typing.html#typing.runtime_checkable)）。
 
-**有意识地使用这一点**：结构类型描述能力，不描述身份；用协议表达「需要能读」，用类表达「是一个」。两者都表达了什么，也就都隐含地排除了什么。
+## 外部数据与业务约束
 
-## 库读取标注时
+外部数据的静态类型来自 API 声明，不证明实际值满足业务要求。例如 `os.environ` 是字符串键、字符串值的映射（见 [os：environ](https://docs.python.org/3.14/library/os.html#os.environ)）；JSON 解析结果则可以包含数字、布尔值、列表、映射与空值。不能统一把外部数据称为文本或 `Any`。
 
-```python run id="py.typing.dataclass-consumer"
-from dataclasses import dataclass, fields
-
-
-@dataclass
-class Sensor:
-    name: str
-    reading: float = 0.0
-
-    def describe(self) -> str:
-        return f"{self.name}={self.reading}"
-
-
-sensor = Sensor("inlet", 21.5)
-print("the generated repr uses the annotations:", sensor)
-print("the field list comes from the annotations:", [field.name for field in fields(Sensor)])
-print("comparison was generated too:", sensor == Sensor("inlet", 21.5))
-print("annotations are still not enforced on construction:")
-print("  ", Sensor("inlet", "not a number").reading)
-```
-
-`dataclass` 读取 `__annotations__` 决定字段名与顺序，据此生成 `__init__`、`__repr__` 与相等比较。注解在这里是**可执行的**：漏写一个字段的注解，它就不会成为构造参数。同时它仍然不检查值的类型——`Sensor("inlet", "not a number")` 照常构造，只有使用这个字段的代码才会失败。库把注解从注释变成了规格，但没有把它变成守卫。
-
-## 运行时数据边界
-
-**静态检查与运行时检查是两件事**，这是本课的核心结论：静态契约由工具在运行前验证，回答「按类型看这段代码是否自洽」；运行时契约由代码在失败点抛出，回答「这次调用的实际数据是否满足前提」。两者检查的是不同命题，互不替代。
-
-数据从外部进入程序的位置——JSON、表单、环境变量、数据库结果——恰好是标注最无力、运行时检查最必要的位置：这些值在类型系统里是 `Any`，把它们变成契约的一部分需要一次显式检查（解析、校验、断言），这一步不能由标注替代。标注无法表达的约束——取值范围、非空、状态互斥、单位一致——同样只能在运行时校验，写错的地方是「以为标注管住了」。标注错误的代价不对称：遗漏标注只损失检查覆盖，写错的标注会让检查器放过缺陷并让读者相信它，比不写更糟。
-
-## 版本与运行时语义
-
-求值时机被改过两次，同一个 `def parse(text: Token) -> None` 因此在不同年份的 Python 上给出三种结果：
-
-| 语义 | 生效版本 | 求值时机 | 存储形态 |
-| --- | --- | --- | --- |
-| stock（PEP 3107、PEP 526） | 3.0–3.13 默认 | 定义语句执行时立即求值 | 结果存入 `__annotations__` |
-| stringified（PEP 563） | 3.7 起，写了 `from __future__ import annotations` 时 | 不求值 | 源代码文本 |
-| deferred（PEP 649、PEP 749） | 3.14 起默认 | 被访问时才求值 | `__annotate__` 函数，首次访问后缓存 |
-
-本课程的运行时是固定的发行版，它的 `sys.version` 是 **3.14.2**，所以这里看到的默认行为是延迟求值。求值结果仍然存在 `__annotations__` 里，延迟语义下由 `__annotate__` 函数产出并缓存（见 [PEP 649](https://peps.python.org/pep-0649/) 与 [annotationlib](https://docs.python.org/3/library/annotationlib.html)）。求值时机可以直接用副作用读出来：
-
-```python run id="py.typing.deferred-evaluation"
-import annotationlib
-
-events = []
-
-
-def note(value):
-    events.append("evaluated")
+```python run id="py.typing.validation"
+def parse_limit(raw: str) -> int:
+    value = int(raw)
+    if not 1 <= value <= 100:
+        raise ValueError("limit must be in 1..100")
     return value
 
 
-def late(x: note(int)) -> None:
-    pass
-
-
-print("at definition time:", events)
-print("the annotation is stored as a function:", callable(late.__annotate__))
-print("first access evaluates it:", late.__annotations__)
-print("events after that access:", events)
-print("read as text without evaluating:", annotationlib.get_annotations(late, format=annotationlib.Format.STRING))
+for raw in ("12", "abc", "0"):
+    try:
+        print(repr(raw), "->", parse_limit(raw))
+    except ValueError as failure:
+        print(repr(raw), "->", type(failure).__name__)
 ```
 
-定义 `late` 之后 `events` 还是空的：函数对象上多了一个 `__annotate__`，注解表达式被留到第一次读取 `__annotations__` 时才执行，结果缓存起来。`annotationlib`（3.14 新增）把这三种读法显式分开：`Format.VALUE` 求值，`Format.FORWARDREF` 把无法解析的名字保留为前向引用，`Format.STRING` 只给源代码文本。
+三个输入都满足 `str` 契约，只有一个满足业务约束。解析检查表示是否有效，范围检查建立领域不变量。静态检查回答「依据声明，这段代码的类型使用是否一致」；运行时校验回答「这次实际输入是否满足前提」。跨越不可信数据边界时，需要后者的证据。
 
-延迟求值让前向引用不再需要引号——函数可以先于它引用的类出现：
+## 标注内省的版本边界
 
-```python run id="py.typing.forward-reference"
-def parse(text: Token) -> list[Token]:
-    return [text]
+Python 不在运行时强制标注；标注本身是可以被运行时工具读取的数据，例如库可以据此生成字段或接口。标注表达式的求值时机属于版本敏感行为：Python 3.14 默认延迟求值，需要内省时优先用当前官方 API `annotationlib.get_annotations()`（见 [annotationlib](https://docs.python.org/3.14/library/annotationlib.html) 与 [标注最佳实践](https://docs.python.org/3.14/howto/annotations.html)）。
 
-
-class Token:
-    pass
+```python run id="py.typing.introspection"
+from annotationlib import get_annotations
 
 
-print("the name is resolved later:", parse.__annotations__["text"] is Token)
-print("the return annotation is a parameterized list:", parse.__annotations__["return"] == list[Token])
-print("and the call itself works:", isinstance(parse(Token())[0], Token))
+def parse(text: str) -> list[int]:
+    return [int(part) for part in text.split()]
+
+
+print(get_annotations(parse))
 ```
 
-在 3.13 及更早的默认语义下，`def` 执行时 `Token` 还没有定义，这一行会抛 `NameError`，只能把注解写成引号里的 `"Token"`，或者依赖 `from __future__ import annotations`。字符串化语义至今仍然可用，代价是注解在运行时永远是文本：
-
-```python run id="py.typing.stringified"
-from __future__ import annotations
-
-
-def stringified(x: Token) -> None:
-    pass
-
-
-class Token:
-    pass
-
-
-print("stored as source text:", stringified.__annotations__)
-```
-
-标注存放在**执行它的那个命名空间**里：模块顶层的进入模块的 `__annotations__`，类体里的进入类的 `__annotations__`，函数内部的既不存储也不求值。
-
-```python run id="py.typing.class-annotations"
-class Config:
-    count: int = 0
-    label: str
-
-
-def local_scope() -> None:
-    temporary: int = 3
-    never_evaluated: print("  the annotation expression never runs") = temporary
-    print("  inside the function:", temporary)
-
-
-print("the class body collects its annotations:", Config.__annotations__)
-print("annotating without assigning creates no attribute:", hasattr(Config, "label"))
-
-try:
-    Config.label
-except AttributeError as failure:
-    print("reading it fails:", failure)
-
-local_scope()
-```
-
-单元格里那个写在标注位置上的 `print` 从未执行，运行时连求值痕迹都没有——函数内部的标注只对静态工具可见。`label: str` 只有标注没有赋值，因此类上没有这个属性，读取抛 `AttributeError`。本课程的单元格顶层不是模块命名空间，因此这里用类体观察存储位置。
-
-`from __future__ import annotations` 只作用于它所在的模块；在 3.14 上它意味着连 `annotationlib` 都不需要碰，读到 `__annotations__` 时拿到的直接是字符串。这就是同一个问题在不同年份的答案会互相矛盾的原因：**求值语义是版本相关的，解释器不检查标注这一点则始终不变。**
+本例使用 Python 3.14 的 API。读取并求值标注不等于校验一次调用；若维护其他版本的内省工具，应按该版本文档选择读取方式。

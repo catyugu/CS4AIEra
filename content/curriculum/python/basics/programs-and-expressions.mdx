@@ -2,65 +2,82 @@
 id: python.programs-and-expressions
 slug: /python/programs-and-expressions
 order: 10
-title: 程序、表达式与语句
+title: 求值、值与名称绑定
 status: published
 objectives:
-  - 区分表达式与语句，并说明各自在一次求值中产生什么
-  - 判断一段代码会输出什么，并指出打印输出与结果值的区别
-  - 用 repr 检查一个字符串的真实内容
+  - 追踪表达式求值、得到对象与名称绑定的顺序
+  - 区分表达式的结果值、打印输出与语句的作用
+  - 用 type 判定对象类型，并预测运算与显式转换的结果
+  - 预测重新赋值后各名称指向的值，并解释赋值为什么不复制对象
 ---
 
-Python 程序由语句组成，语句中的表达式被求值成值。分清这两类结构，是读懂后续所有代码的前提。
+Python 程序由语句组成，语句中的表达式求值得到对象，赋值语句可以把名称绑定到对象。后续表达式通过名称取得对象，再进行运算。第一套可复用的模型是：
 
-## 求值
-
-解释器从上到下读代码，遇到一条语句就执行它。
-
-- **表达式**（expression）是有值的代码片段：`2 + 3`、`len("hello")`、`"a" + "b"`。
-- **语句**（statement）是让解释器做一件事的指令：赋值、`if`、`for`、函数定义。
-- **函数调用** `name(...)` 是表达式：把参数交给函数，函数返回一个值。
-- `print(...)` 是函数调用，作用是把值写到输出；它自身返回 `None`。
-- 名字区分大小写：`Width` 与 `width` 是两个名字。
-- 缩进有语法含义：行首多余的空格会改变代码块结构，或直接抛 `IndentationError`。
-- `#` 之后的内容是注释，不参与求值。
-
-程序的可观察行为由三部分构成：输出、副作用与返回值。日志、指标与退出码都建立在这三者上。
-
-```python run id="py.basics.hello"
-print("Hello, world")
+```text
+源码中的表达式 → 求值 → 得到对象（具有值与类型）
+                            ↓ 赋值
+                         名称绑定
+                            ↓ 后续表达式读取名称
+                         取得对象
 ```
 
-这一行是一条语句。`print` 是函数，`"Hello, world"` 是它的参数，一个字符串。执行后输出区出现 `Hello, world`。
+## 表达式与语句
+
+**表达式**（expression）是求值后得到对象的代码片段，如 `2 + 3`、`"a" + "b"`、`len("hello")`。**语句**（statement）规定执行动作，如赋值、条件、循环与函数定义。函数调用也是表达式：调用有返回值，并且可以产生副作用。
 
 ```python run id="py.basics.expression-vs-text"
 print(2 + 3)
 print("2 + 3")
+result = print("output")
+print("return value:", result)
 ```
 
-第一行的参数是表达式 `2 + 3`，先求值为整数 5 再打印。第二行的参数是字符串，内容就是 `2 + 3` 这几个字符，原样打印。引号决定一段文本是代码还是数据。
+第一行先求值 `2 + 3` 得到整数 5，再打印；第二行打印字符串里的字符。第三行产生输出并返回 `None`，赋值把 `result` 绑定到这个返回值。打印输出与表达式结果是两个不同的可观察量，不能从「打印了什么」推断「返回了什么」。
 
-## 单元格的求值规则
+顺序执行的语句从上到下运行，条件、循环与调用会改变执行路径。缩进规定代码块结构，多余或缺失的缩进可能抛 `IndentationError`；`#` 引入行内注释，注释不参与求值。
 
-本课程的代码单元格按交互式解释器的规则求值：执行全部语句，并显示最后一行表达式的值。这是单元格的求值语义；Python 脚本不会因为文件最后写了一个表达式就显示结果，脚本里的表达式只有被打印、赋值或返回才产生可见效果。
+## 对象的值与类型
 
-```python run id="py.basics.trailing-expression"
-width = 3
-height = 4
-width * height
+每个对象有类型，类型决定可用的运算以及运算的含义。这里先用值与类型预测运算；对象身份、别名与可变性的后果由 <CrossRef id="python.names-and-objects" /> 展开。
+
+```python run id="py.types.overview"
+print(type(1), type(1.5), type("text"), type(True), type(None))
+print(1 + 1, "1" + "1", 1 + 1.5)
+print(isinstance(True, int), True + True)
 ```
 
-前两行是赋值语句，没有可显示的值；最后一行的表达式求值为 12，单元格把它作为结果值单独显示。把最后一行改成 `print(width * height)` 会得到打印输出。
+`int` 表示整数，`float` 表示浮点数，`str` 表示字符串，`bool` 的值是 `True` 与 `False`。`None` 也是对象，是 `NoneType` 的唯一实例，常用来表示结果缺失；它不等于空字符串或 0。`bool` 是 `int` 的子类型，因此 `isinstance(True, int)` 为真，相加得到 2。
 
-`repr()` 给出一个值的可读表示，用于检查字符串里看不见的字符：
+`+` 对整数做加法，对字符串做拼接，整数与浮点数相加得到浮点数。字符串与整数之间没有这种加法定义：
 
-```python run id="py.basics.repr"
-print(repr("two\nlines"))
-print(repr("  padded  "))
+```python run id="py.types.mismatch"
+print("abc" + 1)
 ```
 
-`repr` 把换行显示为 `\n`，把空格留在引号内。检查字符串的真实内容用 `repr`，观察程序行为用 `print`。
+这一行抛 `TypeError`。修法取决于意图：`str(1)` 得到文本，`int("1")` 得到整数。转换也可能失败：`int("abc")` 抛 `ValueError`，说明参数类型可接受但值不合法。详细的数字与字符串规则分别见后两课。
 
-不加引号的文本是一个名字，名字在赋值之前被求值时抛 `NameError`：
+## 赋值与重新绑定
+
+`name = expression` 分两步：先求值右侧表达式，再把左侧名称绑定到结果对象。名称是读取绑定的入口，类型属于对象；同一名称可以先后绑定到不同类型的对象。
+
+```python run id="py.names.reassignment"
+x = 10
+x = x + 5
+print(x)
+
+a = b = 0
+a = a + 1
+print(a, b)
+
+x = "fifteen"
+print(x, type(x))
+```
+
+`x = x + 5` 先读取旧绑定，算出 15，再更新 `x`。`a = b = 0` 将两个名称绑定到同一个整数对象；`a = a + 1` 将 `a` 重新绑定到 1，`b` 仍绑定到 0。赋值不复制对象，详细的共享状态实验见 <CrossRef id="python.names-and-objects" />。
+
+对本例的整数，`x += 1` 得到的值与 `x = x + 1` 相同。增强赋值一般不能简单替换为普通赋值：可变对象可能原地更新，目标的求值规则也有区别（<CrossRef id="python.mutability-and-copy" />）。
+
+名称区分大小写，`Width` 与 `width` 不同；名称不能以数字开头，也不能使用关键字。函数中绑定的名称通常是局部名称，作用域规则由 <CrossRef id="python.scope-and-closure" /> 处理。
 
 ```python run id="py.basics.name-error"
 print("before")
@@ -68,4 +85,28 @@ print(missing_name)
 print("after")
 ```
 
-执行在第二行停止，`NameError` 说明这个名字还没有被赋值。已经打印的内容留在输出区，最后一行不会执行。输出区同时给出异常类型、消息与出错位置。
+第二行无法找到名称绑定，抛 `NameError`，执行在这里停止。已打印的 `before` 保留，第三行不运行。异常类型、消息与出错位置提供定位失败的证据。
+
+## 单元格结果与输出表示
+
+本课程的单元格执行全部语句，并显示末尾表达式的结果。这是交互式单元格的规则；普通 Python 脚本不会自动显示末尾表达式的值。表达式仍会被求值，也可能产生副作用或抛异常。
+
+```python run id="py.basics.trailing-expression"
+width = 3
+height = 4
+width * height
+```
+
+两条赋值语句建立绑定，最后的表达式读取绑定并求值为 12，单元格单独显示这个结果。把末行改为 `print(width * height)`，则得到打印输出，调用的返回值为 `None`。
+
+```python run id="py.basics.repr"
+total = 42
+print("value is", total)
+print("value is " + str(total))
+print(repr("two\nlines"))
+print(repr("  padded  "))
+```
+
+`print` 接受多个参数，默认用空格分隔并将值转为文本；用字符串 `+` 拼接时，需要显式转换数字。`repr` 给出便于检查的表示：换行显示为 `\n`，边界空格保留在引号内。
+
+静态工具可以依据类型推断与标注提前发现部分不一致（<CrossRef id="python.typing" />），运行时则在实际执行到操作时检查。环境变量的值是文本，JSON 解析结果还可能是数字、列表或其他对象；进入业务计算前仍需按实际数据解析与校验。

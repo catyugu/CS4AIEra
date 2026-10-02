@@ -249,4 +249,31 @@ async def main():
 await main()
 ```
 
-`@asynccontextmanager` 装饰的函数只能有一个 `yield`，`yield` 的值绑定给 `as` 的名字，异常路径同样经过 `yield` 之后的代码——写在这里的释放逻辑与手写 `__aexit__` 等价，代价是不能抑制异常（生成器上下文管理器在异常路径上重新抛出，`try` 只负责收尾）。
+`@asynccontextmanager` 要求每次执行恰好产出一次，`yield` 的值绑定给 `as` 的名字。块内异常会在 `yield` 处重新抛入异步生成器；若只为清理或记录而捕获，必须重新抛出；若捕获后正常结束，则等价于 `__aexit__` 返回真值，会抑制异常（见 [contextlib：生成器上下文管理器](https://docs.python.org/3.14/library/contextlib.html#contextlib.contextmanager) 与 [asynccontextmanager](https://docs.python.org/3.14/library/contextlib.html#contextlib.asynccontextmanager)）。上面的 `finally` 释放资源，没有捕获异常，因此异常继续传播。
+
+```python run id="py.async.asynccontextmanager-suppression"
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def handle_failure(suppress):
+    try:
+        yield
+    except ValueError:
+        print("caught at yield")
+        if not suppress:
+            raise
+    finally:
+        print("cleanup")
+
+
+for suppress in (False, True):
+    try:
+        async with handle_failure(suppress):
+            raise ValueError("body failed")
+        print("continued after suppression")
+    except ValueError:
+        print("propagated to caller")
+```
+
+两条路径都会清理。区别在于捕获之后是否重新抛出，抑制异常是显式的失败处理决定。
