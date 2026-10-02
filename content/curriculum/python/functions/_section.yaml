@@ -1,0 +1,5 @@
+id: python.functions
+label: 函数与调用
+order: 30
+summary: 调用与参数绑定、作用域与闭包、函数作为值与装饰器。
+status: active

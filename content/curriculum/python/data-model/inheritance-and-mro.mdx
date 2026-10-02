@@ -1,0 +1,249 @@
+---
+id: python.inheritance-and-mro
+slug: /python/inheritance-and-mro
+order: 30
+title: 继承与 MRO
+status: draft
+objectives:
+  - 说明继承改变了查找的哪一步，以及为什么属性不会被复制到子类
+  - 读出 `__mro__` 并解释为什么菱形继承的方法解析顺序不是深度优先的左到右
+  - 用 `super()` 描述「下一个类」，说出它在多继承里为什么不是「直接父类」
+  - 判断一次属性读取或类型检查会落到继承层次的哪一层
+---
+
+## 目的
+
+前两课建立了属性访问与方法查找的机制。本课补上第三个维度：一个类可以有多个基类，查找因此在一条**线性顺序**上走，而不是在一个类上走。
+
+继承在真实代码里的用途是复用与抽象：把共性放在基类，让子类只声明差异。代价是行为的来源变得分散——读一个方法时，实现可能在若干层之外，`super()` 的目标只有在知道完整继承结构时才能确定。要读得准，需要一条明确的规则：顺序是什么、由谁决定、`super()` 究竟指向哪一个类。
+
+## 模型
+
+- `class Child(Base)` 在创建类对象时记录基类。**没有任何属性被复制**：子类里查不到的属性要到基类上找。
+- 属性查找沿**方法解析顺序**（method resolution order，MRO）进行：`Child.__mro__` 是一个元组，从自身开始，到 `object` 结束，读取属性和 `super()` 都按它推进。
+- MRO 由 C3 线性化在类创建时算出，满足三个条件：子类排在基类之前；声明时的基类顺序被保留；每个类只出现一次，且一个类的所有后代都排在它之前。
+- 三条的直接后果是：**不能出现交叉的先后要求**。`class X(B, C)` 要求 `B` 在 `C` 前，若 `C` 又是 `B` 的基类，两个要求冲突，类创建时直接抛 `TypeError`，而不是留下一个含糊的顺序。
+- `super()` 访问的是 **`type(self).__mro__` 中当前类之后的第一个类**，不是「直接父类」。在单继承里两者恰好一致，在多继承里常常不一致——这正是协作式多继承能工作的原因。
+- `isinstance` 与 `issubclass` 沿 MRO 判断：`isinstance(x, T)` 为真当且仅当 `T` 出现在 `type(x).__mro__` 中（虚基类注册是唯一例外）。
+
+## 继承改变了哪一步
+
+```python run id="py.inherit.lookup-walks-mro"
+class Base:
+    kind = "base"
+
+    def describe(self):
+        return f"{type(self).__name__} is a {self.kind}"
+
+
+class Child(Base):
+    kind = "child"
+
+
+class GrandChild(Child):
+    pass
+
+
+print("the lookup order:", [cls.__name__ for cls in GrandChild.__mro__])
+print("the nearest definition wins:", GrandChild().describe(), "|", Child().describe())
+print("each class keeps its own attributes:", "kind" in Base.__dict__, "kind" in Child.__dict__, "kind" in GrandChild.__dict__)
+
+Base.kind = "base (updated)"
+print("changing the base is visible unless shadowed:", GrandChild().kind, "|", Child().kind)
+```
+
+`GrandChild` 自己没有定义 `kind`，读取时沿 MRO 找到 `Child` 上的定义并停在那里，所以修改 `Base.kind` 不影响它。三个 `__dict__` 的检查说明继承**不复制**属性：`kind` 只存在于声明它的两个类上，`GrandChild` 里什么都没有。
+
+`describe` 里的 `type(self).__name__` 每次给出**实际类型**：方法写在 `Base` 上，`self` 却是子类实例。这是继承的行为定义——查找沿 MRO 找到方法，调用时绑定的是真实对象。
+
+## 菱形与线性化
+
+一个类从两个类继承，而这两个类又继承同一个基类，构成菱形。选择哪个实现要靠一条精确的规则。
+
+```python run id="py.inherit.diamond-mro"
+class A:
+    def label(self):
+        return "A"
+
+
+class B(A):
+    pass
+
+
+class C(A):
+    def label(self):
+        return "C"
+
+
+class D(B, C):
+    pass
+
+
+def naive_depth_first(cls, name):
+    """A plain depth-first search over bases, ignoring ordering constraints."""
+    if name in cls.__dict__:
+        return cls.__dict__[name]
+    for base in cls.__bases__:
+        found = naive_depth_first(base, name)
+        if found is not None:
+            return found
+    return None
+
+
+print("D's MRO:", [cls.__name__ for cls in D.__mro__])
+print("the real lookup finds:", D().label())
+print("a plain depth-first search would find:", naive_depth_first(D, "label").__qualname__)
+print("C's own behaviour is unchanged:", C().label(), "|", A().label())
+```
+
+`D.__mro__` 是 `(D, B, C, A, object)`：`B` 的基类 `A` 被排到 `C` 之后。这一条是 C3 的结果——它保证 `B` 在 `C` 之前（声明顺序），同时保证 `C` 在 `A` 之前（`C` 是 `A` 的子类）。朴素的深度优先搜索会先钻到 `B`，再沿 `B` 的基类走到 `A`，于是找到 `A.label`；真实的顺序先经过 `C`，返回 `C.label`。
+
+两类代码的差别不在速度，而在**读到哪个实现**。写 `class D(B, C)` 时，`B` 与 `C` 的先后是有语义的：只有 MRO 给出的顺序才能解释 `super()` 的走向与最终调用的方法。
+
+顺序冲突时类根本创建不出来：
+
+```python run id="py.inherit.inconsistent-order"
+class Root:
+    pass
+
+
+class Left(Root):
+    pass
+
+
+class Right(Root):
+    pass
+
+
+try:
+    class Broken(Root, Left):
+        pass
+except TypeError as failure:
+    print("the order cannot be satisfied:", failure)
+
+print("a valid diamond still builds:", [cls.__name__ for cls in type("Both", (Left, Right), {}).__mro__])
+```
+
+`Broken` 同时要求 `Root` 在 `Left` 之前（声明顺序）与 `Left` 在 `Root` 之前（`Left` 是 `Root` 的子类），无法同时满足。这类错误在类创建时立刻出现，不会留到运行时。
+
+## super() 指的是下一个类
+
+```python run id="py.inherit.super-is-next"
+class Root:
+    def __init__(self, name=None):
+        print("  Root.__init__ received", name)
+
+
+class Left(Root):
+    def __init__(self, name=None):
+        print("  Left.__init__ received", name)
+        super().__init__(name)
+
+
+class Right(Root):
+    def __init__(self, name=None):
+        print("  Right.__init__ received", name)
+        super().__init__(name)
+
+
+class Both(Left, Right):
+    def __init__(self):
+        print("  Both.__init__")
+        super().__init__("from Both")
+
+
+print("Both's MRO:", [cls.__name__ for cls in Both.__mro__])
+print("creating an instance runs the chain once:")
+instance = Both()
+order = [cls.__name__ for cls in Both.__mro__]
+print("the class after Left in that order is:", order[order.index("Left") + 1])
+```
+
+四个 `__init__` 各运行一次，顺序是 `Both → Left → Right → Root`。关键在于 `Left.__init__` 里的 `super()`：`Left` 的直接父类是 `Root`，但运行时 `self` 是 `Both` 的实例，于是 `super()` 按 `Both.__mro__` 推进，落到 `Right`——`Root.__init__` 因此在链条末端只运行一次，而不是被 `Left` 与 `Right` 各调用一次。
+
+**`super()` 的参数是「从哪个类之后开始找」，它的目标由实例的实际类型决定。** 这条规则带来两个实践要求：
+
+- 多继承的每一层都要调用 `super().__init__(...)`，否则链条在没人调用的地方断掉，后面的初始化被静默跳过。
+- 参数要能穿透中间层：中间类不认识的关键字参数要原样转发，`*args` 与 `**kwargs` 的转发的完整规则见 <CrossRef id="python.call-semantics" />。
+
+## 覆盖与扩展
+
+子类定义同名方法就是覆盖，读取时最近的定义胜出。
+
+```python run id="py.inherit.override"
+class Store:
+    def save(self, record):
+        return f"saved {record}"
+
+
+class AuditedStore(Store):
+    def __init__(self):
+        self.log = []
+
+    def save(self, record):
+        self.log.append(record)
+        return super().save(record)
+
+
+class SloppyStore(Store):
+    def save(self, record):
+        super().save(record)          # return value dropped
+
+
+store = AuditedStore()
+print(store.save("a"), "|", store.save("b"), "| log:", store.log)
+print("the base still works on its own:", Store().save("c"))
+print("an override that forgets to return loses the result:", SloppyStore().save("d"))
+print("the nearest definition is the one called:", type(store).__mro__[0].__name__)
+```
+
+`AuditedStore.save` 用 `super().save(record)` **扩展**基类行为并交出返回值；`SloppyStore.save` 丢掉了返回值，调用方拿到 `None`。两者都是合法代码，差别只在有没有把结果传出去——覆盖时要把基类的方法看作当前层要负责调用的一部分，它提供的结果仍然需要被传递。
+
+## 类型检查沿 MRO 判断
+
+```python run id="py.inherit.type-checks"
+class A:
+    pass
+
+
+class B(A):
+    pass
+
+
+class C(A):
+    pass
+
+
+class D(B, C):
+    pass
+
+
+print("isinstance walks the MRO:", isinstance(D(), A), isinstance(D(), C), isinstance(D(), B))
+print("issubclass uses the same order:", issubclass(D, A), issubclass(A, D))
+print("exact type is the stricter question:", type(D()).__name__, type(D()) is A)
+print("every MRO ends at object:", D.__mro__[-1].__name__, issubclass(D, object))
+```
+
+`isinstance(D(), C)` 为真，尽管 `C` 不是 `D` 的直接基类：判断依据是 `C` 是否出现在 `D.__mro__` 中。`type(x) is A` 则是另一个问题——它只比较实际类型，对多态代码几乎总是错的判断方式；需要按能力分支时用 `isinstance`，需要精确类型时才用 `type(...) is ...`。
+
+## 边界与失败情形
+
+- **继承不复制属性**：基类属性的修改对所有未覆盖它的子类立刻可见；这与「子类里有一份副本」的直觉相反，是共享状态问题的另一个来源。
+- **`__bases__` 只能受限地修改**：赋值要求布局兼容且新的解析顺序自洽，否则抛 `TypeError` 并保持原样；解析顺序由类的基类重新算出，不需要手工维护缓存。
+- **顺序冲突在创建类时抛 `TypeError`**：看到这个错误时，检查是不是同时要求了两个方向相反的先后关系。
+- **`super()` 需要运行时上下文**：它依赖 `__class__` 与第一个参数，因此只能在方法体内使用；在模块层或普通函数里调用它没有意义。
+- **链条会断**：某一层没有调用 `super()` 时，它之后的初始化不再运行，且没有任何错误提示；多继承的每一层都必须转发。
+- **`__slots__` 与多继承冲突**：多个带非空 `__slots__` 的基类无法组合（布局冲突），这是一个真实的限制，不是实现缺陷。
+- **钻石结构要求协作**：MRO 只决定查找顺序，不能让重复的初始化自动去重；`Root.__init__` 之所以只运行一次，是因为每一层都转发。非协作的写法（直接写 `Root.__init__(self)`）会绕开顺序，重复初始化。
+- **继承是为了「是一种」而不是为了「有这些方法」**：只为复用实现而继承会把无关的接口一起带进子类，需要组合时用持有对象。抽象与接口设计的判据属于设计模块，本课只讲机制。
+- **虚基类注册是类型检查的例外**：`SomeABC.register(SomeClass)` 让 `isinstance` 为真，但不改变 MRO，也不带来任何方法；`collections.abc` 的结构性检查见 <CrossRef id="python.dunder-protocols" />。
+- **异常层次是本机制的一次应用**：自定义异常继承 `Exception`，`except` 的匹配沿类型层次上溯；异常类型的匹配规则见 <CrossRef id="python.exceptions" />。
+
+## 小结
+
+- `class Child(Base)` 只记录基类关系，不复制属性；查找沿 `Child.__mro__` 推进。
+- MRO 由 C3 线性化在类创建时算出，保证子类在前、基类声明顺序保留；无法满足时类创建抛 `TypeError`。
+- 菱形继承的解析顺序不是朴素深度优先：`D(B, C)` 且 `B`、`C` 同源时，`A` 排在 `C` 之后。
+- `super()` 是「`type(self).__mro__` 中当前类之后的第一个类」，在多继承里不是直接父类；每层都转发才能让初始化链完整。
+- 覆盖时用 `super().method(...)` 扩展并传递返回值；丢掉返回值是最常见的覆盖缺陷。
+- `isinstance`/`issubclass` 沿 MRO 判断，`type(x) is T` 只比较实际类型。

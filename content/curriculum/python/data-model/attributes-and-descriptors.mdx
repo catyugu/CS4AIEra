@@ -1,0 +1,263 @@
+---
+id: python.attributes-and-descriptors
+slug: /python/attributes-and-descriptors
+order: 10
+title: 属性查找与方法绑定
+status: draft
+objectives:
+  - 按对象、类型与描述符协议列出一次属性读取的查找顺序，并预测哪一处提供值
+  - 说明函数为什么在实例上变成绑定方法，以及 `self` 从哪一步出现
+  - 写一个最小的描述符，并用它解释 `property` 与 `__slots__` 的行为
+  - 判断 `__getattr__` 在什么时候被调用，以及它的失败方式
+---
+
+## 目的
+
+基础课给出的规则是「读属性先看实例，再看类」。它足以读懂大多数代码，但有两个反例：`property` 定义在类上，却不会被实例属性遮蔽；`__slots__` 让实例根本没有自己的属性字典。要预测这两类代码的行为，需要把属性访问当成一次**查找过程**，而不是一次字段读取。
+
+本课给出这个过程：有哪些来源，按什么顺序，谁可以截断它。
+
+## 模型
+
+`obj.attr` 是一次调用，不是一个地址。它按固定顺序在几个来源里找 `attr`，找到后可能直接返回，也可能调用一段代码再返回。顺序是语言保证的一部分，写在语言参考的数据模型一章里，不是某个实现的偶然行为。
+
+普通对象上，读取 `obj.attr` 的顺序是：
+
+```text
+1. type(obj) 上名为 attr 的数据描述符     <- 定义了 __set__ 或 __delete__ 的描述符
+2. obj 自己的属性字典（__dict__）
+3. type(obj) 的 MRO 上名为 attr 的非数据描述符或普通类属性
+4. type(obj) 上的 __getattr__（仅在前三步全部失败时）
+```
+
+三条推论：
+
+- **实例字典不是第一顺位。** 只有类型上没有名为 `attr` 的数据描述符时，实例字典才参与。
+- **函数是非数据描述符**，因此函数可以被实例字典里的同名属性遮蔽。
+- **`__getattr__` 是兜底**，它只在正常查找失败时被调用；`__getattribute__` 则是每次访问都要走的入口，覆盖它是最后手段，容易写出递归。
+
+**描述符协议**只有三个可选方法，实现其中任意一个的对象就是描述符：
+
+| 方法 | 调用时机 | 接收到的参数 |
+| --- | --- | --- |
+| `__get__` | 通过实例或类读取该属性 | `(self, instance, owner)`；通过类读取时 `instance` 为 `None` |
+| `__set__` | 通过实例赋值 | `(self, instance, value)` |
+| `__delete__` | 通过实例删除 | `(self, instance)` |
+
+定义了 `__set__`（或 `__delete__`）的是**数据描述符**，它排在第一顺位；只定义 `__get__` 的是**非数据描述符**，它排在实例字典之后。函数、`property`、`__slots__` 生成的槽位描述符都是这套协议的实例——方法绑定不是特例，是协议的一次应用。
+
+**方法绑定**由此解释：函数定义在类上，它是一个非数据描述符。读取 `instance.method` 时协议被触发，`function.__get__(instance, type(instance))` 返回一个绑定方法，它记住实例与函数。这就是 `self` 出现的位置——在调用发生之前，实例已经被绑进可调用对象里。
+
+## 属性来自哪里
+
+```python run id="py.attr.sources-order"
+class Base:
+    kind = "class attribute"
+
+    def label(self):
+        return "method from the class"
+
+
+class Item(Base):
+    pass
+
+
+item = Item()
+print("1. found on the class:", item.kind)
+
+item.kind = "instance attribute"
+print("2. instance dict shadows a plain class attribute:", item.kind, "| class still:", Item.kind)
+
+item.label = lambda: "lambda from the instance"
+print("3. it also shadows a function:", item.label())
+
+del item.label
+print("4. after deletion the descriptor is found again:", item.label())
+```
+
+前三步说明实例字典的位置：它在普通类属性和非数据描述符之前，但在数据描述符之后。第四步说明「遮蔽」只是多了一层来源，删除之后查找重新落到类上。
+
+## property 是数据描述符
+
+`property` 是内置的数据描述符：它把读写转发到被装饰的函数上，并因此获得第一顺位。
+
+```python run id="py.attr.property-wins"
+class Temperature:
+    def __init__(self, celsius):
+        self._celsius = celsius
+
+    @property
+    def celsius(self):
+        return self._celsius
+
+    @celsius.setter
+    def celsius(self, value):
+        if value < -273.15:
+            raise ValueError(f"below absolute zero: {value}")
+        self._celsius = value
+
+
+temperature = Temperature(20)
+print("reading it:", temperature.celsius, "| instance dict:", temperature.__dict__)
+
+temperature.celsius = 30
+print("after assignment:", temperature.celsius, temperature.__dict__)
+
+try:
+    temperature.celsius = -300
+except ValueError as failure:
+    print("the setter rejected the value:", failure)
+
+temperature.__dict__["celsius"] = 999
+print("an instance dict entry with the same name changes nothing:", temperature.celsius)
+```
+
+最后两步是本课的关键证据：`celsius` 是数据描述符，因此 `temperature.__dict__` 里的同名条目**不参与读取**——实例字典在这一顺位之前就已经被跳过了。`property` 拿到了第一顺位，就用它实现了「读时计算、写时校验」，而不是靠外部约定。
+
+注意 `__dict__` 里的存储名是 `_celsius`：描述符协议管理的是通过 `obj.attr` 的访问，不是属性字典本身。绕过接口直接写 `__dict__` 仍然能改坏状态，这属于「协议保护接口，不保护内存」。
+
+## 方法绑定
+
+```python run id="py.attr.binding"
+class Counter:
+    def __init__(self):
+        self.value = 0
+
+    def increment(self, step=1):
+        self.value += step
+        return self.value
+
+
+counter = Counter()
+bound = counter.increment
+
+print("on the class it is a plain function:", type(Counter.increment).__name__)
+print("on the instance it is a bound method:", type(bound).__name__)
+print("the method carries both parts:", bound.__self__ is counter, bound.__func__ is Counter.increment)
+print("each access builds a new object:", counter.increment is counter.increment, counter.increment == counter.increment)
+print("calling it:", bound(), counter.increment(5))
+```
+
+`type(Counter.increment).__name__` 是 `function`，`type(counter.increment).__name__` 是 `method`。绑定方法持有 `__self__`（实例）与 `__func__`（类上的函数），这正是基础课里 `Counter.increment(instance)` 与 `instance.increment()` 等价的原因：后者只是把实例预先绑好了。
+
+每次访问都创建一个新的绑定方法对象（`is` 为假，`==` 为真，因为方法按实例与函数比较）。这意味着「把方法存下来备用」存的是一个已经绑定到实例的对象，它不会随实例属性的变化而失效，也不会因为类上函数被替换而更新指向。
+
+## 自己写一个描述符
+
+描述符的用途是让「通过属性访问」这件事自带行为：校验、惰性计算、把值转发到别处。一个最小实现只需要 `__get__` 与 `__set__`。
+
+```python run id="py.attr.custom-descriptor"
+class Positive:
+    """A data descriptor that stores the value in the instance dict."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def __get__(self, instance, owner=None):
+        if instance is None:
+            return self
+        return instance.__dict__[self.name]
+
+    def __set__(self, instance, value):
+        if value <= 0:
+            raise ValueError(f"{self.name} must be positive, got {value}")
+        instance.__dict__[self.name] = value
+
+
+class Order:
+    quantity = Positive("quantity")
+    price = Positive("price")
+
+    def __init__(self, quantity, price):
+        self.quantity = quantity
+        self.price = price
+
+    def total(self):
+        return self.quantity * self.price
+
+
+order = Order(2, 10.5)
+print("total:", order.total(), "| stored in the instance dict:", order.__dict__)
+
+try:
+    order.quantity = 0
+except ValueError as failure:
+    print("the descriptor rejected it:", failure)
+
+print("reading it on the class returns the descriptor itself:", type(Order.quantity).__name__)
+order.__dict__["quantity"] = 100
+print("writing through __dict__ bypasses __set__:", order.total())
+```
+
+三个细节值得记住：`__get__` 里 `instance is None` 的分支处理「通过类读取」（例如 `Order.quantity`）；描述符实例在类上只创建一次，被所有实例共用，因此它不能把每个实例的值存在自己身上——值存在实例字典里，描述符只负责规则；`__set__` 是所有通过属性赋值的入口，因此校验写在它里面就够了。
+
+## 查找失败时的兜底
+
+```python run id="py.attr.getattr-fallback"
+class Settings:
+    def __init__(self, values):
+        self.values = values
+
+    def __getattr__(self, name):
+        if name in self.values:
+            return self.values[name]
+        raise AttributeError(f"{type(self).__name__!r} has no attribute {name!r}")
+
+
+settings = Settings({"retries": 3})
+print("found through the fallback:", settings.retries)
+print("the fallback is only reached on a miss:", hasattr(settings, "retries"), hasattr(settings, "timeout"))
+
+try:
+    settings.timeout
+except AttributeError as failure:
+    print("the failure keeps the name and the type:", failure)
+```
+
+`__getattr__` 只在正常查找失败后被调用，因此它对已存在的属性没有影响。它必须抛 `AttributeError`，不能返回 `None`：`hasattr` 与 `getattr(obj, name, default)` 都靠这个异常判断属性是否存在，返回默认值会把这些判断全部变成真。
+
+## 槽位描述符
+
+```python run id="py.attr.slots"
+class Point:
+    __slots__ = ("x", "y")
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+
+point = Point(1, 2)
+print("values:", point.x, point.y)
+print("the class holds descriptors, not values:", hasattr(Point.x, "__get__") and hasattr(Point.x, "__set__"))
+print("has an instance dict:", hasattr(point, "__dict__"))
+
+try:
+    point.z = 3
+except AttributeError as failure:
+    print("an undeclared attribute cannot be assigned:", failure)
+```
+
+`__slots__` 的作用是取消实例字典：类上为每个名字生成一个数据描述符，值存在实例的开销固定的槽位里，因此 `point.x` 仍然是一次属性访问，只是走的来源不同。没有 `__dict__` 之后，给未声明的属性赋值会失败，拼错的属性名从「静默创建一个新属性」变成可见的错误——这是它在状态管理上的实际价值，代价是失去运行时添加属性的能力。
+
+## 边界与失败情形
+
+- **属性查找顺序是语言保证**，但每一步的具体存储（属性字典的布局、槽位的偏移、方法对象的字段名）是实现细节。判断行为时依据顺序，判断性能时依据测量。
+- **写 `__dict__` 绕过协议**：`obj.__dict__[name] = value` 不触发 `__set__`，描述符的校验形同不存在。协议约束的是 `obj.attr` 这个接口。
+- **数据描述符与实例字典的同名条目可以同时存在**，读取时前者胜出，后者变成不可见的死数据，调试时容易误判。
+- **覆盖 `__getattribute__` 会拦截每一次属性访问**，包括查找过程中的内部访问，稍不注意就写出无限递归；需要拦截特定属性时用 `__getattr__`，需要描述符时用描述符。
+- **`__getattr__` 返回默认值会让 `hasattr` 永远为真**：属性探测、序列化与依赖注入依赖这个异常，静默的默认值会把这些机制一起废掉。
+- **描述符实例被所有实例共享**：把每个实例的值存在描述符自身（例如 `self.value = value`）会让所有实例看到同一个值；值必须存在实例上，或存在按实例索引的结构里。
+- **`__slots__` 与继承、与类属性同名时行为受限**：子类未声明 `__slots__` 会重新获得 `__dict__`；槽位名与类属性同名会冲突。需要精确控制内存时才值得引入。
+- **继承顺序的完整规则**（多继承的 MRO、`super()` 的解析）由后续的「继承与 MRO」一课展开；本课只用到了「沿类型的 MRO 查找」这一条。
+- **特殊方法的查找不走本课的顺序**：它们是在类型上查找的，因此 `instance.__len__ = ...` 不会影响 `len(instance)`。这条规则由后续的「特殊方法与协议」一课展开。
+- **相等与哈希契约**不在这里重讲：`__eq__` 与 `__hash__` 的约束见 <CrossRef id="python.equality-and-hashing" />。
+
+## 小结
+
+- `obj.attr` 是一次按固定顺序进行的查找：类型上的数据描述符、实例字典、类型上的非数据描述符与普通类属性、`__getattr__`。
+- 描述符协议是 `__get__`/`__set__`/`__delete__`；有 `__set__` 的排第一顺位，只有 `__get__` 的排在实例字典之后。
+- 函数是非数据描述符，`instance.method` 通过 `__get__` 绑定实例，绑定方法持有 `__self__` 与 `__func__`。
+- `property` 与 `__slots__` 的槽位都是描述符，前者的价值是「读时计算、写时校验」，后者的价值是去掉实例字典。
+- `__getattr__` 只在查找失败后调用，且必须抛 `AttributeError`。
+- 协议保护的是 `obj.attr` 这个接口；直接操作 `__dict__` 会绕过它。

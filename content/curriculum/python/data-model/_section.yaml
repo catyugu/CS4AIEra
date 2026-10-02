@@ -1,0 +1,5 @@
+id: python.data-model
+label: 对象协议与数据模型
+order: 50
+summary: 属性查找与方法绑定、描述符与 property、特殊方法与协议、继承顺序与 MRO。
+status: active

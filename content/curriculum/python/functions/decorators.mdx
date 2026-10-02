@@ -1,0 +1,236 @@
+---
+id: python.decorators
+slug: /python/decorators
+order: 30
+title: 函数作为值与装饰器
+status: draft
+objectives:
+  - 说明 `@decorator` 与显式重新赋值是同一件事，以及它发生在什么时刻
+  - 解释一个包裹函数为什么必须在调用时转交实参，并预测不转发时的错误
+  - 判断装饰器返回的对象缺了哪些原函数属性，并说明恢复它们的方式
+  - 区分「装饰一次」与「调用一次」两种成本，指出在装饰器里做重活的后果
+---
+
+## 目的
+
+本课把装饰器还原成一个已经在前面成立的事实：函数是值，名字可以指向任何对象。装饰器只是对这个事实的机械应用，不是新的语言机制。
+
+同时本课给出装饰器的三个实际约束：它在定义时执行、它改变被装饰对象的属性、它默认不知道也不保留原签名。理解这三条之后，装饰器的行为不需要靠记模式，而是可以直接推出。
+
+## 模型
+
+函数对象是普通值：可以赋给名字、放进容器、作为实参、作为返回值。装饰器是「接收一个可调用对象、返回一个可调用对象」的函数。
+
+```text
+@decorate
+def target(): ...
+
+target = decorate(target)
+```
+
+两行等价。因此：
+
+- 装饰发生在 `def` 语句执行时（模块导入或函数体执行到该处），而不是调用 `target()` 时；
+- `target` 这个名字最终指向 `decorate` 的返回值，原函数对象仍然存在，只是不再由该名字绑定；
+- 装饰器返回什么，`target` 就是什么。返回非可调用对象时不报错，直到有人调用它。
+
+包装（wrapper）是常见实现：装饰器定义内层函数，闭包捕获原函数与装饰时传入的参数，调用时转交实参并返回内层函数。
+
+## 装饰就是重新赋值
+
+```python run id="py.dec.shorthand"
+events = []
+
+
+def traced(function):
+    events.append(f"decorating {function.__name__}")
+
+    def wrapper(*args, **kwargs):
+        events.append(f"calling {function.__name__}")
+        return function(*args, **kwargs)
+
+    return wrapper
+
+
+@traced
+def add(left, right):
+    return left + right
+
+
+print("events before any call:", events)
+print("result:", add(1, 2))
+print("events after one call:", events)
+print("name is bound to the wrapper:", add.__name__, add.__qualname__)
+```
+
+`decorating add` 在任何调用之前就出现在 `events` 里，说明装饰在定义时完成。`add` 现在指向 `wrapper`，因此 `add.__name__` 是 `wrapper`；原函数被闭包引用着，通过 `wrapper` 的闭包可以取回。
+
+## 转交实参
+
+```python run id="py.dec.forwarding"
+def traced(function):
+    def wrapper(*args, **kwargs):
+        print(f"before {function.__name__}({args}, {kwargs})")
+        result = function(*args, **kwargs)
+        print(f"after {function.__name__} -> {result!r}")
+        return result
+
+    return wrapper
+
+
+@traced
+def area(width, height, unit="px"):
+    return f"{width * height} {unit}"
+
+
+print(area(2, 3))
+print(area(2, height=3, unit="cm"))
+```
+
+包装函数用 `*args, **kwargs` 原样转交，因此被装饰函数的签名仍然可用。漏掉转交时，包装函数会吞掉实参或抛绑定错误：
+
+```python run id="py.dec.without-forwarding"
+def traced(function):
+    def wrapper():
+        return function()
+
+    return wrapper
+
+
+@traced
+def area(width, height):
+    return width * height
+
+
+try:
+    area(2, 3)
+except TypeError as exc:
+    print("wrapper swallowed the arguments:", type(exc).__name__, "-", exc)
+```
+
+## 恢复被替换的属性
+
+```python run id="py.dec.wraps"
+import functools
+import inspect
+
+
+def naive(function):
+    def wrapper(*args, **kwargs):
+        return function(*args, **kwargs)
+
+    return wrapper
+
+
+def documented(function):
+    @functools.wraps(function)
+    def wrapper(*args, **kwargs):
+        return function(*args, **kwargs)
+
+    return wrapper
+
+
+@naive
+def plain(width, height):
+    """Return the area."""
+    return width * height
+
+
+@documented
+def described(width, height):
+    """Return the area."""
+    return width * height
+
+
+print("naive:", plain.__name__, "| doc:", plain.__doc__)
+print("naive signature:", inspect.signature(plain))
+print("documented:", described.__name__, "| doc:", described.__doc__)
+print("documented signature:", inspect.signature(described))
+print("original reachable:", described.__wrapped__ is not None)
+```
+
+`functools.wraps` 把原函数的 `__name__`、`__doc__`、`__module__`、`__dict__` 等复制到包装函数上，并设置 `__wrapped__` 指向原函数；`inspect.signature` 顺着 `__wrapped__` 读出原签名。没有它，日志、文档、参数检查与依赖注入都会看到 `wrapper`，而当被装饰对象是方法或路由处理器时，这个差异会直接改变框架行为。
+
+## 带参数的装饰器
+
+```python run id="py.dec.factory"
+def repeated(times=2):
+    def decorate(function):
+        def wrapper(*args, **kwargs):
+            results = [function(*args, **kwargs) for _ in range(times)]
+            return results
+
+        return wrapper
+
+    return decorate
+
+
+@repeated(times=3)
+def roll():
+    return "attempt"
+
+
+@repeated()
+def once():
+    return "single"
+
+
+print(roll())
+print(once())
+```
+
+`@repeated(times=3)` 先调用 `repeated(times=3)` 得到真正的装饰器，再对函数应用它，因此需要多一层函数。`times` 在装饰时被固定并存入闭包，调用期不可更改；需要每次调用不同的次数，就把次数做成被装饰函数的参数。
+
+## 层叠顺序
+
+```python run id="py.dec.stacking"
+def first(function):
+    def wrapper(*args, **kwargs):
+        print("first: before")
+        result = function(*args, **kwargs)
+        print("first: after")
+        return result
+
+    return wrapper
+
+
+def second(function):
+    def wrapper(*args, **kwargs):
+        print("second: before")
+        result = function(*args, **kwargs)
+        print("second: after")
+        return result
+
+    return wrapper
+
+
+@first
+@second
+def action():
+    print("action body")
+
+
+action()
+```
+
+靠近 `def` 的那个装饰器先应用，因此执行时从外到内进入、从内到外返回。读代码时自上而下推应用顺序会得到相反的结论，这也是层叠装饰器的常见误读点。
+
+## 边界与失败情形
+
+- **装饰在定义时执行**：装饰器内的任何工作（读文件、建连接、发请求）都在导入或定义那一刻发生，成本与失败点都不在调用处。
+- **返回非可调用对象**：装饰器可以返回任何值，语法不检查可调用性；把函数替换成字符串会在调用处失败，报错位置离原因很远。
+- **方法上的装饰器收到的是普通函数**：装饰发生在类创建之前，绑定成方法发生在之后，因此装饰器看到的是未绑定的函数，按方法身份处理会出错。
+- **包装默认不保留签名**：不写 `functools.wraps` 时，`__name__`、`__doc__`、签名与注解都指向上层包装函数。
+- **包装吞掉属性**：包装函数自带 `__dict__`，原函数上后加的自定义属性不会自动出现在包装对象上。
+- **层叠顺序自上而下相反**：先应用靠近定义的装饰器。
+- **装饰器也能修饰类**：类对象是值，装饰器收到的是类对象，可以返回替身类型；这会改变实例化的行为，而不只是调用的行为。
+- **闭包延长对象存活期**：装饰器捕获原函数与装饰参数，长驻进程里被装饰的函数随模块存活，装饰参数也就一直可达。
+
+## 小结
+
+- `@decorate` 等价于 `target = decorate(target)`，发生在定义时而不是调用时。
+- 包装函数必须用 `*args, **kwargs` 转交实参，否则实参丢失或绑定失败。
+- 包装会替换 `__name__`、`__doc__` 与签名；`functools.wraps` 恢复这些属性并设置 `__wrapped__`。
+- 带参数的装饰器多一层：先用参数调用工厂，再用得到的装饰器修饰函数。
+- 层叠装饰器中靠近 `def` 的先应用，执行顺序因此与书写顺序相反。
+- 装饰器可以返回任何对象，返回非可调用对象要到调用时才暴露。

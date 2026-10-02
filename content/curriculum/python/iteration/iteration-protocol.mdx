@@ -1,0 +1,160 @@
+---
+id: python.iteration-protocol
+slug: /python/iteration-protocol
+order: 10
+title: iterable 与 iterator
+status: draft
+objectives:
+  - 说明 `for` 在迭代一个对象时调用了哪两个方法、以什么顺序调用
+  - 判断一个对象是可重复迭代的还是一次性的，并预测第二次迭代的结果
+  - 自己实现一个符合协议的迭代器，并说明它的状态存在哪里
+  - 指出迭代过程中修改容器会以何种方式暴露
+---
+
+## 目的
+
+本课把 `for` 展开成显式的方法调用，并给出可重复迭代与一次性迭代的判据。
+
+「能放进 `for` 里」不是一个类型属性，而是两个方法构成的协议。分清协议的两侧之后，`for`、推导式、`zip`、`sum` 与任何接受可迭代对象的库函数的行为都可以统一推出，包括「为什么第二次遍历得到空结果」这类常见故障。
+
+## 模型
+
+协议由两个方法构成，作用不同：
+
+| 方法 | 作用 |
+| --- | --- |
+| `__iter__` | 返回一个迭代器。可迭代对象的入口 |
+| `__next__` | 返回下一个元素；没有更多元素时抛 `StopIteration` |
+
+一个对象只要实现 `__iter__` 就是 iterable。迭代器（iterator）是实现 `__iter__` 与 `__next__` 的对象，它的 `__iter__` 返回自身。
+
+`for` 的展开过程是固定的：
+
+```text
+iterator = iter(iterable)      # 调用一次 __iter__
+while True:
+    try: item = next(iterator)
+    except StopIteration: break
+    ... 循环体 ...
+```
+
+这解释了三件事：
+
+- **迭代器有状态**：当前位置保存在迭代器对象里，不在可迭代对象里；
+- **迭代器是一次性的**：`StopIteration` 一旦抛出，该迭代器就永久耗尽；
+- **可重复迭代取决于 `__iter__`**：返回新迭代器的对象（列表、元组、字典的键视图）可以反复遍历；返回自身的对象（生成器、文件对象、`map`/`zip` 的结果）只能遍历一次。
+
+## 协议的手工展开
+
+```python run id="py.iter.protocol"
+values = ["a", "b", "c"]
+iterator = iter(values)
+print("iterator type:", type(iterator).__name__)
+
+print("next:", next(iterator), next(iterator), next(iterator))
+try:
+    next(iterator)
+except StopIteration:
+    print("exhausted: StopIteration")
+
+print("exhausted iterator keeps raising:", list(iterator))
+print("a fresh iterator restarts:", list(iter(values)))
+```
+
+`list(iterator)` 在已耗尽的迭代器上得到空列表，不是错误；而 `iter(values)` 每次返回新的迭代器，因此列表本身可以反复遍历。
+
+## 可重复迭代与一次性迭代
+
+```python run id="py.iter.one-shot"
+reusable = [1, 2, 3]
+one_shot = (value * 10 for value in reusable)
+
+print("list yields fresh iterators:", iter(reusable) is reusable, list(reusable), list(reusable))
+print("generator is its own iterator:", iter(one_shot) is one_shot)
+print("first pass:", list(one_shot))
+print("second pass:", list(one_shot))
+print("builtins that consume an iterator:", list(zip(iter(reusable), "xy")))
+```
+
+判据是一行：`iter(x) is x` 为真说明对象同时是迭代器，因此一次性。把一次性对象传给两个消费者时，第二个消费者看到的是剩余部分或空序列，这个错误没有任何异常伴随。
+
+## 自己实现迭代器
+
+```python run id="py.iter.custom-iterator"
+class Countdown:
+    def __init__(self, start):
+        self.remaining = start
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.remaining <= 0:
+            raise StopIteration
+        self.remaining -= 1
+        return self.remaining + 1
+
+
+print("loop:", [value for value in Countdown(3)])
+again = Countdown(3)
+print("manual:", next(again), next(again))
+print("shared state on the iterator, not on the class:", Countdown(2).remaining)
+print("second pass over a used iterator:", list(again))
+```
+
+状态放在迭代器实例上而不是类上，这一点与类属性失效模式同源（见 <CrossRef id="python.classes" />）：把 `remaining` 写成类属性会让所有迭代器共享同一个计数器。
+
+## next 的默认值与哨兵迭代
+
+```python run id="py.iter.sentinel"
+from itertools import count, islice
+
+iterator = iter([1, 2])
+print("next with default:", next(iterator, "none left"), next(iterator, "none left"), next(iterator, "none left"))
+
+stream = iter([7, 8, 9, 0, 5])
+print("stopped by sentinel:", list(iter(lambda: next(stream), 0)))
+
+print("bounded slice of an unbounded iterator:", list(islice(count(0), 4)))
+```
+
+`next(iterator, default)` 把「已耗尽」变成返回值，用于边界明确的读取；`iter(callable, sentinel)` 把「反复调用直到得到哨兵值」写成迭代器。无界序列必须由消费者设限，`islice` 是标准做法。
+
+## 迭代中修改容器
+
+```python run id="py.iter.mutate"
+counts = {"a": 1, "b": 2, "c": 3}
+try:
+    for key in counts:
+        counts[key + "!"] = 0
+except RuntimeError as exc:
+    print("dict size changed during iteration:", type(exc).__name__, "-", exc)
+
+values = [1, 2, 3, 4]
+seen = []
+for value in values:
+    seen.append(value)
+    if value == 2:
+        values.remove(value)
+print("list silently skipped an element:", seen, values)
+```
+
+字典的迭代器记录大小，尺寸变化立即抛 `RuntimeError`；列表的迭代器只记位置，删除元素会让它跳过下一个元素，没有任何提示。需要边遍历边修改时，遍历副本或先收集要删的元素。
+
+## 边界与失败情形
+
+- **迭代器不重启**：耗尽后继续 `next` 一直抛 `StopIteration`；需要重新遍历就重新获得迭代器。
+- **`__iter__` 只调用一次**：`for` 在开始时取一次迭代器；循环体里重新给循环目标赋值不改变迭代位置。
+- **`__getitem__` 兼容路径**：没有 `__iter__` 但有 `__getitem__` 的对象仍可被 `iter()` 接受，按 0、1、2… 依次取值直到 `IndexError`。这是历史兼容行为，新类型不应依赖它。
+- **异常穿过迭代**：循环体内的异常结束循环并把迭代器留在半途状态；异常处理无法恢复该迭代器。
+- **字典顺序是语言保证，集合与字典视图的稳定顺序不是**：需要稳定输出时显式排序（见 <CrossRef id="python.runtime-vs-language" />）。
+- **循环变量在循环后仍然存在**：`for` 不创建新的作用域。
+- **无界迭代器会耗尽内存或时间**：`list(infinite)` 不会终止；消费端必须设限。
+
+## 小结
+
+- `for` 调用 `iter()` 一次，然后反复 `next()`，以 `StopIteration` 结束。
+- iterable 提供 `__iter__`；iterator 同时提供 `__iter__` 与 `__next__`，且 `__iter__` 返回自身。
+- 迭代位置存在迭代器上，因此迭代器是一次性对象；`iter(x) is x` 是判据。
+- `next` 的默认值与 `iter(callable, sentinel)` 把边界条件写进读取方式；无界序列由消费者设限。
+- 迭代中修改容器：字典抛 `RuntimeError`，列表静默跳过元素。
