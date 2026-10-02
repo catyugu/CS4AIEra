@@ -193,7 +193,6 @@ class Cell {
 
   async #ensureEditor(): Promise<EditorHandle | undefined> {
     if (this.#editor) return this.#editor;
-    this.#setStatus("正在加载编辑器…");
     const { createEditor } = await import("./editor");
     const handle = createEditor(this.#code, this.config.language, this.config.source, (modified) => {
       this.#modified = modified;
@@ -203,7 +202,6 @@ class Cell {
     this.#editor = handle;
     this.root.classList.add("has-editor");
     this.#renderModified();
-    this.#setStatus("");
     return handle;
   }
 

@@ -1,6 +1,7 @@
 ---
 import { getCourseModel } from "../../content-model/instance";
 import { DEFAULT_CELL_TIMEOUT_MS } from "../../content-model/runtime-config";
+import { highlightCode } from "../../runtime/code-highlighting";
 
 /**
  * An executable code cell (DESIGN.md section 7).
@@ -9,8 +10,8 @@ import { DEFAULT_CELL_TIMEOUT_MS } from "../../content-model/runtime-config";
  * turns it into this component at build time, so the author never writes
  * component markup.
  *
- * The markup is complete without JavaScript: the wrapped fence renders as
- * highlighted code. The editor, the runtime and the output region are activated
+ * The markup is complete without JavaScript: the source renders as highlighted
+ * code using the editor's parser. The editor, runtime and output are activated
  * by `src/runtime/codelab.ts`, which is loaded only by pages that contain cells.
  */
 interface Props {
@@ -27,6 +28,7 @@ interface Props {
 }
 
 const { id, language, source, session, fixture, timeoutMs, packages, editable } = Astro.props;
+const tokens = highlightCode(source, language);
 
 let fixtureUrl: string | undefined;
 if (fixture) {
@@ -65,11 +67,10 @@ if (fixture) {
   </figcaption>
 
   {/*
-    The fence itself is the slot: the authoring syntax stays a code block, so
-    this renders highlighted source with no JavaScript, and the runtime replaces
-    it with the editor on demand.
+    Render with the editor's parser and token classes at build time. The reader
+    needs no JavaScript until editing, and activation preserves the appearance.
   */}
-  <div class="codelab-code" data-cell-code><slot /></div>
+  <div class="codelab-code" data-cell-code><pre><code>{tokens.map(token => token.classes ? <span class={token.classes}>{token.text}</span> : token.text)}</code></pre></div>
 
   <p class="codelab-status" data-cell-status role="status" aria-live="polite"></p>
   <div class="codelab-output" data-cell-output aria-live="polite"></div>

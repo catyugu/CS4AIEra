@@ -9,9 +9,10 @@ import { isExecutableFence, parseCellMeta } from "../content-model/mdx-scan";
  * cell is never highlighted and never rendered twice: the static code path and
  * the interactive path are the same fence, decided once.
  *
- * The fence is *wrapped*, not replaced, so it stays a code block: the shiki pass
- * still highlights it and `<CodeLab>` renders it as its fallback. A reader
- * without JavaScript sees a highlighted code block, not a blank cell.
+ * The fence is wrapped to preserve the code-block authoring syntax. `<CodeLab>`
+ * renders the source with the same parser and token classes as its lazy editor,
+ * so activating the editor does not change the highlighting. The original
+ * Shiki-highlighted slot is unused. Readers without JavaScript still see code.
  *
  * The cell source also travels as an attribute, because Reset and the editor
  * need the author's exact text rather than the rendered markup.

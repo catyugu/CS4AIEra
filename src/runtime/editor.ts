@@ -8,11 +8,10 @@
  */
 
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { python } from "@codemirror/lang-python";
-import { sql } from "@codemirror/lang-sql";
-import { bracketMatching, indentOnInput, syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
+import { bracketMatching, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
-import { EditorView, drawSelection, highlightActiveLine, keymap, lineNumbers } from "@codemirror/view";
+import { EditorView, drawSelection, keymap } from "@codemirror/view";
+import { codeHighlighter, codeLanguage } from "./code-highlighting";
 
 export interface EditorHandle {
   getSource(): string;
@@ -56,16 +55,13 @@ export function createEditor(
 
 function extensions(language: "python" | "sql", onDocChange: (doc: string) => void): Extension[] {
   return [
-    lineNumbers(),
     history(),
     drawSelection(),
     indentOnInput(),
     bracketMatching(),
-    highlightActiveLine(),
-    syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+    syntaxHighlighting(codeHighlighter),
     keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-    language === "sql" ? sql() : python(),
-    EditorView.lineWrapping,
+    codeLanguage(language),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) onDocChange(update.state.doc.toString());
     }),

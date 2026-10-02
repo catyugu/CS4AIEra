@@ -228,7 +228,7 @@ a {
   max-width: var(--measure);
 }
 
-.prose > :first-child {
+.prose> :first-child {
   margin-top: 0;
 }
 
@@ -299,6 +299,7 @@ a {
 
 /* Shiki emits both themes; pick the dark tokens when the reader prefers dark. */
 @media (prefers-color-scheme: dark) {
+
   .prose pre.astro-code,
   .prose pre.astro-code span {
     color: var(--shiki-dark) !important;
@@ -335,7 +336,7 @@ a {
   color: var(--muted);
 }
 
-.breadcrumbs li + li::before {
+.breadcrumbs li+li::before {
   content: "/";
   margin-right: 0.35rem;
   color: var(--line);
@@ -488,10 +489,6 @@ a {
   color: var(--muted);
 }
 
-.codelab.has-editor .codelab-hint {
-  display: none;
-}
-
 .codelab-actions {
   display: flex;
   gap: 0.35rem;
@@ -521,6 +518,11 @@ a {
 
 .codelab-code {
   cursor: text;
+  background: var(--code-bg);
+  color: var(--fg);
+  font: 0.88rem/1.6 ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, monospace;
+  font-variant-ligatures: none;
+  tab-size: 4;
 }
 
 .codelab-code pre {
@@ -528,10 +530,88 @@ a {
   border: 0;
   border-radius: 0;
   background: var(--code-bg);
+  padding: 0.85rem 1rem;
+  font: inherit;
+  white-space: pre;
+  tab-size: inherit;
 }
 
 .codelab-code .cm-editor {
-  font-size: 0.88rem;
+  font: inherit;
+  background: inherit;
+  color: inherit;
+}
+
+.codelab-code pre code::after {
+  content: "\200b";
+}
+
+.codelab-code .cm-scroller {
+  font: inherit;
+  overflow: auto;
+}
+
+.codelab-code .cm-content {
+  padding: 0.85rem 0;
+  tab-size: 4;
+}
+
+.codelab-code .cm-line {
+  padding: 0 1rem;
+}
+
+.codelab-code .code-keyword {
+  color: #cf222e;
+}
+
+.codelab-code .code-string {
+  color: #0a3069;
+}
+
+.codelab-code .code-literal {
+  color: #0550ae;
+}
+
+.codelab-code .code-comment {
+  color: #6e7781;
+}
+
+.codelab-code .code-definition {
+  color: #8250df;
+}
+
+.codelab-code .code-type {
+  color: #953800;
+}
+
+.codelab-code .code-operator {
+  color: var(--fg);
+}
+
+@media (prefers-color-scheme: dark) {
+  .codelab-code .code-keyword {
+    color: #ff7b72;
+  }
+
+  .codelab-code .code-string {
+    color: #a5d6ff;
+  }
+
+  .codelab-code .code-literal {
+    color: #79c0ff;
+  }
+
+  .codelab-code .code-comment {
+    color: #8b949e;
+  }
+
+  .codelab-code .code-definition {
+    color: #d2a8ff;
+  }
+
+  .codelab-code .code-type {
+    color: #ffa657;
+  }
 }
 
 .codelab-code .cm-editor.cm-focused {
@@ -602,6 +682,7 @@ a {
 }
 
 @media (prefers-color-scheme: dark) {
+
   .cell-stderr,
   .cell-traceback {
     color: #f2b8b5;
