@@ -36,7 +36,7 @@
 
 | order | 模块 id | 名称 | 定位 |
 | --- | --- | --- | --- |
-| 10 | `python` | Python 语言 | 课程的编程基础与唯一的在线实验载体；对象模型、并发与工具链都在这里建立 |
+| 10 | `python` | Python 语言 | 课程的编程基础与唯一的在线实验载体；对象与共享状态、调用与作用域、迭代与资源生命周期、协作式并发在这里建立 |
 | 20 | `algorithms` | 数据结构、算法与复杂度 | 成本模型与表示选择；为后续每个模块提供分析语言 |
 | 30 | `operating-systems` | 操作系统 | 进程、内存、I/O 与资源；上层所有系统的运行时底座 |
 | 40 | `networks` | 计算机网络 | 分组、传输与应用协议；延迟、超时与重试的来源 |
@@ -53,13 +53,19 @@
 
 ### 5.1 Python 语言（`python`，order 10）
 
-定位：课程的编程基础与实验载体。本模块分两层：语言基础从零开始，建立读代码所需的语法、类型与控制流；对象模型与后续子章节进入语言语义与运行时行为，包括并发与性能。语法目录与标准库清单不进正文。
+定位：课程的编程基础与唯一的在线实验载体。本模块承担三件事：建立全课程唯一的可执行语言，使后续模块可以直接给出 Python 实验而不必再解释语言；建立后续模块反复使用的程序语义模型（求值、绑定、对象与共享状态、调用、作用域、协议、异常、资源生命周期、协作式异步）；让读者能审查生成代码的状态变化、控制流与失败行为，而不只是写出能运行的程序。语法目录、标准库清单、工具链命令与格式化规则不进正文。
+
+验收标准：给读者一段陌生的 Python，他能精确预测其状态变化、控制流与失败行为；不能直接预测时，他知道该构造什么实验来验证。
 
 **交给 AI 与文档**：字符串、列表、字典的方法全集；`re` 语法细节；`itertools` 与 `collections` 的完整清单；`typing` 的全部构造；打包与工具链命令参数；`venv`、`pip` 的操作步骤；格式化与风格规则。
 
-**必须掌握**：表达式与语句；值与类型；数值与字符串的常用操作；赋值与控制流；函数定义与调用；内置容器的使用；类与实例；模块与导入；异常捕获；生产代码中常见的类型标注写法；文件与上下文管理器基础；实用层面的依赖声明与环境隔离。
+**必须掌握**：表达式与语句；值与类型；数值与字符串的常用操作；赋值与控制流；函数定义与调用；内置容器的使用；类与实例；模块与导入；异常捕获；生产代码中常见的类型标注写法；文件与上下文管理器基础。
 
-**值得深入**：名称绑定与对象身份；可变性、复制与共享状态；相等与哈希契约；数值表示与浮点误差；文本、字节与编码；作用域与闭包；迭代协议、生成器与惰性；异常作为控制流与资源清理；属性查找与描述符；线程、GIL 与共享状态；async/await 的调度与取消；语言保证与实现细节的边界；剖析与数据驱动的优化。
+**值得深入**：名称绑定与对象身份；可变性、原地更新与复制；相等与哈希契约；调用与参数绑定；作用域与闭包；迭代协议与生成器；异常传播与 `finally`；上下文管理与资源生命周期；属性查找、特殊方法与读码所需的 MRO；数值表示与近似；文本、字节与编码；类型标注作为可机械检查的契约；`async`/`await` 的调度、取消与清理；语言保证与 CPython、课程运行时的边界。
+
+**有意排除并指定去处**：线程、GIL 与共享内存归 `os.threads`、`os.concurrency`——线程是操作系统的执行模型，在 Python 章完整讲授会与 OS 章重复，本模块只讲语言的协作式异步语义；剖析与数据驱动的性能调查归 `swe.debugging`，它需要算法成本模型与 I/O 知识在前；`venv`、依赖声明、锁文件与可复现环境归 `swe.dependencies`，属于工程与供应链问题，本模块只说明依赖属于环境而不属于源码；异常层次与失败契约设计归 `swe.error-contracts`，语言机制在本模块讲完，契约设计属于接口设计。
+
+深度分配：`python.basics` 为 B；`python.objects`、`python.functions`、`python.iteration` 以 C/D 为主；`python.data-model`、`python.representation`、`python.program`、`python.async` 为 C 与 C/D。
 
 状态列：`✓` 已发布，`草稿` 已落盘但不进入站点，`—` 计划中。
 
@@ -74,30 +80,29 @@
 | | 70 | `python.loops` | 循环 | ✓ |
 | | 80 | `python.functions` | 函数 | ✓ |
 | | 90 | `python.collections` | 列表、元组、字典与集合 | ✓ |
-| | 100 | `python.classes` | 类与实例 | — |
+| | 100 | `python.classes` | 类与实例 | 草稿 |
 | | 110 | `python.modules-basics` | 模块、导入与文件读写 | — |
 | | 120 | `python.errors-basics` | 错误与异常处理入门 | — |
-| `python.model` | 10 | `python.names-and-objects` | 名称、对象与别名 | 草稿 |
-| | 20 | `python.mutability-and-copy` | 可变性、复制与共享状态 | 草稿 |
-| | 30 | `python.equality-and-hashing` | 相等、哈希与可变键 | 草稿 |
-| | 40 | `python.numbers-and-floats` | 数值表示与浮点误差 | 草稿 |
-| | 50 | `python.text-and-bytes` | 文本、字节与编码 | 草稿 |
-| | 60 | `python.runtime-vs-language` | 语言保证与实现细节 | — |
-| `python.abstraction` | 10 | `python.call-semantics` | 调用语义与参数传递 | — |
-| | 20 | `python.scope-and-closure` | 作用域、闭包与延迟绑定 | — |
-| | 30 | `python.decorators` | 装饰器与高阶函数 | — |
-| | 40 | `python.attributes-and-descriptors` | 属性查找与描述符 | — |
-| `python.iteration` | 10 | `python.iteration-protocol` | 迭代协议与惰性 | — |
-| | 20 | `python.generators` | 生成器与状态机 | — |
-| | 30 | `python.context-managers` | 上下文管理器与资源生命周期 | — |
-| `python.errors` | 10 | `python.exceptions` | 异常语义与控制流 | — |
-| | 20 | `python.error-design` | 异常层次与失败契约 | — |
-| `python.concurrency` | 10 | `python.threads-and-gil` | 线程、GIL 与共享状态 | — |
-| | 20 | `python.asyncio-scheduling` | 事件循环与协程调度 | — |
-| | 30 | `python.cancellation-and-timeouts` | 取消、超时与资源清理 | — |
-| `python.program` | 10 | `python.modules-and-imports` | 模块、导入与命名空间边界 | — |
-| | 20 | `python.environments` | 依赖、环境与可复现性 | — |
-| | 30 | `python.profiling` | 剖析与数据驱动的优化 | — |
+| `python.objects` | 10 | `python.names-and-objects` | 对象、身份与别名 | 草稿 |
+| | 20 | `python.mutability-and-copy` | 可变性、原地更新与复制 | 草稿 |
+| | 30 | `python.equality-and-hashing` | 相等与哈希契约 | 草稿 |
+| `python.functions` | 10 | `python.call-semantics` | 调用与参数绑定 | — |
+| | 20 | `python.scope-and-closure` | 作用域与闭包 | — |
+| | 30 | `python.decorators` | 函数作为值与装饰器 | — |
+| `python.iteration` | 10 | `python.iteration-protocol` | iterable 与 iterator | — |
+| | 20 | `python.generators` | generator 与 `yield` | — |
+| | 30 | `python.exceptions` | 异常、传播与 `finally` | — |
+| | 40 | `python.context-managers` | 上下文管理器与资源生命周期 | — |
+| `python.data-model` | 10 | `python.attributes-and-descriptors` | 属性查找与方法绑定 | — |
+| | 20 | `python.dunder-protocols` | 特殊方法与 Python 协议 | — |
+| | 30 | `python.inheritance-and-mro` | 继承与 MRO | — |
+| `python.representation` | 10 | `python.numbers-and-floats` | 整数、浮点数与近似 | 草稿 |
+| | 20 | `python.text-and-bytes` | 文本、bytes 与编码 | 草稿 |
+| `python.program` | 10 | `python.runtime-vs-language` | 语言保证与实现细节 | 草稿 |
+| | 20 | `python.modules-and-imports` | 模块、包与导入边界 | — |
+| | 30 | `python.typing` | 类型标注与静态契约 | — |
+| `python.async` | 10 | `python.asyncio-scheduling` | coroutine、task 与调度 | — |
+| | 20 | `python.cancellation-and-timeouts` | 取消、超时与清理 | — |
 
 ### 5.2 数据结构、算法与复杂度（`algorithms`，order 20）
 
@@ -135,6 +140,8 @@
 ### 5.3 操作系统（`operating-systems`，order 30）
 
 定位：解释上层所有系统的运行时底座。内核边界、虚拟内存、调度、同步与 I/O 路径是后续数据库、分布式与安全模块反复依赖的机制。
+
+线程在本模块首次引入，实验载体是 Python 的 `threading`：Python 章只建立对象共享状态与协作式异步，共享地址空间、调度、竞态与同步原语属于本模块，GIL 作为 CPython 的实现约束一并说明。
 
 **交给 AI 与文档**：系统调用号与名称记忆；冷门调度器参数；与概念无关的发行版管理命令。
 
@@ -232,6 +239,8 @@ SQL 夹具计划：`sql.orders.basic` 覆盖关系语义、`NULL`、聚合、连
 
 定位：变更与验证的方法论。前面所有模块讲系统如何工作，本模块讲如何安全地改动它们，以及什么证据能支持"改动正确"这一结论。
 
+性能调查在本模块展开：它需要算法模块的成本模型与操作系统模块的 I/O 知识在前，因此剖析与数据驱动的优化归入 `swe.debugging` 批次，而不放在 Python 章。
+
 **交给 AI 与文档**：每个 Git 参数的含义；IDE 点击路径；格式化器与 linter 机械执行的风格细节；测试框架的断言 API 清单。
 
 **必须掌握**：仓库工作流；commit、分支与 tag；实用层面的 merge 与 rebase；包与依赖管理；单元、集成与端到端测试的分工；CI 基础；代码评审；调试工具。
@@ -323,27 +332,32 @@ SQL 夹具计划：`sql.orders.basic` 覆盖关系语义、`NULL`、聚合、连
 
 | 批次 | 范围 | 状态 |
 | --- | --- | --- |
-| 1 | `python.model`：既有课时归位，新增可变性、相等与哈希、数值、文本与字节 | 进行中 |
-| 2 | `python.model` 收尾（语言保证与实现细节）、`python.functions` | 计划 |
-| 3 | `python.iteration`、`python.errors` | 计划 |
-| 4 | `python.concurrency`、`python.program` | 计划 |
-| 5 | `algorithms.complexity`、`algorithms.sequences` | 计划 |
-| 6 | `algorithms.maps`、`algorithms.graphs` | 计划 |
-| 7 | `algorithms.techniques`、`algorithms.selection` | 计划 |
-| 8 | `os.processes`、`os.memory` | 计划 |
-| 9 | `os.concurrency`、`os.io` | 计划 |
-| 10 | `os.resources` | 计划 |
-| 11 | `net.foundations`、`net.transport` | 计划 |
-| 12 | `net.application`、`net.operations` | 计划 |
-| 13 | `db.relational` 收尾、`db.schema` | 计划 |
-| 14 | `db.storage`（含新夹具） | 计划 |
-| 15 | `db.transactions`、`db.operations` | 计划 |
-| 16 | `swe.git`、`swe.design` | 计划 |
-| 17 | `swe.testing`、`swe.delivery`、`swe.debugging` | 计划 |
-| 18 | `dist.foundations`、`dist.communication` | 计划 |
-| 19 | `dist.data`、`dist.architecture`、`dist.operations` | 计划 |
-| 20 | `sec.foundations`、`sec.crypto` | 计划 |
-| 21 | `sec.web`、`sec.systems` | 计划 |
+| 1 | `python.basics` 精度修订（9 节正文） | 完成 |
+| 2 | `python.classes`（已落盘）、`python.modules-basics`、`python.errors-basics`：封闭 `python.basics` | 进行中 |
+| 3 | `python.objects`：对象、身份与别名 → 可变性、原地更新与复制 → 相等与哈希契约 | 进行中 |
+| 4 | `python.functions`：调用与参数绑定、作用域与闭包、函数作为值与装饰器 | 计划 |
+| 5 | `python.iteration`：iterable 与 iterator → generator → 异常传播与 `finally` → 上下文管理器 | 计划 |
+| 6 | `python.data-model`：属性查找与方法绑定、特殊方法、继承与 MRO | 计划 |
+| 7 | `python.representation`：整数与浮点、文本与 bytes | 进行中 |
+| 8 | `python.program`：语言保证与实现细节、模块与包导入边界、类型标注与静态契约 | 进行中 |
+| 9 | `python.async`：coroutine 与调度、取消与超时清理 | 计划 |
+| 10 | `algorithms.complexity`、`algorithms.sequences` | 计划 |
+| 11 | `algorithms.maps`、`algorithms.graphs` | 计划 |
+| 12 | `algorithms.techniques`、`algorithms.selection` | 计划 |
+| 13 | `os.processes`、`os.memory` | 计划 |
+| 14 | `os.concurrency`、`os.io` | 计划 |
+| 15 | `os.resources` | 计划 |
+| 16 | `net.foundations`、`net.transport` | 计划 |
+| 17 | `net.application`、`net.operations` | 计划 |
+| 18 | `db.relational`、`db.schema` | 计划 |
+| 19 | `db.storage`（含新夹具） | 计划 |
+| 20 | `db.transactions`、`db.operations` | 计划 |
+| 21 | `swe.git`、`swe.design` | 计划 |
+| 22 | `swe.testing`、`swe.delivery`、`swe.debugging` | 计划 |
+| 23 | `dist.foundations`、`dist.communication` | 计划 |
+| 24 | `dist.data`、`dist.architecture`、`dist.operations` | 计划 |
+| 25 | `sec.foundations`、`sec.crypto` | 计划 |
+| 26 | `sec.web`、`sec.systems` | 计划 |
 
 批次顺序按模块顺序推进，模块内按子章节顺序推进。每个批次落盘后更新本表。
 

@@ -1,0 +1,168 @@
+---
+id: python.classes
+slug: /python/classes
+order: 100
+title: 类与实例
+status: draft
+objectives:
+  - 说明 `class` 语句执行时创建了什么对象，以及名称绑定到哪个对象
+  - 判断一个属性来自实例还是类，并预测修改它在哪些对象上可见
+  - 解释两个实例为什么会共享同一个可变对象，并给出修正方式
+  - 说明 `self` 接收到什么，并把一次方法调用改写成函数调用
+---
+
+## 目的
+
+本课建立读 `class` 定义与实例所需的最小模型：类语句创建了什么，实例状态存在哪里，一次属性赋值改变了哪个对象。
+
+真实代码里几乎每个模块都有类。读一个类时最先要回答的是：实例状态放在哪些属性上，哪些属性属于类本身并被所有实例共享。这两类属性在定义处语法相同，行为差别决定程序是否正确。
+
+## 模型
+
+- `class` 语句执行时创建一个类对象（class object），并把名称绑定到它。类对象是普通的值：可以改名、传参、放进容器。
+- 调用类对象 `Counter()` 创建**实例**（instance），返回值是实例。
+- `__init__` 初始化一个已经创建出来的实例。对象创建协议还涉及 `__new__`，普通类代码通常只需要定义 `__init__`。
+- `self` 是普通形参的惯用名称，不是关键字；它按位置接收实例。
+- `instance.value` 是属性访问，`instance.value = 3` 是属性赋值。实例与类构成一个属性查找层次：读取时先看实例，再看类；赋值在实例上创建或覆盖属性。
+- 类属性是所有实例共享的一个对象，实例属性属于单个实例。
+- 方法访问 `instance.increment` 得到一个绑定到该实例的可调用对象，调用时实例作为第一个实参传入。
+
+## 类对象与实例
+
+```python run id="py.classes.instances"
+class Counter:
+    def __init__(self, start=0):
+        self.value = start
+
+    def increment(self):
+        self.value += 1
+
+
+first = Counter()
+second = Counter(10)
+
+print(type(first).__name__, first is second)
+first.increment()
+first.increment()
+print(first.value, second.value)
+print(Counter)
+```
+
+每次调用 `Counter()` 都创建新实例：`first is second` 为假，两个实例各自持有自己的 `value`，因此 `first` 自增两次之后，`second` 的值不受影响。`type(first).__name__` 给出 `Counter`，而 `Counter` 本身是一个值，打印出来是 `<class '__main__.Counter'>`，它的类型是 `type`。
+
+## 实例状态与类属性
+
+```python run id="py.classes.mutable-class-attribute"
+class Team:
+    members = []
+
+    def add(self, name):
+        self.members.append(name)
+
+
+a = Team()
+b = Team()
+a.add("Ada")
+
+print(a.members, b.members)
+print(a.members is b.members, Team.members is a.members)
+```
+
+`members = []` 写在类体里，这个列表属于类对象。两个实例都没有自己的 `members`，读取时沿层次找到类上的那一个，`append` 修改的是同一个列表：两个实例的输出相同，且 `a.members is b.members` 为真。这是<Term id="class-attribute">类属性</Term>最常见的失效模式，执行过程中没有任何错误，只是两个实例的状态合流了。
+
+```python run id="py.classes.instance-attribute-fix"
+class Team:
+    def __init__(self):
+        self.members = []
+
+    def add(self, name):
+        self.members.append(name)
+
+
+a = Team()
+b = Team()
+a.add("Ada")
+
+print(a.members, b.members)
+print(a.__dict__, b.__dict__)
+```
+
+在 `__init__` 里给 `self.members` 赋值之后，属性落在实例上，两个实例各有自己的列表，不再互为<Term id="alias">别名</Term>。`a.__dict__` 与 `b.__dict__` 显示属性确实存在实例上，这是判断状态所有权的直接证据。
+
+## 属性赋值与重新绑定
+
+```python run id="py.classes.rebinding"
+class Config:
+    retries = 3
+
+
+c = Config()
+c.retries = 5
+print(c.retries, Config.retries, c.__dict__)
+
+Config.retries = 7
+print(c.retries, Config.retries, Config().retries)
+```
+
+`c.retries = 5` 在实例上创建了 `retries`，类上的 `retries` 仍是 3。随后 `Config.retries = 7` 只改类属性：`c` 上的实例属性遮蔽了它，因此 `c.retries` 仍是 5，只有新创建的实例读到 7。
+
+读代码时要区分这两种写法：「改共享的默认值」影响所有还没有自己值的实例，「给这个实例设一个值」只影响一个对象。
+
+## self 是普通形参
+
+```python run id="py.classes.self-is-a-parameter"
+class Counter:
+    def __init__(self, start=0):
+        self.value = start
+
+    def increment(self):
+        self.value += 1
+
+
+instance = Counter()
+Counter.increment(instance)
+instance.increment()
+
+print(instance.value)
+print(type(Counter.increment).__name__, type(instance.increment).__name__)
+print(Counter.increment is instance.increment)
+```
+
+`Counter.increment` 是函数，`instance.increment` 是绑定到该实例的方法；两者不是同一个对象，调用效果相同。`instance.increment()` 与 `Counter.increment(instance)` 是同一次调用，`self` 接住了那个位置上的实参。
+
+```python run id="py.classes.missing-self"
+class Greeter:
+    def greet():
+        return "hello"
+
+
+greeter = Greeter()
+print(greeter.greet())
+```
+
+方法定义里漏掉 `self` 时，调用把实例当成多出来的实参，`TypeError` 的消息给出 1 个多余的位置参数。看到这个数字时先数一遍形参。
+
+## 边界与失败情形
+
+- **可变类属性被共享**：类上的列表、字典、集合被所有实例共用，一次写入在任何实例上都可见。
+- **实例属性遮蔽类属性**：一旦实例上有同名属性，改类属性不再影响它，读代码时容易把两种属性当成一回事。
+- **赋值创建属性**：`self.x = 1` 不需要预先声明；拼错名字会在实例上创建一个新属性，赋值路径上不报错。`__slots__` 会改变这一点。
+- **属性不存在**：读取既没有在实例上赋值、类上也没有的属性抛 `AttributeError`。
+- **`__init__` 里漏赋值**：别的属性先访问到这个对象时才会失败，报错位置离原因很远。
+- **默认参数与类属性是同一个模式**：两者都在定义时求值一次，被多次调用或多个实例共享。这一模式的完整后果由 <CrossRef id="python.mutability-and-copy" /> 展开。
+- **继承与属性查找顺序**：子类实例的查找会沿继承链进行，顺序由 MRO 决定，见 `python.inheritance-and-mro`。
+
+## 生产后果
+
+- 共享的可变类属性是状态泄漏的常见来源：数据看起来属于一个实例，实际上被同一类的所有对象共用。
+- 类对象在模块导入时创建并长期存活，写在类体里的对象存活期与进程相同；每个请求都期望全新的状态时，这类共享会跨请求累积。
+- 读生成代码时，`__init__` 是否给所有需要的属性赋值，是判断实例是否处于可用状态的直接依据。
+- 属性名拼写错误在赋值路径上不报错，因此这类缺陷靠静态检查与运行测试发现，靠通读代码很难。
+
+## 小结
+
+- `class` 语句创建类对象并绑定名称；调用类对象创建实例。
+- `__init__` 初始化已经创建出来的实例；`self` 是普通形参，接收实例。
+- 读取属性先看实例再看类；赋值在实例上创建或覆盖属性。
+- 类属性是所有实例共享的一个对象；可变类属性会让状态在实例之间合流。
+- `instance.method()` 与 `Class.method(instance)` 是同一次调用。

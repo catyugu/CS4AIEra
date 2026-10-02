@@ -1,187 +1,210 @@
 ---
 id: db.sql.null-semantics
 slug: /databases/sql-null-semantics
-order: 10
+order: 20
 title: NULL 与三值逻辑
-status: published
+status: draft
 objectives:
-  - 说明 SQL 的 NULL 表示"未知"而非"空值"，并据此预测比较结果
-  - 区分 NULL 比较、IS NULL 谓词与 NOT IN 中的未知传播
-  - 判断一个含 NULL 的查询返回空结果是数据事实还是逻辑事实
-  - 指出约束（NOT NULL、CHECK、UNIQUE）在含 NULL 列上的实际保证范围
+  - 说明 NULL 表示「未知」，并据此预测比较运算的结果
+  - 区分比较运算、`IS NULL` 谓词与 `NOT IN` 中的未知传播
+  - 判断一个返回空集的查询是数据事实还是谓词求值的结果
+  - 指出 `NOT NULL`、`CHECK`、`UNIQUE` 在含 NULL 的列上各自保证什么
 ---
 
 ## 目的
 
-本课解释 SQL 中 <Term id="null-logic">NULL</Term> 的语义，以及它如何把二值逻辑扩展为三值逻辑。
+本课解释 SQL 中 <Term id="null-logic">NULL 三值逻辑</Term> 的语义，以及它如何让过滤条件、聚合与约束的表现偏离直觉。
 
-这不是一个语法细节。它决定了 `WHERE` 子句会返回哪些行、`NOT IN` 为什么会静默返回空结果、聚合函数为什么忽略 NULL、以及 `UNIQUE` 约束为什么允许同一列出现多行 NULL。把 NULL 当作"空字符串"或"零"来推理，是查询结果与预期不符的最常见来源。
+`WHERE` 子句只保留谓词为真的行，而 NULL 参与的比较不产生真或假，只产生未知。由此产生的结果是行静默消失、`NOT IN` 静默返回空集、聚合忽略 NULL 输入、`CHECK` 拦不住 NULL。查询返回空集时，必须能判断这是「确实没有这样的数据」还是「谓词求值为未知」。
 
-本课使用实验夹具 <LabRef id="sql.orders.basic" />：一个含外键、唯一约束与若干可空列的小型订单模式。
+本课使用夹具 <LabRef id="sql.orders.basic" />。`customers.country` 与 `orders.discount_cents` 允许为空，其余列由约束保证非空。
 
-## 模型：三个真值
+## 模型
 
-SQL 的布尔表达式有三种结果：`TRUE`、`FALSE`、`UNKNOWN`。`WHERE` 子句只保留结果为 `TRUE` 的行；`FALSE` 与 `UNKNOWN` 都会被丢弃。
-
-NULL 是"此处没有值/值未知"的标记。因此：
+布尔表达式有三个真值：`TRUE`、`FALSE`、`UNKNOWN`。`WHERE` 保留结果为真的行，假与未知都被丢弃。
 
 | 表达式 | 结果 |
 | --- | --- |
 | `NULL = NULL` | `UNKNOWN` |
 | `NULL = 1` | `UNKNOWN` |
-| `1 = 1` | `TRUE` |
 | `NULL IS NULL` | `TRUE` |
 | `NOT UNKNOWN` | `UNKNOWN` |
 | `TRUE OR UNKNOWN` | `TRUE` |
 | `FALSE OR UNKNOWN` | `UNKNOWN` |
+| `TRUE AND UNKNOWN` | `UNKNOWN` |
+| `FALSE AND UNKNOWN` | `FALSE` |
 
-关键推论：**UNKNOWN 会传播**。一个由多个条件用 `AND`、`OR` 组合的谓词，只要含有 UNKNOWN 且其余部分不足以决定结果，整体就是 UNKNOWN，于是行被丢弃。
+未知会传播：由 `AND`、`OR` 组合的谓词只要含有未知且其余部分不足以决定结果，整体就是未知。`OR` 的左侧为真时整体为真，`AND` 的左侧为假时整体为假——这两条短路规则是唯一能让未知被吸收的情形。
 
-## 观察：比较不等于匹配
+`IS NULL` 与 `IS NOT NULL` 是谓词：它们判定「值是否存在」，对 NULL 给出确定结果。三值逻辑表达的是「值未知」，与「值等于空字符串」或「值等于零」完全不同。
 
-夹具中 `customer_id = 3` 的客户 `country` 为 NULL。下面第一条查询按常规比较取国家为 `'GB'` 的客户，第二条查询想取"不是 GB"的客户。
+## 比较运算不覆盖 NULL
 
 ```sql run id="sql.null.comparison" fixture="sql.orders.basic"
 SELECT customer_id, full_name, country
 FROM customers
-WHERE country = 'GB';
+WHERE country = 'GB'
+ORDER BY customer_id;
 
 SELECT customer_id, full_name, country
 FROM customers
-WHERE country <> 'GB';
+WHERE country <> 'GB'
+ORDER BY customer_id;
 ```
 
-第二条查询漏掉了 `country` 为 NULL 的那一行：`NULL <> 'GB'` 求值为 `UNKNOWN`。这是三值逻辑的直接后果，与数据是否缺失无关。
+第一条返回英国客户。第二条返回两位美国客户，国家未知的那一行没有出现：`NULL <> 'GB'` 求值为未知，被 `WHERE` 丢弃。
 
-## 正确写法：IS NULL 谓词
+`country = 'GB'` 与 `country <> 'GB'` 的并集不覆盖全部行，原因是同一行在两种谓词下都得到未知。想表达「不是英国」并包含国家未知的客户，必须显式补上分支：
 
-要表达"没有值"，必须用 `IS NULL` 与 `IS NOT NULL`。它们是谓词而不是比较，因此对 NULL 有确定结果。
-
-```sql run id="sql.null.is-null" fixture="sql.orders.basic"
-SELECT customer_id, full_name
-FROM customers
-WHERE country IS NULL;
-```
-
-要"取所有不是 GB 的客户，包括国家未知的客户"，必须显式写出两个分支：
-
-```sql run id="sql.null.not-gb-or-unknown" fixture="sql.orders.basic"
+```sql run id="sql.null.complete-filter" fixture="sql.orders.basic"
 SELECT customer_id, full_name, country
 FROM customers
-WHERE country IS NULL OR country <> 'GB';
+WHERE country IS NULL OR country <> 'GB'
+ORDER BY customer_id;
 ```
 
-`IS NULL` 与 `IS NOT NULL` 的并集覆盖全部行，而 `= 'x'` 与 `<> 'x'` 的并集不覆盖含 NULL 的行。这条差异是编写"互斥且完备"过滤条件的判据。
+`IS NULL` 与 `IS NOT NULL` 的并集覆盖全部行，因此它们是编写「互斥且完备」过滤条件的工具。检查一个过滤条件是否完备，用这两条互补谓词判断。
 
-## 陷阱：NOT IN 与 NULL
+## NOT IN 与未知
 
-`NOT IN` 是这一语义最容易出错的地方。下面是两个只差一个元素的子查询。
+`NOT IN` 是三值逻辑最容易造成静默错误的地方。
 
-```sql run id="sql.null.not-in" fixture="sql.orders.basic"
-SELECT customer_id, country
-FROM customers
-WHERE country NOT IN ('GB', 'US');
+```sql run id="sql.null.not-in-literal" fixture="sql.orders.basic"
+SELECT order_id, discount_cents
+FROM orders
+WHERE discount_cents NOT IN (200, 500)
+ORDER BY order_id;
 
-SELECT customer_id, country
-FROM customers
-WHERE country NOT IN ('GB', 'US', NULL);
+SELECT order_id, discount_cents
+FROM orders
+WHERE discount_cents NOT IN (200, 500, NULL)
+ORDER BY order_id;
 ```
 
-第二条返回空集。原因是 `x NOT IN (a, b, NULL)` 等价于 `NOT (x = a OR x = b OR x = NULL)`。对任何非 NULL 的 `x`，`x = NULL` 为 `UNKNOWN`；当 `x` 与 `a`、`b` 都不相等时，整个 `OR` 链为 `UNKNOWN`，取反后仍为 `UNKNOWN`，行被丢弃。对 NULL 的 `x` 同样得到 `UNKNOWN`。
+第一条返回两条 `discount_cents = 0` 的订单，`discount_cents` 为空的两条订单被未知排除。第二条在列表里加入一个 NULL 之后返回空集：`x NOT IN (200, 500, NULL)` 等价于 `NOT (x = 200 OR x = 500 OR x = NULL)`，对任何值，`x = NULL` 都是未知；当 `x` 不等于前两个值时，整条 `OR` 链是未知，取反仍是未知，行被丢弃。
 
-因此：**子查询可能产生 NULL 时，不要用 `NOT IN`**。改用 `NOT EXISTS` 或先过滤掉 NULL：
+子查询产生的 NULL 有同样的效果：
+
+```sql run id="sql.null.not-in-subquery" fixture="sql.orders.basic"
+SELECT order_id, discount_cents
+FROM orders
+WHERE discount_cents NOT IN (
+    SELECT discount_cents FROM orders WHERE customer_id = 1
+)
+ORDER BY order_id;
+```
+
+客户 1 的两条订单折扣分别是 500 与 NULL，子查询的结果集含 NULL，于是整条查询返回空集，而「折扣不同于客户 1 的订单」在数据上是存在的。子查询的列可以为空时，`NOT IN` 的语义就不再是「不属于这个集合」。
+
+表达「不存在」用 `NOT EXISTS`。它只判断子查询是否产生行，不把值代入比较：
 
 ```sql run id="sql.null.not-exists" fixture="sql.orders.basic"
 SELECT c.customer_id, c.full_name
 FROM customers AS c
 WHERE NOT EXISTS (
-    SELECT 1
-    FROM orders AS o
-    WHERE o.customer_id = c.customer_id
-);
+    SELECT 1 FROM orders AS o WHERE o.customer_id = c.customer_id
+)
+ORDER BY c.customer_id;
+
+SELECT c.customer_id, c.full_name
+FROM customers AS c
+WHERE c.customer_id NOT IN (SELECT o.customer_id FROM orders AS o)
+ORDER BY c.customer_id;
 ```
 
-`NOT EXISTS` 只关心子查询是否产生行，不把值代入比较，因此不受 NULL 影响。这条查询返回没有任何订单的客户，结果是确定的行集合。
+两条查询返回同一个结论：4 号客户没有订单。第二条之所以在这里成立，是因为 `orders.customer_id` 被声明为 `NOT NULL`，子查询不可能产生 NULL。同一个写法换到可空列上就会静默返回空集，这就是「`NOT IN` 是否安全取决于列的约束」的含义。
 
-## 聚合与分组
-
-聚合函数（`COUNT`、`SUM`、`AVG`、`MAX`）忽略 NULL 输入。这带来两个必须区分的计数：
+## 聚合忽略 NULL
 
 ```sql run id="sql.null.aggregates" fixture="sql.orders.basic"
 SELECT
-    COUNT(*)                    AS total_rows,
-    COUNT(country)              AS rows_with_country,
-    COUNT(*) - COUNT(country)   AS rows_with_null_country
+    COUNT(*)                  AS rows_total,
+    COUNT(country)            AS rows_with_country,
+    COUNT(*) - COUNT(country) AS rows_without_country
 FROM customers;
-```
 
-`COUNT(*)` 计行数，`COUNT(column)` 只计该列非 NULL 的行。`SUM` 与 `AVG` 在分母上使用非 NULL 行数，因此 `AVG(discount_cents)` 在含 NULL 的列上并不等于"把 NULL 当 0 的平均值"。
-
-`GROUP BY` 把所有 NULL 归入同一个组：在 SQL 分组语义里 NULL 彼此"相同"，这与 `WHERE` 比较中的 `UNKNOWN` 并不矛盾——分组用的是"是否同一组"的等价关系，不是 `=` 谓词。
-
-## 具名 session：连续观察同一连接
-
-默认情况下每个单元格使用独立连接并重新加载夹具。需要连续观察同一连接上的状态时，作者给单元格指定同一个 session 名。
-
-```sql run id="sql.session.load" session="orders-demo" fixture="sql.orders.basic"
-SELECT COUNT(*) AS orders_before
+SELECT
+    COUNT(*)            AS orders,
+    SUM(discount_cents) AS discount_sum,
+    AVG(discount_cents) AS discount_avg,
+    MAX(discount_cents) AS discount_max
 FROM orders;
 ```
 
-```sql run id="sql.session.mutate" session="orders-demo"
-INSERT INTO orders (order_id, customer_id, placed_on, status, discount_cents)
-VALUES (1005, 2, '2026-03-01', 'pending', NULL);
+`COUNT(*)` 数行数，`COUNT(column)` 只数该列非空的行，两者之差就是该列为空的行数。`SUM`、`AVG`、`MAX` 忽略空值输入：折扣合计 700 只由三个非空值产生，`AVG` 的分母是 3，因此平均值高于「把 NULL 当作零」的口径。
+
+业务指标的分母由此确定。报表口径必须写明 NULL 的处置方式，否则同一个字段在不同查询里含义不同。
+
+## 分组与排序
+
+```sql run id="sql.null.grouping" fixture="sql.orders.basic"
+SELECT country, COUNT(*) AS customers
+FROM customers
+GROUP BY country
+ORDER BY country;
 ```
 
-```sql run id="sql.session.after" session="orders-demo"
-SELECT COUNT(*) AS orders_after
-FROM orders;
-```
+`GROUP BY` 把所有 NULL 归入同一组：分组使用「是否同一组」的等价关系，因此三个国家值（未知、GB、US）产生三组。这一点与 `WHERE` 中的比较不矛盾——两处处理的是不同的问题：过滤判断谓词真假，分组判断行是否属于同一类。
 
-第三个单元格看到 1005，因为三个单元格共享同一个连接。**Reset** 会重建该 session 的连接并重新应用夹具，`orders_after` 回到原值——这正是夹具"可重现"的含义。
+NULL 在排序中的位置由引擎决定：
 
-## 约束与 NULL
-
-约束在含 NULL 的列上保证的范围比直觉要窄：
-
-- `NOT NULL` 排除 NULL；没有它，列上的任何其他约束都可能被 NULL 绕过。
-- `CHECK (x > 0)` 在 `x` 为 NULL 时结果为 `UNKNOWN`，而约束只在结果为 `FALSE` 时被违反。因此 `CHECK` 不禁止 NULL，需要与 `NOT NULL` 配合。
-- `UNIQUE` 允许任意多行 NULL：唯一性按"两个值是否相等"判定，而 `NULL = NULL` 是 `UNKNOWN`，不构成冲突。要禁止多个 NULL，需要部分索引或额外的约束设计。
-- 外键列上的 NULL 表示"没有引用对象"，不触发引用完整性检查。
-
-```sql run id="sql.null.unique-insert" fixture="sql.orders.basic"
-INSERT INTO orders (order_id, customer_id, placed_on, status, discount_cents)
-VALUES (1006, 1, '2026-03-02', 'paid', NULL);
+```sql run id="sql.null.ordering" fixture="sql.orders.basic"
+SELECT order_id, discount_cents
+FROM orders
+ORDER BY discount_cents, order_id;
 
 SELECT order_id, discount_cents
 FROM orders
-WHERE discount_cents IS NULL
-ORDER BY order_id;
+ORDER BY discount_cents DESC, order_id;
 ```
 
-两行 `discount_cents` 为 NULL 的行可以共存，但把 `order_id` 换成重复值会立即因主键冲突失败。
+SQLite 把 NULL 视为小于任何值，于是升序时排在最前、降序时排在最后。这是方言行为：PostgreSQL 的默认行为相反，标准 SQL 也不规定。跨引擎的报表要么显式写出 NULL 的处置，要么把 NULL 转换成参与排序的显式值。
 
-## 方言说明
+## 约束在 NULL 上的保证范围
 
-本课的可执行基线是 SQLite，以上语义是 SQL 标准的三值逻辑，主流引擎一致。但要注意 SQLite 特有的部分：
+`CHECK` 只在结果为假时拒绝写入，而含 NULL 的表达式得到未知：
 
-- SQLite 是动态类型系统，列类型是"亲和性"而非强制约束；`CHECK` 与 `NOT NULL` 仍被强制，但把字符串写入 `INTEGER` 列通常不会报错。其他引擎的行为不同。
-- `COUNT(*)`、`NOT IN` 与 `NOT EXISTS` 的语义在各引擎一致，但查询计划与索引使用方式差异很大，不能由 SQLite 的表现推断其他引擎。
-- 部分引擎提供 `IS DISTINCT FROM` 这类把 NULL 当作普通值的比较运算符，SQLite 没有。
+```sql run id="sql.null.check" fixture="sql.orders.basic"
+SELECT COUNT(*) AS orders_before FROM orders;
+
+INSERT INTO orders (order_id, customer_id, placed_on, status, discount_cents)
+VALUES (1007, 1, '2026-03-05', 'paid', -1);
+```
+
+负的折扣被 `CHECK` 拒绝。
+
+```sql run id="sql.null.check-null" fixture="sql.orders.basic"
+INSERT INTO orders (order_id, customer_id, placed_on, status, discount_cents)
+VALUES (1007, 1, '2026-03-05', 'paid', NULL);
+
+SELECT order_id, discount_cents FROM orders WHERE order_id = 1007;
+```
+
+同一个约束对 NULL 不做判定：`CHECK` 求值为未知，约束不算被违反。要禁止这一列出现 NULL，必须再加 `NOT NULL`。
+
+结论汇总：`NOT NULL` 排除空值，是其余约束实际生效的前提；`CHECK` 只拒绝明确为假的取值；`UNIQUE` 允许任意多行 NULL；外键列上的 NULL 表示「没有引用对象」，不触发参照完整性检查。
+
+## 边界与失败情形
+
+- **`IS DISTINCT FROM`**：部分引擎提供把 NULL 当作普通值比较的运算符，用于表达「确实不同」。SQLite 没有这个运算符，只能用 `IS NULL` 分支或 `COALESCE` 模拟。
+- **`COALESCE` 与默认值**：`COALESCE(x, 0)` 让 NULL 参与运算，代价是「未知」与「零」在结果里不再可区分。用于展示可以，用于计数与均值会改变口径。
+- **`NOT NULL` 的添加**：对既有数据加 `NOT NULL` 时，先回填再改约束，否则迁移失败。
+- **`COUNT(DISTINCT)` 忽略 NULL**：去重计数同样不计空值，与 `COUNT(*)` 的差异需要显式说明。
+- **`ORDER BY` 中的 NULL**：位置由引擎决定，跨引擎结果的顺序可能不同。
+- **`NOT IN` 的可空列**：子查询列可空时改写成 `NOT EXISTS`，这是从语义出发的必要改动，不是风格偏好。
 
 ## 生产后果
 
-- 过滤条件必须成对检查：`=`/`<>` 覆盖不到 NULL，需要显式分支，否则行会静默消失。
-- 应用层用"空字符串"或"0"表示缺失时，写入数据库就变成了真实值，三值逻辑不再能区分"未知"与"空"，这类混淆会一直传播到报表与对账。
-- 聚合结果的分母决定业务指标。`AVG` 忽略 NULL 可能让"平均折扣"偏高，需要在口径上明确 NULL 的处置。
-- 迁移与回填时，`NOT NULL` 约束的添加会因既有 NULL 行失败，需要显式的回填步骤。
-- 生成式工具常写出 `NOT IN (SELECT ...)` 形式的查询，在含 NULL 的子查询上静默返回空结果，看起来"没数据"而不是"写错了"。
+- 应用层用空字符串或 0 表示缺失时，三值逻辑不再能区分「未知」与「空」。这类混淆会一直传播到报表与对账，且无法在查询层修复。
+- 聚合的分母决定指标含义。平均值、比率与转化率的口径必须写清 NULL 的处置。
+- 生成式工具常写出 `NOT IN (SELECT ...)` 形式的排除查询，在可空列上静默返回空结果，看起来像「没有数据」。
+- 过滤条件成对检查：`=` 与 `<>` 覆盖不到 NULL，写入审查清单可以避免这一类缺陷进入生产。
 
 ## 小结
 
-- NULL 表示未知，不是空值；比较运算遇 NULL 得到 UNKNOWN。
-- `WHERE` 只保留 `TRUE` 的行，`FALSE` 与 `UNKNOWN` 都被丢弃。
-- `IS NULL`、`IS NOT NULL` 是谓词，对 NULL 有确定结果。
-- `NOT IN` 在子查询含 NULL 时可能返回空集；用 `NOT EXISTS` 表达"不存在"。
-- 聚合忽略 NULL，`COUNT(*)` 与 `COUNT(column)` 含义不同。
-- `NOT NULL`、`CHECK`、`UNIQUE` 在含 NULL 的列上保证范围各不相同，需要分别核对。
+- NULL 表示未知；任何与它的比较得到未知，`WHERE` 丢弃未知的行。
+- `IS NULL`、`IS NOT NULL` 是谓词，对 NULL 有确定结果，且两者互补覆盖全部行。
+- 列表或子查询中出现 NULL 会让 `NOT IN` 返回空集；表达「不存在」用 `NOT EXISTS`。
+- 聚合忽略 NULL 输入，`COUNT(*)` 与 `COUNT(column)` 的含义不同。
+- `GROUP BY` 把 NULL 归入同一组；`ORDER BY` 中 NULL 的位置由引擎决定。
+- `NOT NULL`、`CHECK`、`UNIQUE` 对 NULL 的保证各不相同，需要逐条核对。

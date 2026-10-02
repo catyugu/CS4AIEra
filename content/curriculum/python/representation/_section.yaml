@@ -1,0 +1,5 @@
+id: python.representation
+label: 数据表示
+order: 60
+summary: 数值的表示与近似、文本与字节在编码边界上的转换。
+status: active

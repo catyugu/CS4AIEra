@@ -1,0 +1,196 @@
+---
+id: python.mutability-and-copy
+slug: /python/mutability-and-copy
+order: 20
+title: 可变性、原地更新与复制
+status: draft
+objectives:
+  - 判断一次复制消除到哪一层，并指出仍然共享的部分
+  - 解释深拷贝的 memo 为什么同时保证共享子图与环被正确复制
+  - 区分 `[x] * n` 与推导式构造的结构在写入后的差异
+  - 判断一个函数是否把内部状态的修改权交给了调用方
+  - 指出可变默认参数与类属性把状态的存活期延长到了哪里
+---
+
+## 目的
+
+本课处理赋值语义的直接后果：复制能消除到哪一层，剩余的部分为什么仍然共享，以及共享状态如何沿函数、容器与模块传播。
+
+复制是控制共享范围的手段，而复制有深度之分。用错深度的代码在只读路径上表现正确，在写入路径上留下仍然共享的部分。共享状态也是接口契约与生命周期问题：函数返回内部容器、类属性持有可变对象、默认参数在定义时求值一次，都会让状态的存活期超出单次调用。
+
+## 模型
+
+三种操作必须分开：
+
+| 操作 | 效果 |
+| --- | --- |
+| `b = a` | 增加一个指向同一对象的名字 |
+| `copy.copy(a)`、`a[:]`、`list(a)`、`dict(a)` | <Term id="shallow-copy">浅拷贝</Term>：新建外层容器，元素仍是原来的引用 |
+| `copy.deepcopy(a)` | <Term id="deep-copy">深拷贝</Term>：递归新建对象图，图内的共享与环都被保留 |
+
+判断共享范围只需要两个问题：两个名字是否指向同一对象（`is`），以及通过一个名字修改后另一个名字是否观察到变化。
+
+```python run id="py.copy.depth"
+import copy
+
+inner = [1, 2]
+outer = [inner, 3]
+
+shallow = copy.copy(outer)
+deep = copy.deepcopy(outer)
+
+inner.append(99)
+
+print("outer:  ", outer)
+print("shallow:", shallow)
+print("deep:   ", deep)
+print("shallow[0] is inner:", shallow[0] is inner)
+print("deep[0] is inner:   ", deep[0] is inner)
+```
+
+浅拷贝复制了外层列表，元素 `inner` 仍是同一个对象：`inner.append(99)` 在 `outer` 与 `shallow` 中都可见，在 `deep` 中不可见。`shallow[0] is inner` 为真说明浅拷贝停在第一层。
+
+## 深拷贝与对象图
+
+`deepcopy` 在递归过程中维护一张「原对象到副本」的映射。这张映射同时保证两个性质：原图中被多处引用的子对象在副本中仍然被多处引用，含环的结构不会无限递归。
+
+```python run id="py.copy.graph"
+import copy
+
+shared = [1]
+graph = [shared, shared]
+graph.append(graph)
+
+clone = copy.deepcopy(graph)
+
+print("clone[0] is clone[1]:", clone[0] is clone[1])
+print("clone[2] is clone:   ", clone[2] is clone)
+print("clone[0] is shared:  ", clone[0] is shared)
+print("len(clone):", len(clone))
+```
+
+原对象中 `graph[0]` 与 `graph[1]` 是同一个列表，`graph[2]` 指向 `graph` 自身。副本保留了这两种关系，同时与原件不再共享任何可变对象。朴素递归复制会在 `graph[2]` 上无限展开，也复制不出 `clone[0] is clone[1]` 这个事实。
+
+## 重复引用与构造顺序
+
+乘法的操作数决定复制的是什么。`[x] * n` 重复引用，推导式每次迭代重新求值。
+
+```python run id="py.copy.repetition"
+grid = [[0] * 3] * 3
+rows = [[0] * 3 for _ in range(3)]
+
+print("grid rows identical:", grid[0] is grid[1])
+print("rows distinct:     ", rows[0] is not rows[1])
+
+grid[0][0] = 1
+rows[0][0] = 1
+print("grid:", grid)
+print("rows:", rows)
+```
+
+`grid` 的三行是同一个列表，写入第一行等于写入全部三行。`rows` 的每一行是独立求值得到的列表，写入只影响一行。只读时两者行为相同。
+
+## 所有权
+
+所有权指谁有权修改一份状态。函数返回内部容器，等于把修改权交给调用方。
+
+```python run id="py.copy.ownership"
+class Buffer:
+    def __init__(self):
+        self._items = []
+
+    def add(self, item):
+        self._items.append(item)
+
+    def items(self):
+        return list(self._items)
+
+    def raw_items(self):
+        return self._items
+
+
+buffer = Buffer()
+buffer.add(1)
+
+snapshot = buffer.items()
+snapshot.append(999)
+print("after mutating a copy:", buffer.raw_items())
+
+raw = buffer.raw_items()
+raw.append(999)
+print("after mutating the internals:", buffer.raw_items())
+```
+
+两个访问器签名相同，契约不同：`items()` 返回副本，调用方的修改对 `Buffer` 不可见；`raw_items()` 返回内部列表本身，调用方的修改进入了对象内部状态。返回副本、返回不可变视图、或明确约定「返回值可以修改」都能界定所有权，选择必须写进接口文档。
+
+## 可变默认参数
+
+默认值在函数定义时求值一次，此后所有未传该参数的调用共用同一个对象。
+
+```python run id="py.copy.default-argument"
+def collect(item, bucket=[]):
+    bucket.append(item)
+    return bucket
+
+
+print(collect("a"))
+print(collect("b"))
+print(collect("c"))
+print("shared default identity:", collect("d") is collect("e"))
+```
+
+`bucket=[]` 是定义时创建的一个列表，三次调用都向它追加，因此返回值逐次增长。用 `None` 表示「未提供」并在函数体内新建容器可以把状态限制在单次调用内：
+
+```python
+def collect(item, bucket=None):
+    if bucket is None:
+        bucket = []
+    bucket.append(item)
+    return bucket
+```
+
+## 迭代中修改容器
+
+容器的元素数量是迭代状态的一部分，修改它会让迭代器跳过或重复元素。
+
+```python run id="py.copy.mutate-while-iterating"
+values = [1, 2, 3, 4]
+visited = []
+for value in values:
+    visited.append(value)
+    if value == 2:
+        values.remove(value)
+
+print("visited:", visited)
+print("values: ", values)
+```
+
+迭代器按位置推进：访问 `2` 时把它删除，列表缩短，位置 2 上的 `3` 被跳过，位置 3 已经越界，循环结束。需要边遍历边修改时，遍历副本或先收集要删的元素再统一删除。
+
+## 边界与失败情形
+
+- **浅拷贝不构成隔离**：`list(x)`、`x[:]`、`dict(x)`、`copy.copy(x)` 都只复制一层，嵌套的元素继续共享。
+- **不可变容器可以含可变元素**：`t = ([1], 2)` 上的 `t[0].append(3)` 合法。元组的不可变性只覆盖元素绑定，不覆盖元素指向的对象。
+- **分片是浅拷贝**：`a[:] is a` 为假，而 `a[:][0] is a[0]` 为真。
+- **深拷贝的代价与限制**：对象图越大越慢、越占内存；文件、套接字、锁、模块这些对象不可复制并会抛错；定义 `__copy__` 或 `__deepcopy__` 的类会改写复制语义。
+- **复制不等于新建**：对不可变对象，`copy.copy` 允许返回同一个对象，因此「调用过复制」不保证得到新对象。判断隔离始终用 `is`，不用函数名。
+- **环与回收**：容器参与引用环时引用计数无法归零，需要垃圾回收器介入。这属于实现层面的资源画像，不影响引用语义本身。
+- **跨边界的复制是强制的**：跨进程、跨网络、跨语言时不存在共享内存，复制语义由序列化格式决定，JSON 往返得到的嵌套结构与原对象不再共享。
+
+## 生产后果
+
+- **缓存污染**：缓存返回内部对象，调用方就地修改后，缓存里存的是被改过的值，而失效逻辑对此一无所知。
+- **请求间串味**：长驻进程把请求数据放进共享容器，上一次请求的残留出现在下一次请求里。
+- **并发**：共享可变状态是竞态的前提。线程、协程与数据库事务都在处理「谁在什么时候看到谁写的哪个版本」。
+- **生命周期**：类属性与模块级可变对象被所有实例、所有调用共享，状态的存活期等于进程的存活期。
+- **生成代码**：把 `list(x)`、`x[:]`、`dict(x)` 当作隔离手段，在嵌套结构上留下别名；反过来，在每次调用都做深拷贝，会把共享结构退化为重复存储。
+
+## 小结
+
+- 赋值增加名称，浅拷贝复制一层容器，深拷贝递归复制并保留图内身份关系。
+- 判断共享用 `is`：元素仍然指向原对象时，浅拷贝没有隔离。
+- 深拷贝的 memo 同时解决共享子图与环。
+- `[x] * n` 重复引用；独立元素由推导式构造。
+- 返回内部容器等于交出修改权；所有权必须写进接口契约。
+- 默认参数在定义时求值一次，可变默认值是跨调用共享状态。
+- 遍历容器的同时修改它会让迭代跳过或重复元素。

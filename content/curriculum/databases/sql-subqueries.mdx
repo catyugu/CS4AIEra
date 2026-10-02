@@ -1,0 +1,158 @@
+---
+id: db.sql.subqueries
+slug: /databases/sql-subqueries
+order: 50
+title: 子查询、CTE 与求值
+status: draft
+objectives:
+  - 区分标量子查询、`IN` 与 `EXISTS` 的语义，并说明各自在 NULL 上的行为
+  - 说明相关子查询的语义模型与执行代价之间的关系
+  - 用 CTE 给中间结果命名，并说明它与派生表的语义关系
+  - 判断一个谓词或别名在查询的哪一步可见，并解释报错原因
+---
+
+## 目的
+
+本课解释子查询扮演的三种角色、求值语义与执行方式的区别，以及逻辑处理顺序如何限制谓词与别名的可见范围。
+
+子查询是 SQL 里唯一能表达「按组比较」和「存在性」的结构。它的写法看起来像嵌套循环，但执行方式由优化器决定；同时，逻辑顺序决定了哪些写法在语义上就不成立。把这两件事分开，是读懂复杂查询与查询计划的前提。
+
+本课使用夹具 <LabRef id="sql.orders.basic" />。
+
+## 模型
+
+子查询出现在三种位置，语义各不相同：
+
+| 位置 | 角色 | 要求 |
+| --- | --- | --- |
+| 表达式 | 标量子查询 | 一行一列；零行时为 NULL |
+| `WHERE` 谓词 | `IN`、`ANY`、`ALL`、`EXISTS` | `IN` 比较值，`EXISTS` 只判断行是否存在 |
+| `FROM` | 派生表 | 提供一张临时的关系，需要别名 |
+
+- `EXISTS` 不把值代入比较，因此不受 NULL 影响；`IN` 比较值，遇到 NULL 得到未知。
+- 相关子查询引用外层的列，语义上对外层每一行求值一次；优化器可能把它改写成半连接，代价与写法不直接对应。
+- CTE（<Term id="cte">公共表表达式</Term>）用 `WITH 名字 AS (...)` 给子查询命名，同一个名字可以在查询里引用多次。它在语义上等价于派生表；是否物化、是否内联由优化器决定。
+- 逻辑处理顺序是 `FROM` → `WHERE` → `GROUP BY` → `HAVING` → `SELECT` → `ORDER BY`。聚合在 `WHERE` 求值时还不存在，`SELECT` 的输出别名也在那之后才产生。
+
+## 标量子查询
+
+```sql run id="sql.sub.scalar" fixture="sql.orders.basic"
+SELECT order_id, discount_cents
+FROM orders
+WHERE discount_cents > (SELECT AVG(discount_cents) FROM orders)
+ORDER BY order_id;
+```
+
+子查询先算出一个值：非空折扣的平均值 175。外层查询把它当作常量比较，返回两条高于平均值的订单。子查询在这里与书写位置无关——它不属于外层查询的每一行。
+
+标量子查询的形状必须是一行一列：
+
+```sql run id="sql.sub.shape" fixture="sql.orders.basic"
+SELECT (SELECT customer_id FROM customers ORDER BY customer_id DESC) AS last_customer;
+
+SELECT order_id, (SELECT full_name FROM customers WHERE customer_id = 99) AS customer_name
+FROM orders
+WHERE order_id = 1001;
+
+SELECT (SELECT customer_id, email FROM customers) AS pair;
+```
+
+第一条的子查询返回四行，SQLite 静默取了第一行；第二条返回零行，标量结果为 NULL；第三条返回两列，报错。标准 SQL 要求标量子查询最多返回一行，PostgreSQL 之类的引擎会对第一种情形直接报错。SQLite 的宽容是方言行为，依赖它会把「数据比预期多」这类问题藏起来。
+
+## 相关子查询
+
+```sql run id="sql.sub.correlated" fixture="sql.orders.basic"
+SELECT order_id, customer_id, discount_cents
+FROM orders AS o
+WHERE discount_cents > (
+    SELECT AVG(discount_cents) FROM orders AS inner_o WHERE inner_o.customer_id = o.customer_id
+)
+ORDER BY order_id;
+```
+
+子查询引用了外层的 `o.customer_id`，因此每一条外层订单都用「该客户自己的平均折扣」比较。结果只剩 1005：客户 1 的平均折扣是 500，客户 3 的平均是 0，只有客户 2 的 200 高于自己的平均 100。
+
+语义上这是逐行求值，代价是外层行数乘以内层扫描，写起来也容易和分析口径混淆——「与全局平均比较」和「与本组平均比较」是两种不同的语义，区别就在这个引用上。
+
+## IN 与 EXISTS
+
+```sql run id="sql.sub.in-exists" fixture="sql.orders.basic"
+SELECT customer_id, full_name
+FROM customers
+WHERE customer_id IN (SELECT customer_id FROM orders)
+ORDER BY customer_id;
+
+SELECT c.customer_id, c.full_name
+FROM customers AS c
+WHERE EXISTS (SELECT 1 FROM orders AS o WHERE o.customer_id = c.customer_id)
+ORDER BY c.customer_id;
+```
+
+两条查询返回相同的三行：有订单的客户。`IN` 的语义是「等于子查询结果中的某一个值」，`EXISTS` 的语义是「至少存在一行」。
+
+差异在 NULL 上显现：`IN` 与子查询产生的 NULL 比较时得到未知，`NOT EXISTS` 不受影响。子查询列可为空、且要表达否定时，`NOT EXISTS` 是唯一不受三值逻辑影响的写法。这里的子查询列是 `NOT NULL` 的外键列，两种写法才等价。
+
+## CTE
+
+```sql run id="sql.sub.cte" fixture="sql.orders.basic"
+WITH line_totals AS (
+    SELECT o.customer_id, SUM(oi.quantity * p.unit_price_cents) AS amount_cents
+    FROM orders AS o
+    JOIN order_items AS oi ON oi.order_id = o.order_id
+    JOIN products AS p ON p.product_id = oi.product_id
+    GROUP BY o.customer_id
+)
+SELECT customer_id, amount_cents
+FROM line_totals
+ORDER BY amount_cents DESC, customer_id;
+```
+
+`line_totals` 把「按客户汇总订单行金额」这一步单独命名，外层查询只负责排序输出。金额按分为单位做整数求和，结果精确：17400、14000、12600。
+
+CTE 的价值在使用多次时更明显：同一个中间结果被连接、筛选或多次聚合时，命名让它只写一次，且每处引用的是同一个定义。它与派生表语义相同，区别只在可读性与引用次数。
+
+## 求值顺序决定可用范围
+
+```sql run id="sql.sub.where-aggregate" fixture="sql.orders.basic"
+SELECT customer_id, COUNT(*) AS orders
+FROM orders
+WHERE COUNT(*) > 1
+GROUP BY customer_id;
+```
+
+`WHERE` 在分组之前求值，聚合结果此时还不存在，因此报错。要按聚合结果筛选，必须写进 `HAVING`，或者把聚合放进子查询再用外层条件过滤。
+
+```sql run id="sql.sub.alias-in-where" fixture="sql.orders.basic"
+SELECT order_id, discount_cents AS discount
+FROM orders
+WHERE discount > 100
+ORDER BY order_id;
+```
+
+这条在 SQLite 中能运行：它允许在 `WHERE` 中使用 `SELECT` 的输出别名。按逻辑处理顺序，`WHERE` 在 `SELECT` 之前求值，别名还不存在，因此这是 SQLite 的扩展；其他引擎通常会报「未知列」。依赖它会让查询无法移植。
+
+## 边界与失败情形
+
+- **标量子查询返回多行**：SQLite 取第一行，标准要求最多一行，其他引擎报错。两种行为都不会提示数据问题，只有报错的那种会让人发现。
+- **`NOT IN` 与可空列**：子查询列可为空时返回空集，改用 `NOT EXISTS`。见 <CrossRef id="db.sql.null-semantics" />。
+- **相关子查询的代价**：没有合适的索引时，写法决定了嵌套扫描，量级是外层行数乘内层行数。执行计划可以改写它，但改写不一定发生。
+- **CTE 的物化**：同一个 CTE 被引用多次时，引擎可能物化一次也可能内联多次，行为差异影响性能而不影响结果。这是查询计划要观察的对象。
+- **递归 CTE**：`WITH RECURSIVE` 可以表达遍历与层级查询，其终止条件由写法保证，写错会无限循环直到资源耗尽。
+- **`ALL` 与 `ANY`**：`<> ALL (...)` 与 `NOT IN` 在 NULL 上的行为一致，容易被当成安全写法。
+- **派生表必须有别名**：`FROM (SELECT ...)` 之后的列在多数引擎中需要显式命名，否则引用时产生歧义。
+
+## 生产后果
+
+- 生成式工具常写 `IN (SELECT ...)` 与相关子查询。前者在可空列上静默出错，后者在缺少索引时把查询变成嵌套扫描，两者都不体现在结果正确性上。
+- 同一份逻辑用「全局平均」还是「本组平均」表达，指标含义完全不同；相关子查询的写法让这个选择变得不明显。
+- 用 CTE 代替层层嵌套能显著降低阅读成本，也让同一个中间结果只定义一次，减少两处定义逐渐分叉的可能。
+- 别名可见性、标量子查询的多行行为属于方言，跨引擎复用查询前要核对。
+
+## 小结
+
+- 子查询出现在表达式、谓词与 `FROM` 中，分别承担标量、集合比较与派生表的角色。
+- 标量子查询要求一行一列；SQLite 对多行取第一行，其他引擎报错。
+- `EXISTS` 只判断行的存在，不受 NULL 影响；`IN` 比较值，遇到 NULL 得到未知。
+- 相关子查询的语义是逐行求值，代价取决于计划与索引。
+- CTE 给中间结果命名，语义等价于派生表，可否重复引用与物化由优化器决定。
+- 逻辑处理顺序决定了聚合不能在 `WHERE` 中使用，输出别名在那里不可见（SQLite 例外）。

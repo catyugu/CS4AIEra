@@ -13,7 +13,7 @@ related: []
 
 ## 定义
 
-SQL 的布尔表达式有三个真值：`TRUE`、`FALSE`、`UNKNOWN`。NULL 表示"值未知/不存在"，不是空字符串或零。因此 `NULL = NULL` 与 `NULL = 1` 都求值为 `UNKNOWN`，而不是 `TRUE` 或 `FALSE`。
+SQL 的布尔表达式有三个真值：`TRUE`、`FALSE`、`UNKNOWN`。NULL 表示值未知或不存在，与空字符串或零不同。因此 `NULL = NULL` 与 `NULL = 1` 都求值为 `UNKNOWN`。
 
 `WHERE` 子句只保留求值为 `TRUE` 的行，`FALSE` 与 `UNKNOWN` 都被丢弃。
 
@@ -29,7 +29,7 @@ SQL 的布尔表达式有三个真值：`TRUE`、`FALSE`、`UNKNOWN`。NULL 表�
 - **比较不覆盖 NULL**：`col = 'x'` 与 `col <> 'x'` 的并集不包含 `col` 为 NULL 的行，需要 `IS NULL` 补齐。
 - **`NOT IN` 陷阱**：`x NOT IN (a, b, NULL)` 在 `x` 不等于任何非 NULL 元素时为 `UNKNOWN`，整条查询可能返回空集。表达"不存在"应使用 `NOT EXISTS`。
 - **聚合忽略 NULL**：`COUNT(column)` 只计非 NULL 行；`AVG` 的分母是非 NULL 行数。
-- **分组把 NULL 视为同组**：`GROUP BY` 使用等价关系而非 `=` 谓词，因此所有 NULL 落入同一组。
+- **分组把 NULL 视为同组**：`GROUP BY` 使用等价关系，因此所有 NULL 落入同一组。
 - **约束范围收窄**：`CHECK` 只在结果为 `FALSE` 时被违反，因此不禁止 NULL；`UNIQUE` 允许任意多行 NULL；外键列上的 NULL 不触发引用检查。
 
 ## 常见误用

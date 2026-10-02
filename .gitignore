@@ -147,3 +147,5 @@ public/pyodide/
 
 # Turbo Repo
 .turbo
+
+__pycache__/

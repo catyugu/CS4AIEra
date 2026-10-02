@@ -1,0 +1,161 @@
+---
+id: db.sql.aggregation
+slug: /databases/sql-aggregation
+order: 30
+title: 分组与聚合
+status: draft
+objectives:
+  - 区分行级过滤与组级过滤，并说明 `WHERE` 与 `HAVING` 各自作用于处理顺序的哪一步
+  - 解释 `COUNT(*)`、`COUNT(column)` 与 `COUNT(DISTINCT column)` 的差异
+  - 预测聚合函数在空输入上的返回值，并说明它与零的区别
+  - 说明连接之后再聚合为什么会放大计数，并给出修正方式
+---
+
+## 目的
+
+本课解释聚合函数与分组键的语义：一组行如何折叠为一个值，组的边界由什么决定，以及指标口径在哪里被无声地改变。
+
+聚合是报表与指标的计算层。同一份数据可以算出相差数倍的结果，差别来自分母、去重与 NULL 处置，而这些差别不体现在函数名上。读一个聚合查询时要能说出：每组包含哪些行，计数对象是什么，空输入会返回什么。
+
+本课使用夹具 <LabRef id="sql.orders.basic" />。
+
+## 模型
+
+- <Term id="aggregate-function">聚合函数</Term>接收一组行，返回一个值：`COUNT`、`SUM`、`AVG`、`MIN`、`MAX`、`group_concat`。
+- `GROUP BY` 按分组键的等价关系把行划分为组；NULL 归入同一组。
+- 没有 `GROUP BY` 时，整个结果集是一组。输入为零行时仍然产生一行结果。
+- `WHERE` 在分组之前过滤行，`HAVING` 在分组之后过滤组。逻辑处理顺序是 `FROM` → `WHERE` → `GROUP BY` → `HAVING` → `SELECT` → `ORDER BY` → `LIMIT`，因此聚合可以出现在 `HAVING` 与 `ORDER BY` 中，不能出现在 `WHERE` 中。
+- 计数对象由参数决定：`COUNT(*)` 是行数，`COUNT(column)` 是该列非空的行数，`COUNT(DISTINCT column)` 是该列不同的非空值个数。
+- `SUM`、`AVG`、`MIN`、`MAX` 忽略 NULL 输入；输入全为 NULL 或零行时返回 NULL。`COUNT` 在这两种情形都返回 0。
+
+## 三种计数
+
+```sql run id="sql.agg.counts" fixture="sql.orders.basic"
+SELECT
+    COUNT(*)                 AS customers,
+    COUNT(country)           AS with_country,
+    COUNT(DISTINCT country)  AS distinct_countries,
+    COUNT(referral_code)     AS with_referral_code
+FROM customers;
+```
+
+四个数字回答四个不同的问题：表里有多少行、多少行填了国家、有多少个不同的国家、多少行填了推荐码。把其中任何一个当作「客户数」都是在选择口径。
+
+## 分组与分母
+
+```sql run id="sql.agg.groups" fixture="sql.orders.basic"
+SELECT status, COUNT(*) AS orders, SUM(discount_cents) AS total_discount
+FROM orders
+GROUP BY status
+ORDER BY status;
+```
+
+四组各一行。`pending` 组的两条订单折扣分别是非空的 0 与 0，合计 0；`cancelled` 与 `shipped` 组各只有一条折扣为 NULL 的订单，`SUM` 忽略它并返回 NULL。
+
+`SUM` 返回 NULL 与返回 0 的区别是口径的起点：NULL 表示「这组没有可加的值」，0 表示「加总结果为零」。把 NULL 显示成 0 会让缺失与零无法区分。
+
+## 连接之后聚合
+
+```sql run id="sql.agg.line-totals" fixture="sql.orders.basic"
+SELECT
+    o.order_id,
+    SUM(oi.quantity)                       AS units,
+    SUM(oi.quantity * p.unit_price_cents)  AS items_total_cents
+FROM orders AS o
+JOIN order_items AS oi ON oi.order_id = o.order_id
+JOIN products AS p ON p.product_id = oi.product_id
+GROUP BY o.order_id
+ORDER BY o.order_id;
+```
+
+订单金额由订单行数量乘单价再按订单求和得到，金额以分为单位做整数运算，结果精确。没有订单行的订单不出现在结果里：`JOIN` 只保留匹配的行，因此这里的分组键取自订单行一侧。
+
+连接会改变行数，聚合建在连接结果之上时，计数对象就不再是原来的表：
+
+```sql run id="sql.agg.fanout-count" fixture="sql.orders.basic"
+SELECT
+    o.customer_id,
+    COUNT(*)                     AS joined_rows,
+    COUNT(DISTINCT o.order_id)   AS orders,
+    COUNT(oi.product_id)         AS line_items
+FROM orders AS o
+LEFT JOIN order_items AS oi ON oi.order_id = o.order_id
+WHERE o.status <> 'cancelled'
+GROUP BY o.customer_id
+HAVING COUNT(oi.product_id) >= 2
+ORDER BY o.customer_id;
+```
+
+客户 1 有两条未取消的订单，`joined_rows` 却是 3：订单 1001 有两行订单行，连接后展开成两行。`COUNT(*)` 数的是连接后的行，于是「订单数」被订单行数量放大。`COUNT(DISTINCT o.order_id)` 修正了订单数，`COUNT(oi.product_id)` 数的是订单行数，两者含义不同。
+
+同样的放大发生在金额上：在连接结果上 `SUM(o.discount_cents)` 会把折扣按订单行的数量重复计入。安全的形式是先在子查询或 CTE 里按各自粒度聚合，再连接汇总，这需要了解子查询的求值语义。
+
+## 组级过滤
+
+```sql run id="sql.agg.having" fixture="sql.orders.basic"
+SELECT
+    customer_id,
+    COUNT(*)                            AS orders,
+    SUM(COALESCE(discount_cents, 0))    AS total_discount_cents
+FROM orders
+GROUP BY customer_id
+HAVING SUM(COALESCE(discount_cents, 0)) > 0
+ORDER BY customer_id;
+```
+
+`WHERE` 只能看到单行，`HAVING` 才能看到聚合结果，因此「折扣合计大于零的客户」只能写在 `HAVING` 里。`COALESCE` 把 NULL 当作 0 参与求和，这是一个明确的口径选择：这样客户 3 的合计是 0，随后被 `HAVING` 排除。
+
+把聚合写进 `WHERE` 会被拒绝，原因就是处理顺序：`WHERE` 在分组之前求值，此时还不存在聚合结果。
+
+## 空输入
+
+```sql run id="sql.agg.empty" fixture="sql.orders.basic"
+SELECT
+    COUNT(*)            AS rows_matched,
+    SUM(discount_cents) AS sum_discount,
+    AVG(discount_cents) AS avg_discount,
+    MAX(discount_cents) AS max_discount
+FROM orders
+WHERE customer_id = 1 AND status = 'cancelled';
+```
+
+零行匹配时，无 `GROUP BY` 的聚合仍返回一行：`COUNT(*)` 是 0，其余是 NULL。区分「没有行」与「值为零」是聚合查询的基本功，应用代码把 NULL 一律渲染成 0 会丢掉这个区别。
+
+`GROUP BY` 下的空输入不产生任何行，因为组由数据行产生。要得到「包含零计数的完整分组」，需要用 `LEFT JOIN` 保留没有匹配的行，再用 `COUNT(column)` 计数，这一点在连接中展开。
+
+## 方言与未定义的取值
+
+```sql run id="sql.agg.bare-column" fixture="sql.orders.basic"
+SELECT status, order_id
+FROM orders
+GROUP BY status;
+```
+
+SQLite 允许选择未出现在 `GROUP BY` 中的列，并为每组返回一行，具体是哪一行属于实现行为。标准 SQL 要求这类列在功能上依赖于分组键，其他引擎会直接报错。判断一个聚合查询是否可移植，看 `SELECT` 列表里除聚合之外的列是否都在分组键里。
+
+同类实现差异还包括：`AVG` 返回浮点数（金额聚合因此在精确性上退化），组之间的输出顺序在没有 `ORDER BY` 时不受保证。
+
+## 边界与失败情形
+
+- **`AVG` 产生浮点**：对整数列求平均得到浮点结果，涉及金额时应改用 `SUM` 后再按规则舍入，或按最小单位计算比率。
+- **分母不同**：`COUNT(*)`、`COUNT(column)`、`COUNT(DISTINCT column)` 的分母互不相等，指标定义必须指明用的是哪一个。
+- **`SUM` 与 NULL**：`SUM` 忽略 NULL，全部为空时返回 NULL；用它做「是否为零」的判断要先处理 NULL。
+- **重复计数**：连接之后在错误的粒度上聚合会把金额或计数按匹配行数放大，这类错误在结果里没有任何异常信号。
+- **`HAVING` 与 `WHERE`**：把行级条件写进 `HAVING` 会让聚合计算包含本该排除的行，结果看起来合理但口径错了。
+- **大基数的分组**：分组需要排序或哈希全部输入，组数与输入规模共同决定成本，这属于查询计划的内容。
+
+## 生产后果
+
+- 指标定义是一份契约：分母、去重、NULL 处置与舍入规则都要写清，否则同一份数据在不同查询里给出不同的数字。
+- 报表在连接后聚合导致重复计数是最常见的生产事故之一。评审聚合查询时先确认它建在哪一个粒度上。
+- 金额聚合用整数最小单位，避免 `AVG` 与浮点累加，并在报表层统一舍入规则。
+- 无 `ORDER BY` 的聚合结果在缓存、比对与分页中顺序不稳定，需要显式排序。
+
+## 小结
+
+- 聚合把一组行折叠为一个值；`GROUP BY` 决定组的边界，NULL 归入同一组。
+- `COUNT(*)` 数行，`COUNT(column)` 只数非空行，`COUNT(DISTINCT column)` 数不同的非空值。
+- `WHERE` 过滤行，`HAVING` 过滤组，聚合不能出现在 `WHERE` 中。
+- 零行输入下 `COUNT` 返回 0，其余聚合返回 NULL；`GROUP BY` 下的空输入不产生行。
+- 连接改变行数，在连接结果上计数会放大指标，需要按正确的粒度聚合或使用 `COUNT(DISTINCT ...)`。
+- 未分组的列、组间顺序与 `AVG` 的浮点结果都属于引擎行为，跨引擎使用前要核对。

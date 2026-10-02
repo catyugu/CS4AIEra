@@ -1,0 +1,147 @@
+---
+id: python.runtime-vs-language
+slug: /python/runtime-vs-language
+order: 10
+title: 语言保证与实现细节
+status: draft
+objectives:
+  - 对一条具体行为判断它属于语言保证、实现行为还是通行实践，并说明判据
+  - 识别代码与文档中把 CPython 行为当作语言承诺的论断
+  - 说明依赖实现细节的代码在升级或更换实现后为什么会出现静默的行为变化
+  - 在需要稳定行为时改用可检验的显式机制
+---
+
+## 目的
+
+本课给出判断一条行为归属哪一层的判据，以及本课程可执行环境的性质。
+
+关于 Python 的论断来自三个层次：语言规范、具体实现、通行实践。三层混在一句话里时，代码会依赖从未被承诺过的行为，在版本升级或更换实现后静默改变结果。评审生成代码、阅读库文档、写性能结论时都要先做这一步判断。
+
+## 模型
+
+| 层次 | 出处 | 例子 |
+| --- | --- | --- |
+| 语言保证 | 语言参考与数据模型 | `dict` 保持插入顺序；比较运算的返回类型；`repr` 可往返 |
+| 实现行为 | 具体实现的源码与版本说明 | 小整数缓存；字符串驻留；`sum` 的补偿求和；`id` 取地址；引用计数 |
+| 通行实践 | 社区习惯与文档教程 | 用 `join` 拼接；用 `is` 比较 `None`；不为每行代码写类型标注 |
+
+判据是**规范有没有承诺**。实现行为今天是稳定的，明天可以在发布说明里改掉，而任何依赖它的代码不会得到警告。
+
+识别当前运行时的最小手段是 `sys` 与 `sysconfig`：
+
+```python run id="py.runtime.identity"
+import platform
+import sys
+import sysconfig
+
+print("implementation:", platform.python_implementation(), platform.python_version())
+print("platform:", sys.platform, platform.machine())
+print("string hash algorithm:", sys.hash_info.algorithm, "| randomization:", sys.flags.hash_randomization)
+print("default encoding:", sys.getdefaultencoding())
+print("recursion limit:", sys.getrecursionlimit())
+print("GIL disabled:", sysconfig.get_config_var("Py_GIL_DISABLED"))
+```
+
+这段输出的每一项都属于实现或构建配置：实现名与版本、平台标识、字符串哈希算法与随机化开关、解释器级别的默认编码、递归上限、是否构建为无 GIL 版本。同一段语言代码在这台运行时的输出与在另一台不同。
+
+本课程的可执行单元格运行在一份编译为 WebAssembly 的 <Term id="cpython">CPython</Term> 构建上，发行版固定在仓库中。语言语义与 CPython 一致；平台层不完整——没有真实进程、网络与持久文件系统，线程依赖跨源隔离。涉及这些机制的实验由后续模块用本机命令与可观测证据完成，本运行时不对它们作能力承诺。
+
+## 实现行为的典型形态
+
+```python run id="py.runtime.object-caching"
+import sys
+
+small_a = int("256")
+small_b = int("256")
+print("small ints, same object:", small_a is small_b)
+
+large_a = int("257")
+large_b = int("257")
+print("larger ints, same object:", large_a is large_b)
+
+joined = "".join(["hel", "lo"])
+literal = "hello"
+print("equal:", joined == literal, "| same object:", joined is literal)
+print("after sys.intern:", sys.intern(joined) is literal)
+```
+
+同一段源码，只改数值大小，`is` 的结果就不同：CPython 缓存 −5 到 256 之间的整数对象。长短字符串的行为也不同：由字面量构成的名称式字符串会被驻留，运行时拼出来的不会，除非显式调用 `sys.intern`。
+
+这三条都是实现优化，用来让 `is` 在缓存命中的对象上返回真。语言保证的只有「两个存活对象身份不同」与「`is` 为真当且仅当是同一对象」。把 `is` 用于值比较会在缓存边界上给出与 `==` 不同的答案，而这些边界不属于语言。
+
+对象的生命周期同样分层。语言不规定 `__del__` 何时运行，CPython 用<Term id="reference-counting">引用计数</Term>在引用归零时立即回收。
+
+```python run id="py.runtime.lifetime"
+import gc
+import sys
+
+
+class Tracked:
+    def __del__(self):
+        print("finalizer ran")
+
+
+tracked = Tracked()
+print("references seen by getrefcount:", sys.getrefcount(tracked))
+del tracked
+print("after del")
+
+node = Tracked()
+node.self = node
+del node
+print("cycle created; gc enabled:", gc.isenabled())
+print("gc reclaimed the cycle:", gc.collect() > 0)
+```
+
+第一个对象在 `del` 之后立即被回收，终结器当场运行。第二个对象自己引用自己：引用计数永远不为零，只能等垃圾回收器扫描不可达对象。回收时机因此取决于是否成环，而两种情况下语言都不承诺终结器在何时运行。
+
+把「对象被回收时自动释放资源」写进契约，就等于把这个时机写进了契约。文件、锁与连接应交给上下文管理器与 `finally`，由代码决定释放点。
+
+## 语言保证的形态
+
+另一侧是规范明确承诺、可以依赖的行为。
+
+```python run id="py.runtime.guarantees"
+mapping = {"b": 1, "a": 2, "c": 3}
+print("dict iteration order:", list(mapping))
+
+rows = [("b", 2), ("a", 2), ("c", 1)]
+print("sorted is stable:", sorted(rows, key=lambda row: row[1]))
+
+print("repr round-trips:", float(repr(0.1)) == 0.1)
+
+items = [3, 1, 2]
+print("sorted() leaves the input alone:", items, "->", sorted(items))
+print("list.sort() returns:", items.sort(), "| items:", items)
+```
+
+`dict` 保持插入顺序是自 3.7 起的语言保证，可以直接依赖；集合与字典的**迭代顺序在元素变化时**没有保证，需要稳定输出时显式排序。`sorted` 是稳定排序：键相同的元素保持原有相对顺序。`repr` 的输出可以被求值回同一个浮点值；`sorted` 返回新列表，`list.sort` 原地排序并返回 `None`。这些是语言层面的契约，跨实现、跨版本都成立。
+
+判断一条论断属于哪一层的方法：查语言参考或数据模型中是否有对应条款；没有则查实现文档与发布说明；两者都没有时按通行实践对待，并在代码里写明假设。
+
+## 边界与失败情形
+
+- **`sum` 的舍入**：CPython 从 3.12 起对浮点求和使用补偿算法，早期版本没有。语言不承诺求和精度，需要精确累加时显式使用 `math.fsum`。详见 <CrossRef id="python.numbers-and-floats" />。
+- **默认编码**：`sys.getdefaultencoding()` 返回解释器内部编码，而 `open()` 与 `bytes.decode()` 的默认值来自运行环境的区域设置。两者不同，跨平台行为因此不同。显式写编码，见 <CrossRef id="python.text-and-bytes" />。
+- **递归上限**：默认值由实现决定，超过后抛 `RecursionError`。深层递归应改为迭代或显式栈。
+- **`id` 与哈希值**：`id` 在 CPython 中是地址，回收后可能被复用；哈希值受随机化影响，跨进程不稳定。两者都不能作为持久标识。
+- **`__del__` 与终结时机**：语言不规定运行时机，含环的对象要等垃圾回收器。依赖终结器释放资源在换实现或引入环之后失效。
+- **性能论断**：常数因子、内存布局与优化是否触发都属于实现，一次基准测试只证明该实现、该版本、该输入下的结果，不构成语言层面的结论。
+- **版本敏感的示例**：引用具体行为时记录版本与构建方式。本课程固定运行时版本，因此课时中的观测结果在该版本内可复现。
+
+## 生产后果
+
+- 升级 Python 版本可能改变依赖实现行为的代码，而这类改动不出现在类型检查或测试里，只出现在输出差异中。把实现假设写进注释与测试，才可能在上游变更时被发现。
+- 评审清单：把 `is` 用于值比较、用 `__del__` 释放资源、依赖 `hash()` 的具体数值、依赖 `sys.getsizeof` 的精确值、把 `dict` 迭代顺序当作业务排序。
+- 库与框架文档常混用三层论断。引用时保留版本与出处，避免把「CPython 当前如此」写成「Python 如此」。
+- 测试应断言语言保证；确实需要锁住实现行为时，显式断言并在升级运行时后复核，这样变更会表现为测试失败。
+- 可复现性依赖固定运行时。工具链、解释器版本与依赖版本一起固定，才能让示例与实验在多年后仍然给出同一结果。
+
+## 小结
+
+- 论断分三层：语言保证、实现行为、通行实践。判据是规范有没有承诺。
+- `sys`、`sysconfig` 与构建信息用来识别当前运行时的版本与构建；语言行为按规范判断。
+- 小整数缓存、字符串驻留、引用计数、补偿求和、哈希随机化都是实现行为。
+- 语言保证覆盖 `dict` 插入顺序、`sorted` 的稳定性、`repr` 往返、原地方法的返回值等可依赖的契约。
+- 资源释放不要依赖终结时机；用上下文管理器把释放点写进代码。
+- 依赖实现行为时，写出假设并固定版本，让变更以测试失败的形式出现。
