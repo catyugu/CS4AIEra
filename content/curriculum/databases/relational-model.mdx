@@ -11,9 +11,7 @@ objectives:
   - 说明类型亲和性为什么让一类类型错误不被数据库拒绝
 ---
 
-## 目的
-
-本课建立关系模型的词汇、键的角色与完整性约束的语义。后面的 SQL 课时都使用同一个夹具 <LabRef id="sql.orders.basic" />：一个含主键、外键、唯一约束、非空与 `CHECK` 的小型订单模式。
+后面的 SQL 课时都使用同一个夹具 <LabRef id="sql.orders.basic" />：一个含主键、外键、唯一约束、非空与 `CHECK` 的小型订单模式。
 
 读一个模式时要能回答三个问题：哪些列承担身份，哪些列引用别处的身份，哪些写入会被拒绝。
 
@@ -24,7 +22,7 @@ objectives:
 - **外键**（<Term id="foreign-key">外键</Term>）是引用另一个关系的候选键的属性集合。它的价值在于让引用完整性可以被数据库拒绝，而不必依赖每一处应用代码都记得检查。
 - **完整性约束**（<Term id="integrity-constraint">完整性约束</Term>）分工如下：主键与 `NOT NULL` 保证实体完整性；外键保证参照完整性；`UNIQUE`、`CHECK` 与列类型表达域约束。
 - SQL 表与关系模型有一处差异：表中的行可以重复，查询结果默认是行的**包**（<Term id="bag-semantics">包语义</Term>），需要 `DISTINCT` 才回到集合。列顺序在 SQL 中存在，在关系模型里没有意义。
-- 约束是模式的一部分。判断一个数据库表达了哪些规则，看约束声明，不看应用代码里有多少校验分支。
+- 约束是模式的一部分。判断一个数据库表达了哪些规则，看约束声明，不看应用代码里有多少校验分支。业务不变量写在约束里才在并发下成立：应用层的检查在「两个请求同时通过校验」时失效，数据库的约束在事务提交时仍然生效。
 
 ```sql run id="sql.rel.tables" fixture="sql.orders.basic"
 SELECT customer_id, email, full_name, country, referral_code
@@ -48,7 +46,7 @@ PRAGMA table_info(orders);
 PRAGMA foreign_key_list(orders);
 ```
 
-`table_info` 给出列、声明类型、是否允许空值与主键位置；`foreign_key_list` 给出外键指向的表与列，以及 `on_delete`、`on_update` 的取值（这里是 `NO ACTION`，删除被引用的行会被拒绝）。这两条命令是 SQLite 的接口，其他引擎用 `information_schema` 或等价的系统视图提供同类信息。
+`table_info` 给出列、声明类型、是否允许空值与主键位置；`foreign_key_list` 给出外键指向的表与列，以及 `on_delete`、`on_update` 的取值（这里是 `NO ACTION`，删除被引用的行会被拒绝）。这两条命令是 SQLite 的接口，其他引擎用 `information_schema` 或等价的系统视图提供同类信息。SQLite 中声明的 `INTEGER PRIMARY KEY` 是内部行标识的别名，这个细节属于实现，不要写进依赖跨引擎行为的模式。每个 `UNIQUE` 与外键都需要维护索引结构，写入越频繁代价越明显，索引的收益与代价在后面讲索引时展开。模式变更（加约束、改类型、改外键动作）要先让既有数据满足新约束，否则迁移会在生产库上失败。
 
 ## 包语义
 
@@ -73,7 +71,7 @@ VALUES (5, 'ada@example.com', 'Duplicate Ada', 'GB', NULL);
 SELECT COUNT(*) AS customers_after FROM customers;
 ```
 
-第二行的邮箱已经存在，`UNIQUE` 使整条 `INSERT` 失败。失败发生在语句粒度：表中没有出现部分写入的行，而且这条语句之后的语句没有执行。主键与 `UNIQUE` 的区别只在 NULL 上，`UNIQUE` 允许任意多行 NULL：
+第二行的邮箱已经存在，`UNIQUE` 使整条 `INSERT` 失败。失败发生在语句粒度：表中没有出现部分写入的行，而且这条语句之后的语句没有执行。应用要区分「违反约束」与「连接失败」：前者是数据或逻辑问题，重试无用；后者是基础设施问题，重试可能有效。主键与 `UNIQUE` 的区别只在 NULL 上，`UNIQUE` 允许任意多行 NULL：
 
 ```sql run id="sql.rel.unique-null" fixture="sql.orders.basic"
 SELECT COUNT(*) AS customers_before FROM customers;
@@ -85,7 +83,7 @@ INSERT INTO customers (customer_id, email, full_name, country, referral_code)
 VALUES (6, 'other@example.com', 'Other Customer', 'GB', 'REF-ADA');
 ```
 
-第一条插入成功：`referral_code` 为 NULL，与已有的两行 NULL 不构成冲突，唯一性按「两个值是否相等」判定。第二条插入的 `REF-ADA` 已经存在，被拒绝。用 NULL 表示「没有推荐码」时，数据库允许任意多行；需要限制时另加 `NOT NULL` 或部分唯一索引。
+第一条插入成功：`referral_code` 为 NULL，与已有的两行 NULL 不构成冲突，唯一性按「两个值是否相等」判定。第二条插入的 `REF-ADA` 已经存在，被拒绝。用 NULL 表示「没有推荐码」时，数据库允许任意多行；需要限制时另加 `NOT NULL` 或部分唯一索引。唯一性的比较还受列的排序规则影响，大小写敏感性与去重语义由它决定，跨引擎迁移时要核对。
 
 外键拒绝指向不存在身份的引用：
 
@@ -96,7 +94,7 @@ INSERT INTO orders (order_id, customer_id, placed_on, status, discount_cents)
 VALUES (1007, 99, '2026-03-05', 'pending', NULL);
 ```
 
-`customer_id = 99` 在 `customers` 中不存在，`INSERT` 被拒绝。夹具的第一条语句是 `PRAGMA foreign_keys = ON;`：SQLite 默认不检查外键，必须对每个连接显式开启，这一点与其他主流引擎不同。
+`customer_id = 99` 在 `customers` 中不存在，`INSERT` 被拒绝。夹具的第一条语句是 `PRAGMA foreign_keys = ON;`：SQLite 默认不检查外键，必须对每个连接显式开启，这一点与其他主流引擎不同。`on_delete` 默认为 `NO ACTION`，删除被引用的行会失败；`CASCADE` 连带删除，`SET NULL` 把引用置空，选择哪一个取决于被引用对象的生命周期。
 
 ## 值与类型
 
@@ -115,7 +113,7 @@ ORDER BY order_id;
 
 两条插入都成功。SQLite 的类型是<Term id="type-affinity">类型亲和性</Term>：写入 `INTEGER` 亲和性列的 `'0'` 被转换成整数 0，而 `'unknown'` 无法转换，于是以文本原样存储，`typeof` 显示为 `text`。`CHECK (discount_cents IS NULL OR discount_cents >= 0)` 也没有拦住它：SQLite 的类型顺序把所有整数排在文本之前，因此 `'unknown' >= 0` 为真。
 
-这段行为是 SQLite 特有的，不能推广到其他引擎——PostgreSQL、MySQL 会拒绝或按定义的转换规则处理类型不匹配的写入。可执行基线是 SQLite，因此本课的示例按此语义运行；在生产设计中，不要让类型错误依赖数据库替你发现。
+`CHECK` 只在结果为假时拒绝写入，含 NULL 的表达式得到 `UNKNOWN`，因此它不禁止 NULL，需要与 `NOT NULL` 配合，三值逻辑见 <CrossRef id="db.sql.null-semantics" />。这段行为是 SQLite 特有的，不能推广到其他引擎——PostgreSQL、MySQL 会拒绝或按定义的转换规则处理类型不匹配的写入。可执行基线是 SQLite，因此本课的示例按此语义运行；在生产设计中，不要让类型错误依赖数据库替你发现。
 
 ## 排序与比较
 
@@ -126,26 +124,7 @@ WHERE placed_on >= '2026-02-01'
 ORDER BY placed_on DESC, order_id;
 ```
 
-日期以 ISO 8601 文本存储，`>=` 按文本比较，字典序与时间序一致，因此范围过滤得到 2 月及以后的订单。SQLite 没有原生日期类型，这个约定由模式与写入方共同维持；一旦写入格式不一致（例如混入 `2026/02/11`），比较结果会在没有报错的情况下出错。列类型声明为 `TEXT` 也只表达亲和性。
-
-另外，关系没有顺序，SQL 结果的顺序在没有 `ORDER BY` 时不受保证。本课的查询都显式排序，不要依赖观察到的顺序。
-
-## 边界与失败情形
-
-- **约束失败是语句级的**：违反约束的语句对表没有影响，它之后的语句不会执行。这条行为属于本课的运行时约定，应用代码必须自己处理失败并决定继续或终止事务。
-- **`CHECK` 与 NULL**：`CHECK` 只在结果为假时拒绝写入，含 NULL 的表达式得到 `UNKNOWN`，因此 `CHECK` 不禁止 NULL，需要与 `NOT NULL` 配合。完整的三值逻辑由 <CrossRef id="db.sql.null-semantics" /> 处理。
-- **外键的动作**：`on_delete` 默认为 `NO ACTION`，删除被引用的行会失败。`CASCADE` 会连带删除，`SET NULL` 会把引用置空；选择哪一个取决于被引用对象的生命周期。
-- **唯一性的比较规则**：`UNIQUE` 与主键的比较受列排序规则影响，大小写敏感性与去重语义由它决定，跨引擎迁移时要核对。
-- **类型亲和性不拒绝错误类型**：整数列可以存下任意文本，查询与聚合会按类型顺序处理混入的值，错误可能一直传播到报表。
-- **约束有写入代价**：每个 `UNIQUE` 与外键都需要维护索引结构，写入越频繁，代价越明显。索引的收益与代价在后面讲索引时展开。
-- **主键的实现**：SQLite 中声明的 `INTEGER PRIMARY KEY` 是内部行标识的别名，这个细节属于实现，不要写进依赖跨引擎行为的模式。
-
-## 生产后果
-
-- 业务不变量写在约束里才在并发下成立。应用层的检查在「两个请求同时通过校验」时失效，数据库的约束在事务提交时仍然生效。
-- 应用必须区分「违反约束」与「连接失败」：前者是数据或逻辑问题，重试无用；后者是基础设施问题，重试可能有效。把两者都当成异常重试会把写入错误变成不一致。
-- 结果集没有顺序时，分页、缓存、逐行比对与导出都会出现难以复现的差异。需要顺序就显式排序。
-- 模式变更（加约束、改类型、改外键动作）需要先让既有数据满足新约束，否则迁移会在生产库上失败。
+日期以 ISO 8601 文本存储，`>=` 按文本比较，字典序与时间序一致，因此范围过滤得到 2 月及以后的订单。SQLite 没有原生日期类型，这个约定由模式与写入方共同维持；一旦写入格式不一致（例如混入 `2026/02/11`），比较结果会在没有报错的情况下出错。列类型声明为 `TEXT` 也只表达亲和性。另外，关系没有顺序，SQL 结果的顺序在没有 `ORDER BY` 时不受保证，需要顺序就显式排序，否则分页、缓存、逐行比对与导出都会出现难以复现的差异；本课的查询都显式排序，不要依赖观察到的顺序。
 
 ## 小结
 

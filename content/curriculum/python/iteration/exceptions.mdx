@@ -11,11 +11,9 @@ objectives:
   - 区分隐式异常链与显式 `raise ... from`，并说明什么时候该断掉链
 ---
 
-## 目的
+异常是一段控制流：抛出之后，控制权如何沿调用栈离开，哪些代码必然运行，调用方最终看到什么信息。
 
-本课把异常当作控制流来读：抛出之后，控制权如何沿调用栈离开，哪些代码必然运行，调用方最终看到什么信息。
-
-上一课看到生成器体内的 `StopIteration` 会被转换；本课给出这个转换背后的统一机制。理解传播顺序与 `finally` 的语义之后，资源清理、错误包装与「异常到底有没有被吞掉」都可以从代码结构推出。
+上一课看到生成器体内的 `StopIteration` 会被转换，这个转换与传播顺序、`finally` 的语义共用同一个机制。
 
 ## 模型
 
@@ -156,7 +154,7 @@ except ConfigError as exc:
     print("suppressed chain:", exc.__cause__, "| suppress_context:", exc.__suppress_context__)
 ```
 
-在 `except` 块内抛出的新异常自动带上 `__context__`，指向正在处理的异常，因此原始失败不会丢失。`raise ... from exc` 把它登记为 `__cause__`，语义是「这是本次失败的直接原因」；`raise ... from None` 不设原因，只抑制上下文的显示，用于失败细节对调用方无意义、暴露出去只会干扰阅读的边界（例如把内部解析错误统一成公开的输入错误）。两种写法的 `__suppress_context__` 都是真值，区别在于是否存在明确的原因。
+在 `except` 块内抛出的新异常自动带上 `__context__`，指向正在处理的异常，因此原始失败不会丢失。`raise ... from exc` 把它登记为 `__cause__`，语义是「这是本次失败的直接原因」；`raise ... from None` 不设原因，只抑制上下文的显示，用于失败细节对调用方无意义、暴露出去只会干扰阅读的边界（例如把内部解析错误统一成公开的输入错误）。两种写法的 `__suppress_context__` 都是真值，区别在于是否存在明确的原因。异常对象持有回溯，回溯引用帧，帧又引用其中的局部变量，因此长期保存异常对象会长期持有这些对象。
 
 ## 重新抛出
 
@@ -218,14 +216,4 @@ def after_handler():
 after_handler()
 ```
 
-`SystemExit`、`KeyboardInterrupt` 与 `GeneratorExit` 继承 `BaseException` 而不是 `Exception`，因此 `except Exception` 不会接住它们。写 `except BaseException` 或裸 `except:` 会把解释器的正常退出信号也吞掉，让 Ctrl-C 与进程终止失效。另一个容易忽略的细节是 `except ... as exc` 里的名字：处理块结束时它被删除，之后引用会失败——在模块层是 `NameError`，在函数内表现为它的子类 `UnboundLocalError`。
-
-## 边界与失败情形
-
-- **`finally` 中的 `return` 吞掉异常**：清理代码里出现 `return` 会让失败静默。
-- **`except Exception: pass`**：把可诊断的失败变成继续执行的错误状态；只在明确知道如何恢复时才捕获。
-- **裸 `except`**：捕获 `BaseException`，包括中断信号。
-- **异常对象持有回溯**：回溯引用帧，帧引用其中的局部变量，因此长期保存异常对象会长期持有这些对象。
-- **`raise exc` 改变回溯的起点**：需要保留原始位置时用裸 `raise`。
-- **处理块内抛出的新异常会替换正在处理的异常**，被替换的只保留在 `__context__` 里。
-- **异常不是廉价的控制流**：逐元素依赖异常跳过低频分支可以接受，把异常当普通分支使用会同时损害性能与可读性。
+`SystemExit`、`KeyboardInterrupt` 与 `GeneratorExit` 继承 `BaseException` 而不是 `Exception`，因此 `except Exception` 不会接住它们。写 `except BaseException` 或裸 `except:` 会把解释器的正常退出信号也吞掉，让 Ctrl-C 与进程终止失效。`except Exception: pass` 把可诊断的失败变成继续执行的错误状态，只在明确知道如何恢复时才捕获。异常不是廉价的控制流：逐元素依赖它跳过低频分支可以接受，把它当普通分支使用会同时损害性能与可读性。另一个容易忽略的细节是 `except ... as exc` 里的名字：处理块结束时它被删除，之后引用会失败——在模块层是 `NameError`，在函数内表现为它的子类 `UnboundLocalError`。

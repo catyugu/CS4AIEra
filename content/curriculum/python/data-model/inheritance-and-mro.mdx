@@ -11,9 +11,7 @@ objectives:
   - 判断一次属性读取或类型检查会落到继承层次的哪一层
 ---
 
-## 目的
-
-前两课建立了属性访问与方法查找的机制。本课补上第三个维度：一个类可以有多个基类，查找因此在一条**线性顺序**上走，而不是在一个类上走。
+前两课建立了属性访问与方法查找的机制。一个类可以有多个基类，查找因此在一条**线性顺序**上走，而不是在一个类上走。
 
 继承在真实代码里的用途是复用与抽象：把共性放在基类，让子类只声明差异。代价是行为的来源变得分散——读一个方法时，实现可能在若干层之外，`super()` 的目标只有在知道完整继承结构时才能确定。要读得准，需要一条明确的规则：顺序是什么、由谁决定、`super()` 究竟指向哪一个类。
 
@@ -52,7 +50,7 @@ Base.kind = "base (updated)"
 print("changing the base is visible unless shadowed:", GrandChild().kind, "|", Child().kind)
 ```
 
-`GrandChild` 自己没有定义 `kind`，读取时沿 MRO 找到 `Child` 上的定义并停在那里，所以修改 `Base.kind` 不影响它。三个 `__dict__` 的检查说明继承**不复制**属性：`kind` 只存在于声明它的两个类上，`GrandChild` 里什么都没有。
+`GrandChild` 自己没有定义 `kind`，读取时沿 MRO 找到 `Child` 上的定义并停在那里，所以修改 `Base.kind` 不影响它。三个 `__dict__` 的检查说明继承**不复制**属性：`kind` 只存在于声明它的两个类上，`GrandChild` 里什么都没有。基类属性的修改对所有未覆盖它的子类立刻可见，这与「子类里有一份副本」的直觉相反，是共享状态问题的另一个来源。
 
 `describe` 里的 `type(self).__name__` 每次给出**实际类型**：方法写在 `Base` 上，`self` 却是子类实例。这是继承的行为定义——查找沿 MRO 找到方法，调用时绑定的是真实对象。
 
@@ -124,7 +122,7 @@ except TypeError as failure:
 print("a valid diamond still builds:", [cls.__name__ for cls in type("Both", (Left, Right), {}).__mro__])
 ```
 
-`Broken` 同时要求 `Root` 在 `Left` 之前（声明顺序）与 `Left` 在 `Root` 之前（`Left` 是 `Root` 的子类），无法同时满足。这类错误在类创建时立刻出现，不会留到运行时。
+`Broken` 同时要求 `Root` 在 `Left` 之前（声明顺序）与 `Left` 在 `Root` 之前（`Left` 是 `Root` 的子类），无法同时满足。这类错误在类创建时立刻出现，不会留到运行时。`__bases__` 只能受限地修改：赋值要求布局兼容且新的解析顺序自洽，否则抛 `TypeError` 并保持原样。多个带非空 `__slots__` 的基类无法组合（布局冲突），这是真实的限制，不是实现缺陷。
 
 ## super() 指的是下一个类
 
@@ -166,6 +164,8 @@ print("the class after Left in that order is:", order[order.index("Left") + 1])
 - 多继承的每一层都要调用 `super().__init__(...)`，否则链条在没人调用的地方断掉，后面的初始化被静默跳过。
 - 参数要能穿透中间层：中间类不认识的关键字参数要原样转发，`*args` 与 `**kwargs` 的转发的完整规则见 <CrossRef id="python.call-semantics" />。
 
+直接写 `Root.__init__(self)` 之类的非协作写法会绕开 MRO，让重复的初始化发生。`super()` 依赖 `__class__` 与第一个参数，因此只能在方法体内使用，在模块层或普通函数里调用没有意义。
+
 ## 覆盖与扩展
 
 子类定义同名方法就是覆盖，读取时最近的定义胜出。
@@ -197,7 +197,7 @@ print("an override that forgets to return loses the result:", SloppyStore().save
 print("the nearest definition is the one called:", type(store).__mro__[0].__name__)
 ```
 
-`AuditedStore.save` 用 `super().save(record)` **扩展**基类行为并交出返回值；`SloppyStore.save` 丢掉了返回值，调用方拿到 `None`。两者都是合法代码，差别只在有没有把结果传出去——覆盖时要把基类的方法看作当前层要负责调用的一部分，它提供的结果仍然需要被传递。
+`AuditedStore.save` 用 `super().save(record)` **扩展**基类行为并交出返回值；`SloppyStore.save` 丢掉了返回值，调用方拿到 `None`。两者都是合法代码，差别只在有没有把结果传出去——覆盖时要把基类的方法看作当前层要负责调用的一部分，它提供的结果仍然需要被传递。继承表达的是「是一种」：只为复用实现而继承会把无关的接口一起带进子类，需要组合时用持有对象。
 
 ## 类型检查沿 MRO 判断
 
@@ -224,17 +224,4 @@ print("exact type is the stricter question:", type(D()).__name__, type(D()) is A
 print("every MRO ends at object:", D.__mro__[-1].__name__, issubclass(D, object))
 ```
 
-`isinstance(D(), C)` 为真，尽管 `C` 不是 `D` 的直接基类：判断依据是 `C` 是否出现在 `D.__mro__` 中。`type(x) is A` 则是另一个问题——它只比较实际类型，对多态代码几乎总是错的判断方式；需要按能力分支时用 `isinstance`，需要精确类型时才用 `type(...) is ...`。
-
-## 边界与失败情形
-
-- **继承不复制属性**：基类属性的修改对所有未覆盖它的子类立刻可见；这与「子类里有一份副本」的直觉相反，是共享状态问题的另一个来源。
-- **`__bases__` 只能受限地修改**：赋值要求布局兼容且新的解析顺序自洽，否则抛 `TypeError` 并保持原样；解析顺序由类的基类重新算出，不需要手工维护缓存。
-- **顺序冲突在创建类时抛 `TypeError`**：看到这个错误时，检查是不是同时要求了两个方向相反的先后关系。
-- **`super()` 需要运行时上下文**：它依赖 `__class__` 与第一个参数，因此只能在方法体内使用；在模块层或普通函数里调用它没有意义。
-- **链条会断**：某一层没有调用 `super()` 时，它之后的初始化不再运行，且没有任何错误提示；多继承的每一层都必须转发。
-- **`__slots__` 与多继承冲突**：多个带非空 `__slots__` 的基类无法组合（布局冲突），这是一个真实的限制，不是实现缺陷。
-- **钻石结构要求协作**：MRO 只决定查找顺序，不能让重复的初始化自动去重；`Root.__init__` 之所以只运行一次，是因为每一层都转发。非协作的写法（直接写 `Root.__init__(self)`）会绕开顺序，重复初始化。
-- **继承是为了「是一种」而不是为了「有这些方法」**：只为复用实现而继承会把无关的接口一起带进子类，需要组合时用持有对象。抽象与接口设计的判据属于设计模块，本课只讲机制。
-- **虚基类注册是类型检查的例外**：`SomeABC.register(SomeClass)` 让 `isinstance` 为真，但不改变 MRO，也不带来任何方法；`collections.abc` 的结构性检查见 <CrossRef id="python.dunder-protocols" />。
-- **异常层次是本机制的一次应用**：自定义异常继承 `Exception`，`except` 的匹配沿类型层次上溯；异常类型的匹配规则见 <CrossRef id="python.exceptions" />。
+`isinstance(D(), C)` 为真，尽管 `C` 不是 `D` 的直接基类：判断依据是 `C` 是否出现在 `D.__mro__` 中。`type(x) is A` 则是另一个问题——它只比较实际类型，对多态代码几乎总是错的判断方式；需要按能力分支时用 `isinstance`，需要精确类型时才用 `type(...) is ...`。虚基类注册是这条例外的来源：`SomeABC.register(SomeClass)` 让 `isinstance` 为真，但不改变 MRO，也不带来任何方法，`collections.abc` 的结构性检查见 <CrossRef id="python.dunder-protocols" />。自定义异常继承 `Exception`，`except` 的匹配沿类型层次上溯，匹配规则见 <CrossRef id="python.exceptions" />。

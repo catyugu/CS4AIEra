@@ -11,10 +11,6 @@ objectives:
   - 指出迭代过程中修改容器会以何种方式暴露
 ---
 
-## 目的
-
-本课把 `for` 展开成显式的方法调用，并给出可重复迭代与一次性迭代的判据。
-
 「能放进 `for` 里」不是一个类型属性，而是两个方法构成的协议。分清协议的两侧之后，`for`、推导式、`zip`、`sum` 与任何接受可迭代对象的库函数的行为都可以统一推出，包括「为什么第二次遍历得到空结果」这类常见故障。
 
 ## 模型
@@ -26,7 +22,7 @@ objectives:
 | `__iter__` | 返回一个迭代器。可迭代对象的入口 |
 | `__next__` | 返回下一个元素；没有更多元素时抛 `StopIteration` |
 
-一个对象只要实现 `__iter__` 就是 iterable。迭代器（iterator）是实现 `__iter__` 与 `__next__` 的对象，它的 `__iter__` 返回自身。
+一个对象只要实现 `__iter__` 就是 iterable。迭代器（iterator）是实现 `__iter__` 与 `__next__` 的对象，它的 `__iter__` 返回自身。没有 `__iter__` 但有 `__getitem__` 的对象仍可被 `iter()` 接受，按 0、1、2… 依次取值直到 `IndexError`；这是历史兼容行为，新类型不应依赖它。
 
 `for` 的展开过程是固定的：
 
@@ -61,7 +57,7 @@ print("exhausted iterator keeps raising:", list(iterator))
 print("a fresh iterator restarts:", list(iter(values)))
 ```
 
-`list(iterator)` 在已耗尽的迭代器上得到空列表，不是错误；而 `iter(values)` 每次返回新的迭代器，因此列表本身可以反复遍历。
+`list(iterator)` 在已耗尽的迭代器上得到空列表，不是错误；而 `iter(values)` 每次返回新的迭代器，因此列表本身可以反复遍历。`for` 只在开始时取一次迭代器，循环体里重新给循环目标赋值不改变迭代位置；循环结束后循环变量仍然存在，`for` 不创建新的作用域。
 
 ## 可重复迭代与一次性迭代
 
@@ -118,7 +114,7 @@ print("stopped by sentinel:", list(iter(lambda: next(stream), 0)))
 print("bounded slice of an unbounded iterator:", list(islice(count(0), 4)))
 ```
 
-`next(iterator, default)` 把「已耗尽」变成返回值，用于边界明确的读取；`iter(callable, sentinel)` 把「反复调用直到得到哨兵值」写成迭代器。无界序列必须由消费者设限，`islice` 是标准做法。
+`next(iterator, default)` 把「已耗尽」变成返回值，用于边界明确的读取；`iter(callable, sentinel)` 把「反复调用直到得到哨兵值」写成迭代器。无界序列必须由消费者设限，`islice` 是标准做法；`list(infinite)` 不会终止。
 
 ## 迭代中修改容器
 
@@ -139,14 +135,4 @@ for value in values:
 print("list silently skipped an element:", seen, values)
 ```
 
-字典的迭代器记录大小，尺寸变化立即抛 `RuntimeError`；列表的迭代器只记位置，删除元素会让它跳过下一个元素，没有任何提示。需要边遍历边修改时，遍历副本或先收集要删的元素。复制能消除到哪一层、遍历副本为什么仍是浅共享，由 <CrossRef id="python.mutability-and-copy" /> 处理。
-
-## 边界与失败情形
-
-- **迭代器不重启**：耗尽后继续 `next` 一直抛 `StopIteration`；需要重新遍历就重新获得迭代器。
-- **`__iter__` 只调用一次**：`for` 在开始时取一次迭代器；循环体里重新给循环目标赋值不改变迭代位置。
-- **`__getitem__` 兼容路径**：没有 `__iter__` 但有 `__getitem__` 的对象仍可被 `iter()` 接受，按 0、1、2… 依次取值直到 `IndexError`。这是历史兼容行为，新类型不应依赖它。
-- **异常穿过迭代**：循环体内的异常结束循环并把迭代器留在半途状态；异常处理无法恢复该迭代器。
-- **字典顺序是语言保证，集合与字典视图的稳定顺序不是**：需要稳定输出时显式排序（见 <CrossRef id="python.runtime-vs-language" />）。
-- **循环变量在循环后仍然存在**：`for` 不创建新的作用域。
-- **无界迭代器会耗尽内存或时间**：`list(infinite)` 不会终止；消费端必须设限。
+字典的迭代器记录大小，尺寸变化立即抛 `RuntimeError`；列表的迭代器只记位置，删除元素会让它跳过下一个元素，没有任何提示。需要边遍历边修改时，遍历副本或先收集要删的元素。循环体内的异常会结束循环并把迭代器留在半途状态，异常处理无法恢复该迭代器。字典的插入顺序是语言保证，集合与字典视图的稳定顺序不是，需要稳定输出时显式排序（见 <CrossRef id="python.runtime-vs-language" />）。复制能消除到哪一层、遍历副本为什么仍是浅共享，由 <CrossRef id="python.mutability-and-copy" /> 处理。
