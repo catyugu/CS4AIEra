@@ -17,7 +17,7 @@ objectives:
 
 - `for name in sequence:` 依次把序列中的每个元素绑定到 `name`，对每个元素执行一次循环体。
 - `range(stop)`、`range(start, stop)`、`range(start, stop, step)` 描述一个不含 `stop` 的整数区间。`range` 对象是惰性、不可变的：它按需产生元素，写成 `list(range(...))` 才会把区间展开成列表。
-- `while condition:` 在条件为真时重复执行循环体。循环体必须改变条件涉及的值，否则循环不终止。
+- `while condition:` 在条件为真时重复执行循环体。要终止的 `while` 必须有某种机制最终让条件为假，或者通过 `break`、`return`、抛出异常离开循环。
 - 循环体靠缩进界定。
 - `break` 结束整个循环，`continue` 跳过本次迭代的剩余部分。
 

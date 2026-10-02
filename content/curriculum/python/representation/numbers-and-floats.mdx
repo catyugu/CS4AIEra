@@ -115,7 +115,7 @@ print("Fraction from float:", Fraction(0.1) == Fraction(1, 10))
 
 构造方式决定语义：`Decimal("0.1")` 得到十进制的十分之一，`Decimal(0.1)` 把浮点近似值的精确十进制展开原样带进来，误差进入精确类型。同样，`Fraction(0.1)` 与 `Fraction(1, 10)` 不相等。
 
-`Decimal` 除法的结果长度由上下文精度决定，不是无误差的实数结果；精确算术消除的是十进制舍入误差，不是所有误差来源。
+`Decimal` 除法的结果长度由上下文精度决定，不是无误差的实数结果。`Decimal` 精确表示有限十进制输入，并让精度与舍入规则显式可控；它没有消除所有舍入误差，例如 `1 / 3` 必须按上下文精度舍入，`quantize` 之外的操作也可能引入舍入。
 
 ## 特殊值与失败
 
@@ -135,9 +135,12 @@ except OverflowError as exc:
     print("math.exp(1000):", type(exc).__name__, "-", exc)
 
 print("inf - inf =", float("inf") - float("inf"))
-print("nan <= 1:", float("nan") <= 1)
+nan = float("nan")
+print("nan <= 1:", nan <= 1)
+print("nan == nan:", nan == nan, "| nan != nan:", nan != nan)
+print("nan is nan:", nan is nan)
 ```
 
 数字超出可表示范围时得到 `inf`，`inf - inf` 得到 `nan`。Python 的除法不使用 IEEE 的「除以零得无穷」规则：`1.0 / 0.0` 与 `1 // 0` 都抛 `ZeroDivisionError`。数学库函数在上溢或参数超出定义域时抛 `OverflowError` 或 `ValueError`。
 
-NaN 与任何值的比较都为假，包括与自身比较，因此 `nan <= 1`、`nan == nan` 都是 `False`。含 NaN 的序列排序结果不再有序，`min`、`max`、去重与分组都会给出难以预测的结果。检测 NaN 用 `math.isnan`，不要用相等比较。`-0.0 == 0.0` 为真，`math.copysign(1.0, x)` 可以区分两者，但作为字典键时两者是同一个键。
+NaN 不等于任何数值，包括自身：`nan == nan` 为 `False`，`nan != nan` 为 `True`，有序比较 `nan <= 1` 也为 `False`。相等不再自反，有序比较也不建立全序，含 NaN 的序列排序结果因此不再有序，`min`、`max`、去重与分组都会给出难以预测的结果。检测 NaN 用 `math.isnan`，不要用相等比较。`-0.0 == 0.0` 为真，`math.copysign(1.0, x)` 可以区分两者，但作为字典键时两者是同一个键。

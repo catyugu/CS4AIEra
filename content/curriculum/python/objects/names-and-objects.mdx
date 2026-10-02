@@ -57,7 +57,7 @@ print("a is b:", a is b)
 | 表达式 | 判据 | 说明 |
 | --- | --- | --- |
 | `x is y` | 是否同一个对象 | 由语言保证：对存活对象，`is` 为真当且仅当身份相同 |
-| `x == y` | `x.__eq__(y)` 的判定结果 | 默认实现比较身份，类可以重新定义 |
+| `x == y` | rich comparison 协议的结果，通常从 `x.__eq__(y)` 开始 | 默认实现比较身份，类可以重新定义；反射与 `NotImplemented` 的回退见 <CrossRef id="python.dunder-protocols" /> |
 
 ```python run id="py.names.identity"
 x = [1, 2]
@@ -123,7 +123,9 @@ print("after replace:", data)
 
 ## 复合赋值的两种语义
 
-`x += y` 先查找 `x` 类型上的 `__iadd__`。类型提供原地版本时，运算结果绑定回原对象；没有时退化为 `x = x + y`，产生新对象。原地方法按运算符提供，不按类型提供：列表定义了 `__iadd__`（`+=`），集合与字典对应的是 `|=`（`__ior__`），因此 `+=` 只在 `+` 本身有定义的类型上成立。
+`x += y` 先对 target 求值一次，再按 `x` 的类型查找对应的 in-place operation（`+=` 找 `__iadd__`）。该 operation 可能修改原对象并返回它，也可能返回另一个对象；无论哪种情形，结果都重新赋给那个 target。类型没有对应的 in-place operation 时走普通二元运算的回退路径，效果等同于 `x = x + y`。
+
+target 只求值一次这一点与类型无关：`a[f()] += y` 只调用 `f()` 一次，`a[f()] = a[f()] + y` 调用两次。in-place operation 按运算符提供，不按类型提供：列表定义了 `__iadd__`（`+=`），集合与字典对应的是 `|=`（`__ior__`），因此 `+=` 只在 `+` 本身有定义的类型上成立。
 
 ```python run id="py.names.augmented"
 items = [1]
@@ -141,7 +143,7 @@ print("pair_alias:", pair_alias)
 print("same object:", pair is pair_alias)
 ```
 
-同一个 `+=` 在列表上修改对象（别名看到变化），在元组上重绑定名称（别名不变）：元组没有 `__iadd__`，这一行就是 `x = x + y`。`x += y` 与 `x = x + y` 只在类型定义了原地方法时才出现差别。
+同一个 `+=` 在列表上修改对象（别名看到变化），在元组上重绑定名称（别名不变）：元组没有 `__iadd__`，走回退路径。读代码时不能从运算符的字面形式推断对象有没有被修改，判据是类型是否提供对应的 in-place operation；提供了也不保证沿用原对象。
 
 集合与字典的原地合并走 `|=`：
 
@@ -163,3 +165,24 @@ except TypeError as failure:
 ```
 
 `numbers |= {3}` 修改原集合，`alias` 跟着变化；这里失败的原因是 `+` 没有为集合定义，与原地机制无关。读代码时把 `+=`、`|=`、`&=` 一律当成「原地修改」会在不支持该运算符的类型上给出错误预测。
+
+in-place operation 返回另一个对象是合法的，此时别名看不到变化，尽管类型确实提供了该方法：
+
+```python run id="py.names.augmented-custom"
+class Buffer:
+    def __init__(self, text):
+        self.text = text
+
+    def __iadd__(self, other):
+        return Buffer(self.text + other)
+
+
+original = Buffer("a")
+alias = original
+original += "b"
+print("after +=, text is:", original.text)
+print("alias text is:   ", alias.text)
+print("same object:", original is alias)
+```
+
+`Buffer.__iadd__` 存在，但返回的是新对象，`alias` 仍指向旧对象。判据是运算结果是不是原对象，`+=` 这个写法本身不保证任何一项。
