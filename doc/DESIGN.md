@@ -103,9 +103,6 @@ Git repository
 ├── content/
 │   ├── curriculum/
 │   │   ├── _section.yaml
-│   │   ├── foundations/
-│   │   │   ├── _section.yaml
-│   │   │   └── what-is-computation.mdx
 │   │   ├── python/
 │   │   │   ├── _section.yaml
 │   │   │   ├── names-and-objects.mdx
@@ -120,8 +117,7 @@ Git repository
 │   │
 │   ├── glossary/
 │   │   ├── process.mdx
-│   │   ├── transaction.mdx
-│   │   └── invariant.mdx
+│   │   └── transaction.mdx
 │   │
 │   ├── labs/
 │   │   └── sql-orders-basic/
