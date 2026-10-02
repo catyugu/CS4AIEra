@@ -2,10 +2,10 @@
 import CourseTree from "../components/CourseTree.astro";
 import { getCourseModel } from "../content-model/instance";
 import {
-  allSectionIds,
   buildCourseTree,
   buildToc,
   sectionPathIds,
+  topLevelSectionIds,
   type TocEntry,
 } from "../content-model/navigation";
 import "../styles/global.css";
@@ -35,9 +35,13 @@ const tree = buildCourseTree(model, { includeUnpublished });
 const activeLesson = activeLessonId
   ? model.lessons.find((lesson) => lesson.id === activeLessonId)
   : undefined;
+/**
+ * Open the current lesson's branch; a page with no lesson opens the top level
+ * only, so no page starts with the whole tree expanded.
+ */
 const openSectionIds = activeLesson
   ? sectionPathIds(model, activeLesson.sectionId)
-  : allSectionIds(tree);
+  : topLevelSectionIds(tree);
 
 const toc = buildToc(headings);
 const siteTitle = "AI 时代的计算机科学";

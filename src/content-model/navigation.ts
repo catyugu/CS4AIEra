@@ -97,9 +97,12 @@ export function sectionPathIds(model: CourseModel, sectionId: string): Set<strin
   return new Set(sectionTrail(model, sectionId).map((section) => section.id));
 }
 
-/** Every section id in the tree, for a fully expanded navigation. */
-export function allSectionIds(tree: CourseTreeNode[]): Set<string> {
-  return new Set(tree.flatMap((node) => [node.section.id, ...allSectionIds(node.children)]));
+/**
+ * Section ids at the top level of the tree. A page with no current lesson opens
+ * the navigation down to this level only, so nested sections stay collapsed.
+ */
+export function topLevelSectionIds(tree: CourseTreeNode[]): Set<string> {
+  return new Set(tree.map((node) => node.section.id));
 }
 
 /**

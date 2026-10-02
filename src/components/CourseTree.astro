@@ -4,8 +4,8 @@ import CourseTree from "./CourseTree.astro";
 
 /**
  * Course tree navigation. Sections are `<details>` elements so collapsing works
- * by keyboard with no client script; the branch containing the current lesson
- * starts open.
+ * by keyboard with no client script. Only the ids in `openSectionIds` render
+ * open: the current lesson's branch on a lesson page, the top level elsewhere.
  */
 interface Props {
   nodes: CourseTreeNode[];

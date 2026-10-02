@@ -4,7 +4,6 @@ import { createSatteriMarkdownProcessor } from "@astrojs/markdown-satteri";
 
 import { headingAnchors } from "../src/markdown/heading-anchors";
 import {
-  allSectionIds,
   buildCourseTree,
   buildToc,
   isVisibleLesson,
@@ -13,6 +12,7 @@ import {
   readingOrder,
   sectionPathIds,
   sectionTrail,
+  topLevelSectionIds,
 } from "../src/content-model/navigation";
 import type { CourseModel, Lesson, Section } from "../src/content-model/types";
 
@@ -138,14 +138,12 @@ describe("section trails", () => {
     expect(sectionTrail(model, "databases").map((entry) => entry.id)).toEqual(["root", "databases"]);
   });
 
-  it("collects the open branch and the whole tree", () => {
+  it("collects the branch a lesson lives on", () => {
     expect([...sectionPathIds(model, "advanced")]).toEqual(["root", "python", "advanced"]);
-    expect([...allSectionIds(buildCourseTree(model))].sort()).toEqual([
-      "advanced",
-      "databases",
-      "python",
-      "root",
-    ]);
+  });
+
+  it("collects the top level only, for a page with no current lesson", () => {
+    expect([...topLevelSectionIds(buildCourseTree(model))]).toEqual(["root"]);
   });
 });
 
