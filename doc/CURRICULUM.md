@@ -81,7 +81,7 @@
 | `python.representation` | 10 | `python.numbers-and-floats` | 整数、浮点数与近似 | 草稿 |
 | | 20 | `python.text-and-bytes` | 文本、bytes 与编码 | 草稿 |
 | `python.program` | 10 | `python.runtime-vs-language` | 语言保证与实现细节 | 草稿 |
-| | 20 | `python.modules-and-imports` | 模块、包与导入边界 | — |
+| | 20 | `python.modules-and-imports` | 模块、包与导入边界 | 草稿 |
 | | 30 | `python.typing` | 类型标注与静态契约 | — |
 | `python.async` | 10 | `python.asyncio-scheduling` | coroutine、task 与调度 | — |
 | | 20 | `python.cancellation-and-timeouts` | 取消、超时与清理 | — |
@@ -316,7 +316,7 @@
 | 5 | `python.iteration`：迭代协议、generator、异常、上下文管理器 | 已落盘待审核 |
 | 6 | `python.data-model`：属性查找、特殊方法、继承与 MRO | 已落盘待审核 |
 | 7 | `python.representation`：数值与浮点、文本与 bytes | 已落盘待审核 |
-| 8 | `python.program`：语言保证与实现细节、导入边界、类型标注 | 首节已落盘；另两节计划 |
+| 8 | `python.program`：语言保证与实现细节、导入边界、类型标注 | 前两节已落盘；`python.typing` 计划 |
 | 9 | `python.async`：coroutine 与调度、取消与超时清理 | 计划 |
 | 10 | `algorithms.complexity`、`algorithms.sequences` | 已落盘待审核（`average-and-randomized`、`lower-bounds`、`strings` 待写） |
 | 11 | `algorithms.maps`：哈希表、有序映射、堆 | `hash-tables` 已落盘；其余计划 |

@@ -1,0 +1,308 @@
+---
+id: python.modules-and-imports
+slug: /python/modules-and-imports
+order: 20
+title: 模块、包与导入边界
+status: draft
+objectives:
+  - 说出一次 `import` 经过的步骤，并解释模块名与模块对象之间的对应关系
+  - 用包与子模块的目录结构预测 `import a.b` 与 `from a import b` 分别绑定了什么名字
+  - 说明相对导入在什么位置有效，以及它失败时的错误来源
+  - 诊断循环导入，并把它归因到导入期的属性读取而不是导入语句本身
+---
+
+## 目的
+
+基础课建立了单个文件的模型：`import` 把模块对象绑定到名字，模块体只执行一次。本课补上「多个文件如何组成一个程序」：
+
+- 一个名字怎样被解析到某个文件；
+- 包是什么，目录结构与导入语句怎样对应；
+- 模块按**名字**缓存意味着什么；
+- 导入期的代码在什么时候执行、失败时错误落在谁身上。
+
+这些机制决定了一个程序的结构：哪部分是模块、哪部分是包、谁在导入时执行代码、同名文件为什么会互相覆盖。
+
+## 模型
+
+一次成功的 `import` 经过四个阶段：
+
+```text
+1. 查缓存：sys.modules 里已有这个名字就用它，不重新执行任何代码
+2. 查找：沿 sys.path 的每一项，由查找器把模块名映射到一个来源（文件、目录、内置）
+3. 执行：创建模块对象、放进 sys.modules、在它自己的命名空间里执行模块体
+4. 绑定：把名字绑到调用方的命名空间
+```
+
+三条后果：
+
+- **缓存按模块名索引，在模块体执行之前就写入**。所以重复导入不重新执行；也所以在模块体运行期间，别的代码已经能看到这个半成品模块——循环导入的失败发生在第 3 步的内部。
+- **每个模块一个命名空间**。模块体里的顶层名字属于该模块的字典，模块之间只能通过导入相互访问，没有一个全局共享空间。
+- **导入期是执行期**。模块体的顶层代码在第一次导入时运行，因此「导入时读配置、连数据库、扫描目录」都会成为导入的代价与失败点。
+
+**包**是带子模块的模块：一个目录，导入时执行它的 `__init__.py`，目录本身成为模块的 `__path__`，子模块名为 `包名.子模块名`。目录里没有 `__init__.py` 时，只要它在 `sys.path` 上，导入系统会把它当作命名空间包——同样可以导入，但没有可执行的初始化代码。
+
+**相对导入**（`from . import x`）的起点是当前模块所在的包，因此只在包内的模块里有意义；它把「模块在树里的位置」写进代码，而不是把顶层包名写死。以 `from .` 或 `from ..` 开头的导入在包外执行会失败。
+
+## 名字怎样解析到模块
+
+```python run id="py.import.resolution"
+import importlib
+import os
+import sys
+
+path = os.path.join(os.getcwd(), "resolution_demo.py")
+with open(path, "w", encoding="utf-8") as handle:
+    handle.write(
+        'import sys\n'
+        'SEEN_WHILE_RUNNING = "resolution_demo" in sys.modules\n'
+        'STATE = "ready"\n'
+    )
+
+sys.modules.pop("resolution_demo", None)
+importlib.invalidate_caches()
+import resolution_demo
+
+print("the module object:", type(resolution_demo).__name__)
+print("its namespace:", sorted(name for name in vars(resolution_demo) if not name.startswith("_")))
+print("cached under its name:", sys.modules["resolution_demo"] is resolution_demo)
+print("already in the cache while its body ran:", resolution_demo.SEEN_WHILE_RUNNING)
+print("source file:", os.path.basename(resolution_demo.__file__))
+
+sys.modules.pop("resolution_demo", None)
+os.remove(path)
+```
+
+模块对象在模块体开始执行之前就进入了 `sys.modules`：`SEEN_WHILE_RUNNING` 在模块自己的代码里查缓存得到 `True`。这条规则是循环导入能够「部分成功」的原因——第二次导入拿到的是已经存在但还没执行完的模块，它的命名空间里只有已经执行过的那些名字。
+
+## 包与子模块
+
+```python run id="py.import.package"
+import importlib
+import os
+import shutil
+import sys
+
+package = os.path.join(os.getcwd(), "geometry")
+os.makedirs(package, exist_ok=True)
+with open(os.path.join(package, "__init__.py"), "w", encoding="utf-8") as handle:
+    handle.write('KIND = "regular package"\n')
+with open(os.path.join(package, "shapes.py"), "w", encoding="utf-8") as handle:
+    handle.write('def rectangle(width, height):\n    return width * height\n')
+
+for name in ("geometry", "geometry.shapes"):
+    sys.modules.pop(name, None)
+importlib.invalidate_caches()
+
+import geometry.shapes
+
+print("the package ran its __init__:", geometry.KIND)
+print("the submodule is an attribute of the package:", geometry.shapes.__name__)
+print("the package records where its submodules live:", os.path.basename(geometry.__path__[0]))
+print("a dotted import binds only the first name:", "geometry" in vars())
+
+from geometry import shapes
+
+print("the from-form binds the submodule itself:", shapes.rectangle(3, 4), shapes.__name__)
+
+shutil.rmtree(package)
+for name in ("geometry", "geometry.shapes"):
+    sys.modules.pop(name, None)
+```
+
+`import geometry.shapes` 绑定的是 `geometry`——子模块成为包的属性，通过 `geometry.shapes` 访问；`from geometry import shapes` 则把子模块对象直接绑定到当前命名空间。两种写法都把 `__init__.py` 执行一次（导入 `geometry.shapes` 必然先导入 `geometry`）。
+
+## 相对导入的位置
+
+```python run id="py.import.relative"
+import importlib
+import os
+import shutil
+import sys
+
+package = os.path.join(os.getcwd(), "shapes_pkg")
+os.makedirs(package, exist_ok=True)
+with open(os.path.join(package, "__init__.py"), "w", encoding="utf-8") as handle:
+    handle.write('from . import metrics\n')
+with open(os.path.join(package, "metrics.py"), "w", encoding="utf-8") as handle:
+    handle.write('UNITS = "square meters"\n')
+
+loose = os.path.join(os.getcwd(), "loose_relative.py")
+with open(loose, "w", encoding="utf-8") as handle:
+    handle.write('from . import metrics\n')
+
+for name in ("shapes_pkg", "shapes_pkg.metrics", "loose_relative"):
+    sys.modules.pop(name, None)
+importlib.invalidate_caches()
+
+import shapes_pkg
+
+print("inside a package the relative import works:", shapes_pkg.metrics.UNITS)
+
+try:
+    import loose_relative
+except ImportError as failure:
+    print("outside a package it fails:", type(failure).__name__, "-", failure)
+
+shutil.rmtree(package)
+for name in ("shapes_pkg", "shapes_pkg.metrics", "loose_relative"):
+    sys.modules.pop(name, None)
+os.remove(loose)
+```
+
+同一个 `from . import metrics`：写在包的 `__init__.py` 里可以工作，写在 `sys.path` 上的普通文件里抛 `ImportError`，因为那时没有「当前包」这个概念。看到这个错误时，问题不在被导入的模块，而在导入语句所在的位置——需要改成绝对导入，或把文件移进包里。
+
+## `__all__` 与星号导入
+
+```python run id="py.import.star-and-all"
+import importlib
+import os
+import sys
+
+path = os.path.join(os.getcwd(), "star_demo.py")
+with open(path, "w", encoding="utf-8") as handle:
+    handle.write(
+        '__all__ = ["PUBLIC", "helper"]\n'
+        'PUBLIC = 1\n'
+        'helper = lambda: "helper"\n'
+        '_INTERNAL = "not exported"\n'
+        'EXTRA = "reachable explicitly"\n'
+    )
+
+sys.modules.pop("star_demo", None)
+importlib.invalidate_caches()
+import star_demo
+
+namespace = {}
+exec("from star_demo import *", namespace)
+imported = sorted(name for name in namespace if not name.startswith("__"))
+print("names bound by the star import:", imported)
+print("__all__ decides the list, not the leading underscore:", "EXTRA" in imported, "_INTERNAL" in imported)
+print("every name is still reachable explicitly:", star_demo._INTERNAL, star_demo.EXTRA)
+
+sys.modules.pop("star_demo", None)
+os.remove(path)
+```
+
+`__all__` 是一份**导出清单**：定义了它，星号导入就只绑定清单里的名字；没定义时才是「所有不以下划线开头的名字」。显式导入不受它限制——`__all__` 是给「批量导入」与文档工具用的约定，不是访问控制。
+
+## 循环导入
+
+```python run id="py.import.circular"
+import importlib
+import os
+import shutil
+import sys
+
+directory = os.getcwd()
+first = os.path.join(directory, "cycle_first.py")
+second = os.path.join(directory, "cycle_second.py")
+
+with open(first, "w", encoding="utf-8") as handle:
+    handle.write(
+        'import cycle_second\n'
+        'CONSTANT = "from first"\n'
+        'def describe():\n'
+        '    return cycle_second.read()\n'
+    )
+with open(second, "w", encoding="utf-8") as handle:
+    handle.write(
+        'import cycle_first\n'
+        'VALUE = cycle_first.CONSTANT          # read at import time\n'
+        'def read():\n'
+        '    return VALUE\n'
+    )
+
+
+def clean():
+    for name in ("cycle_first", "cycle_second"):
+        sys.modules.pop(name, None)
+    shutil.rmtree("__pycache__", ignore_errors=True)
+
+
+clean()
+importlib.invalidate_caches()
+try:
+    import cycle_first
+except AttributeError as failure:
+    print("importing the pair fails:", type(failure).__name__, "-", failure)
+
+with open(second, "w", encoding="utf-8") as handle:
+    handle.write(
+        'import cycle_first\n'
+        'def read():\n'
+        '    return cycle_first.CONSTANT        # read when called\n'
+    )
+
+clean()
+importlib.invalidate_caches()
+import cycle_first
+
+print("reading the same name inside a function works:", cycle_first.describe())
+
+clean()
+os.remove(first)
+os.remove(second)
+```
+
+第一次导入失败的不是 `import` 语句，而是 `VALUE = cycle_first.CONSTANT` 这一行：执行到 `cycle_second` 时，`cycle_first` 已经存在于缓存里但只执行到 `import cycle_second`，`CONSTANT` 还没有被定义。
+
+改后的 `cycle_second` 把读取推迟到函数体里，导入期不再有属性访问，两个模块都能完成初始化，`cycle_first.describe()` 随后调用它并拿到值。这是循环导入唯一稳定的修法：**让导入期的代码只做定义，不做取值**。仍然需要双向依赖时，把导入本身放进函数也可以，但那会把依赖隐藏到调用点，只适合少数必须的场景。
+
+## 缓存按名字索引
+
+```python run id="py.import.name-collision"
+import importlib
+import os
+import shutil
+import sys
+
+for folder, value in (("collision_a", "from directory a"), ("collision_b", "from directory b")):
+    target = os.path.join(os.getcwd(), folder)
+    os.makedirs(target, exist_ok=True)
+    with open(os.path.join(target, "shared_name.py"), "w", encoding="utf-8") as handle:
+        handle.write(f'ORIGIN = "{value}"\n')
+
+first_dir = os.path.join(os.getcwd(), "collision_a")
+second_dir = os.path.join(os.getcwd(), "collision_b")
+sys.path.insert(0, second_dir)
+sys.path.insert(0, first_dir)
+
+sys.modules.pop("shared_name", None)
+importlib.invalidate_caches()
+import shared_name
+
+print("first hit on the search path wins:", shared_name.ORIGIN)
+print("the module came from the directory:", os.path.basename(os.path.dirname(shared_name.__file__)))
+print("search path order decides:", sys.path[0] == first_dir and sys.path[1] == second_dir)
+
+sys.modules.pop("shared_name", None)
+sys.path.remove(first_dir)
+sys.path.remove(second_dir)
+shutil.rmtree(first_dir)
+shutil.rmtree(second_dir)
+```
+
+两个不同目录里的同名模块只会加载一个：缓存与查找都以**模块名**为键，先出现在 `sys.path` 上的那个胜出，另一个永远不执行。这也是「自己写的 `utils.py` 覆盖了同名依赖」这类问题的机制——不是冲突检测失败，而是根本没有第二个位置被查询。
+
+## 边界与失败情形
+
+- **`ModuleNotFoundError` 与 `ImportError` 是两件事**：前者表示按名字找不到模块（检查 `sys.path`、文件名与拼写）；后者在找到模块但取不到名字时抛出（`from m import missing`）。`ModuleNotFoundError` 是 `ImportError` 的子类。
+- **`AttributeError` 出现在导入期**通常意味着循环导入：某个模块的属性在它执行完之前被读取。
+- **相对导入的位置决定成败**：包内的模块可以用，`sys.path` 上的顶层模块不行；文件被当作脚本直接运行时（`python file.py`）它不在包里，相对导入同样失败。
+- **导入期副作用会变成启动代价**：模块顶层读文件、连网络、扫描目录会让导入变慢且可能失败；导入应该只做定义，把动作推迟到调用时。
+- **`sys.path` 的顺序是语义**：插入目录会改变解析结果，脚本目录与 `sys.path[0]` 常常不同，部署环境与开发环境因此可能导入到不同的模块。
+- **修改文件后不会自动重载**：`importlib.reload` 只是重新执行模块体，已有对象仍指向旧定义，缓存的引用（函数、类实例）不会自动更新。
+- **命名空间包没有 `__init__.py`**：可以导入、可以被拆到多个目录里，因此也没有一处集中执行初始化的位置；需要初始化代码时用常规包。
+- **导入与运行是两条路径**：同一个文件被导入时 `__name__` 是模块名，被当作程序运行时是 `"__main__"`，两种角色下的模块会被缓存成两个不同的名字（<CrossRef id="python.modules-basics" /> 给出了这条判据）。
+- **`__all__` 不是访问控制**：它只影响星号导入与文档工具，任何名字都能被显式导入。
+- **依赖声明与虚拟环境属于环境边界**：可导入性与安装状态是环境问题，不属于语言语义；本课只讲导入系统本身。
+
+## 小结
+
+- `import` 依次经过查缓存、查找、执行、绑定四步；缓存按模块名索引，在模块体执行前写入。
+- 每个模块一个命名空间；模块之间只能通过导入相互访问。
+- `import a.b` 绑定 `a`，`from a import b` 绑定 `b`；两者都先执行包的初始化。
+- 相对导入以当前包为起点，只在包的模块内有效；包外或脚本入口处使用会抛 `ImportError`。
+- `__all__` 决定星号导入绑定哪些名字，不构成访问控制。
+- 循环导入的失败来自导入期的属性读取，修法是让导入期的代码只做定义。
+- 模块名是全局命名空间的键：同名文件只有一个会被加载，由 `sys.path` 顺序决定。
