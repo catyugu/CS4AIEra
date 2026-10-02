@@ -1,8 +1,8 @@
 /**
  * Fetch the pinned Pyodide distribution into `public/pyodide/`.
  *
- *   bun run setup:runtime            # core interpreter only (~13 MB)
- *   bun run setup:runtime --packages # plus every pinned package wheel
+ *   npm run setup:runtime            # core interpreter only (~13 MB)
+ *   npm run setup:runtime --packages # plus every pinned package wheel
  *
  * The runtime is self-hosted so a build is reproducible and the deployed site
  * never depends on a public CDN (DESIGN.md sections 3 and 21). The files are

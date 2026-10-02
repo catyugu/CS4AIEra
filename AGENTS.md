@@ -52,8 +52,8 @@ Baseline technology choices are in `DESIGN.md` section 3. Do not replace them me
 Run both commands before reporting a change as done:
 
 ```text
-bun run check    content validation, type check, unit tests
-bun run build    static build
+npm run check    content validation, type check, unit tests
+npm run build    static build
 ```
 
 A change is done only when:

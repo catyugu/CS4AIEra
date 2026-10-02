@@ -39,7 +39,7 @@ export function runtimeAssets(): AstroIntegration {
         } catch {
           throw new Error(
             `${cells} executable cell(s) are declared but public/pyodide/ is missing; ` +
-              `run \`bun run setup:runtime\` (Pyodide ${PYODIDE_VERSION}) before building`,
+              `run \`npm run setup:runtime\` (Pyodide ${PYODIDE_VERSION}) before building`,
           );
         }
       },

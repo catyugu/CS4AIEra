@@ -1,7 +1,7 @@
 /**
  * Content validation entry point.
  *
- *   bun run validate [content-root]
+ *   npm run validate [content-root]
  *
  * Exits non-zero when any issue is an error. Warnings are printed but do not
  * fail the build; they cover editorial smells such as an unused glossary term.

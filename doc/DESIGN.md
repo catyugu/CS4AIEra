@@ -43,7 +43,7 @@
 
 **搜索**：构建期生成静态搜索索引，搜索不得需要应用服务器。索引覆盖课时标题、各级标题、术语、别名与正文，并把标题与标题层级的排名置于正文之上。具体库可以是 Pagefind 或等价静态索引器；这是实现选择，不是内容契约。
 
-**工具链**：`bun` 是包管理器与脚本运行器；内容校验与测试仍在 Node 下执行（`tsx`、`vitest`），因为 SQL 夹具回放与测试套件使用 `node:sqlite`，Bun 未实现该模块。单元测试用 Vitest，浏览器与运行时集成测试用 Playwright。
+**工具链**：`npm` 是包管理器与脚本运行器，Node 是唯一运行时；内容校验与测试在 Node 下执行（`tsx`、`vitest`），SQL 夹具回放与测试套件依赖 `node:sqlite`。单元测试用 Vitest，浏览器与运行时集成测试用 Playwright。依赖的安装脚本按 `package.json` 的 `allowScripts` 白名单执行（当前仅 `esbuild`），未列入的包不运行生命周期脚本。
 
 ## 4. 系统拓扑与仓库组织
 
@@ -55,7 +55,7 @@
 ├── DESIGN.md
 ├── CONTENT_GUIDE.md
 ├── package.json
-├── bun.lock
+├── package-lock.json
 ├── astro.config.*
 │
 ├── content/
@@ -289,7 +289,7 @@ type RuntimeResponse =
 已实现：
 
 - 每个课时页一个惰性 worker，首次 Run 时创建；不含可执行单元格的页面不加载任何脚本。
-- 运行时自托管（`public/pyodide/`，由 `bun run setup:runtime` 取回），不依赖 CDN。
+- 运行时自托管（`public/pyodide/`，由 `npm run setup:runtime` 取回），不依赖 CDN。
 - 若课时声明了可执行单元格而自托管运行时缺失，构建直接失败并给出应执行的命令，而不是产出单元格全部失效的站点。
 - 单元格默认隔离命名空间；`session="..."` 共享一个命名空间，SQL 的 session 共享一个连接。
 - Stop 与硬超时都通过终止 worker 实现；随后一次执行重建 worker，并按需重建夹具与 session。
@@ -563,7 +563,7 @@ merge to main
 
 Git 是正文与代码的权威历史。
 
-**版本策略**：固定重要的教学运行时：Node/bun 工具链；Astro 与 UI 依赖；Pyodide 发行版；可执行课时显式使用的任何包。会改变课时可观察行为的依赖升级是影响内容的变更，应按此评审。课时正文应区分规范级论断与实现或版本相关论断。例如"Python 语言语义"与"CPython 3.x 实现行为"不可互换。
+**版本策略**：固定重要的教学运行时：Node 工具链；Astro 与 UI 依赖；Pyodide 发行版；可执行课时显式使用的任何包。会改变课时可观察行为的依赖升级是影响内容的变更，应按此评审。课时正文应区分规范级论断与实现或版本相关论断。例如"Python 语言语义"与"CPython 3.x 实现行为"不可互换。
 
 ## 21. 拒绝的替代方案
 
