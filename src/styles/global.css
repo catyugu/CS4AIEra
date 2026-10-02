@@ -381,29 +381,24 @@ a {
 
 /* --- term references --------------------------------------------------- */
 
-/* The popover's containing block is the content column, not the term. A
-   popover anchored to an inline box cannot be kept inside the viewport in pure
-   CSS — its horizontal offset inside the column is not knowable — so one
-   anchored to a term near the right edge would give the page a horizontal
-   scrollbar. Anchored to the column it can never overflow, and the vertical
-   position still comes from the term: `top: auto` resolves to the box's static
-   position, which is the line the term sits on. */
-.prose {
-  position: relative;
-}
-
+/* The popover is anchored to the term, so it opens beside the word the reader
+   is on: `left: 0` starts at the term's own left edge and the top offset is the
+   line below it. Anchored to an inline box the tip can no longer be guaranteed
+   to stay inside the viewport — a term near the right edge would push the page
+   into horizontal scroll — so `src/runtime/term-tip.ts` shifts it back by the
+   overflow. Without that script the popover still opens at the term. */
 .term-ref {
+  position: relative;
   text-decoration: underline dotted;
   text-underline-offset: 0.2em;
 }
 
 .term-tip {
   position: absolute;
-  top: auto;
+  top: calc(100% + 0.5rem);
   left: 0;
   z-index: 10;
-  width: min(22rem, 100%);
-  margin-top: 1.6em;
+  width: min(22rem, calc(100vw - 2rem));
   padding: 0.5rem 0.7rem;
   background: var(--panel);
   border: 1px solid var(--line);

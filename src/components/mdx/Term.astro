@@ -23,3 +23,7 @@ if (!entry) throw new Error(`<Term id="${id}"> has no glossary entry`);
   <slot />
   <span class="term-tip">{entry.short}</span>
 </a>
+
+<script>
+  import "../../runtime/term-tip";
+</script>
