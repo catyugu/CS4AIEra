@@ -1,0 +1,182 @@
+---
+id: algorithms.abstractions-and-invariants
+slug: /algorithms/abstractions-and-invariants
+order: 10
+title: 抽象数据类型、表示与不变量
+status: draft
+objectives:
+  - 区分问题规约、抽象契约与具体表示，并指出一条复杂度论断属于哪一层
+  - 为一个自建结构写出表示不变量与它的前置条件
+  - 用不变量检查器在操作返回后立刻定位被破坏的状态
+  - 说明同一契约的两种表示为什么在时间与空间上给出不同结论
+---
+
+本模块的每一课都回答同一组问题：契约承诺了什么，内部状态用什么表示，哪些内部状态是合法的，每个操作怎样保持这些性质，成本是多少。这一课建立这套写法，后面的动态数组、链表、哈希表、树与堆都只是它的实例。
+
+读代码时最常见的混淆是把两件事当成一件：一个结构承诺了哪些操作，与它实际怎样保存状态。前者决定调用方可以依赖什么，后者决定每次操作要付出多少代价。两者的分界就是这一课的内容。
+
+## 规约、抽象契约与表示
+
+四层要分开写：
+
+| 层 | 回答什么 | 例子 |
+| --- | --- | --- |
+| 问题规约 | 要解决什么问题，允许什么输入，要求什么输出，允许多大误差 | 在一批记录中按键查找 |
+| 抽象数据类型 | 提供哪些操作，每个操作的前置条件与后置条件是什么 | 映射：`lookup(key)` 返回关联值；`set(key, value)` 之后 `lookup(key)` 返回该值 |
+| 表示 | 内部状态用什么保存 | 有序数组；桶数组加链 |
+| 算法 | 每个操作在表示上怎样实现 | 二分查找定位键；哈希后遍历一个桶 |
+
+抽象契约只描述可观察的行为，因此同一份契约可以有多种实现。契约里的**前置条件**由调用方负责：`pop` 要求栈非空，`add(value)` 要求 `value` 落在表示能够容纳的范围内。前置条件不满足时实现不必给出任何行为；把它写进契约的价值在于实现可以省掉防御代码，而调用方清楚自己必须检查什么。**后置条件**由实现负责，它描述操作返回时调用方可以依赖什么。
+
+## 表示不变量
+
+<Term id="invariant">不变量</Term>是在一组操作前后都必须成立的性质。表示不变量约束内部状态，只对实现可见：`size` 不超过 `capacity`，链表的 `head` 能到达全部节点，有序数组保持有序。
+
+- 不变量在操作执行过程中可以暂时不成立；要求是每个公开操作返回之前重新建立它。
+- 不变量把「操作正确」分解成两件可以独立检查的事：操作保持不变量，而不变量蕴含契约承诺的行为。
+- 违反不变量的状态通常不会立刻报错，而是在很久之后的某次操作上表现为错误结果或越界，届时现场已经远离原因。
+
+## 用检查器把非法状态显式暴露
+
+下面的结构用一个定长数组保存元素，再用一个单独的 `size` 记录有效元素的个数，只有前 `size` 个槽位属于栈的内容。它的表示不变量是三条：`size` 落在 `0` 到 `capacity` 之间；前 `size` 个槽位非空；其余槽位为空。
+
+```python run id="alg.adt.invariant-check"
+class BoundedStack:
+    """Fixed-capacity LIFO stack; live elements occupy values[:size]."""
+
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.values = [None] * capacity
+        self.size = 0
+
+    def push(self, value):
+        self.values[self.size] = value
+        self.size += 1
+
+    def pop(self):
+        value = self.values[self.size - 1]
+        self.size -= 1
+        self.values[self.size] = None
+        return value
+
+    def check_invariants(self):
+        """List every violation of the representation invariant."""
+        problems = []
+        if not 0 <= self.size <= self.capacity:
+            problems.append(f"size {self.size} is outside 0..{self.capacity}")
+        for index, value in enumerate(self.values):
+            if index < self.size and value is None:
+                problems.append(f"live slot {index} is empty")
+            if index >= self.size and value is not None:
+                problems.append(f"free slot {index} still holds {value!r}")
+        return problems
+
+
+class BrokenStack(BoundedStack):
+    """A pop that reads the slot it just freed."""
+
+    def pop(self):
+        self.size -= 1
+        return self.values[self.size + 1]
+
+
+def exercise(stack):
+    for value in (10, 20, 30):
+        stack.push(value)
+    return stack.pop(), stack.size, stack.check_invariants()
+
+
+popped, size, problems = exercise(BoundedStack(4))
+print("correct pop :", "popped", popped, "| size", size, "|", problems or "invariants hold")
+
+popped, size, problems = exercise(BrokenStack(4))
+print("broken pop  :", "popped", popped, "| size", size, "|", problems or "invariants hold")
+```
+
+两个版本都不会在调用点抛异常：错误版本只是返回了 `None`，此后每一次 `push` 都会继续往一个已经属于空闲区的槽位写数据。检查器把失败提前到产生它的那一次操作，并指出具体是哪一条不变量被破坏。注意检查器自身的成本——它遍历全部槽位，把一次常数时间的 `pop` 变成扫描 `capacity` 个槽位的调用，所以它属于调试与教学路径，不属于热路径。
+
+## 同一个契约，两种表示
+
+一个整数集合只承诺两件事：`add(value)` 之后 `contains(value)` 为真；`contains(value)` 的返回值就是该值是否在集合中。下面给出两种表示，并数出每种表示付出的比较次数与空间。
+
+```python run id="alg.adt.representations"
+class ListSet:
+    """Unordered list representation."""
+
+    def __init__(self):
+        self.values = []
+
+    def add(self, value):
+        comparisons = 0
+        for existing in self.values:
+            comparisons += 1
+            if existing == value:
+                return comparisons
+        self.values.append(value)
+        return comparisons
+
+    def contains(self, target):
+        comparisons = 0
+        for value in self.values:
+            comparisons += 1
+            if value == target:
+                return True, comparisons
+        return False, comparisons
+
+    def slots(self):
+        return len(self.values)
+
+
+class DirectSet:
+    """One boolean slot per possible value; the range is a precondition."""
+
+    def __init__(self, value_range):
+        self.bits = [False] * value_range
+
+    def add(self, value):
+        self.bits[value] = True
+        return 0
+
+    def contains(self, target):
+        return self.bits[target], 0
+
+    def slots(self):
+        return len(self.bits)
+
+
+value_range = 4096
+target = 4000
+rows = []
+for size in (128, 256, 512):
+    elements = [index * 7 for index in range(size)]
+    list_set = ListSet()
+    direct_set = DirectSet(value_range)
+    for value in elements:
+        list_set.add(value)
+        direct_set.add(value)
+    _, list_comparisons = list_set.contains(target)
+    direct_found, _ = direct_set.contains(target)
+    list_slots = list_set.slots()
+    direct_slots = direct_set.slots()
+    list_add = list_set.add(target)
+    direct_add = direct_set.add(target)
+    rows.append((size, list_comparisons, list_add, list_slots, direct_found, direct_add, direct_slots))
+
+header = f"{'n':>4} {'list contains':>13} {'list add':>8} {'list slots':>10}"
+header += f" {'table contains':>14} {'table add':>9} {'table slots':>11}"
+print(header)
+for size, found, added, list_slots, direct_found, direct_added, direct_slots in rows:
+    print(f"{size:>4} {found:>13} {added:>8} {list_slots:>10}", end="")
+    print(f" {str(direct_found):>14} {direct_added:>9} {direct_slots:>11}")
+```
+
+同一个契约在这两种表示上给出完全不同的成本：列表表示的 `contains` 与「只加入尚不存在的值」都要扫过已有元素，成本随元素个数增长，空间也只随元素个数增长；直接寻址表示的两个操作都不随元素个数变化，但空间随**取值范围**增长，而且它的前置条件是待加入的值必须落在该范围内。
+
+所以「这个操作是 $O(1)$」这句话只有在补上表示与规模之后才是可检验的。完整的写法是：在直接寻址表示上，`contains` 是 $\Theta(1)$ 次槽位读取，代价是 $\Theta(m)$ 空间，$m$ 为取值范围；在无序列表表示上，同一个操作是 $\Theta(n)$ 次相等比较，$n$ 为当前元素个数。取值范围远大于元素个数时，直接寻址表示浪费的空间可以这样收回：把取值映射到一个更小的索引范围——这正是哈希函数要做的事，见后续「集合、映射与哈希」一章。
+
+## 小结
+
+- 问题规约、抽象契约、表示、算法是四层；复杂度论断属于表示加算法，不属于契约。
+- 表示不变量是每个公开操作返回前必须重新建立的性质；前置条件由调用方负责，两者不能互相替代。
+- 违反不变量通常延迟报错；可执行的检查器把它提前到产生它的那次操作，代价是检查器自身的成本。
+- 同一契约的不同表示在时间与空间上给出不同结论；给出成本时必须同时说明表示、规模与成本模型，见 <CrossRef id="algorithms.cost-model" />。
