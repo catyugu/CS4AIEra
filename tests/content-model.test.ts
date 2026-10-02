@@ -158,7 +158,6 @@ describe("identity and references", () => {
             title: "课时",
             status: "published",
             objectives: ["说明某事"],
-            terms: ["missing-term"],
           },
           [
             "```python run id=\"topic.lesson.cell\"",
@@ -427,7 +426,6 @@ describe("glossary", () => {
         title: "课时",
         status: "published",
         objectives: ["说明某事"],
-        terms: ["alias", "invariant"],
       },
       "```python run id=\"topic.lesson.cell\"\nprint(1)\n```\n",
     );

@@ -36,7 +36,6 @@ function lesson(id: string, sectionId: string, order: number, overrides: Partial
     title: id,
     status: "published",
     objectives: ["objective"],
-    terms: [],
     sectionId,
     file: `curriculum/${sectionId}/${id}.mdx`,
     cells: [],

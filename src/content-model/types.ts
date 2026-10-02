@@ -63,7 +63,6 @@ export interface Lesson {
   title: string;
   status: LessonStatus;
   objectives: string[];
-  terms: string[];
   estimatedReadingMinutes?: number;
   /** Owning section id. */
   sectionId: string;

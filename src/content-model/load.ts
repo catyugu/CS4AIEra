@@ -187,7 +187,6 @@ async function loadLesson(
     title: parsed.data.title,
     status: parsed.data.status,
     objectives: parsed.data.objectives,
-    terms: parsed.data.terms,
     estimatedReadingMinutes: parsed.data.estimated_reading_minutes,
     sectionId,
     file: relativeFile,
@@ -283,7 +282,7 @@ function attachUsage(model: CourseModel): void {
   const byTerm = new Map(model.glossary.map((entry) => [entry.id, entry]));
   const byLab = new Map(model.labs.map((lab) => [lab.id, lab]));
   for (const lesson of model.lessons) {
-    const terms = new Set(lesson.terms);
+    const terms = new Set<string>();
     for (const reference of lesson.references) {
       if (reference.kind === "term") terms.add(reference.target);
     }

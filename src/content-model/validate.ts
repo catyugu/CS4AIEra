@@ -204,11 +204,6 @@ function checkReferences(model: CourseModel, issues: Issue[]): void {
   const labIds = new Set(model.labs.map((lab) => lab.id));
 
   for (const lesson of model.lessons) {
-    for (const termId of lesson.terms) {
-      if (!termIds.has(termId)) {
-        error(issues, "unresolved-term", `term '${termId}' has no glossary entry`, lesson.file);
-      }
-    }
     for (const reference of lesson.references) {
       switch (reference.kind) {
         case "term":

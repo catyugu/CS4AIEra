@@ -184,9 +184,6 @@ objectives:
   - 精确定义事务调度与可串行化
   - 区分 dirty read、non-repeatable read 与 phantom
   - 根据并发控制机制解释实际隔离级别行为
-terms:
-  - serializability
-  - mvcc
 estimated_reading_minutes: 55
 ---
 ```
