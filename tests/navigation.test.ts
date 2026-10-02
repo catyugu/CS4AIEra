@@ -35,8 +35,6 @@ function lesson(id: string, sectionId: string, order: number, overrides: Partial
     order,
     title: id,
     status: "published",
-    prerequisites: [],
-    allowDraftPrerequisites: [],
     objectives: ["objective"],
     terms: [],
     sectionId,

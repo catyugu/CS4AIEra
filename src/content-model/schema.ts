@@ -25,8 +25,6 @@ export const lessonFrontmatterSchema = z.strictObject({
   order: z.number().int(),
   title: z.string().min(1),
   status: z.enum(["draft", "review", "published", "archived"]),
-  prerequisites: z.array(idSchema).default([]),
-  allow_draft_prerequisites: z.array(idSchema).default([]),
   objectives: z.array(z.string().min(1)).default([]),
   terms: z.array(idSchema).default([]),
   estimated_reading_minutes: z.number().int().positive().optional(),

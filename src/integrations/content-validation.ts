@@ -10,8 +10,8 @@ import type { Issue } from "../content-model/types";
  * Fail the Astro build on content errors.
  *
  * Validation is a first-class build step, not a lint task someone remembers to
- * run: broken ids, dangling references and prerequisite cycles must stop the
- * build that would otherwise publish them.
+ * run: broken ids and dangling references must stop the build that would
+ * otherwise publish them.
  *
  * Warnings are printed but do not fail the build.
  */

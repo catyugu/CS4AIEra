@@ -21,7 +21,6 @@ export function validateContent(model: CourseModel): Issue[] {
   checkUniqueIds(model, issues);
   checkUniqueSlugs(model, issues);
   checkSiblingOrder(model, issues);
-  checkPrerequisites(model, issues);
   checkCells(model, issues);
   checkReferences(model, issues);
   checkAnchors(model, issues);
@@ -130,84 +129,6 @@ function reportDuplicateOrder(
     }
     byOrder.set(item.order, item.id);
   }
-}
-
-function checkPrerequisites(model: CourseModel, issues: Issue[]): void {
-  const byId = new Map(model.lessons.map((lesson) => [lesson.id, lesson]));
-  const edges = new Map<string, string[]>();
-
-  for (const lesson of model.lessons) {
-    const resolved: string[] = [];
-    for (const prerequisiteId of lesson.prerequisites) {
-      const target = byId.get(prerequisiteId);
-      if (!target) {
-        error(
-          issues,
-          "unresolved-prerequisite",
-          `prerequisite '${prerequisiteId}' does not resolve to a lesson`,
-          lesson.file,
-        );
-        continue;
-      }
-      resolved.push(prerequisiteId);
-      if (lesson.status === "published" && target.status !== "published") {
-        if (!lesson.allowDraftPrerequisites.includes(prerequisiteId)) {
-          error(
-            issues,
-            "published-lesson-needs-draft",
-            `published lesson depends on '${prerequisiteId}', which is '${target.status}'; publish it or list it in allow_draft_prerequisites`,
-            lesson.file,
-          );
-        }
-      }
-    }
-    edges.set(lesson.id, resolved);
-  }
-
-  for (const cycle of findCycles(edges)) {
-    const first = byId.get(cycle[0]!);
-    error(
-      issues,
-      "prerequisite-cycle",
-      `prerequisite cycle: ${cycle.join(" -> ")}`,
-      first?.file,
-    );
-  }
-}
-
-/** Return every cycle in a directed graph, each as a closed id path. */
-function findCycles(edges: Map<string, string[]>): string[][] {
-  const cycles: string[][] = [];
-  const state = new Map<string, "visiting" | "done">();
-  const stack: string[] = [];
-  const seenCycles = new Set<string>();
-
-  const visit = (node: string): void => {
-    state.set(node, "visiting");
-    stack.push(node);
-    for (const next of edges.get(node) ?? []) {
-      if (!edges.has(next)) continue;
-      const nextState = state.get(next);
-      if (nextState === "visiting") {
-        const start = stack.indexOf(next);
-        const cycle = [...stack.slice(start), next];
-        const key = [...cycle].sort().join("|");
-        if (!seenCycles.has(key)) {
-          seenCycles.add(key);
-          cycles.push(cycle);
-        }
-        continue;
-      }
-      if (nextState === undefined) visit(next);
-    }
-    stack.pop();
-    state.set(node, "done");
-  };
-
-  for (const node of edges.keys()) {
-    if (state.get(node) === undefined) visit(node);
-  }
-  return cycles;
 }
 
 function checkCells(model: CourseModel, issues: Issue[]): void {

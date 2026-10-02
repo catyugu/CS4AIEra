@@ -62,9 +62,6 @@ export interface Lesson {
   order: number;
   title: string;
   status: LessonStatus;
-  prerequisites: string[];
-  /** Prerequisite ids this lesson may depend on even while they are unpublished. */
-  allowDraftPrerequisites: string[];
   objectives: string[];
   terms: string[];
   estimatedReadingMinutes?: number;

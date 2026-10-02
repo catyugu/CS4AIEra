@@ -3,9 +3,8 @@ import type { CourseModel, Lesson, LessonStatus, Section, SectionStatus } from "
 /**
  * Navigation over the course tree.
  *
- * The tree is the visible course structure; the prerequisite graph is a
- * separate concern (DESIGN.md section 5.4). These functions are pure so the
- * ordering rules can be tested without a browser or a build.
+ * These functions are pure so the ordering rules can be tested without a
+ * browser or a build.
  *
  * Reading order is a depth-first walk of the tree: a section's own lessons come
  * before its subsections, and both are ordered by their `order` field. Within a

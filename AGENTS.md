@@ -36,7 +36,7 @@ Do not replace these technologies merely because another library is fashionable.
 
 ## Content contracts
 
-Every lesson must have a stable ID, title, order, declared prerequisites, learning objectives, and status. References to lessons, glossary terms, figures, datasets, and labs must resolve at build time.
+Every lesson must have a stable ID, title, order, learning objectives, and status. References to lessons, glossary terms, figures, datasets, and labs must resolve at build time.
 
 Executable examples must be deterministic unless nondeterminism is itself the topic. Seed random sources when practical. Do not depend on public APIs, mutable remote resources, current time, or hidden server state.
 
@@ -57,7 +57,7 @@ A code block is executable only when explicitly marked. Ordinary fenced code rem
 
 - Type public interfaces and worker messages explicitly.
 - Prefer small modules with explicit data flow over global stores.
-- Keep build-time content validation strict; fail the build on broken IDs, references, duplicate slugs, invalid fixtures, or prerequisite cycles.
+- Keep build-time content validation strict; fail the build on broken IDs, references, duplicate slugs, or invalid fixtures.
 - Preserve accessible keyboard operation for navigation, glossary popovers, editors, Run/Stop/Reset controls, and output.
 - Avoid hydration for static prose.
 - Do not add client state persistence unless the requirement explicitly needs it.

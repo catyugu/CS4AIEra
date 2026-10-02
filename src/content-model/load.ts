@@ -186,8 +186,6 @@ async function loadLesson(
     order: parsed.data.order,
     title: parsed.data.title,
     status: parsed.data.status,
-    prerequisites: parsed.data.prerequisites,
-    allowDraftPrerequisites: parsed.data.allow_draft_prerequisites,
     objectives: parsed.data.objectives,
     terms: parsed.data.terms,
     estimatedReadingMinutes: parsed.data.estimated_reading_minutes,

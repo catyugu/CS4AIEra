@@ -19,8 +19,8 @@ import CourseLayout from "../layouts/CourseLayout.astro";
  * Lesson pages.
  *
  * The route comes from the collection (which owns the rendered body); the
- * lesson's identity, section and prerequisites come from the course model,
- * joined on the stable lesson id. Unpublished lessons are routable in dev only.
+ * lesson's identity and section come from the course model, joined on the
+ * stable lesson id. Unpublished lessons are routable in dev only.
  */
 export async function getStaticPaths() {
   const includeUnpublished = import.meta.env.DEV;
@@ -47,9 +47,6 @@ if (!lesson) throw new Error(`lesson '${entry.id}' is in the content collection 
 const order = readingOrder(buildCourseTree(model, { includeUnpublished: import.meta.env.DEV }));
 const { previous, next } = lessonNeighbors(order, lesson.id);
 const trail = sectionTrail(model, lesson.sectionId).slice(1);
-const prerequisites = lesson.prerequisites
-  .map((id) => model.lessons.find((candidate) => candidate.id === id))
-  .filter((candidate) => candidate !== undefined);
 ---
 
 <CourseLayout
@@ -78,19 +75,6 @@ const prerequisites = lesson.prerequisites
             .join(" · ")
         }
       </p>
-      {
-        prerequisites.length > 0 && (
-          <p class="lesson-meta">
-            前置：
-            {prerequisites.map((prerequisite, index) => (
-              <>
-                {index > 0 && "、"}
-                <a href={`${prerequisite.slug}/`}>{prerequisite.title}</a>
-              </>
-            ))}
-          </p>
-        )
-      }
       {
         lesson.objectives.length > 0 && (
           <section class="objectives" aria-labelledby="objectives-heading">
