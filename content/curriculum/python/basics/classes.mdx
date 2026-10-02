@@ -3,7 +3,7 @@ id: python.classes
 slug: /python/classes
 order: 100
 title: 类与实例
-status: draft
+status: published
 objectives:
   - 说明 `class` 语句执行时创建了什么对象，以及名称绑定到哪个对象
   - 判断一个属性来自实例还是类，并预测修改它在哪些对象上可见
@@ -23,7 +23,7 @@ objectives:
 - 调用类对象 `Counter()` 创建**实例**（instance），返回值是实例。
 - `__init__` 初始化一个已经创建出来的实例；它不创建对象，调用方拿到的实例在 `__init__` 运行之前就已经存在。
 - `self` 是普通形参的惯用名称，不是关键字；它按位置接收实例。
-- `instance.value` 是属性访问，`instance.value = 3` 是属性赋值。实例与类构成一个属性查找层次：读取时先看实例，再看类；赋值在实例上创建或覆盖属性。
+- `instance.value` 是属性访问，`instance.value = 3` 是属性赋值。实例与类构成一个属性查找层次：读取时先看实例，再看类；赋值在实例上创建或覆盖属性。完整的查找顺序、描述符与绑定方法见 <CrossRef id="python.attributes-and-descriptors" />。
 - 类属性是所有实例共享的一个对象，实例属性属于单个实例。
 - 方法访问 `instance.increment` 得到一个绑定到该实例的可调用对象，调用时实例作为第一个实参传入。
 
@@ -150,11 +150,4 @@ print(greeter.greet())
 - **属性不存在**：读取既没有在实例上赋值、类上也没有的属性抛 `AttributeError`。
 - **`__init__` 里漏赋值**：别的属性先访问到这个对象时才会失败，报错位置离原因很远。
 - **默认参数与类属性是同一个模式**：两者都在定义时求值一次，被多次调用或多个实例共享。这一模式的完整后果由 <CrossRef id="python.mutability-and-copy" /> 展开。
-
-## 小结
-
-- `class` 语句创建类对象并绑定名称；调用类对象创建实例。
-- `__init__` 初始化已经创建出来的实例；`self` 是普通形参，接收实例。
-- 读取属性先看实例再看类；赋值在实例上创建或覆盖属性。
-- 类属性是所有实例共享的一个对象；可变类属性会让状态在实例之间合流。
-- `instance.method()` 与 `Class.method(instance)` 是同一次调用。
+- **多个类之间的属性来源**：本课只处理「实例与它自己的类」这一层。子类与基类之间的查找顺序由 <CrossRef id="python.inheritance-and-mro" /> 建立。

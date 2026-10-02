@@ -1,0 +1,5 @@
+id: python.async
+label: 协作式异步
+order: 80
+summary: coroutine、task 与事件循环的调度模型；取消、超时与清理路径。
+status: active

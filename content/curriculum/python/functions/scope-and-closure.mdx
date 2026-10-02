@@ -3,7 +3,7 @@ id: python.scope-and-closure
 slug: /python/scope-and-closure
 order: 20
 title: 作用域与闭包
-status: draft
+status: published
 objectives:
   - 对一次名称读取判断它由局部、外层函数、模块还是内建提供，并说明赋值如何改变这个结论
   - 解释闭包捕获的是变量而不是快照，并据此预测循环中创建的函数的行为
@@ -159,12 +159,3 @@ print("captured by default argument:", [function("x") for function in with_defau
 - **闭包延长对象存活期**：被捕获的大对象随函数对象存活，长生命周期回调会因此持有本可释放的内存。
 - **重复定义同名函数不报错**：后一个定义直接覆盖前一个，闭包与默认值都随之替换。
 - **递归深度由实现决定**：超过限制抛 `RecursionError`，该限制是实现配置而非语言约定（见 <CrossRef id="python.runtime-vs-language" />）。
-
-## 小结
-
-- 名称按 Local → Enclosing → Global → Builtin 顺序查找，查找发生在运行期。
-- 函数体内任何位置的赋值都让名字成为局部名；读未绑定的局部名抛 `UnboundLocalError`。
-- `global` 与 `nonlocal` 声明赋值作用于哪一层，不创建名字。
-- 闭包捕获变量而不是值，并通过 cell 引用延长这些对象的存活期。
-- 延迟绑定使循环中创建的函数在调用时看到循环变量的最终值；用工厂函数或默认参数绑定当前值。
-- 类体与推导式不构成外层函数作用域，方法读不到类体的名字。

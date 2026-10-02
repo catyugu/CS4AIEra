@@ -3,7 +3,7 @@ id: python.dunder-protocols
 slug: /python/dunder-protocols
 order: 20
 title: 特殊方法与协议
-status: draft
+status: published
 objectives:
   - 把一段语法或内置调用对应到它调用的特殊方法，并说明查找发生在哪个对象上
   - 用 `NotImplemented` 与反向方法解释一次运算的回退过程
@@ -213,16 +213,7 @@ print("a function is callable, a list is not:", isinstance(len, Callable), isins
 - **`__eq__` 与 `__hash__` 是一对**：定义 `__eq__` 会让类型失去默认哈希，容器里能不能用取决于 `__hash__` 的定义，完整约束见 <CrossRef id="python.equality-and-hashing" />。
 - **协议只约束方法名，不约束语义**：实现了 `__len__` 的对象会被当作有长度，长度是否合理由实现者负责；`len()` 还检查返回值，非整数抛 `TypeError`，负数抛 `ValueError`。
 - **不要用 `NotImplementedError` 当 `NotImplemented`**：前者是异常，会把回退过程直接终止；后者是一个哨兵值，表示「我不处理，请别人试试」。
-- **`__getitem__` 能替代 `__iter__`**：老式迭代协议仍然有效，但只实现 `__getitem__` 的对象在 `iter()`、`in` 与解包上走的是逐索引路径，效率与语义都不同。
+- **`__getitem__` 能替代 `__iter__`**：老式迭代协议仍然有效，但只实现 `__getitem__` 的对象在 `iter()`、`in` 与解包上走的是逐索引路径，效率与语义都不同（见 <CrossRef id="python.iteration-protocol" />）。
 - **特殊方法不参与普通属性查找，因此也不参与 `hasattr` 之外的探测**：判断能力用 `isinstance` 与 ABC，或直接尝试调用并捕获 `TypeError`。
 - **运算符重载不等于数学定义**：`+` 在自定义类型上的含义由实现者决定（列表的连接、字符串的拼接、数值的加法互不相同），读代码时以类型定义的方法为准。
 - **`__eq__` 之外还有顺序协议**：`__lt__` 等六个比较方法各自独立，`sorted` 只需要 `__lt__`；只实现一部分时，另一部分语法仍然失败。
-
-## 小结
-
-- 特殊方法由语法与内置函数调用，在**类型上**查找，实例字典不参与。
-- 语法到方法的对应是一份固定清单；缺方法时错误是调用点的 `TypeError`。
-- 二元运算先试正向方法，遇到 `NotImplemented` 再试反向方法，两边都放弃才抛 `TypeError`。
-- `bool(x)` 依次尝试 `__bool__`、`__len__`，都没有则为真；`str(x)` 会退回 `__repr__`。
-- 协议是一组特殊方法；`collections.abc` 的 ABC 提供的是结构性检查，不需要继承。
-- `__eq__` 与 `__hash__`、`__iter__` 与迭代协议、`__enter__` 与上下文管理器都是这套机制的实例，各自的完整语义在对应课时展开。

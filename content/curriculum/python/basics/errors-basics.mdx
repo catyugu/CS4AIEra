@@ -3,7 +3,7 @@ id: python.errors-basics
 slug: /python/errors-basics
 order: 120
 title: 错误与异常处理
-status: draft
+status: published
 objectives:
   - 读出一个异常的类名与消息，并说出它来自哪一类失败
   - 用 try/except/else 在正确的位置捕获错误，保证捕获范围只覆盖会失败的语句
@@ -180,11 +180,3 @@ print("both handle the expected failure:", parse_wide("12"), parse_narrow("12"))
 - **错误类型要表达语义**：`ValueError` 适合参数内容不合法；业务规则失败应使用自定义类型，否则调用方无法区分。
 - **异常的传播、`finally` 的执行路径、异常链与自定义异常的层次设计**由 <CrossRef id="python.exceptions" /> 与后续的接口设计内容处理，本课只覆盖「认出来、就地处理、抛出去」。
 - **回溯属于输出的一部分**：未处理的异常会打印类型、消息与调用路径，不要为了「界面干净」把它们全部捕获掉。
-
-## 小结
-
-- 失败以异常对象出现，类型说明种类、消息说明细节；未处理的异常终止程序并打印回溯。
-- `try/except/else` 按类型匹配，第一个匹配的子句胜出；捕获范围只覆盖会失败的那几条语句。
-- 用继承 `Exception` 的自定义类型表达本程序的失败语义，调用方按类型分支。
-- 捕获具体类型而不是裸 `except`，否则自己的缺陷会被伪装成输入问题。
-- 异常与失败状态的边界是接口的一部分，处理方式要与调用方约定。

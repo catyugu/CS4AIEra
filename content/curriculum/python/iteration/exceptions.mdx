@@ -3,10 +3,10 @@ id: python.exceptions
 slug: /python/exceptions
 order: 30
 title: 异常、传播与 finally
-status: draft
+status: published
 objectives:
   - 说明一次异常从抛出点到处理点经过了哪些步骤，以及每层帧上的 finally 何时运行
-  - 判断多条 except 子句的匹配顺序，并预测一个异常最终由哪一条处理
+  - 预测 finally 在正常结束、return 与异常展开三条路径上各自何时运行
   - 解释 finally 中 return 的效果，并说明它为什么吞掉异常
   - 区分隐式异常链与显式 `raise ... from`，并说明什么时候该断掉链
 ---
@@ -36,7 +36,9 @@ objectives:
 
 `finally` 的必然性让它成为释放点：它跨 `return`、`break`、`continue` 与异常展开都执行。
 
-## 匹配顺序与 else
+## 子句顺序与各路径
+
+按书写顺序取第一个匹配、子类也匹配父类，这两条规则由 <CrossRef id="python.errors-basics" /> 建立。在本课的模型里它们只决定一件事：`finally` 在哪个分支之后运行。`else` 只在 `try` 块没有触发异常时运行，把「正常路径」与「异常处理」分开，避免处理块捕获自己抛出的异常。
 
 ```python run id="py.exc.matching"
 class ConfigError(Exception):
@@ -74,7 +76,7 @@ print(load("value"))
 print(load("ok"))
 ```
 
-子类必须先于基类出现，否则先写下的基类会接管全部。`else` 只在 `try` 块没有触发异常时运行，把「正常路径」与「异常处理」分开，避免处理块捕获自己抛出的异常。一个 `except` 子句可以列出多个类型，用元组表示。
+执行时每个分支结束后都运行一次 `finally`，正常加载的那次还会经过 `else`。这段输出的顺序就是模型里那张表：`else` 只出现在没有异常的那一次，`finally` 出现四次且位置固定在每个分支之后。
 
 ## finally 的执行路径
 
@@ -220,7 +222,6 @@ after_handler()
 
 ## 边界与失败情形
 
-- **子类必须写在基类之前**：顺序决定哪一条处理，写反不会报错。
 - **`finally` 中的 `return` 吞掉异常**：清理代码里出现 `return` 会让失败静默。
 - **`except Exception: pass`**：把可诊断的失败变成继续执行的错误状态；只在明确知道如何恢复时才捕获。
 - **裸 `except`**：捕获 `BaseException`，包括中断信号。
@@ -228,12 +229,3 @@ after_handler()
 - **`raise exc` 改变回溯的起点**：需要保留原始位置时用裸 `raise`。
 - **处理块内抛出的新异常会替换正在处理的异常**，被替换的只保留在 `__context__` 里。
 - **异常不是廉价的控制流**：逐元素依赖异常跳过低频分支可以接受，把异常当普通分支使用会同时损害性能与可读性。
-
-## 小结
-
-- `raise` 把异常交给当前帧，`except` 按书写顺序匹配类型与子类，未匹配则逐层向外传播，每层退出时运行 `finally`。
-- `else` 只在 `try` 块正常结束时运行；`finally` 在所有路径上都运行，包括 `return` 与异常展开。
-- `finally` 中的 `return` 结束函数并丢弃异常。
-- 处理块内抛出的新异常自动链接到 `__context__`；`raise ... from` 建立 `__cause__`，`from None` 抑制上下文。
-- 裸 `raise` 保留原回溯，`raise exc` 从当前行重新记录。
-- `except Exception` 不捕获 `SystemExit` 与 `KeyboardInterrupt`；`except ... as name` 的名字在处理块结束后被删除。

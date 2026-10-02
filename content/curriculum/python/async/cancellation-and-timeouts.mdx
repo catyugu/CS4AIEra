@@ -1,0 +1,378 @@
+---
+id: python.cancellation-and-timeouts
+slug: /python/cancellation-and-timeouts
+order: 20
+title: 取消、超时与清理
+status: published
+objectives:
+  - 说明一次取消请求在什么时候、以什么形式到达被取消的协程
+  - 判断一段代码在被取消时能否交出控制权，并预测 CancelledError 出现的位置
+  - 用 try/finally 写出在取消路径上也执行的清理，并说明吞掉取消会破坏什么
+  - 解释超时、屏蔽与 TaskGroup 各自在取消谁
+---
+
+## 目的
+
+本课把取消当作一条控制流来读：请求从哪里发出、以什么形式到达、会经过哪些清理代码、在谁那里结束。
+
+协作式模型里没有从外部掐断一个任务的操作。取消是一次注入到执行流里的异常，因此它出现的位置、能否被观察到、被吞掉之后调用方看到什么，全部由代码结构决定。
+
+## 模型
+
+- `task.cancel()` 是**向事件循环发出的请求**：它立即返回，并把该 task 标记为待取消，不对正在运行的协程做任何事。
+- 请求在协程**下一次被调度到挂起点**时生效，`CancelledError` 在那个 `await` 处抛出。三条直接后果：
+  - 一个在两次挂起点之间完成的协程会跑完并正常返回，取消没有效果；
+  - 已经结束的 task 上调用 `cancel()` 返回 `False`，什么也不发生；
+  - 还没开始步进的 task 被取消后，函数体一行都不执行。
+- `CancelledError` 继承 `BaseException`，不是 `Exception`（见 <CrossRef id="python.exceptions" />）。因此 `except Exception` 不会接住取消，而裸 `except:` 会。
+- 取消也是控制流：`try/finally` 会运行，这是执行清理的位置，清理里仍可以使用挂起点。资源释放的完整模型由 <CrossRef id="python.context-managers" /> 建立。
+- 吞掉 `CancelledError` 而不重新抛出，会让调用方收到「正常结束」：`task.done()` 为真、`task.cancelled()` 为假。调用方因此失去了对任务生命周期的控制。
+- **超时**是取消的一种应用：`asyncio.timeout(seconds)` 到期时取消当前正在被等待的工作，并把 `TimeoutError` 抛给 `with` 所在的调用者。
+- **屏蔽** `asyncio.shield(awaitable)` 把内部任务从外部的这次取消中隔离出来：外部等待仍然超时，内部任务继续运行到结束。
+- **结构化并发**：`asyncio.TaskGroup` 在一个子任务失败时取消其余子任务，并等待它们全部结束；父任务被取消时，它创建但**没有等待**的子任务不会被自动取消。
+
+取消通过 `CancelledError` 表现，这是语言参考里异常层次的规定；`cancel`、`timeout`、`shield` 与 `TaskGroup` 是标准库 `asyncio` 的契约，随标准库版本演进。
+
+本课用到的 `async with` 是 `with` 的异步形式：进入与退出由 `__aenter__` 与 `__aexit__` 驱动，退出逻辑同样在所有路径上运行，包括取消路径。同步版本的完整模型（进入、正常退出、异常退出三条路径，以及抑制的代价）见 <CrossRef id="python.context-managers" />。
+
+## 取消在挂起点出现
+
+```python run id="py.async.cancel-at-suspension"
+import asyncio
+
+
+async def worker():
+    print("the task starts")
+    try:
+        await asyncio.sleep(10)
+    except asyncio.CancelledError:
+        print("the cancellation arrives at the suspension point")
+        raise
+    print("this line never runs")
+
+
+async def main():
+    task = asyncio.create_task(worker())
+    await asyncio.sleep(0)
+    print("requesting cancellation")
+    task.cancel()
+    print("cancel() returned already | finished:", task.done())
+    await asyncio.sleep(0)
+    print("after the loop delivered it | cancelled:", task.cancelled(), "| finished:", task.done())
+
+
+await main()
+```
+
+`cancel()` 返回时 task 还没有结束，也没有被打断：真正发生的事是把取消记在事件循环的待办里。下一个挂起点——这里是 `worker` 里被挂起的 `await asyncio.sleep(10)`——把 `CancelledError` 抛进协程，`try` 捕获它、`raise` 让它继续传播，task 随后变成已取消状态。10 秒的等待一秒都没有等。
+
+## 没有挂起点就交不出控制权
+
+取消请求到达时，如果协程已经跑完，它就什么也做不了。
+
+```python run id="py.async.cancel-after-completion"
+import asyncio
+
+
+async def busy():
+    total = 0
+    for value in range(2_000_000):
+        total += value
+    print("busy() reached the end of its body without a suspension point")
+    return total
+
+
+async def main():
+    task = asyncio.create_task(busy())
+    await asyncio.sleep(0)
+    print("control came back only after busy() had finished:", task.done())
+    print("cancel() on a finished task returns:", task.cancel())
+    print("the task completed normally | cancelled:", task.cancelled())
+
+
+await main()
+```
+
+`busy` 在一次步进里跑完整段循环，`main` 直到那一刻之后才拿回控制权，因此取消请求落在了一个已经结束的 task 上。这不是竞态，而是协作式模型的直接结果：**取消的及时性等于协程到达下一个挂起点的及时性**。
+
+未开始的 task 是另一种边界：请求可以早于第一次步进。
+
+```python run id="py.async.cancel-before-start"
+import asyncio
+
+
+async def worker():
+    print("this line never runs")
+    await asyncio.sleep(0)
+
+
+async def main():
+    task = asyncio.create_task(worker())
+    task.cancel()
+    print("right after cancel() | cancelled:", task.cancelled(), "| finished:", task.done())
+    await asyncio.sleep(0)
+    print("after the loop handled it | cancelled:", task.cancelled())
+
+
+await main()
+```
+
+同一个请求对应两种状态：刚发出时 task 还没被标记，循环处理过之后才是已取消。`worker` 的函数体一次都没有执行——取消在它有第一个挂起点之前就已经生效。
+
+## 清理在 finally 里
+
+取消路径同样经过 `finally`，这是把释放逻辑放对位置的依据。
+
+```python run id="py.async.cancel-cleanup"
+import asyncio
+
+
+async def worker():
+    try:
+        await asyncio.sleep(10)
+    finally:
+        print("cleanup runs while the cancellation is in flight")
+
+
+async def main():
+    task = asyncio.create_task(worker())
+    await asyncio.sleep(0)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        print("the caller observes the cancellation | cancelled:", task.cancelled())
+
+
+await main()
+```
+
+`finally` 在 `CancelledError` 穿过协程时运行，调用方随后在 `await task` 处收到同一个异常。清理代码本身仍然可以使用挂起点：
+
+```python run id="py.async.finally-may-await"
+import asyncio
+
+
+async def worker():
+    try:
+        await asyncio.sleep(10)
+    finally:
+        await asyncio.sleep(0)
+        print("a suspension point inside finally still runs")
+
+
+async def main():
+    task = asyncio.create_task(worker())
+    await asyncio.sleep(0)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        print("the caller still sees the cancellation")
+
+
+await main()
+```
+
+代价是取消的完成被推迟到清理结束：`await task` 要等 `finally` 跑完才返回。
+
+## 吞掉取消
+
+`CancelledError` 是一个普通异常对象，因此它可以被 `try` 截住、也可以被上下文管理器抑制。截住之后不重新抛出，调用方就再也看不到取消。
+
+```python run id="py.async.swallowing-cancellation"
+import asyncio
+
+
+class Swallower:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        if exc_type is asyncio.CancelledError:
+            print("the manager ate the cancellation")
+            return True
+        return False
+
+
+async def worker():
+    async with Swallower():
+        await asyncio.sleep(10)
+    print("control continued past the with block")
+
+
+async def main():
+    task = asyncio.create_task(worker())
+    await asyncio.sleep(0)
+    task.cancel()
+    await task
+    print("the caller thinks it finished | cancelled:", task.cancelled(), "| finished:", task.done())
+
+
+await main()
+```
+
+10 秒的等待被取消了，但那个等待被当作「已处理」，于是协程继续执行、正常返回，`cancelled()` 为假。请求取消的一方——无论是超时、上层框架还是关闭流程——都会继续等待一个它以为已经停下的任务。这就是「取消也是控制流」的实际含义：截住它要么完成等价的收尾，要么重新抛出。
+
+## 超时
+
+```python run id="py.async.timeout"
+import asyncio
+
+
+async def slow():
+    try:
+        await asyncio.sleep(10)
+    except asyncio.CancelledError:
+        print("the deadline cancelled this task")
+        raise
+
+
+async def main():
+    try:
+        async with asyncio.timeout(0.001):
+            await slow()
+    except TimeoutError as failure:
+        print("the deadline reported:", type(failure).__name__)
+
+    print("the loop is still usable:", await asyncio.sleep(0, result="yes"))
+
+
+await main()
+```
+
+到期时 `timeout` 做两件事：取消正在被等待的工作，并把 `TimeoutError` 抛给 `with` 的调用者。被等待的协程看到的是普通的取消，因此它的清理路径照常运行。传入一个已经就绪的等待时不会触发取消：
+
+```python run id="py.async.timeout-not-expired"
+import asyncio
+
+
+async def main():
+    async with asyncio.timeout(10):
+        value = await asyncio.sleep(0, result="finished in time")
+    print("within the deadline:", value)
+
+    try:
+        async with asyncio.timeout(0.001):
+            await asyncio.sleep(10)
+    except TimeoutError:
+        print("past the deadline: TimeoutError reached the caller")
+
+
+await main()
+```
+
+## 屏蔽
+
+`shield` 把内部任务从这次取消中隔离出来，代价是「谁负责收尾」转移给了调用方。
+
+```python run id="py.async.shield"
+import asyncio
+
+
+async def important():
+    await asyncio.sleep(0.02)
+    return "finished anyway"
+
+
+async def main():
+    task = asyncio.create_task(important())
+    try:
+        async with asyncio.timeout(0.001):
+            await asyncio.shield(task)
+    except TimeoutError:
+        print("the caller timed out | the shielded task is finished:", task.done())
+    print("and it still produces its result:", await task)
+
+
+await main()
+```
+
+调用方的等待被取消了，`task` 没有被取消——它继续运行并给出结果。屏蔽不是保留控制权，而是把这次取消挡在外部：调用方仍要在超时之后决定那个还在运行的任务怎么办，或者等待它。
+
+## 结构化并发
+
+`TaskGroup` 让一组任务共享一个生命周期：任何一个失败，其余被取消，并且全部结束之后才退出 `async with` 块。
+
+```python run id="py.async.task-group"
+import asyncio
+
+
+async def failing():
+    await asyncio.sleep(0)
+    raise ValueError("boom")
+
+
+async def waiting(name):
+    try:
+        await asyncio.sleep(10)
+    finally:
+        print("cleanup of the sibling:", name)
+
+
+async def main():
+    try:
+        async with asyncio.TaskGroup() as group:
+            group.create_task(waiting("a"))
+            group.create_task(waiting("b"))
+            group.create_task(failing())
+    except Exception as failure:
+        print("the group reported:", type(failure).__name__)
+
+    print("the block is over only after every sibling has finished")
+
+
+await main()
+```
+
+两个等待 10 秒的子任务都收到了取消并运行了清理，失败被聚合成一个异常交给调用方。这正是 `create_task` 单独使用时不具备的保证：`TaskGroup` 会等待它创建的全部任务。
+
+`create_task` 与 `TaskGroup` 的差别在父任务被取消时最明显。
+
+```python run id="py.async.orphan-child"
+import asyncio
+
+
+async def child():
+    try:
+        await asyncio.sleep(0.01)
+    finally:
+        print("the child's cleanup ran")
+
+
+async def parent():
+    inner = asyncio.create_task(child())
+    try:
+        await asyncio.sleep(10)
+    finally:
+        print("the parent's cleanup ran | the child is finished:", inner.done())
+    return inner
+
+
+async def main():
+    task = asyncio.create_task(parent())
+    await asyncio.sleep(0)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        print("the parent was cancelled while its child was still running")
+    await asyncio.sleep(0.1)
+    print("the child outlived its parent and finished on its own")
+
+
+await main()
+```
+
+取消只作用于被取消的那个 task。`parent` 里创建但没有等待的 `child` 不在取消范围内：父任务的清理已经跑完，子任务仍在自己推进，并独立地走完自己的收尾。要在取消时收走整棵子树，就必须用会等待所有子任务的结构（`TaskGroup`）或显式地取消并等待它们。
+
+## 边界与失败情形
+
+- **取消是请求而不是指令**：发出请求与协程观察到它之间隔着任意长度的、没有挂起点的代码。
+- **清理会推迟取消的完成**：`finally` 必须跑完，`await task` 才返回。
+- **截住取消就要重新抛出**：捕获 `CancelledError` 后完成必要的收尾，再 `raise`；只 `pass` 等于把取消转换成正常结束。
+- **裸 `except:` 会吞掉取消**：`except Exception` 不会（`CancelledError` 继承 `BaseException`），裸 `except:` 会，并且同时吞掉其他 `BaseException`。
+- **屏蔽让收尾责任转移**：`shield` 之后那个任务仍在运行，谁等它、它失败算谁的，必须在代码里写清楚。
+- **超时精度由循环的时钟决定**：`timeout` 保证「不会早于」意义上的边界，不保证毫秒级的准时；调度与时钟都由运行环境提供（见 <CrossRef id="python.asyncio-scheduling" />）。
+- **未被取回的异常与取消由事件循环报告**：报告的位置是 worker 控制台而不是调用处，具体形式随实现变化。
+- **取消不会回滚已完成的部分**：取消发生在某个挂起点，之前已经产生的状态变化保持不变，收尾逻辑要按这个前提写。

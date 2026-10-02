@@ -9,27 +9,27 @@
 | 约定 | 内容 |
 | --- | --- |
 | 模块 | 目录名与模块 `id` 一致，如 `python`、`algorithms`；模块 `order` 取 10 的倍数 |
-| 子章节 | 模块下的目录，`_section.yaml` 给出 `id`、`label`、`order`、`summary`；子章节不产生页面 |
-| 课时 id | `<模块>.<主题>`，全小写点分隔，需要区分同名的不同子章节时才加入子章节段（如 `db.sql.joins`）。id 登记后长期稳定，标题、slug 与所在目录可以改 |
+| 子章节 | 模块下的目录；其 `_section.yaml` 只提供子章节的 `id`、`label`、`order`、`summary`，不提供页面（见 `doc/DESIGN.md` 第 5 节） |
+| 课时 id | `<模块>.<主题>`，全小写点分隔，需要区分同名的不同子章节时才加入子章节段（如 `db.sql.joins`）；唯一性与稳定性规则见 `doc/DESIGN.md` 第 5.3 节 |
 | slug | 扁平形式 `/python/mutability-and-copy`，不体现子章节层级 |
 | order | 同级唯一，取 10 的倍数 |
-| 状态 | 新课时以 `draft` 落盘；在开发服务器下通读并运行全部单元格后改为 `published`。可见性规则见 `doc/CONTENT_GUIDE.md` 第 3.2 节 |
+| 状态 | 本文件的课时表给出每个课时的落盘与发布状态；作者流程与可见性规则见 `doc/CONTENT_GUIDE.md` 第 3.2 节 |
 | 落盘 | 章节与它的课时同一批次落盘，避免空章节 |
 
 课时的内容要求（可执行单元格、术语与引用标记）由 `doc/CONTENT_GUIDE.md` 规定，本文件不重复。
 
 ## 2. 模块顺序
 
-| order | 模块 id | 名称 | 定位 |
-| --- | --- | --- | --- |
-| 10 | `python` | Python 语言 | 课程的编程基础与唯一的在线实验载体；程序语义模型在这里建立 |
-| 20 | `algorithms` | 数据结构、算法与复杂度 | 成本模型与表示选择；为后续每个模块提供分析语言 |
-| 30 | `operating-systems` | 操作系统 | 进程、内存、I/O 与资源；上层所有系统的运行时底座 |
-| 40 | `networks` | 计算机网络 | 分组、传输与应用协议；延迟、超时与重试的来源 |
-| 50 | `databases` | 数据库 | 关系语义、索引、事务与查询计划；持久状态与并发 |
-| 60 | `software-engineering` | 软件工程、Git 与测试 | 变更与验证的方法论 |
-| 70 | `distributed-systems` | 系统设计与分布式系统 | 部分失败下的推理；复制、一致性、投递语义与容量 |
-| 80 | `security` | 安全 | 威胁模型与信任边界；对抗性场景下的系统推理 |
+| order | 模块 id | 名称 |
+| --- | --- | --- |
+| 10 | `python` | Python 语言 |
+| 20 | `algorithms` | 数据结构、算法与复杂度 |
+| 30 | `operating-systems` | 操作系统 |
+| 40 | `networks` | 计算机网络 |
+| 50 | `databases` | 数据库 |
+| 60 | `software-engineering` | 软件工程、Git 与测试 |
+| 70 | `distributed-systems` | 系统设计与分布式系统 |
+| 80 | `security` | 安全 |
 
 顺序理由：Python 是唯一能在线运行的语言，其余模块的实验都在它上面建立；复杂度是后续所有性能与容量论断的记法，因此紧随其后；操作系统与网络提供数据库、分布式系统与安全所依赖的运行时与通信假设；软件工程讨论如何安全地变更这些系统，因此排在系统类模块之后；安全最后，因为它需要前七个模块的具体机制才能建立可信的威胁模型。
 
@@ -62,29 +62,29 @@
 | | 70 | `python.loops` | 循环 | ✓ |
 | | 80 | `python.functions` | 函数 | ✓ |
 | | 90 | `python.collections` | 列表、元组、字典与集合 | ✓ |
-| | 100 | `python.classes` | 类与实例 | 草稿 |
-| | 110 | `python.modules-basics` | 模块、导入与文件 | 草稿 |
-| | 120 | `python.errors-basics` | 错误与异常处理 | 草稿 |
-| `python.objects` | 10 | `python.names-and-objects` | 对象、身份与别名 | 草稿 |
-| | 20 | `python.mutability-and-copy` | 可变性、原地更新与复制 | 草稿 |
-| | 30 | `python.equality-and-hashing` | 相等与哈希契约 | 草稿 |
-| `python.functions` | 10 | `python.call-semantics` | 调用与参数绑定 | 草稿 |
-| | 20 | `python.scope-and-closure` | 作用域与闭包 | 草稿 |
-| | 30 | `python.decorators` | 函数作为值与装饰器 | 草稿 |
-| `python.iteration` | 10 | `python.iteration-protocol` | iterable 与 iterator | 草稿 |
-| | 20 | `python.generators` | generator 与 `yield` | 草稿 |
-| | 30 | `python.exceptions` | 异常、传播与 `finally` | 草稿 |
-| | 40 | `python.context-managers` | 上下文管理器与资源生命周期 | 草稿 |
-| `python.data-model` | 10 | `python.attributes-and-descriptors` | 属性查找与方法绑定 | 草稿 |
-| | 20 | `python.dunder-protocols` | 特殊方法与协议 | 草稿 |
-| | 30 | `python.inheritance-and-mro` | 继承与 MRO | 草稿 |
-| `python.representation` | 10 | `python.numbers-and-floats` | 整数、浮点数与近似 | 草稿 |
-| | 20 | `python.text-and-bytes` | 文本、bytes 与编码 | 草稿 |
-| `python.program` | 10 | `python.runtime-vs-language` | 语言保证与实现细节 | 草稿 |
-| | 20 | `python.modules-and-imports` | 模块、包与导入边界 | 草稿 |
-| | 30 | `python.typing` | 类型标注与静态契约 | 草稿 |
-| `python.async` | 10 | `python.asyncio-scheduling` | coroutine、task 与调度 | — |
-| | 20 | `python.cancellation-and-timeouts` | 取消、超时与清理 | — |
+| | 100 | `python.classes` | 类与实例 | ✓ |
+| | 110 | `python.modules-basics` | 模块、导入与文件 | ✓ |
+| | 120 | `python.errors-basics` | 错误与异常处理 | ✓ |
+| `python.objects` | 10 | `python.names-and-objects` | 对象、身份与别名 | ✓ |
+| | 20 | `python.mutability-and-copy` | 可变性、原地更新与复制 | ✓ |
+| | 30 | `python.equality-and-hashing` | 相等与哈希契约 | ✓ |
+| `python.functions` | 10 | `python.call-semantics` | 调用与参数绑定 | ✓ |
+| | 20 | `python.scope-and-closure` | 作用域与闭包 | ✓ |
+| | 30 | `python.decorators` | 函数作为值与装饰器 | ✓ |
+| `python.iteration` | 10 | `python.iteration-protocol` | iterable 与 iterator | ✓ |
+| | 20 | `python.generators` | generator 与 `yield` | ✓ |
+| | 30 | `python.exceptions` | 异常、传播与 `finally` | ✓ |
+| | 40 | `python.context-managers` | 上下文管理器与资源生命周期 | ✓ |
+| `python.data-model` | 10 | `python.attributes-and-descriptors` | 属性查找与方法绑定 | ✓ |
+| | 20 | `python.dunder-protocols` | 特殊方法与协议 | ✓ |
+| | 30 | `python.inheritance-and-mro` | 继承与 MRO | ✓ |
+| `python.representation` | 10 | `python.numbers-and-floats` | 整数、浮点数与近似 | ✓ |
+| | 20 | `python.text-and-bytes` | 文本、bytes 与编码 | ✓ |
+| `python.program` | 10 | `python.runtime-vs-language` | 语言保证与实现细节 | ✓ |
+| | 20 | `python.modules-and-imports` | 模块、包与导入边界 | ✓ |
+| | 30 | `python.typing` | 类型标注与静态契约 | ✓ |
+| `python.async` | 10 | `python.asyncio-scheduling` | coroutine、task 与调度 | ✓ |
+| | 20 | `python.cancellation-and-timeouts` | 取消、超时与清理 | ✓ |
 
 ### 3.2 数据结构、算法与复杂度（`algorithms`，order 20）
 
@@ -310,14 +310,14 @@
 | 批次 | 范围 | 状态 |
 | --- | --- | --- |
 | 1 | `python.basics` 精度修订（9 节正文） | 完成 |
-| 2 | `python.classes`、`python.modules-basics`、`python.errors-basics` | 已落盘待审核 |
-| 3 | `python.objects`：对象与共享状态的三节课 | 已落盘待审核 |
-| 4 | `python.functions`：调用语义、作用域与闭包、装饰器 | 已落盘待审核 |
-| 5 | `python.iteration`：迭代协议、generator、异常、上下文管理器 | 已落盘待审核 |
-| 6 | `python.data-model`：属性查找、特殊方法、继承与 MRO | 已落盘待审核 |
-| 7 | `python.representation`：数值与浮点、文本与 bytes | 已落盘待审核 |
-| 8 | `python.program`：语言保证与实现细节、导入边界、类型标注 | 已落盘待审核 |
-| 9 | `python.async`：coroutine 与调度、取消与超时清理 | 计划 |
+| 2 | `python.classes`、`python.modules-basics`、`python.errors-basics` | 完成 |
+| 3 | `python.objects`：对象与共享状态的三节课 | 完成 |
+| 4 | `python.functions`：调用语义、作用域与闭包、装饰器 | 完成 |
+| 5 | `python.iteration`：迭代协议、generator、异常、上下文管理器 | 完成 |
+| 6 | `python.data-model`：属性查找、特殊方法、继承与 MRO | 完成 |
+| 7 | `python.representation`：数值与浮点、文本与 bytes | 完成 |
+| 8 | `python.program`：语言保证与实现细节、导入边界、类型标注 | 完成 |
+| 9 | `python.async`：coroutine 与调度、取消与超时清理 | 完成 |
 | 10 | `algorithms.complexity`、`algorithms.sequences` | 已落盘待审核（`lower-bounds`、`strings` 待写） |
 | 11 | `algorithms.maps`：哈希表、有序映射、堆 | `hash-tables` 已落盘；其余计划 |
 | 12 | `algorithms.graphs` | 计划 |
@@ -343,5 +343,3 @@
 - 拆分课时：新课时取新 `id`，旧 `id` 保留给拆分后覆盖原有范围的那一节。
 - 删除课时：先清引用（`<CrossRef>`、术语与示例的使用），再删文件与可能空掉的章节。
 - 调整模块或子章节顺序：改本文件与对应 `_section.yaml` 的 `order`，两者必须一致。
-- 版本敏感的论断：升级 Pyodide 或数据库引擎后，复查本文件标记为依赖运行时行为的课时。
-- 本文件的课时表必须与 `content/` 中的实际文件一致；表格与文件冲突时以文件为准，并立即修正表格。

@@ -3,7 +3,7 @@ id: python.modules-basics
 slug: /python/modules-basics
 order: 110
 title: 模块、导入与文件
-status: draft
+status: published
 objectives:
   - 说明 `import` 语句把什么绑定到了哪个名字，以及模块体在什么时候执行
   - 用 `__name__` 判断一个文件是被导入还是作为程序运行，并写出脚本入口
@@ -220,13 +220,5 @@ print("sys.path is the search list for imports:", [entry or "." for entry in sys
 - **默认编码取决于环境**：不写 `encoding` 的代码在开发机上正常、在别的环境上读错，跨平台代码一律显式指定。
 - **文本模式还会转换换行**：写出的 `\n` 在某些平台上变成两个字节，需要精确控制字节内容时用二进制模式并在应用层决定编码。
 - **`read()` 不带参数会读入整个文件**：大文件要分批读，或按行迭代。
-- **模块搜索路径与包结构**：`sys.path` 的来源、包与 `__init__.py`、相对导入、循环导入的失败方式属于后续的语言边界内容，本课只覆盖单文件模块的导入。
+- **模块搜索路径与包结构**：`sys.path` 的来源、包与 `__init__.py`、相对导入、循环导入的失败方式属于导入系统的完整模型，见 <CrossRef id="python.modules-and-imports" />；本课只覆盖单文件模块的导入与文件读写。
 - **导入发生在程序启动的早期**：导入失败会在入口处直接终止程序，因此导入语句的位置本身是一种依赖声明。
-
-## 小结
-
-- 模块是文件执行后留下的命名空间；`import` 把它绑定为名字，`from ... import` 只绑定其中的属性。
-- 模块体每个进程只执行一次，缓存在 `sys.modules` 里；重复导入拿到同一个对象。
-- `__name__` 区分「被导入」与「作为程序运行」，`if __name__ == "__main__":` 让一个文件同时是库和程序。
-- 文本模式在字节之上加一层编解码，`encoding` 必须显式指定；`with` 负责关闭文件。
-- 模块找不到、属性不存在、文件不存在分别抛出 `ModuleNotFoundError`、`AttributeError`、`FileNotFoundError`；相对路径按工作目录解析。

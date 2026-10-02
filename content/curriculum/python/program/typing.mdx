@@ -3,7 +3,7 @@ id: python.typing
 slug: /python/typing
 order: 30
 title: 类型标注与静态契约
-status: draft
+status: published
 objectives:
   - 说明标注在什么时刻求值、存在哪里，以及解释器为什么不检查它
   - 区分标注能表达的约束（结构、名称、可空性）与它无法表达的约束（取值范围、不变量）
@@ -125,7 +125,7 @@ print("the check only looks for the method:", isinstance(WrongSignature(), Reade
 print("it does not compare signatures:", WrongSignature().read(10), FileReader().read())
 ```
 
-`Protocol` 把「有哪些方法」写成可检查的契约，对象不需要继承它就能通过 `isinstance`——这与基础课里的抽象基类检查是同一件事，区别在于 `Protocol` 同时可以被静态工具读取。`@runtime_checkable` 的运行时检查只验证**方法是否存在**，不验证签名：`WrongSignature.read(size)` 同样通过检查。静态工具会报告这个不一致，运行时不会。
+`Protocol` 把「有哪些方法」写成可检查的契约，对象不需要继承它就能通过 `isinstance`——这与 <CrossRef id="python.dunder-protocols" /> 里的抽象基类检查是同一件事，区别在于 `Protocol` 同时可以被静态工具读取。`@runtime_checkable` 的运行时检查只验证**方法是否存在**，不验证签名：`WrongSignature.read(size)` 同样通过检查。静态工具会报告这个不一致，运行时不会。
 
 **有意识地使用这一点**：结构类型描述能力，不描述身份；用协议表达「需要能读」，用类表达「是一个」。两者都表达了什么，也就都隐含地排除了什么。
 
@@ -163,16 +163,6 @@ print("  ", Sensor("inlet", "not a number").reading)
 - **可空性是标注的一部分**：`x: int` 与 `x: int | None` 在检查器看来不同，前者下使用 `x` 是安全的，后者必须判空；漏写 `| None` 会让检查器放过一个真实的空值缺陷。
 - **容器元素的方差**：`list[int]` 不接受 `list[bool]` 的赋值（可变容器既不协变也不逆变），只读的序列类型才允许协变；这类规则由检查器实现，运行时没有对应机制。
 - **字符串形式的注解需要解析**：使用 `from __future__ import annotations` 时注解以字符串保存，`typing.get_type_hints` 负责求值；本运行时的行为可以直接在单元格里看到。
-- **单元格顶层不是模块命名空间**：本课程的可执行单元格没有模块级 `__annotations__`，要观察标注存放的位置时用类体或函数。
 - **循环引用与前置声明**：类型之间互相引用时，字符串注解与 `if TYPE_CHECKING:` 块是常规写法；导入开销与运行时的循环导入问题因此与标注有关。
 - **检查器是工具链的一部分**：选定检查器、严格程度与是否在 CI 中阻断提交属于交付流程，本课只界定标注的语义与它的失效方式。
 - **标注错误的代价不对称**：遗漏标注只损失检查覆盖；写错的标注会让检查器放过缺陷并让读者相信它，比不写更糟。
-
-## 小结
-
-- 标注是定义时求值一次的表达式，存放在 `__annotations__` 里，解释器运行时不再检查。
-- 函数内部的标注不存储；只有标注没有赋值不创建名字。
-- `list[int]`、`int | None` 是标注语法，不是运行时类型；`isinstance` 只接受类与少数特殊形式。
-- `Protocol` 加 `@runtime_checkable` 提供结构检查，但只检查方法是否存在，不检查签名。
-- 库读取标注时它变成可执行规格（`dataclasses`、`get_type_hints`），但仍然是规格而不是守卫。
-- 类型层面的约束交给静态工具，取值范围与不变量必须由运行时校验承担；未标注的边界数据会静默地让检查失效。

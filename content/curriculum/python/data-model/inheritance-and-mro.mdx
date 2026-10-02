@@ -3,7 +3,7 @@ id: python.inheritance-and-mro
 slug: /python/inheritance-and-mro
 order: 30
 title: 继承与 MRO
-status: draft
+status: published
 objectives:
   - 说明继承改变了查找的哪一步，以及为什么属性不会被复制到子类
   - 读出 `__mro__` 并解释为什么菱形继承的方法解析顺序不是深度优先的左到右
@@ -238,12 +238,3 @@ print("every MRO ends at object:", D.__mro__[-1].__name__, issubclass(D, object)
 - **继承是为了「是一种」而不是为了「有这些方法」**：只为复用实现而继承会把无关的接口一起带进子类，需要组合时用持有对象。抽象与接口设计的判据属于设计模块，本课只讲机制。
 - **虚基类注册是类型检查的例外**：`SomeABC.register(SomeClass)` 让 `isinstance` 为真，但不改变 MRO，也不带来任何方法；`collections.abc` 的结构性检查见 <CrossRef id="python.dunder-protocols" />。
 - **异常层次是本机制的一次应用**：自定义异常继承 `Exception`，`except` 的匹配沿类型层次上溯；异常类型的匹配规则见 <CrossRef id="python.exceptions" />。
-
-## 小结
-
-- `class Child(Base)` 只记录基类关系，不复制属性；查找沿 `Child.__mro__` 推进。
-- MRO 由 C3 线性化在类创建时算出，保证子类在前、基类声明顺序保留；无法满足时类创建抛 `TypeError`。
-- 菱形继承的解析顺序不是朴素深度优先：`D(B, C)` 且 `B`、`C` 同源时，`A` 排在 `C` 之后。
-- `super()` 是「`type(self).__mro__` 中当前类之后的第一个类」，在多继承里不是直接父类；每层都转发才能让初始化链完整。
-- 覆盖时用 `super().method(...)` 扩展并传递返回值；丢掉返回值是最常见的覆盖缺陷。
-- `isinstance`/`issubclass` 沿 MRO 判断，`type(x) is T` 只比较实际类型。

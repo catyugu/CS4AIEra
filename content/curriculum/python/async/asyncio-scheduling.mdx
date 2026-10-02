@@ -1,0 +1,190 @@
+---
+id: python.asyncio-scheduling
+slug: /python/asyncio-scheduling
+order: 10
+title: coroutine、task 与调度
+status: published
+objectives:
+  - 说明调用 `async def` 定义的函数得到什么，并指出函数体从哪一刻开始执行
+  - 区分 `await` 的两个效果：驱动被等待的对象与在挂起点交回控制权
+  - 说明 task 与 coroutine 的关系，以及 task 在什么条件下获得执行机会
+  - 对一组只依赖就绪队列的任务预测输出顺序，并指出哪些顺序不可推理
+---
+
+## 目的
+
+本课建立协作式并发的执行模型：一段 `async def` 代码什么时候运行、由谁驱动、在哪些位置让出控制权。
+
+读异步代码的常见错误是把 `await` 当成「发起一次调用」或「等待一段时间」。它实际做的是交出控制权。分清楚「谁在驱动谁」之后，输出顺序、卡住的原因与任务之间的关系都可以从代码结构推出。
+
+## 模型
+
+- `async def` 定义的是协程函数。调用它不执行函数体，而是返回一个**协程对象**（coroutine object）。协程对象是一次还没有开始的计算。
+- 协程对象是可等待对象：`await expr` 驱动它运行，直到它返回或暂停在挂起点。
+- `await` 有两个效果，在同一个表达式里一起发生：把当前协程挂起、把控制权交回驱动它的调度器，并把被等待对象的结果作为表达式的值。被等待的对象已经就绪时，控制权不离开当前协程。
+- **task** 是被调度器驱动的协程。`asyncio.create_task(coro)` 立即返回一个 task 对象，并把该协程登记进事件循环；协程在下一个挂起点之后才有机会被步进。
+- **事件循环**持有就绪队列，反复取出下一个条目并推进它。协程只在**挂起点**让出控制权：`await` 一个尚未就绪的对象是挂起点，`await` 一个已经就绪的对象不是。
+- 因此切换总是由被运行的代码自己发起，任何位置都不会被抢占。一个不释放控制权的函数会占住整个循环。
+- 可以推理的是**就绪队列的先后**：同一轮里入队的顺序是确定的（先进先出），因此只依赖挂起顺序的实验有唯一输出。不可以推理的是**基于时间的相对顺序**：谁先醒来由循环的时钟与当时的负载决定。
+
+`await` 与协程对象的规定在 Python 语言参考的表达式与数据模型部分；task 与事件循环是标准库 `asyncio` 的契约，不是语言语法的一部分。
+
+## 调用 async def 不执行任何东西
+
+```python run id="py.async.call-returns-coroutine"
+async def greet(name):
+    print("the body starts here")
+    return "hello " + name
+
+
+pending = greet("Ada")
+print("calling an async def returned:", type(pending).__name__)
+print("nothing in the body has run yet")
+
+value = await pending
+print("the awaited value is:", value)
+```
+
+调用返回的是 `coroutine` 对象，函数体一行都没有执行：`the body starts here` 出现在 `await` 之后。这一点把「创建一个计算」与「运行这个计算」分开——协程对象可以被传递、放进容器、稍后再驱动，也可以永远不被驱动。
+
+## await 驱动被等待的对象
+
+```python run id="py.async.await-drives"
+import asyncio
+
+
+async def worker(name):
+    print(name, "starts")
+    await asyncio.sleep(0)
+    print(name, "resumes")
+
+
+async def main():
+    print("main reaches the await")
+    await worker("A")
+    print("main resumes after worker returned")
+
+
+await main()
+```
+
+`await worker("A")` 把控制权交给 `worker` 的协程，直到它返回；`main` 在那一行之后才继续。整段代码的先后顺序由代码结构决定，与 `sleep(0)` 的时长无关——它要求的只是「让出一次」。
+
+## task 什么时候运行
+
+`create_task` 把协程交给循环，而不是当场执行它。
+
+```python run id="py.async.task-runs-later"
+import asyncio
+
+
+async def worker(name):
+    print("task", name, "is running")
+    return name
+
+
+async def main():
+    task = asyncio.create_task(worker("X"))
+    print("create_task returned immediately | finished:", task.done())
+    print("the coroutine has not started")
+    await asyncio.sleep(0)
+    print("after one suspension | finished:", task.done())
+    print("the task's result:", await task)
+
+
+await main()
+```
+
+`create_task` 之后 task 处于「已登记、未运行」状态，`done()` 为假；协程体在 `main` 到达第一个挂起点之后才被步进。`await task` 取出结果：task 已经完成时它立即返回，未完成时它挂起当前协程直到 task 结束。
+
+## 只依赖队列顺序的输出
+
+两个 task 交替推进，而不是各自跑完。每一轮的入队顺序是确定的，因此输出有唯一结果。
+
+```python run id="py.async.ready-queue"
+import asyncio
+
+
+async def worker(name, steps):
+    for step in range(steps):
+        print(name, step)
+        await asyncio.sleep(0)
+
+
+async def main():
+    await asyncio.gather(worker("a", 2), worker("b", 2))
+
+
+await main()
+```
+
+输出是 `a 0`、`b 0`、`a 1`、`b 1`：`sleep(0)` 把当前 task 放到就绪队列末尾，循环于是先去推进另一个 task。交错不是随机调度，而是队列顺序的结果。
+
+同样的性质解释了 `gather` 的返回值：任务的**完成顺序**不影响结果的**排列顺序**，结果按传入顺序排。
+
+```python run id="py.async.gather-order"
+import asyncio
+
+
+async def delayed(value, turns):
+    for _ in range(turns):
+        await asyncio.sleep(0)
+    return value
+
+
+async def main():
+    results = await asyncio.gather(delayed("first", 3), delayed("second", 1), delayed("third", 2))
+    print("the result list follows the argument order:", results)
+
+
+await main()
+```
+
+## 没有挂起点就没有交错
+
+交错只发生在挂起点。一个内部不挂起的函数从头到尾占住循环。
+
+```python run id="py.async.no-suspension-point"
+import asyncio
+
+
+async def compute(size):
+    return sum(range(size))
+
+
+async def report(name, size):
+    print(name, "entered; nothing can interleave inside this function")
+    result = await compute(size)
+    print(name, "left with", result)
+
+
+async def main():
+    await asyncio.gather(report("a", 10_000), report("b", 10_000), report("c", 10_000))
+
+
+await main()
+```
+
+`await compute(size)` 不是挂起点：`compute` 不等待任何东西，它在被驱动时一次跑完。三个 task 因此依次完成，输出里没有任何交错。把三份工作真正重叠起来，需要它们各自到达一个挂起点，而不是把它们放进同一个 `gather`。
+
+## 事件循环由环境提供
+
+```python run id="py.async.loop-provided"
+import asyncio
+
+loop = asyncio.get_running_loop()
+print("the cell already runs inside a loop:", loop.is_running())
+print("whose implementation is:", type(loop).__module__ + "." + type(loop).__name__)
+print("this loop was provided by the environment, not created by the cell")
+```
+
+单元格的顶层代码本身运行在一个已经存在的事件循环里，因此单元格用顶层 `await` 驱动协程，而不是自己创建循环。打印出的实现名说明循环由运行环境提供，属于环境事实：本运行时是 Pyodide 的 WebLoop，语言只规定 task 与循环要满足 `asyncio` 的接口，不规定具体类型或时钟精度。
+
+## 边界与失败情形
+
+- **协程不被驱动就不运行**：调用 `async def` 函数而不 await 它，函数体永远不执行；解释器在对象被回收时给出「协程从未被 await」的警告，告警点不在调用处。
+- **不挂起的代码占住循环**：`while True: pass` 会让同一循环里其他 task 永远拿不到执行机会。本课程的**停止**按钮通过终止 worker 结束执行，它不是协作式的打断；`sleep` 之类的挂起点才是。
+- **顺序不是时间保证**：`sleep(0.01)` 与 `sleep(0.02)` 的相对完成顺序由循环的时钟与负载决定。测试里依赖它，就是把调度器实现写进了断言。
+- **task 的具体类型是实现**：`asyncio.current_task()` 给出当前正在被步进的 task，`task.get_name()` 给出名字。`type(task)` 的类名随运行环境变化，语言只规定 `asyncio.Task` 的接口。
+- **异常在 await 处交给调用者**：被等待对象抛出的异常在 `await` 表达式处重新抛出，之后按普通异常传播处理（见 <CrossRef id="python.exceptions" />）。未被取回的 task 异常由事件循环报告到 worker 控制台。
+- **同步的耗时调用不会被调度**：在协程里直接调用一个长时间返回的同步函数，循环内的其他 task 全部停住。让阻塞部分离开循环属于运行时结构问题，本课只建立语言层面的执行模型。

@@ -3,7 +3,7 @@ id: python.context-managers
 slug: /python/context-managers
 order: 40
 title: 上下文管理器与资源生命周期
-status: draft
+status: published
 objectives:
   - 说明 `with` 语句在进入、正常退出与异常退出三种路径上分别调用哪些方法
   - 判断 `__exit__` 的返回值如何影响异常的传播，并预测调用方能否看到失败
@@ -248,11 +248,3 @@ print("object still exists:", lock is not None, "| resource released:", not lock
 - **`yield` 未包在 `try/finally` 中会漏掉异常路径**：这是 `contextmanager` 最常见的错误。
 - **不要用终结器代替 `with`**：`__del__` 的运行时机不在语言约定内，含环对象要等垃圾回收。
 - **释放顺序是获取顺序的逆序**：跨对象的依赖顺序必须由嵌套结构表达，不能靠调用时机凑巧。
-
-## 小结
-
-- `with` 展开为 `__enter__`、`try` 体、以及所有路径上都执行的 `__exit__`。
-- `__exit__` 收到异常三元组，正常退出时为 `None`；返回真值抑制异常。
-- 多个管理器从左到右进入、从右到左退出。
-- `@contextmanager` 把生成器的 `yield` 前后映射为进入与退出；异常在 `yield` 处抛回，因此必须用 `try/finally` 包住它。
-- 对象存活与资源占用是两件事；释放点写在 `with` 或 `finally` 里，不依赖回收时机。

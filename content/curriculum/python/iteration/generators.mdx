@@ -3,7 +3,7 @@ id: python.generators
 slug: /python/generators
 order: 20
 title: generator 与 yield
-status: draft
+status: published
 objectives:
   - 说明调用生成器函数时立即发生了什么，以及函数体从哪一刻开始执行
   - 解释 `yield` 如何保存局部状态，并预测两次 `next` 之间哪些名字保持取值
@@ -200,12 +200,3 @@ print("eager version holds every element:", len(materialised))
 - **被丢弃的生成器不会立即结束**：`close()` 在挂起点抛 `GeneratorExit`，`finally` 在此时运行；不显式关闭时，结束时机取决于引用何时被回收。资源清理不应依赖这一点（见 <CrossRef id="python.context-managers" />）。
 - **生成器表达式也是一次性迭代器**：传给两个消费者时，第二个看到剩余部分。
 - **异常在恢复时抛出**：生成器体内的错误会出现在 `next()` 的调用点，而不是创建生成器的地方，回溯里同时包含两侧的帧。
-
-## 小结
-
-- 生成器函数调用时只创建生成器对象，函数体在第一次 `next` 时开始执行。
-- `yield` 挂起时保留整帧局部状态，下一次 `next` 从挂起处继续。
-- `yield` 是表达式，值由 `send` 提供；`next` 等价于 `send(None)`，第一次推进必须用 `next`。
-- `return` 的值通过 `StopIteration.value` 交给消费端，`yield from` 把子可迭代对象整体委托出去并转发它的返回值。
-- 从生成器体内逃出的 `StopIteration` 被转换为 `RuntimeError`。
-- 惰性管道不物化中间结果，代价是逐元素开销与一次性消费。
