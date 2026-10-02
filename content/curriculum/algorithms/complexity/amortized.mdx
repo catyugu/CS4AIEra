@@ -1,0 +1,230 @@
+---
+id: algorithms.amortized
+slug: /algorithms/amortized
+order: 20
+title: 摊还分析
+status: draft
+objectives:
+  - 用聚合、记账与势能三种方法证明一串操作的总成本，并说明三者的关系
+  - 推导动态数组追加的摊还常数成本，并写出所用的势函数与不变式
+  - 区分「摊还上界」与「单次最坏界」，说明前者为什么不能作为延迟保证
+  - 判断一段序列的成本上界来自每次操作，还是来自元素在一生中被处理的次数
+---
+
+## 目的
+
+上一课区分了最坏、平均与摊还三种情形。本课把「摊还」变成可计算的东西：给出一串操作的总成本上界，并说明这个上界用什么代价换来。
+
+结论的形式是「`m` 次操作的总成本是 `Θ(m)`」，因此平均到每次操作是常数。这个「平均」不是对输入分布取期望，而是对**同一输入下的操作序列**求和：它不需要任何随机性假设，也不需要哈希或分布均匀。代价是它对单次操作不作出任何承诺。
+
+## 模型
+
+设一串共 `m` 次操作，第 `i` 次的真实成本是 `c_i`，总成本 `T(m) = Σc_i`。摊还成本定义为：
+
+```text
+单次摊还成本 = T(m) / m
+```
+
+三种给出了同样的分摊结果、但推理路径不同的方法：
+
+| 方法 | 做法 | 需要什么 |
+| --- | --- | --- |
+| 聚合分析 | 直接求 `T(m)` 的上界，再除以 `m` | 对整串操作计数 |
+| 记账法 | 给每次操作收取固定费用，预收的部分存成「信用」，用来支付后续的昂贵操作 | 一个信用不变式，保证余额不为负 |
+| 势能法 | 定义状态函数 `Φ`，令摊还成本 `â_i = c_i + Φ_i − Φ_{i-1}` | 一个非负的势函数 |
+
+势能法与记账法等价：势就是「存起来的信用总额」。势能法的形式化版本更适合写证明，因为 `Σâ_i = T(m) + Φ_m − Φ_0` 是一个恒等式——只要 `Φ_m ≥ Φ_0`，摊还总和就不低于真实总和。
+
+**摊还上界主张什么、不主张什么**：
+
+- 主张：任何长度 `m` 的操作序列，总成本不超过 `m · 单次摊还成本`。
+- 不主张：某一次操作很快。单次最坏成本可以远高于摊还成本。
+- 不主张：概率。没有「平均而言」的分布假设，也不需要随机化。
+- 不主张：中途停止时的保证。序列只跑一部分，省下的信用没有兑现成工作时间。
+
+因此能否用摊还结论，取决于系统关心的是**吞吐**还是**单次延迟**：批量导入、按批处理的流水线适合前者；在线请求路径、实时与交互式系统需要单次上界。
+
+## 势能法看动态数组
+
+动态数组的追加操作大多数是常数时间，偶尔一次要复制全部已有元素。用势函数 `Φ = 2·size − capacity` 分析：`Φ` 是「已经写入但尚未用于复制的预留空间」，扩容前它足够支付复制。
+
+```python run id="alg.amortized.potential"
+class GrowingArray:
+    """A dynamic array that reports the potential of each append."""
+
+    def __init__(self):
+        self.capacity = 0
+        self.size = 0
+
+    def potential(self):
+        return 2 * self.size - self.capacity
+
+    def append(self):
+        before = self.potential()
+        if self.size == self.capacity:
+            real_cost = 1 + self.size          # write the element, copy the existing ones
+            self.capacity = max(1, self.capacity * 2)
+        else:
+            real_cost = 1
+        self.size += 1
+        after = self.potential()
+        return self.capacity, real_cost, after - before, real_cost + after - before
+
+
+array = GrowingArray()
+rows = [array.append() for _ in range(16)]
+
+print(f"{'n':>3} {'capacity':>8} {'real':>5} {'dPhi':>5} {'amortized':>9}")
+for step, (capacity, real, delta, amortized) in enumerate(rows, start=1):
+    print(f"{step:>3} {capacity:>8} {real:>5} {delta:>5} {amortized:>9}")
+
+total_real = sum(real for _, real, _, _ in rows)
+total_amortized = sum(amortized for _, _, _, amortized in rows)
+print("real costs:", [real for _, real, _, _ in rows])
+print("amortized costs:", [amortized for _, _, _, amortized in rows])
+print("sum of real costs:", total_real, "| sum of amortized costs:", total_amortized)
+print("final potential:", array.potential())
+print("identity T + Phi_m - Phi_0 = sum of amortized:", total_real + array.potential() == total_amortized)
+print("worst single operation:", max(real for _, real, _, _ in rows))
+```
+
+每一个发生了复制的步骤都落回同一水平：`dPhi` 在大操作上是负的（信用被花掉），在小操作上是正的（信用被存入），两者相加得到固定的摊还成本。最后一次的大复制由前面各次存下的信用支付，因此单次成本的尖峰不会改变整串的结论。
+
+这段代码说明了两件事，第二件比第一件重要：16 次追加的总真实成本约两倍于 16，`Φ` 在末尾还留着 `2·size − capacity` 的正余额，因此 `T + Φ_m − Φ_0` 恰好等于摊还成本之和。恒等式成立说明「预收的信用」不是记账技巧，而是真实成本在时间上被推迟的部分。
+
+## 聚合分析看栈
+
+一个栈通常只支持 `push` 与 `pop`。给它加一个 `multipop(k)`：弹出 `min(k, size)` 个元素。单次 `multipop` 的成本是 `Θ(n)`，看起来让整串操作变贵了。
+
+```python run id="alg.amortized.aggregate-multipop"
+def run_sequence(operations):
+    """Return (total element operations, worst single operation, remaining size)."""
+    stack = []
+    total = 0
+    worst = 0
+    for kind, count in operations:
+        if kind == "push":
+            for value in range(count):
+                stack.append(value)
+                total += 1
+            worst = max(worst, count)
+        else:
+            popped = min(count, len(stack))
+            for _ in range(popped):
+                stack.pop()
+                total += 1
+            worst = max(worst, popped)
+    return total, worst, len(stack)
+
+
+sequences = {
+    "push only": [("push", 1)] * 32,
+    "push then multipop": [("push", 1)] * 32 + [("multipop", 32)],
+    "interleaved": [item for _ in range(16) for item in (("push", 1), ("push", 1), ("multipop", 1))],
+    "repeated whole-stack drains": [item for _ in range(8) for item in ([("push", 1)] * 8 + [("multipop", 8)])],
+}
+
+for name, operations in sequences.items():
+    total, worst, remaining = run_sequence(operations)
+    print(f"{name:28s} operations={len(operations):3d} work={total:4d} work/op={total / len(operations):.2f} worst single={worst:3d} remaining={remaining}")
+```
+
+四个序列的单次最差成本分别是 `1`、`32`、`1`、`8`，但 `work/op` 都不超过 2。原因与结构无关：每个元素只被压入一次、弹出至多一次，因此整串操作的总工作量不超过 `2m`，与 `multipop` 的参数无关。
+
+**摊还成本来自元素的总处理次数，而不是每次操作的常数时间。** 这是聚合分析的核心，也是判断一个结论能否套用时的第一问：这段序列里，每个元素最多被处理几次。
+
+## 势能法看二进制计数器
+
+一个 `k` 位计数器每次加一，翻转从最低位开始的连续 1。单次加一可以翻转全部 `k` 位，也就是 `Θ(log m)`。
+
+```python run id="alg.amortized.binary-counter"
+def increment(bits):
+    """Add one, return the number of bit flips."""
+    flips = 0
+    for index in range(len(bits)):
+        flips += 1
+        if bits[index] == 0:
+            bits[index] = 1
+            return flips
+        bits[index] = 0
+    return flips  # wrapped back to zero
+
+
+width = 32
+for count in (8, 16, 64, 256):
+    bits = [0] * width
+    flips_per_increment = [increment(bits) for _ in range(count)]
+    print(
+        f"increments={count:4d} total flips={sum(flips_per_increment):4d} "
+        f"flips/increment={sum(flips_per_increment) / count:.2f} worst single={max(flips_per_increment):2d}"
+    )
+```
+
+第 `i` 位每 `2^i` 次加一翻转一次，因此 `m` 次加一的总翻转次数是 `Σ floor(m / 2^i) < 2m`：摊还常数成本，而单次最坏是 `Θ(log m)`。势函数是 `Φ = 计数器中 1 的个数`，一次加一翻转 `t + 1` 位（其中 `t` 位由 1 变 0）时，`â = (t + 1) + (1 − t) = 2`。
+
+## 摊还不是延迟保证
+
+把三个结构的数字放在一起，区别就清楚了：摊还成本衡量整串操作，单次成本衡量一次调用。
+
+```python run id="alg.amortized.latency-gap"
+class GrowingArray:
+    def __init__(self):
+        self.capacity = 0
+        self.size = 0
+
+    def append(self):
+        if self.size == self.capacity:
+            real_cost = 1 + self.size
+            self.capacity = max(1, self.capacity * 2)
+        else:
+            real_cost = 1
+        self.size += 1
+        return real_cost
+
+
+def increment(bits):
+    flips = 0
+    for index in range(len(bits)):
+        flips += 1
+        if bits[index] == 0:
+            bits[index] = 1
+            return flips
+        bits[index] = 0
+    return flips
+
+
+count = 4096
+array = GrowingArray()
+append_costs = [array.append() for _ in range(count)]
+
+bits = [0] * 64
+flip_costs = [increment(bits) for _ in range(count)]
+
+for name, costs in (("dynamic array append", append_costs), ("binary counter", flip_costs)):
+    total = sum(costs)
+    print(
+        f"{name:22s} amortized={total / count:6.2f} "
+        f"worst single={max(costs):5d} ratio={max(costs) / (total / count):8.1f}x"
+    )
+print("the same operations, two different questions: throughput and tail latency")
+```
+
+同一个序列里，摊还成本是常数，而单次成本可以是摊还成本的上百倍。**决定用哪个结论的是系统的问题**：批量任务关心总吞吐，摊还结论足够；在线路径关心尾延迟，必须看单次最坏成本。把摊还结论当作延迟保证写进接口文档，是把一个正确的数学结论用在了它不覆盖的场合。
+
+## 边界与失败情形
+
+- **摊还不限制单次延迟**：势函数只能约束总量，不能约束分布。
+- **摊还结论依赖「操作序列足够长」**：`m` 很小时常数因子主导，结论没有实际含义。
+- **中途终止会破坏结论**：序列被打断时，预收的信用还没有兑现成工作，此时真实成本可能高于摊还总和。
+- **最坏情形分析不可省**：需要单次上界时（实时、交互、超时预算）必须单独给出最坏界。
+- **扩容策略决定摊还结论成立与否**：固定增量扩容的总成本是 `Θ(n²)`，几何扩容是 `Θ(n)`；这一取舍的细节见 <CrossRef id="algorithms.arrays-and-lists" />。
+- **摊还 ≠ 平均情形**：后者是对输入分布取期望，需要说明分布假设（见 <CrossRef id="algorithms.cost-model" />）；前者不需要任何分布假设。
+- **不要把「摊还 O(1)」写成「O(1)」**：接口描述里省略「摊还」二字，会让调用方对单次成本作出错误推断。
+
+## 小结
+
+- 摊还成本是一串操作总成本除以操作数；推论需要论证，不能从「大多数情况很快」推出。
+- 聚合分析对整串操作计数；记账法预收固定费用并维持信用不变式；势能法把信用写成状态函数，`â = c + ΔΦ`。
+- 动态数组追加的势函数是 `Φ = 2·size − capacity`，每次追加的摊还成本是常数；二进制计数器的势是 1 的个数，每次加一的摊还成本是 2。
+- 栈加 `multipop` 后单次成本可以是 `Θ(n)`，但每个元素只被压入一次、弹出一次，整串总成本仍是 `Θ(m)`。
+- 摊还结论回答吞吐问题，单次最坏界回答延迟问题；两者不能互相替换。

@@ -1,0 +1,199 @@
+---
+id: algorithms.stacks-and-queues
+slug: /algorithms/stacks-and-queues
+order: 20
+title: 栈、队列与 deque
+status: draft
+objectives:
+  - 写出栈、队列与双端队列的操作契约，包括空结构上的行为与容量约束
+  - 按成本模型比较动态数组、环形缓冲与链式表示在两端的操作成本，并指出结论属于哪种情形
+  - 说明为什么用 Python `list` 实现队列是错误表示，并用移动计数给出证据
+  - 写出环形缓冲的表示不变量，并据此判断一次操作序列是否破坏了它
+---
+
+## 目的
+
+本课先固定抽象类型（ADT）的操作契约，再比较它有哪些具体表示。
+
+上一课看到连续数组在头部插入删除上是 `Θ(n)`。本课把这个后果放进实际用途：栈、队列与双端队列这三个用途需要不同的访问端点，因此需要不同的表示。结论仍然是「表示决定成本」——同一组操作契约可以由代价完全不同的结构承担。
+
+## 模型
+
+三个抽象类型由「允许在哪些端点操作」区分：
+
+| 类型 | 操作 | 语义 |
+| --- | --- | --- |
+| 栈 | `push`、`pop`、`peek` | 后进先出（LIFO） |
+| 队列 | `enqueue`、`dequeue`、`front` | 先进先出（FIFO） |
+| 双端队列 | 以上四端操作 | 两端都可插入与删除 |
+
+契约必须补全三件事，否则实现之间无法互换：
+
+- **空结构上的行为**：抛异常，还是返回哨兵值？返回 `None` 会把「空」与「存了 `None`」混为一谈。
+- **容量**：无界（内存限制实际起作用），或固定容量（满时抛错、覆盖、还是阻塞）。
+- **迭代顺序**：从栈顶到栈底，还是相反；迭代过程中允许修改吗。
+
+复杂度结论属于表示，因此每个结论都要带三个限定：成本模型、输入规模，以及它是最坏、摊还还是期望。
+
+| 表示 | 栈顶 | 队首出队 | 两端操作 | 中间访问 | 内存 |
+| --- | --- | --- | --- | --- | --- |
+| 动态数组（尾部为栈顶） | 摊还 `O(1)` | `Θ(n)` | 只有一端便宜 | `Θ(1)` | 连续块，有空槽 |
+| 动态数组 + 队首下标 | — | 摊还 `O(1)`，但已出队的位置无法复用 | — | `Θ(1)` | 每次重新分配时才能回收前缀 |
+| 环形缓冲（固定容量） | `Θ(1)` | `Θ(1)` | `Θ(1)` | `Θ(n)` | 定长连续块，无分配 |
+| 双向链式 | `Θ(1)` 最坏 | `Θ(1)` 最坏 | `Θ(1)` 最坏 | `Θ(n)` | 每元素一个节点加两个引用 |
+
+## 栈
+
+动态数组的尾端正好是栈顶：`append` 与 `pop()` 都作用在末尾，不需要移动元素。
+
+```python run id="alg.stack.list-stack"
+stack = []
+stack.append("a")
+stack.append("b")
+print("top:", stack[-1], "| size:", len(stack))
+
+print("pop:", stack.pop(), "then:", stack.pop())
+print("empty now:", not stack)
+
+try:
+    stack.pop()
+except IndexError as failure:
+    print("popping an empty stack:", type(failure).__name__, "-", failure)
+```
+
+`pop()` 不带参数时作用在末尾，因此是摊还 `O(1)`；`pop(0)` 是 `Θ(n)`。这两种调用长得几乎一样，成本差一个数量级，是读代码时要留意的位置。
+
+## 队列：`list` 是错误表示
+
+队列在队首出队、队尾入队，而连续数组在头部删除要移动全部剩余元素。
+
+```python run id="alg.queue.naive-list"
+def drain_with_moves(values):
+    """Dequeue from the front of a list while counting element moves."""
+    moves = 0
+    order = []
+    while values:
+        order.append(values.pop(0))
+        moves += len(values)
+    return order, moves
+
+
+for size in (200, 400, 800):
+    order, moves = drain_with_moves(list(range(size)))
+    print(f"n={size:4d}  dequeues={size:4d}  moves={moves:7d}  moves/n={moves / size:6.1f}")
+```
+
+出队 `n` 次的移动总量随 `n²` 增长（`moves/n` 也随 `n` 增长，说明每出队一次的均摊代价不是常数）。队列需要一种能在队首 `O(1)` 出队的表示。
+
+## 环形缓冲
+
+固定容量的队列可以用一块定长数组加两个下标实现：`head` 指向最旧的元素，`count` 记录元素个数，新元素写在 `(head + count) mod capacity`。元素在物理数组中循环移动，逻辑顺序由下标运算维持。
+
+表示不变量有两条：
+
+```text
+0 <= count <= capacity
+0 <= head < capacity
+逻辑顺序的第 i 个元素位于物理位置 (head + i) mod capacity
+```
+
+```python run id="alg.queue.ring-buffer"
+class RingBuffer:
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.slots = [None] * capacity
+        self.head = 0
+        self.count = 0
+
+    def enqueue(self, value):
+        if self.count == self.capacity:
+            raise OverflowError("ring buffer is full")
+        self.slots[(self.head + self.count) % self.capacity] = value
+        self.count += 1
+
+    def dequeue(self):
+        if self.count == 0:
+            raise IndexError("ring buffer is empty")
+        value = self.slots[self.head]
+        self.slots[self.head] = None
+        self.head = (self.head + 1) % self.capacity
+        self.count -= 1
+        return value
+
+
+buffer = RingBuffer(4)
+for value in (1, 2, 3, 4):
+    buffer.enqueue(value)
+print("full:", buffer.slots, "| head:", buffer.head, "| count:", buffer.count)
+
+print("dequeue:", buffer.dequeue(), buffer.dequeue())
+for value in (5, 6):
+    buffer.enqueue(value)
+
+print("after wrapping:", buffer.slots, "| head:", buffer.head, "| count:", buffer.count)
+logical = [buffer.slots[(buffer.head + offset) % buffer.capacity] for offset in range(buffer.count)]
+print("logical order:", logical)
+print("invariants:", 0 <= buffer.count <= buffer.capacity, 0 <= buffer.head < buffer.capacity)
+
+try:
+    for value in (7, 8, 9):
+        buffer.enqueue(value)
+except OverflowError as failure:
+    print("fixed capacity rejects overflow:", type(failure).__name__, "-", failure)
+```
+
+物理数组中 `3, 4` 在前、`5, 6` 在后，而逻辑顺序是 `3, 4, 5, 6`：下标运算把一块定长内存变成了循环使用的队列。这条路径上没有任何移动元素的操作，两端操作都是 `Θ(1)`，代价是容量必须在创建时确定，且中间访问需要遍历。
+
+## 双端队列
+
+Python 的 `collections.deque` 是双向链式块结构：两端插入删除都是 `Θ(1)` 最坏情形，而不是摊还；这与动态数组的尾部操作不同——扩容发生的时刻不影响两端操作的延迟上界。
+
+```python run id="alg.deque.both-ends"
+from collections import deque
+
+queue = deque([2, 3])
+queue.appendleft(1)
+queue.append(4)
+print("both ends:", list(queue))
+print("pop from the right:", queue.pop(), "| popleft:", queue.popleft())
+print("remaining:", list(queue))
+
+bounded = deque(maxlen=3)
+for value in range(5):
+    bounded.append(value)
+print("bounded deque keeps the newest three:", list(bounded))
+
+bounded.appendleft(-1)
+print("pushing on the other end evicts the opposite end:", list(bounded))
+```
+
+`maxlen` 把容量约束直接写进契约：满时从另一端淘汰元素，而不是抛错。这类「有界 + 淘汰」的语义适合做滑动窗口，但它同时改变了「插入」的含义——调用方必须明确接受丢弃。
+
+有界队列也可以用动态数组加队首下标实现，成本相差不大；两者的区别在于 deque 的两端操作是最坏 `Θ(1)`，不需要在扩容时刻承担突发复制。
+
+## 选择与边界
+
+- **先定契约，再选表示**：空结构行为、容量、迭代顺序一旦写进接口，就限制了可选的表示。反过来，先选表示再补契约，接口会继承该表示的偶然特性。
+- **按端点选结构**：只有一端操作（栈）用动态数组；两端操作（队列、滑动窗口）用环形缓冲或双端队列；需要按位置访问则回到动态数组。
+- **最坏与摊还要分开看**：动态数组的尾部操作是摊还 `O(1)`，扩容那一次是 `Θ(n)`；链式与环形结构给出最坏 `Θ(1)`。延迟敏感路径上这个区别决定能不能用。
+- **本课程不鼓励手写生产容器**：`list`、`collections.deque`、`queue`（线程安全变体，属于操作系统模块的话题）已经覆盖这些用途。手写实现只用于暴露不变量与操作轨迹，不应进入生产代码——手写的环形缓冲比标准库版本更容易在有界情形上出错。
+- **内存与局部性**：链式结构每元素多一个节点对象与两个引用，且元素散落在堆上；环形缓冲是定长连续块，单位元素的内存开销更小，访问模式也更友好。
+- **有界队列会阻塞或丢弃**：容量满时的三种策略对应三种接口语义，选择哪一种取决于调用方能否等待；背压属于并发与分布式模块的内容。
+
+## 边界与失败情形
+
+- **空结构必须可判定**：靠哨兵值表示「空」会在存储哨兵值本身时出歧义。
+- **`pop(0)` 与 `pop()` 不是同一个操作**：前者代价 `Θ(n)`，是队列实现的常见错误来源。
+- **环形缓冲的容量是硬上限**：满之后的三种策略（抛错、覆盖、阻塞）必须在接口中声明。
+- **环形缓冲不支持中间插入**：需要按位置访问时它不是合适的表示。
+- **`deque` 的中间访问是 `Θ(n)`**：它是为两端操作优化的结构，不要按随机访问假定成本。
+- **迭代顺序属于契约**：从栈顶还是栈底遍历会改变消费端的行为，必须明确写出。
+- **并发安全不属于本课**：上述结构都不是线程安全的；共享访问需要同步原语，属于操作系统模块。
+
+## 小结
+
+- 抽象类型由操作端点与契约定义；成本结论属于表示，并且要标明成本模型与情形。
+- 栈用动态数组实现时两端操作都是摊还 `O(1)`；队列不能这样做，因为队首出队是 `Θ(n)`。
+- 环形缓冲用定长数组加 `head`、`count` 维持循环使用，两端操作 `Θ(1)`，代价是固定容量与 `Θ(n)` 的中间访问。
+- `collections.deque` 的两端操作是最坏 `Θ(1)`，`maxlen` 把容量与淘汰语义写进契约。
+- 生产代码使用标准库结构；手写实现用于展示不变量与成本。

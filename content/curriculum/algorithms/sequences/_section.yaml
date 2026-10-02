@@ -1,0 +1,5 @@
+id: algorithms.sequences
+label: 线性结构
+order: 20
+summary: 抽象序列与具体表示、连续数组与动态数组、栈与队列的抽象契约与实现成本、链式结构及其表示不变量。
+status: active

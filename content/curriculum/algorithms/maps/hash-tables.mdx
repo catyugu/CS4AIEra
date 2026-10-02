@@ -1,0 +1,235 @@
+---
+id: algorithms.hash-tables
+slug: /algorithms/hash-tables
+order: 10
+title: 哈希表与关联映射
+status: draft
+objectives:
+  - 说明哈希表的表示：哈希函数、桶数组、冲突处理策略，以及它维持的映射不变量
+  - 推导负载因子与期望查找长度之间的关系，并指出期望成本依赖哪个假设
+  - 区分哈希表操作的期望成本与扩容引起的摊还成本
+  - 构造使所有键冲突的输入，说明为什么「字典查找是 O(1)」不是最坏情形结论
+---
+
+## 目的
+
+本课把「按键查找」这个契约变成一种表示：用哈希函数把键映射到桶数组的位置，使查找不需要扫描。
+
+上一课的链式结构给出了按键值顺序查找的 `Θ(n)` 下界形式：无论怎样组织顺序，逐项比较都逃不开扫描。哈希表换掉了这个问题——前提是对键的分布作出假设，而结论只在假设成立时成立。本课的重点是把这个前提说清楚，并把「`O(1)` 查找」还原成它实际主张的东西。
+
+## 模型
+
+哈希表由三部分组成：
+
+```text
+hash(key) -> 整数
+bucket = hash(key) mod capacity        （或由容量参与的等价混合）
+桶数组：capacity 个槽位，每个槽位存放一个键值对或一个冲突链
+```
+
+它维持的映射不变量：
+
+```text
+每个键最多出现在一个槽位上
+键 k 只能出现在 (hash(k) mod capacity) 对应的槽位或其冲突链中
+没有重复的键
+```
+
+**冲突**必然发生：不同的键可以得到相同的桶下标（可能的键比槽位多）。两种处理策略决定了冲突时的行为：
+
+- **分离链接**：每个桶挂一条链（或小数组），冲突的键放在同一条链上。
+- **开放寻址**：所有元素放在桶数组本身，冲突时按探测序列找下一个空槽。
+
+**成本模型**：一次键比较记 1，一次槽位访问记 1。查找的成本 = 定位一个槽位 + 在冲突链或探测序列中与键比较的次数。
+
+**关键假设**：哈希函数把键均匀分散到桶上。在这个假设下，负载因子 `α = 元素数 / 槽位数` 决定期望比较次数：分离链接约为 `1 + α/2`，开放寻址约为 `1/(1-α)`。`α` 趋近 1 时开放寻址的期望代价急剧上升，因此实现会在 `α` 超过阈值时扩容。
+
+## 从键到桶
+
+```python run id="alg.hash.bucket-index"
+def bucket_of(key, capacity):
+    """A toy polynomial hash. Real functions mix the bits much more thoroughly."""
+    total = 0
+    for character in key:
+        total = total * 31 + ord(character)
+    return total % capacity
+
+
+capacity = 8
+keys = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", "kappa"]
+buckets = {}
+for key in keys:
+    buckets.setdefault(bucket_of(key, capacity), []).append(key)
+
+for index in sorted(buckets):
+    chain = buckets[index]
+    marker = "  <- collision" if len(chain) > 1 else ""
+    print(f"bucket {index}: {chain}{marker}")
+
+print("keys:", len(keys), "| buckets used:", len(buckets), "| load factor:", len(keys) / capacity)
+```
+
+10 个键放进 8 个桶，出现冲突是正常的：桶下标只有 8 种取值，键有 10 个。冲突本身不是缺陷，冲突长度才是成本。
+
+## 期望成本与负载因子
+
+```python run id="alg.hash.chaining-cost"
+def bucket_of(key, capacity):
+    total = 0
+    for character in key:
+        total = total * 31 + ord(character)
+    return total % capacity
+
+
+def build_table(keys, capacity):
+    table = [[] for _ in range(capacity)]
+    for key in keys:
+        table[bucket_of(key, capacity)].append(key)
+    return table
+
+
+def lookup_cost(table, key, capacity):
+    """Return comparisons needed to find `key` in a chained table."""
+    comparisons = 0
+    for candidate in table[bucket_of(key, capacity)]:
+        comparisons += 1
+        if candidate == key:
+            return comparisons
+    return comparisons
+
+
+keys = [f"key-{index:05d}" for index in range(4000)]
+for capacity in (8192, 4096, 2048, 1024):
+    table = build_table(keys, capacity)
+    alpha = len(keys) / capacity
+    total = sum(lookup_cost(table, key, capacity) for key in keys)
+    worst = max(lookup_cost(table, key, capacity) for key in keys)
+    print(f"capacity={capacity:5d}  load factor={alpha:.2f}  mean comparisons={total / len(keys):.2f}  worst={worst}")
+```
+
+负载因子从 0.5 升到 3.9，平均比较次数随之上升，而**最坏**比较次数与具体键的分布有关，可以远高于平均值。两个统计量回答不同的问题：平均值决定总吞吐，最坏值决定延迟上界。
+
+## 扩容与摊还成本
+
+负载因子升高时必须扩容（或接受代价上升）。扩容不只是分配更大的桶数组，还要把每个键重新放到新容量的桶里——因为桶下标依赖容量。
+
+```python run id="alg.hash.resizing"
+def bucket_of(key, capacity):
+    total = 0
+    for character in key:
+        total = total * 31 + ord(character)
+    return total % capacity
+
+
+def insert_all(keys, max_load=1.0, initial=8):
+    """A chained table that rehashes when the load factor exceeds max_load."""
+    capacity = initial
+    table = [[] for _ in range(capacity)]
+    size = 0
+    rehashed = 0
+    moved = 0
+    for key in keys:
+        if size >= capacity * max_load:
+            old_items = [item for chain in table for item in chain]
+            capacity *= 2
+            table = [[] for _ in range(capacity)]
+            moved += len(old_items)
+            rehashed += 1
+            for item in old_items:
+                table[bucket_of(item, capacity)].append(item)
+        table[bucket_of(key, capacity)].append(key)
+        size += 1
+    return rehashed, moved
+
+
+for count in (1000, 2000, 4000):
+    rehashed, moved = insert_all([f"key-{index:05d}" for index in range(count)])
+    print(f"n={count:5d}  rehashes={rehashed:2d}  entries moved={moved:6d}  moved/n={moved / count:.2f}")
+```
+
+搬移总量与插入次数成正比，因此单次插入的**摊还**成本是常数——与动态数组的 `append` 是同一个论证：按几何因子扩容，总搬移量的和收敛到 `Θ(n)`。单次插入的**最坏**成本仍然是 `Θ(n)`（触发扩容的那一次）。这两个结论不能互相替换。
+
+## 最坏情形：所有键冲突
+
+期望成本的说法依赖哈希函数把键分散开的假设。构造一个违反假设的输入就能看到结论失效。
+
+```python run id="alg.hash.worst-case-collisions"
+class ConstantHash:
+    """Every instance claims the same hash, so every key lands in one bucket."""
+
+    def __init__(self, value):
+        self.value = value
+
+    def __hash__(self):
+        return 1
+
+    def __eq__(self, other):
+        return isinstance(other, ConstantHash) and self.value == other.value
+
+
+def lookup_cost(chain, key):
+    comparisons = 0
+    for candidate in chain:
+        comparisons += 1
+        if candidate == key:
+            break
+    return comparisons
+
+
+size = 2000
+chain = [ConstantHash(index) for index in range(size)]
+target = ConstantHash(size - 1)
+print("distinct hash values across all keys:", len({hash(item) for item in chain}))
+print("lookup comparisons in the worst case:", lookup_cost(chain, target), "for n =", size)
+```
+
+同样的操作，在哈希均匀时是期望常数次比较，在这组输入下退化为 `Θ(n)`：哈希表把「按键顺序扫描」换成了「按哈希位置扫描」，它没有消除扫描，只是让扫描的范围取决于哈希分配。
+
+Python 的哈希函数对字符串做了加盐随机化（每次进程启动不同），因此攻击者无法事先构造出全部键冲突的输入；这是环境层面的防护，不是数据结构层面的结论。字典的键相等与哈希契约见 <CrossRef id="python.equality-and-hashing" />。
+
+## Python 字典是具体实现
+
+```python run id="alg.hash.python-dict"
+import sys
+
+mapping = {}
+observations = []
+previous = sys.getsizeof(mapping)
+for index in range(1000):
+    mapping[f"key-{index:05d}"] = index
+    current = sys.getsizeof(mapping)
+    if current != previous:
+        observations.append((len(mapping), current))
+        previous = current
+
+print("grow steps (size, bytes):", observations[:6])
+print("lookups are expected constant time:", mapping["key-00999"])
+print("iteration follows insertion order, which is not a cost property:", list(mapping)[:3])
+
+probe = {}
+probe[1] = "int"
+probe[1.0] = "float key that is equal to 1"
+print("1 and 1.0 are the same key:", probe)
+print("hash(-1) is remapped to -2 because -1 is reserved internally:", hash(-1), hash(-2))
+```
+
+字典的体积在插入过程中分档跳变，说明它在内部也按几何因子扩容并重排；`1` 与 `1.0` 冲突为同一个键，说明判等用的仍然是键的相等契约，哈希只负责缩小搜索范围。迭代顺序是插入顺序——这是语言层面的保证，与哈希表的成本性质无关，不要把两者混为一谈。
+
+## 边界与失败情形
+
+- **最坏情形是 `Θ(n)`**：哈希均匀是期望成本的假设，不是数据结构的不变量。任何声称「查找是 `O(1)`」的论断都必须说明它属于期望情形，并说明假设。
+- **期望与摊还不能互换**：扩容的摊还成本来自几何增长的分析，与哈希分布的随机性无关；两者发生在同一结构上，但论证依据完全不同。
+- **键必须不可变或至少哈希稳定**：哈希依赖的值在插入后改变，键就会落在错误的桶里。这是相等与哈希契约的直接后果。
+- **负载因子上限是取舍**：上限越高，内存占用越低而冲突越长；开放寻址还要为「已删除」的槽位保留标记，否则探测序列断裂。
+- **哈希函数质量决定常数**：均匀性是假设，质量差的哈希函数让实际分布偏离假设，成本随之偏离分析。
+- **有序遍历需要另一种结构**：哈希表不维持顺序，与容量、插入历史都无关；需要按序遍历时要用有序映射（平衡树或跳表）。
+- **开放寻址对删除与聚簇敏感**：线性探测会产生连续占用区，使探测长度在 `α` 较高时上升得比链式更快。
+- **`hash()` 的实现与语言保证分开看**：具体哈希值属于实现，语言只保证相等对象有相等哈希，以及整数、字符串等类型的哈希稳定规则。
+
+## 小结
+
+- 哈希表用哈希函数、桶数组与冲突处理把映射契约变成常数期望成本的查找。
+- 表示不变量是「每个键只出现在一个桶上，且位于哈希决定的桶或其冲突链中」。
+- 期望成本由负载因子决定，且依赖哈希分布均匀这一假设；最坏情形是所有键冲突时的 `Θ(n)`。
+- 扩容需要重新分配所有键，总搬移量与插入次数成正比，因此插入是摊还常数、单次最坏 `Θ(n)`。
+- Python 字典是具体实现：整数与浮点数的相等键会冲突为同一个键，迭代顺序是插入顺序，哈希值在实现层加盐随机化。

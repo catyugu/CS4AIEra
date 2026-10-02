@@ -1,0 +1,5 @@
+id: algorithms.maps
+label: 映射与哈希
+order: 30
+summary: 哈希函数与桶、冲突处理、负载因子与扩容、期望成本成立的前提，以及 Python 字典作为具体实现。
+status: active

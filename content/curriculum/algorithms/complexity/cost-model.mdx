@@ -1,0 +1,183 @@
+---
+id: algorithms.cost-model
+slug: /algorithms/cost-model
+order: 10
+title: 操作成本与渐进记号
+status: draft
+objectives:
+  - 为一段代码写出它能说明成本假设的操作模型，说明「一次操作」指的是什么
+  - 判断一个论断属于最坏、平均还是摊还情形，并指出平均情形的结论依赖哪个分布假设
+  - 用定义区分上界、下界与紧确界，说明为什么 `O` 不表示「运行速度」
+  - 从计数实验的数据判断一个实现的增长率，并指出该数据不能支持哪些结论
+---
+
+## 目的
+
+本课建立分析算法所需的语言：操作成本、输入规模、渐进记号，以及最坏、平均、摊还三种结论各自的含义。
+
+后续每一课的复杂度论断都建立在这里的约定上。这些约定必须显式写出，否则「这个操作是 O(1)」是一句无法检验的话：它没说一次操作花什么，也没说规模指的是什么、在哪种输入分布下成立。本课的目标是让这类句子变成可以逐个检查的断言。
+
+## 模型
+
+**成本模型**：为计算定义一个操作集合与每种操作的单价，复杂度的结论永远是相对于某个成本模型说的。例如「一次元素比较记 1，一次数组下标访问记 1，一次对象分配记 1」。换一个成本模型会得到不同的结论，因此模型必须与结论一起给出。
+
+**输入规模**：结论要说明规模用哪个量度量。常见选择是元素个数 `n`；图用顶点数 `V` 与边数 `E`；整数运算用位数而不是数值大小（任意精度整数的乘法成本取决于位数）。
+
+**渐进记号**：设 `f`、`g` 是定义在自然数上的非负函数。
+
+```text
+f(n) = O(g(n))   存在 c > 0 与 n0，使所有 n >= n0 都有 f(n) <= c * g(n)
+f(n) = Ω(g(n))   存在 c > 0 与 n0，使所有 n >= n0 都有 f(n) >= c * g(n)
+f(n) = Θ(g(n))   f = O(g) 且 f = Ω(g)
+```
+
+这三条定义给出的是函数之间的关系，不是运行时间。`O` 是上界：`3n + 5 = O(n²)` 同样成立，只是不紧。要紧的确切增长率用 `Θ` 表达。渐进记号丢掉常数因子与低阶项，因为当 `n` 足够大时它们被高阶项主导——这是一条关于「足够大」的论断，不是关于当前输入快慢的论断。
+
+**三种情形**必须分开陈述：
+
+| 情形 | 定义 | 依赖什么 |
+| --- | --- | --- |
+| 最坏 | 规模为 `n` 的所有输入上成本的最大值 | 只依赖输入规模 |
+| 平均 | 某个输入分布下成本的期望 | 必须说明分布，结论随分布改变 |
+| 摊还 | 一串操作的总最坏成本除以操作个数 | 只依赖操作序列，不依赖输入分布 |
+
+摊还不是平均：摊还分析对任意操作序列给出上界，不做随机性假设；平均情形分析则必须有一个概率模型。把两者混用会让一个在对抗性输入下退化的结构看起来是安全的。
+
+## 计数而不是计时
+
+计时受实现、机器、编译方式与当前负载影响；计数只受算法与成本模型影响。分析一个实现的增长率时，先数一次操作。
+
+```python run id="alg.cost.linear-search"
+def linear_search(values, target):
+    """Return the index of target, counting element comparisons."""
+    comparisons = 0
+    for index, value in enumerate(values):
+        comparisons += 1
+        if value == target:
+            return index, comparisons
+    return -1, comparisons
+
+
+for size in (100, 200, 400):
+    values = list(range(size))
+    index, comparisons = linear_search(values, size - 1)
+    print(f"n={size:4d}  comparisons={comparisons:4d}  comparisons/n={comparisons / size:.2f}")
+
+index, comparisons = linear_search(list(range(1000)), 2000)
+print("miss:", index, comparisons, "comparisons (the whole input)")
+```
+
+比较次数随 `n` 线性增长，且最坏情形与平均情形不同：命中靠前时比较少，命中末尾或未命中时要扫完整个输入。这正是「最坏情形」与「平均情形」必须分别陈述的原因。
+
+## 用计数验证增长率
+
+一个实现是线性的还是平方级的，可以只看计数的增长比率：规模翻倍时线性实现的操作数翻倍，平方级实现的操作数变成四倍。
+
+```python run id="alg.cost.growth"
+def count_pairs(values):
+    """Count every ordered pair; an intentionally quadratic body."""
+    operations = 0
+    for left in values:
+        for right in values:
+            operations += 1
+    return operations
+
+
+def count_scans(values):
+    """Two linear passes over the same input."""
+    operations = 0
+    for _ in range(2):
+        for _ in values:
+            operations += 1
+    return operations
+
+
+print("pairs / scans, by size:")
+for size in (50, 100, 200, 400):
+    pairs = count_pairs(range(size))
+    scans = count_scans(range(size))
+    print(f"n={size:4d}  pairs={pairs:7d}  scans={scans:4d}  pairs/n^2={pairs / size**2:.3f}  scans/n={scans / size:.3f}")
+```
+
+`pairs / n²` 稳定在 1 附近，`scans / n` 稳定在 2 附近。这两个常数说明常数因子被记在系数里，而增长率由幂次决定：无论常数如何，`Θ(n²)` 最终会超过 `Θ(n)`。
+
+## 计时不能替代成本模型
+
+同一段渐进结论下，常数因子可以相差数倍到十几倍，具体倍数取决于运行时。下面的两种写法都是 `Θ(n)`，但一种循环在解释器里逐项执行，另一种在解释器内部完成。
+
+```python run id="alg.cost.constants"
+import time
+
+size = 400_000
+values = list(range(size))
+
+start = time.perf_counter()
+total_loop = 0
+for value in values:
+    total_loop += value
+loop_seconds = time.perf_counter() - start
+
+start = time.perf_counter()
+total_builtin = sum(values)
+builtin_seconds = time.perf_counter() - start
+
+print("same result:", total_loop == total_builtin)
+print(f"python loop: {loop_seconds:.4f}s   builtin sum: {builtin_seconds:.4f}s   ratio: {loop_seconds / builtin_seconds:.1f}x")
+```
+
+两次运行的绝对数字必然不同，比例也会波动，这正是计时不能作为渐进结论依据的原因。可以稳定得到的结论只有一条：常数因子由实现决定，而渐进记号刻意把它丢掉。要做性能判断必须固定实现、机器与输入，并把测量条件写出来。
+
+## 三种情形不能互换
+
+`list.append` 是摊还 `O(1)`：单次追加在需要扩容时复制整个已有内容，最坏情形是 `Θ(n)`；连续追加 `n` 次的总成本是 `Θ(n)`，因此摊还到每次是 `O(1)`。
+
+```python run id="alg.cost.amortized-append"
+class GrowingArray:
+    """A dynamic array that counts the element copies it performs."""
+
+    def __init__(self):
+        self.capacity = 1
+        self.size = 0
+        self.copies = 0
+        self.worst_single = 0
+        self.steps = []
+
+    def append(self, value):
+        if self.size == self.capacity:
+            self.capacity *= 2
+            self.copies += self.size
+            self.worst_single = max(self.worst_single, self.size)
+            self.steps.append(self.size)
+        self.size += 1
+
+
+array = GrowingArray()
+for value in range(1024):
+    array.append(value)
+
+print("appends:", array.size)
+print("expansions:", array.steps)
+print("total element copies:", array.copies, "| copies / n =", array.copies / array.size)
+print("worst single append:", array.worst_single, "copies")
+```
+
+绝大多数追加不做任何复制，少数几次复制了整个数组，最坏的一次复制了 512 个元素。三个不同的陈述同时成立：单次最坏是 `Θ(n)`，摊还成本是 `O(1)`，而总成本是 `Θ(n)`。只说「追加是 O(1)」而不说明它是摊还结论，会掩盖扩容时的突发代价——在需要单次延迟上界的场合（实时系统、延迟敏感的服务路径），这个区别决定实现能不能用。
+
+## 边界与失败情形
+
+- **成本模型必须写出来**：说「比较是 O(1)」之前要说明比较的是什么对象。比较长字符串、大数或复杂结构都不是常数时间。
+- **规模要选对量**：用 `n` 描述图算法会丢信息；输入是整数时按数值而非位数分析会得出错误结论（试除法分解整数的成本取决于位数）。
+- **`O` 不是速度标签**：`O(n²)` 的实现可能比 `O(n log n)` 的实现快得多，只要输入规模落在常数因子仍然主导的区间。渐进结论对大 `n` 成立，对当前 `n` 未必。
+- **`O` 与 `Θ` 不可互换**：把上界说成确切增长率是最常见的误用。`O(n)` 的算法也可能是 `Θ(1)`。
+- **平均情形的结论随分布改变**：哈希表的期望 `O(1)` 依赖哈希分布与冲突处理；换一种分布或用对抗性输入构造，结论就失效。
+- **摊还不等于「几乎总是很快」**：摊还结论保证的是长序列的平均上界，个别操作仍然可以昂贵，而且这个结论不限制单次延迟。
+- **渐进结论不覆盖内存**：时间与空间是两个独立的成本维度，换空间换时间的选择必须分别给出两边的量级。
+- **基准测试只证明一个配置下的行为**：它不证明渐进律，也不证明其他实现或其它输入的行为。
+
+## 小结
+
+- 复杂度的结论相对于一个显式成本模型与一个显式规模度量；两者都要与结论一起给出。
+- `O` 是上界，`Ω` 是下界，`Θ` 是紧确界；渐进记号丢掉常数与低阶项，只描述足够大时的增长率。
+- 最坏情形只依赖输入规模；平均情形依赖声明的输入分布；摊还是操作序列总最坏成本的平均，不做随机性假设。
+- 计数实验用于判断增长率（比率是否稳定），计时只能用于在固定条件下比较实现。
+- 常数因子可以压过渐进差异，因此「更优的渐进复杂度」不等于「更快的实现」。

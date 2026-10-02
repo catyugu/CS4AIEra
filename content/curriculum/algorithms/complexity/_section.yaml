@@ -1,0 +1,5 @@
+id: algorithms.complexity
+label: 成本模型与复杂度
+order: 10
+summary: 操作成本模型、输入规模的度量、渐进记号、最坏 / 平均 / 摊还三种情形的区别与下界。
+status: active

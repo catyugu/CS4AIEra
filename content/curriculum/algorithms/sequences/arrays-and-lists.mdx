@@ -1,0 +1,196 @@
+---
+id: algorithms.arrays-and-lists
+slug: /algorithms/arrays-and-lists
+order: 10
+title: 数组、动态数组与局部性
+status: draft
+objectives:
+  - 区分抽象 sequence 的契约与某种具体表示，说明同一个契约可以由不同成本的结构实现
+  - 说明连续数组随机访问为 O(1) 的成本模型依据，并指出插入与删除为何是 O(n)
+  - 解释动态数组的 capacity 与 size 的区别，并推导按几何因子扩容时 append 的摊还成本
+  - 判断 Python `list` 属于哪一种具体表示，指出它与紧凑基元数组在内存布局上的差异
+---
+
+## 目的
+
+本课把「列表」拆成两层：抽象 sequence 的契约，以及承担这个契约的具体表示。复杂度结论属于表示，不属于契约。
+
+这是选择数据结构时最容易混淆的一点。`list` 不是「列表」的定义，而是一种具体的动态数组实现；它的成本来自连续内存与扩容策略。分清楚这两层之后，「为什么末尾追加便宜而头部插入昂贵」「为什么下标访问快而查找慢」都可以从表示的机制推出，而不是记住一张成本表。
+
+## 模型
+
+**抽象 sequence** 是一组操作契约，与实现无关：
+
+| 操作 | 契约 |
+| --- | --- |
+| `get(i)` | 返回位置 `i` 的元素；越界是错误 |
+| `set(i, value)` | 替换位置 `i` 的元素 |
+| `insert(i, value)` | 在位置 `i` 之前插入，后续元素整体后移一位 |
+| `delete(i)` | 删除位置 `i` 的元素，后续元素整体前移一位 |
+| `iterate` | 按位置顺序访问每个元素一次 |
+| `search(value)` | 返回值相等元素的位置，或表明不存在 |
+
+同一个契约可以有多种表示：连续数组、动态数组、链式结构、平衡树按位置索引。它们的操作成本不同，因此「序列的查找是 O(n)」这种句子没有意义——必须说清是哪种表示、在哪个成本模型下。
+
+**连续数组**：元素存放在一块连续内存里，元素 `i` 的位置由基址与元素大小算出。随机访问是一次地址计算，与 `n` 无关；代价是插入与删除必须移动元素以维持连续性。
+
+**动态数组**：在连续数组之上维护两个量——`capacity`（已分配槽位）与 `size`（实际元素数）。`size == capacity` 时扩容：分配更大的块，把已有元素复制过去。按固定增量扩容会让 `n` 次追加的总复制量达到 `Θ(n²)`；按几何因子扩容时总复制量是 `Θ(n)`，因此摊还到每次追加是 `O(1)`。
+
+## 随机访问与顺序查找
+
+下标访问不遍历，查找必须遍历：这两件事的成本差别来自表示，而不是来自「元素多少」。
+
+```python run id="alg.arrays.access-vs-search"
+def search_steps(values, target):
+    """Count element comparisons until the target is found."""
+    comparisons = 0
+    for value in values:
+        comparisons += 1
+        if value == target:
+            return comparisons
+    return comparisons
+
+
+values = list(range(1000))
+print("index access needs no comparisons:", values[500])
+for target in (values[0], values[500], values[-1]):
+    print(f"search for {target:4d}: {search_steps(values, target):4d} comparisons")
+
+values.append(2000)
+print("a miss scans the whole input:", search_steps(values, -1), "comparisons for n =", len(values))
+```
+
+最坏情形是最坏输入：未命中或命中末尾都要扫完整个输入。这是 `Θ(n)` 的比较次数，与元素是否有序无关——有序性可以支持更快的查找，那是另一类表示与算法要解决的问题。
+
+## 插入与删除要移动元素
+
+```python run id="alg.arrays.insert-shift"
+def insert_with_moves(values, index, value):
+    """Insert while counting element moves."""
+    moves = 0
+    values.append(None)
+    for position in range(len(values) - 1, index, -1):
+        values[position] = values[position - 1]
+        moves += 1
+    values[index] = value
+    return moves
+
+
+for size in (100, 200, 400):
+    values = list(range(size))
+    front_moves = insert_with_moves(values, 0, -1)
+    values = list(range(size))
+    tail_moves = insert_with_moves(values, len(values) - 1, -1)
+    print(f"n={size:4d}  insert at front moves {front_moves:4d}  insert near the end moves {tail_moves:2d}")
+
+values = list(range(1000))
+removals = len(values) // 2
+moved = 0
+for _ in range(removals):
+    values.pop(0)
+    moved += len(values)
+print(f"deleting the front {removals} times moves about {moved} elements (n = 1000)")
+```
+
+头部插入移动全部元素，尾部附近插入几乎不移动。连续删除头部元素的总移动量随删除次数与输入规模同时增长，因此这种用法是 `Θ(n·m)`：这正是「用 `list` 当队列」代价高昂的原因，队列需要另一种表示（见 <CrossRef id="algorithms.stacks-and-queues" />）。
+
+## 容量、扩容与摊还成本
+
+```python run id="alg.arrays.capacity-growth"
+import sys
+
+
+def sizes_during_appends(count):
+    values = []
+    observations = []
+    previous = sys.getsizeof(values)
+    for index in range(count):
+        values.append(index)
+        current = sys.getsizeof(values)
+        if current != previous:
+            observations.append((index + 1, current))
+            previous = current
+    return observations
+
+
+observations = sizes_during_appends(4000)
+print("first growth steps (appends, container bytes):", observations[:6])
+print("reallocations for 4000 appends:", len(observations))
+print("byte-size ratios between consecutive allocations:", [round(observations[i + 1][1] / observations[i][1], 3) for i in range(min(4, len(observations) - 1))])
+```
+
+列表对象在追加过程中反复改变体积，而且每次都跳过若干槽位，不是每追加一个元素就重新分配：这就是几何扩容策略在 Python `list` 中的痕迹。具体字节数与增长比例随解释器版本和指针宽度变化，但两点与实现无关：扩容次数随 `n` 呈对数增长，总复制量随 `n` 线性增长。
+
+把这两点算清楚：
+
+```python run id="alg.arrays.amortized-cost"
+import math
+
+
+def append_cost_sequence(count, growth_factor=2):
+    """Count element copies for `count` appends under a geometric growth policy."""
+    capacity = 1
+    size = 0
+    copies = 0
+    expansions = 0
+    for _ in range(count):
+        if size == capacity:
+            copies += size
+            capacity = max(size + 1, math.ceil(capacity * growth_factor))
+            expansions += 1
+        size += 1
+    return copies, expansions
+
+
+for count in (1000, 2000, 4000):
+    copies, expansions = append_cost_sequence(count)
+    print(f"n={count:5d}  total copies={copies:5d}  copies/n={copies / count:.2f}  expansions={expansions}")
+
+for factor in (1.1, 1.5, 2.0, 3.0):
+    copies, expansions = append_cost_sequence(100_000, factor)
+    print(f"growth factor {factor}: expansions={expansions:3d}  total copies={copies:7d}  copies/n={copies / 100_000:.2f}")
+```
+
+无论增长因子是 1.5 还是 2，总复制量都与 `n` 成正比，因此摊还成本是常数。因子本身是一次取舍：因子越大，总复制量的常数越小（因子 2 时约为 `n`），但平均闲置槽位越多（最坏接近容量的 `(g-1)/g`）；因子越接近 1，复制总量越大而闲置越少，同时每次扩容额外申请的内存尖峰越小。这组取舍是动态数组实现的固有选择，不由语言决定。
+
+## Python `list` 是具体的动态数组
+
+`list` 存储的是指向对象的引用，不存储对象本身：列表容器的大小只与元素个数有关，元素实际占用的内存由对象自己决定；元素散落在堆上，遍历时每个元素都要追一次引用。
+
+```python run id="alg.arrays.list-holds-references"
+import sys
+
+shared = [0] * 1000
+distinct = list(range(1000))
+print("container size with repeated payload:", sys.getsizeof(shared))
+print("container size with 1000 distinct payloads:", sys.getsizeof(distinct))
+print("the repeated element is one object:", shared[0] is shared[1])
+
+small = [0]
+huge = [10 ** 100]
+print("container size ignores payload size:", sys.getsizeof(small) == sys.getsizeof(huge))
+print("payload sizes differ:", sys.getsizeof(small[0]), "vs", sys.getsizeof(huge[0]))
+```
+
+容器本身是连续排列的指针，元素是堆上的独立对象：列表容器的大小只与元素个数有关，元素多大由对象自己决定。这有两个后果：下标访问仍然 `O(1)`（指针数组可以按位置计算），但遍历的常数因子比紧凑基元数组大——后者把值直接排列在连续内存里，没有逐元素的指针追逐。把「连续数组」与「Python `list`」当成同一个东西，会得到错误的局部性结论。
+
+需要紧凑布局时用 `array` 模块或 `bytes`/`bytearray` 这类按值存储的类型，它们存的是定长值序列，不是对象引用；本运行时里无法测量真实缓存行为，局部性的收益需要原生测量才能确认。
+
+## 边界与失败情形
+
+- **契约与表示要分开说**：同一个 sequence 契约可以由连续数组、链式结构或树实现，`list` 只是其中一种。
+- **随机访问是 `O(1)` 但常数不同**：紧凑数组、指针数组、带偏移的切片视图三者的常数与内存行为都不同。
+- **摊还不限制单次延迟**：扩容时的单次追加是 `Θ(n)`，在延迟敏感路径上需要预留容量。
+- **内存倍数**：动态数组在扩容后可能保留接近一半的空槽；对内存敏感的场景要按峰值容量而不是元素个数估算。
+- **容量不是长度**：`size` 是元素个数，`capacity` 是已分配槽位；两者混用会得出错误的复制量。
+- **`pop(0)` 与 `insert(0, ...)` 是 `Θ(n)`**：需要两端操作时换用另一种表示。
+- **切片复制**：`values[:]`、`values[i:j]` 会分配新的连续块并复制引用，成本是 `Θ(k)`，`k` 是切片长度。
+- **局部性结论不能在本运行时测量**：本课程的可执行环境是 WebAssembly 运行时，无法读取硬件缓存计数器。局部性来自内存布局的事实，其收益需要在原生环境用性能计数器验证。
+
+## 小结
+
+- 抽象 sequence 定义操作契约；复杂度结论属于具体表示，不属于契约。
+- 连续数组的随机访问是 `Θ(1)`（一次地址计算），插入与删除是 `Θ(n)`（移动元素）。
+- 动态数组区分 `capacity` 与 `size`；按几何因子扩容使 `n` 次追加的总复制量为 `Θ(n)`，因此 append 是摊还 `O(1)`，单次最坏是 `Θ(n)`。
+- Python `list` 是存放对象引用的动态数组：下标访问 `O(1)`，但元素散落在堆上，遍历的常数因子大于紧凑基元数组。
+- 需要两端插入删除时，连续数组是错误表示；需要紧凑布局时用按值存储的类型。
