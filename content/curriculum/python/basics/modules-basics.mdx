@@ -5,9 +5,9 @@ order: 110
 title: 模块、导入与文件
 status: published
 objectives:
-  - 说明 `import` 语句把什么绑定到了哪个名字，以及模块体在什么时候执行
+  - 说明 `import` 语句把什么绑定到了哪个名字，以及模块体在什么条件下重新执行
   - 用 `__name__` 判断一个文件是被导入还是作为程序运行，并写出脚本入口
-  - 用文本模式与字节模式读写文件，说明两者的差别与编码参数的作用
+  - 读写一个文本文件，并说明为什么用 `with` 打开
   - 区分模块找不到、属性不存在、文件不存在这三类错误各自报出什么
 ---
 
@@ -25,7 +25,7 @@ objectives:
 
 三种写法导入的是同一个模块对象；`from ... import` 只是省掉前缀，代价是读代码时看不出 `sqrt` 来自哪个模块。导入失败会在入口处终止程序，导入语句的位置本身是一种依赖声明。
 
-模块顶层语句**每个进程只执行一次**：首次导入时执行，之后 `import` 只把名字指向缓存里的同一个对象（缓存是 `sys.modules`）。因此模块顶层的副作用（打印、读写文件、建立连接）只发生一次——这决定了初始化代码能不能放在模块顶层。
+成功导入之后，后续对**同一模块名**的普通 `import` 通常复用 `sys.modules` 里的那个模块对象，不重新执行模块体。`sys.modules` 是一个普通字典，条目可以增删：删掉条目后再次 `import` 会重新搜索并执行模块体，`importlib.reload` 也会重新执行（细节与代价见 <CrossRef id="python.modules-and-imports" />）。能进缓存的是「模块名」，因此模块顶层的副作用在正常导入路径上只发生一次——这决定了初始化代码能不能放在模块顶层。
 
 **`__name__`** 是每个模块都有的属性。被导入的模块，它的值是模块名；作为程序启动的那个文件，它的值是 `"__main__"`。这就是脚本入口写法的依据：
 
@@ -34,7 +34,7 @@ if __name__ == "__main__":
     运行命令行入口
 ```
 
-**文件**在磁盘上是字节序列。`open(path, "r", encoding="utf-8")` 在字节之上加一层解码，读出来是 `str`；`open(path, "rb")` 不加这一层，读出来是 `bytes`。写方向同理：文本模式编码，字节模式原样写入。不指定 `encoding` 时用运行环境的默认编码，不同平台不同，因此跨平台代码要显式写出；文本模式还会转换换行，需要精确控制字节内容时用二进制模式并在应用层决定编码。
+**文件**在磁盘上是字节序列。`open(path, "r", encoding="utf-8")` 在字节之上加一层解码，读出来是 `str`；写方向同理，文本模式编码、字节模式原样写入。编码与解码的完整模型（码点、UTF-8、错误处理、默认编码为什么不固定）见 <CrossRef id="python.text-and-bytes" />，本课只用到文本模式与 `with`。
 
 ## 导入与属性
 
@@ -56,44 +56,31 @@ print("the name of the module that is running:", __name__)
 
 `math.pi` 不是局部变量，而是模块对象上的属性：`import math` 之后 `math` 这个名字指向模块对象，`math.pi` 从它上面取属性。因此「名字来自哪个模块」在代码里是可追查的，只要不用 `from ... import *`。
 
-## 模块体只执行一次
+## 模块体执行几次
 
-把两个文件写进当前工作目录，导入它们：每个模块体在首次导入时执行，之后重复导入只会拿到缓存里的对象。
+把一个模块文件写进当前工作目录，导入两次：模块体只在第一次导入时执行，第二次拿到的是缓存里的同一个对象。
 
 ```python run id="py.mod.body-runs-once"
 import importlib
 import os
 import sys
 
-directory = os.getcwd()
-first = os.path.join(directory, "demo_module.py")
-second = os.path.join(directory, "other_module.py")
-with open(first, "w", encoding="utf-8") as handle:
-    handle.write('print("demo_module body runs")\nvalue = "first module"\n')
-with open(second, "w", encoding="utf-8") as handle:
-    handle.write('print("other_module body runs")\nvalue = "second module"\n')
+path = os.path.join(os.getcwd(), "demo_module.py")
+with open(path, "w", encoding="utf-8") as handle:
+    handle.write('print("demo_module body runs")\nvalue = "loaded"\n')
 importlib.invalidate_caches()
-
-# drop the cache entry so this run imports the file again
-sys.modules.pop("demo_module", None)
-sys.modules.pop("other_module", None)
+sys.modules.pop("demo_module", None)  # drop the entry so the cell can be re-run
 
 import demo_module
 import demo_module
-import other_module
 
-print("both files define `value`:")
-print("  demo_module.value:", demo_module.value)
-print("  other_module.value:", other_module.value)
-print("modules are separate namespaces:", demo_module.value != other_module.value)
-print("the same object on repeated import:", sys.modules["demo_module"] is demo_module)
+print("value:", demo_module.value)
+print("the second import returned the cached object:", sys.modules["demo_module"] is demo_module)
 
-os.remove(first)
-os.remove(second)
+os.remove(path)
 ```
 
-两个文件都定义了 `value`，导入之后互不覆盖：每个模块有自己的全局命名空间。`demo_module body runs` 只打印一次，而模块体里的 `print` 是首次导入的副作用——这就是「模块顶层不要做重活」的具体含义。需要显式初始化时，把初始化写成函数并在入口调用。
-
+`demo_module body runs` 只打印一次：第二次 `import` 发现模块名已经在 `sys.modules` 里，直接返回那个对象，不再读文件。模块是**独立命名空间**，`demo_module.value` 与当前命名空间里的 `value` 是两个不同的名字。模块体里的 `print` 就是副作用本身——模块顶层不做重活，需要初始化时把初始化写成函数，在入口处调用。
 ## 同一个文件的两种角色
 
 ```python run id="py.mod.script-vs-module"
@@ -139,51 +126,29 @@ text = "€100\nsecond line\n"
 
 with open(path, "w", encoding="utf-8") as handle:
     written = handle.write(text)
-
-print("write returned the number of characters:", written)
+    closed_inside = handle.closed
 
 with open(path, "r", encoding="utf-8") as handle:
-    print("text mode reads back:", repr(handle.read()))
+    read_back = handle.read()
 
 with open(path, "rb") as handle:
     raw = handle.read()
 
+print("write returned the number of characters:", written)
+print("closed inside the block:", closed_inside, "| closed after it:", handle.closed)
+print("text mode reads back:", repr(read_back))
 print("binary mode returns bytes:", type(raw).__name__)
 print("byte length:", len(raw), "| text length:", len(text))
-print("the first character is", raw[:3].decode("utf-8"), "and takes", len("€".encode("utf-8")), "bytes")
 
 os.remove(path)
 ```
 
-同一个文件，文本模式读出 `str`，二进制模式读出 `bytes`，两者长度不同：解码之后长度按字符计，字节模式下按字节计。`read()` 不带参数会读入整个文件，大文件要分批读或按行迭代。编码与解码的模型（码点、UTF-8、错误处理）见 <CrossRef id="python.text-and-bytes" />。
-
-## with 语句负责关闭
-
-```python run id="py.files.with-and-close"
-import os
-
-path = os.path.join(os.getcwd(), "closing.txt")
-with open(path, "w", encoding="utf-8") as handle:
-    handle.write("payload")
-    closed_inside = handle.closed
-
-print("closed inside the block:", closed_inside, "| closed after the block:", handle.closed)
-
-try:
-    handle.read()
-except ValueError as failure:
-    print("reading a closed file:", type(failure).__name__, "-", failure)
-
-os.remove(path)
-```
-
-`with` 在块结束时关闭文件，包括块内抛出异常的情况。这条保证的完整模型（`__enter__`/`__exit__`、异常路径、资源生命周期）见 <CrossRef id="python.context-managers" />；本课只需要知道文件要用 `with` 打开。
+写入返回的字符数与字节数不同：文本里的 `€` 算一个字符，编码成 UTF-8 占三个字节，因此同一段内容按字符计 17、按字节计 19。文本模式读出 `str`，二进制模式读出 `bytes`，因此同一个文件的两种长度不同；解码之后按字符计，字节模式下按字节计。`with` 在块结束时关闭文件，块内抛出异常时同样关闭——这条保证的完整模型（`__enter__`/`__exit__`、异常路径、资源生命周期）见 <CrossRef id="python.context-managers" />，编码与字节的模型见 <CrossRef id="python.text-and-bytes" />。文件一律用 `with` 打开；`read()` 不带参数会读入整个文件，大文件要按行迭代或分批读。
 
 ## 失败情形
 
 ```python run id="py.mod.failures"
 import os
-import sys
 
 try:
     import module_that_does_not_exist
@@ -202,8 +167,6 @@ try:
         handle.read()
 except FileNotFoundError as failure:
     print("missing file:", type(failure).__name__, "-", failure)
-
-print("sys.path is the search list for imports:", [entry or "." for entry in sys.path][:3])
 ```
 
-三类错误指向三个不同的原因：模块不在搜索路径上、模块里没有这个名字、文件不在这个路径上。相对路径按**进程的工作目录**解析，而不是按源文件所在目录——脚本被从别处调用时这一条决定了它能不能找到自己的数据文件，因此数据文件的路径应与调用方约定，或由调用方传入。`sys.path` 的来源、包与 `__init__.py`、相对导入与循环导入的失败方式见 <CrossRef id="python.modules-and-imports" />；本课只覆盖单文件模块的导入与文件读写。
+三类错误指向三个不同的原因：模块不在搜索路径上、模块里没有这个名字、文件不在这个路径上。相对路径按**进程的工作目录**解析，而不是按源文件所在目录——脚本被从别处调用时这一条决定了它能不能找到自己的数据文件，因此数据文件的路径应与调用方约定，或由调用方传入。模块搜索路径（`sys.path`）的来源、包与 `__init__.py`、相对导入与循环导入的失败方式见 <CrossRef id="python.modules-and-imports" />；本课只覆盖单文件模块的导入与文件读写。

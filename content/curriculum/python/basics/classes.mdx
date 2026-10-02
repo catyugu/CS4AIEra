@@ -19,7 +19,7 @@ objectives:
 - 调用类对象 `Counter()` 创建**实例**（instance），返回值是实例。
 - `__init__` 初始化一个已经创建出来的实例；它不创建对象，调用方拿到的实例在 `__init__` 运行之前就已经存在。漏赋某个属性不会在这里报错，而是在别处读取该属性时失败。
 - `self` 是普通形参的惯用名称，不是关键字；它按位置接收实例。
-- `instance.value` 是属性访问，`instance.value = 3` 是属性赋值。实例与类构成一个属性查找层次：读取时先看实例，再看类；赋值在实例上创建或覆盖属性。完整的查找顺序、描述符与绑定方法见 <CrossRef id="python.attributes-and-descriptors" />。两层都没有的属性在读取时抛 `AttributeError`；子类与基类之间的查找顺序由 <CrossRef id="python.inheritance-and-mro" /> 建立。
+- `instance.value` 是属性访问，`instance.value = 3` 是属性赋值，赋值在实例上创建或覆盖属性。读取顺序在**不涉及描述符与自定义属性访问的普通类**里，可以先按「先看实例自己的属性，再看类（含基类）」理解：这不是 Python 的一般规则，数据描述符优先于实例属性，完整的查找顺序（数据描述符、实例属性、非数据描述符、类属性）由 <CrossRef id="python.attributes-and-descriptors" /> 细化。两层都没有的属性在读取时抛 `AttributeError`；子类与基类之间的查找顺序由 <CrossRef id="python.inheritance-and-mro" /> 建立。
 - 类属性是所有实例共享的一个对象，实例属性属于单个实例。
 - 方法访问 `instance.increment` 得到一个绑定到该实例的可调用对象，调用时实例作为第一个实参传入。
 
@@ -136,5 +136,5 @@ greeter = Greeter()
 print(greeter.greet())
 ```
 
-方法定义里漏掉 `self` 时，调用把实例当成多出来的实参，`TypeError` 的消息给出 1 个多余的位置参数。看到这个数字时先数一遍形参。
+方法定义里漏掉 `self` 时，调用把实例当成多出来的实参：`TypeError` 的消息指出 `greet()` 接收 0 个位置参数，却收到了 1 个。看到这两个数字时先数一遍形参。
 

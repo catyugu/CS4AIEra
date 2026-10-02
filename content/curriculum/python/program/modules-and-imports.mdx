@@ -142,39 +142,9 @@ os.remove(loose)
 
 同一个 `from . import metrics`：写在包的 `__init__.py` 里可以工作，写在 `sys.path` 上的普通文件里抛 `ImportError`，因为那时没有「当前包」这个概念。看到这个错误时，问题不在被导入的模块，而在导入语句所在的位置——需要改成绝对导入，或把文件移进包里。文件被当作脚本直接运行时（`python file.py`）不在包里，相对导入同样失败。
 
-## `__all__` 与星号导入
+## 导出清单
 
-```python run id="py.import.star-and-all"
-import importlib
-import os
-import sys
-
-path = os.path.join(os.getcwd(), "star_demo.py")
-with open(path, "w", encoding="utf-8") as handle:
-    handle.write(
-        '__all__ = ["PUBLIC", "helper"]\n'
-        'PUBLIC = 1\n'
-        'helper = lambda: "helper"\n'
-        '_INTERNAL = "not exported"\n'
-        'EXTRA = "reachable explicitly"\n'
-    )
-
-sys.modules.pop("star_demo", None)
-importlib.invalidate_caches()
-import star_demo
-
-namespace = {}
-exec("from star_demo import *", namespace)
-imported = sorted(name for name in namespace if not name.startswith("__"))
-print("names bound by the star import:", imported)
-print("__all__ decides the list, not the leading underscore:", "EXTRA" in imported, "_INTERNAL" in imported)
-print("every name is still reachable explicitly:", star_demo._INTERNAL, star_demo.EXTRA)
-
-sys.modules.pop("star_demo", None)
-os.remove(path)
-```
-
-`__all__` 是一份**导出清单**：定义了它，星号导入就只绑定清单里的名字；没定义时才是「所有不以下划线开头的名字」。显式导入不受它限制——`__all__` 是给「批量导入」与文档工具用的约定，不是访问控制。
+`__all__` 是模块的**导出清单**：定义了它，`from module import *` 只绑定清单里的名字；没定义时才绑定所有不以下划线开头的名字。显式导入不受它限制——它是给批量导入与文档工具用的约定，不是访问控制。星号导入会让读代码的人看不出名字来自哪个模块，因此很少出现在需要长期维护的代码里。
 
 ## 循环导入
 
@@ -237,7 +207,9 @@ os.remove(second)
 
 第一次导入失败的不是 `import` 语句，而是 `VALUE = cycle_first.CONSTANT` 这一行：执行到 `cycle_second` 时，`cycle_first` 已经存在于缓存里但只执行到 `import cycle_second`，`CONSTANT` 还没有被定义。
 
-改后的 `cycle_second` 把读取推迟到函数体里，导入期不再有属性访问，两个模块都能完成初始化，`cycle_first.describe()` 随后调用它并拿到值。这是循环导入唯一稳定的修法：**让导入期的代码只做定义，不做取值**。导入期出现的 `AttributeError` 通常就是这个机制：某个模块的属性在它执行完之前被读取。仍然需要双向依赖时，把导入本身放进函数也可以，但那会把依赖隐藏到调用点，只适合少数必须的场景。
+改后的 `cycle_second` 把读取推迟到函数体里，导入期不再有属性访问，两个模块都能完成初始化，`cycle_first.describe()` 随后调用它并拿到值。这只是消除环的几种方法之一：**把共同依赖提取到第三个模块**、**反转依赖方向**（让被依赖的一方不再引用调用方）、**改变模块边界**（把互相引用的部分合成一个模块）、**把导入推迟到函数内部**（代价是把依赖藏到调用点），都能让导入期不再读取尚未执行完的属性。共同判据是导入期不取值；选哪一种取决于依赖方向本身是否合理，没有唯一处方。
+
+导入期出现的 `AttributeError` 通常就是这个机制：某个模块的属性在它执行完之前被读取。看到它时先画依赖环，再决定从哪里断开。
 
 ## 缓存按名字索引
 

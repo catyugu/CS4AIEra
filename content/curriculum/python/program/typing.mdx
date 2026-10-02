@@ -5,23 +5,92 @@ order: 30
 title: 类型标注与静态契约
 status: published
 objectives:
-  - 说明标注在什么时刻求值、存在哪里，以及解释器为什么不检查它
+  - 说明标注的三套求值语义（即时、字符串化、延迟），以及解释器为什么不检查标注
   - 区分标注能表达的约束（结构、名称、可空性）与它无法表达的约束（取值范围、不变量）
   - 判断一段代码里的标注是被工具检查的契约，还是无人验证的注释
   - 说明库读取标注时（`dataclasses`、`get_type_hints`）标注如何变成可执行行为
 ---
 
-标注是 Python 里唯一的静态约束手段：`def parse(text: str) -> list[int]` 写下了「这个函数期望什么、返回什么」。但它由解释器以外的工具检查，运行时的行为与标注是否准确无关。
+标注是 Python 里唯一的静态约束手段：`def parse(text: str) -> list[int]` 写下了「这个函数期望什么、返回什么」。但它由解释器以外的工具检查，运行时的行为与标注是否准确无关。标注还有一个容易踩空的地方：**求值时机随版本改变**，按不同年份的文章在同一台机器上复现会得到互相矛盾的结果。本课先把三套语义固定下来，再讲不随版本变化的那部分结论。
 ## 模型
 
-- 标注是**表达式**，在函数或类定义执行时求值一次，结果存放在 `__annotations__` 里；解释器此后不再看它。
+- 标注是**表达式**，它的求值时机由三套语义之一决定（见下节）：3.0–3.13 默认在定义执行时立即求值，3.14 起默认延迟到被访问时求值，写 `from __future__ import annotations` 时只保存源代码文本。求值结果存在 `__annotations__` 里（延迟语义下由 `__annotate__` 函数产出并缓存）；无论哪种语义，解释器此后都不看它。
 - 因此**运行时不做任何类型检查**：传错类型的实参不会因为标注而失败，只有函数调用本身的机制（参数个数、名称）仍然生效。
 - 检查标注的是静态分析工具，它在运行前读源码、按标注推理并报告不一致。默认配置下未标注的代码不受检查，`Any` 会让检查在该处停止；从 JSON、环境变量或数据库读入的数据通常是 `Any`，静态契约在这些边界处必须手工恢复。选定检查器、严格程度与是否在 CI 中阻断提交属于交付流程。
 - 标注描述的是**类型层面的约束**：参数的类别、返回值的类别、类属性名、可空性、容器元素类型。它无法表达取值范围、非空、互斥状态、单位或任何需要条件判断的不变量；可空性是标注的一部分，`x: int` 与 `x: int | None` 在检查器看来不同，漏写 `| None` 会让检查器放过一个真实的空值缺陷；`bool` 是 `int` 的子类型，`x: int` 接受 `True`，需要排除布尔值时显式判断。
 - `list[int]`、`int | None` 这类写法是标注专用语法：`list[int]` 不是类，不能用于 `isinstance`，运行时它只是一个记录了下标的对象。可变容器既不协变也不逆变，`list[int]` 不接受 `list[bool]` 的赋值，只有只读的序列类型允许协变，这类规则由检查器实现，运行时没有对应机制。
-- 标注变成**可执行行为**只发生在有库读取它的时候：`dataclasses` 用注解生成 `__init__` 与 `repr`，`typing.get_type_hints` 解析字符串形式的注解，序列化与参数校验库按注解生成运行时检查。这些场景里标注错了会改变程序行为，而不只是让检查器报警。使用 `from __future__ import annotations` 时注解以字符串保存，需要由 `typing.get_type_hints` 求值；类型之间互相引用时用字符串注解与 `if TYPE_CHECKING:` 块。
+- 标注变成**可执行行为**只发生在有库读取它的时候：`dataclasses` 用注解生成 `__init__` 与 `repr`，`typing.get_type_hints` 解析字符串形式的注解，序列化与参数校验库按注解生成运行时检查。这些场景里标注错了会改变程序行为，而不只是让检查器报警。使用 `from __future__ import annotations` 时注解以字符串保存，需要由 `typing.get_type_hints` 或 3.14 起的 `annotationlib` 求值；类型之间互相引用时，延迟求值语义下直接写名字即可，字符串注解与 `if TYPE_CHECKING:` 块是其余语义下的兼容做法。
 
-**静态契约与运行时契约的区别**在这里最清楚：静态契约由工具在运行前验证，回答「按类型看这段代码是否自洽」；运行时契约由代码在失败点抛出，回答「这次调用的实际数据是否满足前提」。两者检查的是不同命题，互不替代。标注无法表达的约束——取值范围、非空、状态互斥、单位一致——只能在运行时校验，写错的地方是「以为标注管住了」；标注错误的代价不对称：遗漏标注只损失检查覆盖，写错的标注会让检查器放过缺陷并让读者相信它，比不写更糟。
+## 三种求值语义
+
+同一个 `def parse(text: Token) -> None`，在三个版本的 Python 上会给出三种结果。这不是文章写错了，而是注解的求值时机被改过两次：
+
+| 语义 | 生效版本 | 求值时机 | 存储形态 |
+| --- | --- | --- | --- |
+| stock（PEP 3107、PEP 526） | 3.0–3.13 默认 | 定义语句执行时立即求值 | 结果存入 `__annotations__` |
+| stringified（PEP 563） | 3.7 起，写了 `from __future__ import annotations` 时 | 不求值 | 源代码文本 |
+| deferred（PEP 649、PEP 749） | 3.14 起默认 | 被访问时才求值 | `__annotate__` 函数，首次访问后缓存 |
+
+本课程的运行时是固定的发行版，它的 `sys.version` 是 **3.14.2**，所以这里看到的默认行为是延迟求值。求值时机可以直接用副作用读出来：
+
+```python run id="py.typing.deferred-evaluation"
+import annotationlib
+
+events = []
+
+
+def note(value):
+    events.append("evaluated")
+    return value
+
+
+def late(x: note(int)) -> None:
+    pass
+
+
+print("at definition time:", events)
+print("the annotation is stored as a function:", callable(late.__annotate__))
+print("first access evaluates it:", late.__annotations__)
+print("events after that access:", events)
+print("read as text without evaluating:", annotationlib.get_annotations(late, format=annotationlib.Format.STRING))
+```
+
+定义 `late` 之后 `events` 还是空的：函数对象上多了一个 `__annotate__`，注解表达式被留到第一次读取 `__annotations__` 时才执行，结果缓存起来。`annotationlib`（3.14 新增）把这三种读法显式分开：`Format.VALUE` 求值，`Format.FORWARDREF` 把无法解析的名字保留为前向引用，`Format.STRING` 只给源代码文本。
+
+延迟求值让前向引用不再需要引号——函数可以先于它引用的类出现：
+
+```python run id="py.typing.forward-reference"
+def parse(text: Token) -> list[Token]:
+    return [text]
+
+
+class Token:
+    pass
+
+
+print("the name is resolved later:", parse.__annotations__["text"] is Token)
+print("the return annotation is a parameterized list:", parse.__annotations__["return"] == list[Token])
+print("and the call itself works:", isinstance(parse(Token())[0], Token))
+```
+
+在 3.13 及更早的默认语义下，`def` 执行时 `Token` 还没有定义，这一行会抛 `NameError`，只能把注解写成引号里的 `"Token"`，或者依赖 `from __future__ import annotations`。字符串化语义至今仍然可用，代价是注解在运行时永远是文本：
+
+```python run id="py.typing.stringified"
+from __future__ import annotations
+
+
+def stringified(x: Token) -> None:
+    pass
+
+
+class Token:
+    pass
+
+
+print("stored as source text:", stringified.__annotations__)
+```
+
+`from __future__ import annotations` 只作用于它所在的模块。在 3.14 上它意味着连 `annotationlib` 都不需要碰：读到 `__annotations__` 时拿到的直接是字符串。这就是同一个问题在不同年份的答案会互相矛盾的原因——**求值语义是版本相关的，解释器不检查注解这一点则始终不变。**
 
 ## 标注在运行时不生效
 
@@ -148,3 +217,7 @@ print("  ", Sensor("inlet", "not a number").reading)
 ```
 
 `dataclass` 读取 `__annotations__` 决定字段名与顺序，据此生成 `__init__`、`__repr__` 与相等比较。注解在这里是**可执行的**：漏写一个字段的注解，它就不会成为构造参数。同时它仍然不检查值的类型——`Sensor("inlet", "not a number")` 照常构造，只有使用这个字段的代码才会失败。库把注解从注释变成了规格，但没有把它变成守卫。
+
+## 静态契约与运行时契约
+
+**静态检查与运行时检查是两件事**，这是本课核心结论：静态契约由工具在运行前验证，回答「按类型看这段代码是否自洽」；运行时契约由代码在失败点抛出，回答「这次调用的实际数据是否满足前提」。两者检查的是不同命题，互不替代。标注无法表达的约束——取值范围、非空、状态互斥、单位一致——只能在运行时校验，写错的地方是「以为标注管住了」；标注错误的代价不对称：遗漏标注只损失检查覆盖，写错的标注会让检查器放过缺陷并让读者相信它，比不写更糟。

@@ -8,6 +8,7 @@ objectives:
   - 判断一个比较表达式的真值，并说明链式比较的含义
   - 预测非布尔值在条件语句中的真值结果
   - 用 if/elif/else 表达多分支，并说明分支顺序的影响
+  - 读出一个 match 语句选中的分支，并说出模式里的名字是新的绑定而不是比较
 ---
 
 程序需要根据数据选择不同的路径，这个能力由布尔值与条件语句提供。
@@ -60,6 +61,38 @@ print(grade)
 ```python run id="py.cond.expression"
 print("yes" if 2 < 3 else "no")
 ```
+
+## match 语句
+
+Python 3.10 起多了一条分支写法：它按**结构**匹配，而不只是比较值。
+
+```python run id="py.cond.match"
+def describe_shape(shape):
+    match shape:
+        case ("circle", radius):
+            return f"circle of radius {radius}"
+        case ("rect", width, height) if width == height:
+            return f"square of side {width}"
+        case ["point", x, y]:
+            return f"point at ({x}, {y})"
+        case {"kind": "line", "ends": (start, end)}:
+            return f"line from {start} to {end}"
+        case _:
+            return "not a known shape"
+
+
+for shape in (
+    ("circle", 2),
+    ("rect", 3, 3),
+    ("rect", 3, 4),
+    ["point", 1, 2],
+    {"kind": "line", "ends": ("a", "b")},
+    ("other", 1, 2, 3),
+):
+    print(shape, "->", describe_shape(shape))
+```
+
+`case ("circle", radius)` 同时做两件事：检查这个元组有两个元素、且第一个是 `"circle"`，然后把第二个绑到 `radius`——这是它比 `if` 链更强的地方。**模式里的名字是新的绑定，不是与已有变量比较**：要与已有值比较，用守卫条件（`case radius if radius == limit`）或点号限定的名字（`case Color.RED`，按值比较）。`if` 后缀是守卫，模式匹配成功后还要满足它才选中这一支；`case _` 匹配一切，因此写在最后。没有分支匹配且没有 `case _` 时，整个语句什么都不做，不抛异常——这一点与 `if` 链相同。
 
 ## 布尔运算的组合
 

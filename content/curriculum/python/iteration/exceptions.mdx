@@ -36,7 +36,7 @@ objectives:
 
 ## 子句顺序与各路径
 
-按书写顺序取第一个匹配、子类也匹配父类，这两条规则由 <CrossRef id="python.errors-basics" /> 建立。在本课的模型里它们只决定一件事：`finally` 在哪个分支之后运行。`else` 只在 `try` 块没有触发异常时运行，把「正常路径」与「异常处理」分开，避免处理块捕获自己抛出的异常。
+匹配规则在这里建立：`except` 子句**按书写顺序取第一个匹配**，并且**子类也匹配父类**（`except ConfigError` 会接住 `MissingKey`），因此具体的类型写在前面。在本课的模型里这两条只决定一件事：`finally` 在哪个分支之后运行。`else` 只在 `try` 块没有触发异常时运行，把「正常路径」与「异常处理」分开，避免处理块捕获自己抛出的异常。
 
 ```python run id="py.exc.matching"
 class ConfigError(Exception):
@@ -195,25 +195,7 @@ for label, function in [("bare raise", bare_reraise), ("raise instance", instanc
 ```python run id="py.exc.boundaries"
 print("SystemExit is Exception:", issubclass(SystemExit, Exception))
 print("KeyboardInterrupt is Exception:", issubclass(KeyboardInterrupt, Exception))
-
-
-def after_handler():
-    try:
-        raise ValueError("inner")
-    except ValueError as exc:
-        print("inside the handler:", type(exc).__name__)
-    try:
-        print(exc)
-    except NameError as failure:
-        print(
-            "after the handler:",
-            type(failure).__name__,
-            "| is a NameError:",
-            isinstance(failure, NameError),
-        )
-
-
-after_handler()
+print("GeneratorExit is Exception:", issubclass(GeneratorExit, Exception))
 ```
 
-`SystemExit`、`KeyboardInterrupt` 与 `GeneratorExit` 继承 `BaseException` 而不是 `Exception`，因此 `except Exception` 不会接住它们。写 `except BaseException` 或裸 `except:` 会把解释器的正常退出信号也吞掉，让 Ctrl-C 与进程终止失效。`except Exception: pass` 把可诊断的失败变成继续执行的错误状态，只在明确知道如何恢复时才捕获。异常不是廉价的控制流：逐元素依赖它跳过低频分支可以接受，把它当普通分支使用会同时损害性能与可读性。另一个容易忽略的细节是 `except ... as exc` 里的名字：处理块结束时它被删除，之后引用会失败——在模块层是 `NameError`，在函数内表现为它的子类 `UnboundLocalError`。
+`SystemExit`、`KeyboardInterrupt` 与 `GeneratorExit` 继承 `BaseException` 而不是 `Exception`，因此 `except Exception` 不会接住它们。写 `except BaseException` 或裸 `except:` 会把解释器的正常退出信号也吞掉，让 Ctrl-C 与进程终止失效。`except Exception: pass` 把可诊断的失败变成继续执行的错误状态，只在明确知道如何恢复时才捕获。异常不是廉价的控制流：逐元素依赖它跳过低频分支可以接受，把它当普通分支使用会同时损害性能与可读性。
