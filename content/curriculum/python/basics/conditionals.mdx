@@ -1,0 +1,103 @@
+---
+id: python.conditionals
+slug: /python/conditionals
+order: 60
+title: 比较、布尔与条件
+status: published
+objectives:
+  - 判断一个比较表达式的真值，并说明链式比较的含义
+  - 预测非布尔值在条件语句中的真值结果
+  - 用 if/elif/else 表达多分支，并说明分支顺序的影响
+estimated_reading_minutes: 35
+---
+
+## 目的
+
+本课解释比较运算、布尔运算与条件语句。
+
+程序需要根据数据选择不同的路径，这个能力由布尔值与条件语句提供。
+
+## 模型：布尔值与比较
+
+- 比较运算（`==`、`!=`、`<`、`<=`、`>`、`>=`）返回 `bool`，取值 `True` 或 `False`。
+- `==` 比较值是否相等，`is` 判断是否为同一个对象。对不可变值两者通常一致，区别由对象模型课时处理。
+- 链式比较 `a < b < c` 等价于 `a < b and b < c`。
+- 布尔运算 `and`、`or`、`not`。`and` 在左侧为假时返回左侧操作数，`or` 在左侧为真时返回左侧操作数，因此它们返回操作数本身，不总是返回 `bool`。
+
+```python run id="py.cond.comparisons"
+print(1 == 1.0, 1 != 2)
+print(3 > 2 > 1)
+print(3 >= 3, 2 <= 1)
+print("a" == "a", [1, 2] == [1, 2])
+```
+
+## 真值测试
+
+`if` 与 `while` 要判断一个值是真还是假。空容器、空字符串、`0`、`None` 都是假值。
+
+```python run id="py.cond.truthiness"
+print(bool(0), bool(1), bool(""), bool("x"))
+print(bool([]), bool([0]), bool({}), bool(None))
+print(0 == False, "" == False, bool("False"))
+```
+
+`bool([0])` 为真，因为列表非空，元素是什么无关。`"False"` 是非空文本，也为真——这是解析配置文件时的常见陷阱。
+
+## 条件语句
+
+```python run id="py.cond.grades"
+score = 72
+
+if score >= 90:
+    grade = "A"
+elif score >= 70:
+    grade = "B"
+else:
+    grade = "C"
+
+print(grade)
+```
+
+分支从上到下判断，第一个为真的分支执行，其余跳过。`elif` 的顺序决定结果：把 `>= 70` 放在 `>= 90` 之前，90 分以上也会落到 `B`。
+
+条件表达式把同样的选择写成一行：
+
+```python run id="py.cond.expression"
+print("yes" if 2 < 3 else "no")
+```
+
+## 布尔运算的组合
+
+```python run id="py.cond.boolean-ops"
+print(True and False, True or False, not True)
+print(2 < 3 and "yes" or "no")
+print(None == 0, None is None)
+```
+
+`and` 与 `or` 返回操作数本身，`2 < 3 and "yes"` 得到 `"yes"`。短路求值指 `and` 在左侧为假时不再求值右侧，`or` 在左侧为真时不再求值右侧；依赖这一点时要注意副作用。
+
+`None == 0` 为 `False`，`None is None` 为 `True`。判断「没有值」用 `is None`。
+
+## 边界与失败情形
+
+- **缩进定义分支**：`if` 之后缩进相同的语句属于该分支。缩进不一致抛 `IndentationError`。
+- **冒号不能省**：`if x > 0` 后面漏掉 `:` 抛 `SyntaxError`。
+- **赋值与比较**：`=` 是赋值，`==` 是比较。条件里写成 `=` 会得到 `SyntaxError`，这是语言有意的检查。
+- **`0` 与 `False` 相等**：`0 == False` 为真，因为 `bool` 是 `int` 的子类型。区分「数值为零」与「逻辑为假」需要按类型判断。
+- **空容器为假**：`bool([])` 为假，判断「有内容」可以直接写 `if items:`。
+- **`is` 不用于值比较**：`a is b` 判断身份。对小整数与短字符串，结果依赖实现中的缓存，不是语言保证。
+
+## 生产后果
+
+- 校验逻辑写成条件链时，分支顺序与边界符号（`>` 与 `>=`）决定结果，边界值必须逐个确认。
+- 用真值测试判断容器是否为空是惯用写法，但把 `0`、空字符串与缺失值混在一起会造成误判。
+- 配置解析中 `"false"`、`"0"`、`"None"` 这类文本都是真值，需要显式转换。
+
+## 小结
+
+- 比较运算返回 `bool`；链式比较等价于用 `and` 连接。
+- 空容器、空字符串、`0`、`None` 都是假值；非空容器与 `"False"` 这类文本为真。
+- `if`/`elif`/`else` 从上到下判断，第一个为真的分支执行。
+- 缩进定义分支，冒号不能省。
+- `and` 与 `or` 返回操作数本身并短路求值。
+- 判断「没有值」用 `is None`。

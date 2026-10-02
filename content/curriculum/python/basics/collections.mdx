@@ -1,0 +1,133 @@
+---
+id: python.collections
+slug: /python/collections
+order: 90
+title: 列表、元组、字典与集合
+status: published
+objectives:
+  - 按用途在四种内置容器中做出选择，并说明理由
+  - 用索引、切片与遍历读取容器内容
+  - 用推导式从已有序列构造新列表
+estimated_reading_minutes: 45
+---
+
+## 目的
+
+本课解释四种内置容器的用途与常用操作。
+
+程序需要成组地保存数据。四种容器各有明确用途：列表有序可变，元组有序不可变，字典按键查找，集合去重并判断成员。
+
+## 模型
+
+| 容器 | 字面量 | 有序 | 可变 | 主要用途 |
+| --- | --- | --- | --- | --- |
+| 列表 `list` | `[1, 2]` | 是 | 是 | 有顺序、会变化的序列 |
+| 元组 `tuple` | `(1, 2)` | 是 | 否 | 固定长度的记录，可作字典键 |
+| 字典 `dict` | `{"a": 1}` | 插入序 | 是 | 按键查找的映射 |
+| 集合 `set` | `{1, 2}` | 否 | 是 | 去重与成员判断 |
+
+```python run id="py.collections.list"
+items = [3, 1, 2]
+items.append(4)
+print(items)
+
+items.sort()
+print(items)
+print(items[0], items[-1], items[1:3], len(items))
+print(sorted([3, 1, 2]), [1, 2] + [3])
+```
+
+`append` 在末尾追加，`sort` 原地排序并返回 `None`，`sorted` 返回新列表。列表支持索引、切片、拼接与 `len`。
+
+```python run id="py.collections.comprehension"
+numbers = list(range(5))
+print(numbers)
+print([n * n for n in numbers if n % 2 == 0])
+print(sum(numbers) / len(numbers))
+```
+
+推导式从一个序列构造新列表：`[表达式 for 元素 in 序列 if 条件]`。它比循环加 `append` 更紧凑，是构造列表的惯用写法。
+
+## 元组与解包
+
+```python run id="py.collections.tuple"
+point = (3, 4)
+print(point[0], len(point))
+
+x, y = point
+print(x, y)
+print((1, 2) == (1, 2))
+```
+
+元组不可变，适合表示固定结构的记录。解包把元素绑定到多个名字，函数返回多个值用的就是它。
+
+## 字典
+
+```python run id="py.collections.dict"
+person = {"name": "Ada", "year": 1815}
+print(person["name"], person.get("year"))
+print(person.get("missing"), person.get("missing", "unknown"))
+
+person["field"] = "computing"
+print(person)
+print(list(person.keys()), len(person))
+print("name" in person)
+
+for key, value in person.items():
+    print(key, "=", value)
+```
+
+`person[key]` 在键不存在时抛 `KeyError`；`get` 返回 `None` 或指定的默认值。`in` 判断键是否存在。`items()` 给出键值对，用于遍历。
+
+## 集合
+
+```python run id="py.collections.set"
+seen = {1, 2, 2, 3}
+print(seen, len(seen))
+print({1, 2} | {2, 3})
+print({1, 2} & {2, 3})
+```
+
+集合自动去重，支持并集 `|` 与交集 `&`。集合无序，不能按下标取值。
+
+## 嵌套与选择
+
+```python run id="py.collections.nested"
+orders = [
+    {"id": 1, "total": 250},
+    {"id": 2, "total": 120},
+]
+for order in orders:
+    print(order["id"], order["total"])
+
+totals = [order["total"] for order in orders]
+print(totals, sum(totals))
+```
+
+列表里放字典是常见的记录集合形式：列表提供顺序，字典提供字段名。按字段取值比按位置取值更容易读懂与修改。
+
+选择判据：需要顺序与下标用列表；需要按键查找用字典；需要去重或集合运算用集合；记录的长度与字段固定用元组。
+
+## 边界与失败情形
+
+- **下标越界与缺键**：列表下标越界抛 `IndexError`，字典缺键抛 `KeyError`。`get` 与 `in` 是避免缺键错误的常规手段。
+- **`sort` 返回 `None`**：写 `items = items.sort()` 会把 `items` 变成 `None`，原地方法不返回新容器。
+- **字典的键必须可哈希**：列表与字典不能作键，元组可以。完整规则由相等与哈希课时给出。
+- **集合无序**：遍历集合的顺序不保证稳定。
+- **容器可嵌套，元素是引用**：`[[0] * 3] * 3` 得到三行指向同一个列表的矩阵，构造独立元素用推导式。
+- **相等比较看内容**：`[1, 2] == [1, 2]` 为真，即使它们是不同的对象。
+
+## 生产后果
+
+- 数据在内存中的组织方式决定后续代码的复杂度：按 id 反复查找用字典，顺序处理用列表。
+- 字典与集合的查找依赖哈希，键的类型与是否可变会影响行为与性能。
+- 从 JSON 解析得到的结构就是列表与字典的嵌套，读接口文档时要同时看字段名与嵌套层级。
+
+## 小结
+
+- 列表有序可变，元组有序不可变，字典按键查找，集合去重。
+- `append` 原地追加，`sort` 原地排序并返回 `None`，`sorted` 返回新列表。
+- 推导式从已有序列构造新列表。
+- 字典用 `[]` 取值会抛 `KeyError`，`get` 与 `in` 更安全。
+- 集合支持并集与交集，且无序。
+- 列表里放字典是记录集合的常用形式。

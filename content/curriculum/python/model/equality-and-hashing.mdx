@@ -1,0 +1,136 @@
+---
+id: python.equality-and-hashing
+slug: /python/equality-and-hashing
+order: 30
+title: 相等、哈希与可变键
+status: draft
+objectives:
+  - 陈述相等与哈希之间的契约，并据此判断两个对象是否落在同一个字典键上
+  - 解释在插入后修改参与哈希的字段为何会让条目无法查找
+  - 预测一个类定义 __eq__ 之后可哈希性的变化
+  - 判断跨类型相等在字典与集合中的后果
+estimated_reading_minutes: 45
+---
+
+## 目的
+
+本课解释 `==` 与 `hash()` 这一对契约，以及字典与集合如何依赖它。
+
+上一课的结论是对象可以被多个名称共享并就地修改。本课处理它的直接后果：就地修改会改变哈希值，而哈希表把哈希值当作定位依据。修改发生在插入之后时，条目仍在表里，查找路径却已经不再经过它。
+
+这是静默错误的典型形态：没有异常，没有警告，查找返回「不存在」，写入产生重复键。
+
+## 模型：等价关系与哈希
+
+- `__eq__` 定义等价关系：自反、对称、传递。
+- `__hash__` 把对象映射到整数。
+- **契约**：`a == b` 蕴含 `hash(a) == hash(b)`。反向不成立，不同的对象可以有相同哈希，这种情形称为<Term id="hash-collision">哈希冲突</Term>，哈希表用 `==` 在候选之间确认。
+- 默认的 `__eq__` 比较身份，默认的 `__hash__` 基于身份。
+- 一个类定义 `__eq__` 而未定义 `__hash__` 时，`__hash__` 被置为 `None`，实例不可哈希。
+- 哈希表插入时用哈希选桶，查找时用同一个哈希重走路径。参与哈希的字段在插入后改变，两条路径就分开了。
+
+## 跨类型的相等
+
+```python run id="py.eq.cross-type-keys"
+print(hash(1) == hash(1.0) == hash(True))
+print(1 == 1.0 == True)
+
+table = {1: "int", 1.0: "float", True: "bool"}
+print(table)
+print(len(table))
+```
+
+数值相等跨类型成立，哈希值也一致，因此 `1`、`1.0`、`True` 落在同一个键上。字典保留最后写入的值，长度仍为 1。这个性质在解析配置文件或 JSON 时会造成意外合并：整数 `1` 与布尔 `true` 在 Python 中无法共存于同一个字典。
+
+## 可变键
+
+```python run id="py.eq.mutable-key"
+class Key:
+    def __init__(self, value):
+        self.value = value
+
+    def __hash__(self):
+        return hash(self.value)
+
+    def __eq__(self, other):
+        return isinstance(other, Key) and self.value == other.value
+
+
+key = Key(1)
+lookup = {key: "stored"}
+
+print("lookup:", lookup.get(key))
+
+key.value = 2
+
+print("after mutation:", lookup.get(key))
+print("membership:", key in lookup)
+print("entries:", len(lookup))
+```
+
+修改 `key.value` 之后查找返回 `None`，成员判定为 `False`，而 `len(lookup)` 仍为 1。条目没有被删除，只是无法再通过哈希定位。把这个对象重新赋值为 `Key(2)` 也找不回来，因为 `__eq__` 判定它等于表里那个被改过的键，而查找会先在新哈希对应的桶里寻找。
+
+## 定义 `__eq__` 的后果
+
+```python run id="py.eq.unhashable"
+class Money:
+    def __init__(self, cents):
+        self.cents = cents
+
+    def __eq__(self, other):
+        return isinstance(other, Money) and self.cents == other.cents
+
+
+print("Money.__hash__ is:", Money.__hash__)
+
+try:
+    {Money(100): 1}
+except TypeError as exc:
+    print(type(exc).__name__, "|", "unhashable" in str(exc))
+```
+
+类一旦定义 `__eq__`，Python 把 `__hash__` 置为 `None`。把它放进字典或集合抛出 `TypeError`，异常消息的具体文本随版本变化，判定依据是类型名与「不可哈希」这一事实。
+
+要恢复可哈希性必须显式定义 `__hash__`，并且只用不参与可变状态的字段。数据类上的同一个问题表现为：`eq=True` 且 `frozen=False` 时实例不可哈希，`frozen=True` 才生成基于字段的哈希。
+
+## 集合中的等价类
+
+```python run id="py.eq.set-membership"
+print({1, 1.0, True})
+print(len({1, 1.0, True}))
+
+nan = float("nan")
+print(nan == nan)
+print(len({nan, nan}))
+print(len({float("nan"), float("nan")}))
+```
+
+集合按等价类去重，`1`、`1.0`、`True` 落进同一个元素。
+
+NaN 与任何值都不相等，包括自身，因此每个独立的 NaN 对象都是一个新元素。`{nan, nan}` 只有一个元素的原因是集合在比较前先做身份判定，两次引用的是同一个对象；`{float("nan"), float("nan")}` 调用两次构造函数，得到两个对象，于是有两个元素。
+
+## 边界与失败情形
+
+- **冲突与对抗性输入**：冲突只影响性能。构造大量哈希相同的键会让哈希表退化。CPython 对字符串哈希做随机化（`PYTHONHASHSEED`），跨进程的哈希值不保证一致，持久化哈希值不可取。
+- **对称性**：跨类型比较要返回 `NotImplemented` 交给对方处理，否则 `Money(1) == 1` 与 `1 == Money(1)` 可能给出不同结果。
+- **子类**：子类继承 `__eq__` 又新增字段时，等价关系可能失去传递性，两个不同的子类实例可能都与父类实例相等。
+- **两个方法必须一起维护**：改了 `__eq__` 而没改 `__hash__`，或者反过来，字典行为会静默错误。
+- **可变字段参与哈希**：包含列表字段的对象默认不可哈希；自定义 `__hash__` 时用了可变字段，就落回可变键的失效模式。
+- **负零**：`-0.0 == 0.0` 且两者哈希相同，作为键时是同一个键。
+- **开销**：哈希计算在每次查找时发生。键的哈希过重会让字典退化为昂贵的操作。
+
+## 生产后果
+
+- 缓存键、去重集合、任务去重、ORM 的身份映射都建立在这对契约上。
+- 用可变对象作缓存键，命中率随对象被修改而静默下降，且没有可观测的信号。
+- 用默认的对象身份作键时，跨进程或反序列化得到的「同一个值」会成为不同的键。
+- 把哈希值持久化到数据库或缓存键名里，在哈希随机化与版本变化后不再可复现。
+- 生成代码常见两种错误：定义 `__eq__` 后忘记 `__hash__`；用 `@dataclass` 且未冻结实例却期望可哈希。
+
+## 小结
+
+- 相等蕴含同哈希，同哈希不蕴含相等。
+- 哈希表用哈希定位、用 `==` 确认；参与哈希的字段在插入后不能改。
+- 定义 `__eq__` 会把 `__hash__` 置为 `None`，可哈希性需要显式恢复。
+- 跨类型数值相等让 `1`、`1.0`、`True` 成为同一个键。
+- NaN 与任何值都不相等，包括自身；集合的身份预检查让同一对象的重复插入不产生新元素。

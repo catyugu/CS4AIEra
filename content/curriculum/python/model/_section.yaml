@@ -1,0 +1,5 @@
+id: python.model
+label: 对象模型与数据表示
+order: 20
+summary: 名称与对象、可变性与复制、相等与哈希契约、数值表示与浮点误差、文本与编码，以及语言保证与实现细节的边界。
+status: active

@@ -1,0 +1,101 @@
+---
+id: python.strings
+slug: /python/strings
+order: 40
+title: 字符串
+status: published
+objectives:
+  - 用索引与切片取出字符串的一部分，并预测越界时的行为
+  - 说明拼接、重复与比较在字符串上的规则
+  - 用 f-string 把值插入文本，并说明它与拼接的差别
+estimated_reading_minutes: 40
+---
+
+## 目的
+
+本课解释字符串的表示与常用操作。
+
+字符串是文本在程序里的表示形式。它是序列，可以按位置取值；它不可变，所有「修改」都产生新字符串。
+
+## 模型：字符串是序列
+
+- `len(s)` 给出字符数。
+- `s[i]` 按位置取值，位置从 0 开始；负下标从末尾倒数，`s[-1]` 是最后一个字符。
+- `s[start:stop]` 是切片：取 `start` 到 `stop` 之前的部分，不含 `stop`。
+- 下标越界抛 `IndexError`；切片越界不报错，返回能取到的部分。
+- 字符串不可变，`s[0] = "x"` 抛 `TypeError`，改变内容只能构造新字符串。
+
+```python run id="py.strings.indexing"
+word = "python"
+print(len(word))
+print(word[0], word[1], word[-1])
+print(word[0:3], word[:3], word[3:], word[:])
+```
+
+`word[0:3]` 是 `pyt`，`word[:3]` 等价，`word[3:]` 取到末尾，`word[:]` 复制整个字符串。
+
+## 拼接、重复与成员判断
+
+```python run id="py.strings.operators"
+print("py" + "thon")
+print("ab" * 3)
+print("th" in "python", "z" in "python")
+print("5" + "3")
+```
+
+`+` 拼接，`*` 重复，`in` 判断子串。`"5" + "3"` 得到 `"53"`，这是文本拼接，不是加法。
+
+## 常用方法
+
+```python run id="py.strings.methods"
+word = "python"
+print(word.upper(), word.replace("p", "P"))
+print("  padded  ".strip())
+print("a,b,c".split(","))
+print("-".join(["a", "b", "c"]))
+```
+
+方法不修改原字符串，而是返回新字符串。`split` 把字符串切成列表，`join` 把列表拼成字符串，分隔符由调用方给出。
+
+## 把值插入文本
+
+```python run id="py.strings.formatting"
+word = "python"
+count = 6
+print(f"{word} has {count} letters")
+print("total: " + str(12))
+print("value is", 42)
+```
+
+f-string 在引号前加 `f`，用 `{}` 插入表达式，插入的值自动转成文本。`print` 接受多个参数并用空格分隔，是最省事的输出方式。
+
+## 边界与失败情形
+
+- **不可变**：字符串没有原地修改操作，`s[0] = "x"` 抛 `TypeError`。
+- **下标越界抛错，切片不抛**：`"abc"[5]` 抛 `IndexError`，`"abc"[5:9]` 返回空字符串。
+- **比较按码点顺序**：`"Z" < "a"` 为真，因为大写字母的码点小于小写字母。语言相关的排序需要专门的排序规则。
+- **单引号与双引号等价**：`'a'` 与 `"a"` 是同一个值。文本里含引号时换用另一种引号，或用反斜杠转义。
+- **转义序列**：`\n` 是换行，`\t` 是制表符，`\\` 是一个反斜杠。用 `repr` 看清真实内容。
+- **码点与字符**：`ord("A")` 得到 65，`chr(65)` 得到 `"A"`。
+
+```python run id="py.strings.escapes"
+print(repr("two\nlines"))
+print(repr("tab\there"))
+print(chr(65), ord("A"))
+```
+
+## 生产后果
+
+- 用户输入、配置与日志都是文本，进入计算前要解析与校验。
+- 长度限制的单位决定边界：字符数、字节数与显示宽度互不相等，非 ASCII 文本尤其明显。
+- 拼接大量字符串会反复复制，构建长文本用列表收集再 `join`。
+- 比较、大小写折叠与排序在跨语言数据上不一致，认证与去重场景必须统一规则。
+
+## 小结
+
+- 字符串是字符序列，下标从 0 开始，负下标从末尾倒数。
+- 切片不含结束位置，越界不报错；下标越界抛 `IndexError`。
+- 字符串不可变，方法返回新字符串。
+- `+` 拼接，`*` 重复，`in` 判断子串。
+- f-string 把值插入文本；`print` 用空格分隔多个参数。
+- 比较按码点顺序，与语言习惯的排序不同。

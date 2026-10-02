@@ -1,0 +1,123 @@
+---
+id: python.loops
+slug: /python/loops
+order: 70
+title: 循环
+status: published
+objectives:
+  - 用 for 与 range 写出重复执行的代码，并说明 range 的边界
+  - 选择 for 或 while，并指出 while 需要自己维护什么
+  - 用累加模式把一个序列折叠成单个值
+estimated_reading_minutes: 40
+---
+
+## 目的
+
+本课解释两种循环结构，以及用循环处理序列的常见模式。
+
+对一批数据做同样的处理需要循环。循环的正确性依赖两件事：终止条件与每次迭代累积的状态。
+
+## 模型：for 与 while
+
+- `for name in sequence:` 依次把序列中的每个元素绑定到 `name`，对每个元素执行一次循环体。
+- `range(stop)`、`range(start, stop)`、`range(start, stop, step)` 生成整数序列，不含 `stop`。
+- `while condition:` 在条件为真时重复执行循环体。循环体必须改变条件涉及的值，否则循环不终止。
+- 循环体靠缩进界定。
+- `break` 结束整个循环，`continue` 跳过本次迭代的剩余部分。
+
+```python run id="py.loops.for-range"
+for i in range(3):
+    print("i =", i)
+
+print(list(range(3)), list(range(2, 5)), list(range(0, 10, 3)))
+```
+
+`range(3)` 产生 0、1、2，不含 3。`range(0, 10, 3)` 产生 0、3、6、9。`list()` 把序列显示出来，用于检查范围。
+
+## 遍历序列
+
+```python run id="py.loops.iterate"
+for ch in "abc":
+    print(ch)
+
+for index, item in enumerate(["x", "y"]):
+    print(index, item)
+
+for name, value in [("a", 1), ("b", 2)]:
+    print(name, value)
+```
+
+`for` 直接遍历元素。需要下标时用 `enumerate`，需要并行遍历多个序列时用 `zip`。列表里的元组可以直接解包到多个名字。
+
+## 累加模式
+
+```python run id="py.loops.accumulate"
+total = 0
+for n in [1, 2, 3, 4]:
+    total += n
+print("total:", total)
+
+numbers = [4, 1, 7]
+largest = numbers[0]
+for n in numbers[1:]:
+    if n > largest:
+        largest = n
+print("largest:", largest)
+```
+
+累加需要三部分：初值、每次迭代的更新、循环结束后的使用。初值取错（求最大值时用 0）会让结果在全是负数时出错。
+
+## while 与终止
+
+```python run id="py.loops.while"
+n = 3
+while n > 0:
+    print("n =", n)
+    n -= 1
+```
+
+`while` 适合迭代次数事先不确定的场景，代价是要自己保证终止：这里靠 `n -= 1` 让条件最终为假。漏掉这一步循环永不结束，页面上的**停止**按钮会终止这次执行。
+
+```python run id="py.loops.break-continue"
+for i in range(5):
+    if i == 2:
+        continue
+    if i == 4:
+        break
+    print("kept", i)
+```
+
+`continue` 跳过 `i == 2`，`break` 在 `i == 4` 结束循环，因此输出 0、1、3。
+
+## 内建聚合
+
+```python run id="py.loops.builtins"
+numbers = [1, 2, 3]
+print(sum(numbers), max(numbers), min(numbers), len(numbers))
+```
+
+`sum`、`max`、`min`、`len` 覆盖多数聚合需求，比手写循环更短也更难写错。手写循环用于需要额外状态或多步判断的场景。
+
+## 边界与失败情形
+
+- **`range` 不含终点**：`range(1, 5)` 是 1 到 4。
+- **空序列不执行循环体**：`for x in []:` 一次都不执行，之后的代码继续。
+- **遍历中修改容器**：在循环里增删正在遍历的列表会跳过或重复元素，需要遍历副本或先收集再修改。
+- **无限循环**：`while True`，或条件里的值永不改变。**停止**按钮终止执行，**恢复代码**把单元格还原为作者源码。
+- **累加初值**：求和的初值是 0，求积是 1，求最大值应取序列的第一个元素。
+- **循环变量泄漏**：循环结束后 `i` 仍然存在，值是最后一次迭代的值。
+
+## 生产后果
+
+- 批量处理、重试、分页拉取都是循环。终止条件写错会造成请求风暴或任务挂死。
+- 循环内做 I/O 或网络调用时，每次迭代的成本决定整体耗时，需要按批处理。
+- 循环内的累加状态是并发问题的来源：多个执行流同时更新同一个累加器会丢更新。
+
+## 小结
+
+- `for` 遍历序列，`range` 生成整数序列且不含终点。
+- `while` 适合次数不确定的循环，循环体必须让条件最终为假。
+- `break` 结束循环，`continue` 跳过本次迭代。
+- 累加模式需要正确的初值、更新与终止。
+- 遍历时不要修改容器。
+- `sum`、`max`、`min`、`len` 覆盖多数聚合需求。

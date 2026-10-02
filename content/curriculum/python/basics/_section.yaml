@@ -1,0 +1,5 @@
+id: python.basics
+label: 语言基础
+order: 10
+summary: 从零开始：程序与表达式、值与类型、数值与算术、字符串、名称与赋值、比较与条件、循环、函数、内置容器。
+status: active
