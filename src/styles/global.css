@@ -1,3 +1,7 @@
+/* KaTeX stylesheet, served from the bundled package: math is rendered to
+   static HTML at build time (src/markdown/math-katex.ts). */
+@import "katex/dist/katex.min.css";
+
 /* Reading shell. Static-first: no layout depends on client script. */
 
 :root {
