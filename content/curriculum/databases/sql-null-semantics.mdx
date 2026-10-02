@@ -28,7 +28,7 @@ estimated_reading_minutes: 45
 
 SQL 的布尔表达式有三种结果：`TRUE`、`FALSE`、`UNKNOWN`。`WHERE` 子句只保留结果为 `TRUE` 的行；`FALSE` 与 `UNKNOWN` 都会被丢弃。
 
-NULL 不是值，而是"此处没有值/值未知"的标记。因此：
+NULL 是"此处没有值/值未知"的标记。因此：
 
 | 表达式 | 结果 |
 | --- | --- |
@@ -44,7 +44,7 @@ NULL 不是值，而是"此处没有值/值未知"的标记。因此：
 
 ## 观察：比较不等于匹配
 
-夹具中 `customer_id = 3` 的客户 `country` 为 NULL。下面第一条查询按常规比较取国家为 `'GB'` 的客户，第二条查询想取"不是 GB"的客户。运行前先预测两者各返回几行。
+夹具中 `customer_id = 3` 的客户 `country` 为 NULL。下面第一条查询按常规比较取国家为 `'GB'` 的客户，第二条查询想取"不是 GB"的客户。
 
 ```sql run id="sql.null.comparison" fixture="sql.orders.basic"
 SELECT customer_id, full_name, country
@@ -56,7 +56,7 @@ FROM customers
 WHERE country <> 'GB';
 ```
 
-第二条查询漏掉了 `country` 为 NULL 的那一行：`NULL <> 'GB'` 求值为 `UNKNOWN`，不是 `TRUE`。这不是数据缺失，而是三值逻辑的直接后果。
+第二条查询漏掉了 `country` 为 NULL 的那一行：`NULL <> 'GB'` 求值为 `UNKNOWN`。这是三值逻辑的直接后果，与数据是否缺失无关。
 
 ## 正确写法：IS NULL 谓词
 
@@ -80,7 +80,7 @@ WHERE country IS NULL OR country <> 'GB';
 
 ## 陷阱：NOT IN 与 NULL
 
-`NOT IN` 是这一语义最容易出错的地方。下面是两个只差一个元素的子查询，先预测结果再运行。
+`NOT IN` 是这一语义最容易出错的地方。下面是两个只差一个元素的子查询。
 
 ```sql run id="sql.null.not-in" fixture="sql.orders.basic"
 SELECT customer_id, country

@@ -40,7 +40,7 @@ print("b =", b)
 print("same object:", a is b)
 ```
 
-`a is b` 为真，因为两者是同一个对象。改一个名字看到的内容，另一个名字也看到——这是同一对象，不是复制。
+`a is b` 为真，因为两者是同一个对象。改一个名字看到的内容，另一个名字也看到，中间没有发生复制。
 
 ## 身份与相等
 
@@ -109,7 +109,7 @@ print("second:", next(it))
 print("remaining state is shared because the session is explicit")
 ```
 
-如果把第二个单元格的 `session` 去掉，它会以 `NameError: name 'it' is not defined` 失败——隔离单元格看不到别的单元格的状态。这不是缺陷，而是默认行为在阻止隐藏的执行顺序依赖。
+如果把第二个单元格的 `session` 去掉，它会以 `NameError: name 'it' is not defined` 失败——隔离单元格看不到别的单元格的状态。这一默认行为阻止了隐藏的执行顺序依赖。
 
 ## 函数参数与默认参数
 
