@@ -63,8 +63,8 @@
 | | 80 | `python.functions` | 函数 | ✓ |
 | | 90 | `python.collections` | 列表、元组、字典与集合 | ✓ |
 | | 100 | `python.classes` | 类与实例 | 草稿 |
-| | 110 | `python.modules-basics` | 模块、导入与文件读写 | — |
-| | 120 | `python.errors-basics` | 错误与异常处理入门 | — |
+| | 110 | `python.modules-basics` | 模块、导入与文件 | 草稿 |
+| | 120 | `python.errors-basics` | 错误与异常处理 | 草稿 |
 | `python.objects` | 10 | `python.names-and-objects` | 对象、身份与别名 | 草稿 |
 | | 20 | `python.mutability-and-copy` | 可变性、原地更新与复制 | 草稿 |
 | | 30 | `python.equality-and-hashing` | 相等与哈希契约 | 草稿 |
@@ -75,9 +75,9 @@
 | | 20 | `python.generators` | generator 与 `yield` | 草稿 |
 | | 30 | `python.exceptions` | 异常、传播与 `finally` | 草稿 |
 | | 40 | `python.context-managers` | 上下文管理器与资源生命周期 | 草稿 |
-| `python.data-model` | 10 | `python.attributes-and-descriptors` | 属性查找与方法绑定 | — |
-| | 20 | `python.dunder-protocols` | 特殊方法与协议 | — |
-| | 30 | `python.inheritance-and-mro` | 继承与 MRO | — |
+| `python.data-model` | 10 | `python.attributes-and-descriptors` | 属性查找与方法绑定 | 草稿 |
+| | 20 | `python.dunder-protocols` | 特殊方法与协议 | 草稿 |
+| | 30 | `python.inheritance-and-mro` | 继承与 MRO | 草稿 |
 | `python.representation` | 10 | `python.numbers-and-floats` | 整数、浮点数与近似 | 草稿 |
 | | 20 | `python.text-and-bytes` | 文本、bytes 与编码 | 草稿 |
 | `python.program` | 10 | `python.runtime-vs-language` | 语言保证与实现细节 | 草稿 |
@@ -101,7 +101,7 @@
 | 子章节 | order | 课时 id | 标题 | 落盘 |
 | --- | --- | --- | --- | --- |
 | `algorithms.complexity` | 10 | `algorithms.cost-model` | 操作成本与渐进记号 | 草稿 |
-| | 20 | `algorithms.amortized` | 摊还分析 | — |
+| | 20 | `algorithms.amortized` | 摊还分析 | 草稿 |
 | | 30 | `algorithms.average-and-randomized` | 平均情形与随机化 | — |
 | | 40 | `algorithms.lower-bounds` | 下界与不可近似 | — |
 | `algorithms.sequences` | 10 | `algorithms.arrays-and-lists` | 数组、动态数组与局部性 | 草稿 |
@@ -310,15 +310,15 @@
 | 批次 | 范围 | 状态 |
 | --- | --- | --- |
 | 1 | `python.basics` 精度修订（9 节正文） | 完成 |
-| 2 | `python.classes`、`python.modules-basics`、`python.errors-basics` | `python.classes` 已落盘；另两节待写 |
+| 2 | `python.classes`、`python.modules-basics`、`python.errors-basics` | 已落盘待审核 |
 | 3 | `python.objects`：对象与共享状态的三节课 | 已落盘待审核 |
 | 4 | `python.functions`：调用语义、作用域与闭包、装饰器 | 已落盘待审核 |
 | 5 | `python.iteration`：迭代协议、generator、异常、上下文管理器 | 已落盘待审核 |
-| 6 | `python.data-model`：属性查找、特殊方法、继承与 MRO | 计划 |
+| 6 | `python.data-model`：属性查找、特殊方法、继承与 MRO | 已落盘待审核 |
 | 7 | `python.representation`：数值与浮点、文本与 bytes | 已落盘待审核 |
 | 8 | `python.program`：语言保证与实现细节、导入边界、类型标注 | 首节已落盘；另两节计划 |
 | 9 | `python.async`：coroutine 与调度、取消与超时清理 | 计划 |
-| 10 | `algorithms.complexity`、`algorithms.sequences` | 已落盘待审核（`amortized`、`average-and-randomized`、`lower-bounds`、`strings` 待写） |
+| 10 | `algorithms.complexity`、`algorithms.sequences` | 已落盘待审核（`average-and-randomized`、`lower-bounds`、`strings` 待写） |
 | 11 | `algorithms.maps`：哈希表、有序映射、堆 | `hash-tables` 已落盘；其余计划 |
 | 12 | `algorithms.graphs` | 计划 |
 | 13 | `algorithms.techniques`、`algorithms.selection` | 计划 |
