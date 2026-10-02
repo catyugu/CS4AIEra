@@ -4,7 +4,6 @@ slug: /databases/sql-null-semantics
 order: 10
 title: NULL 与三值逻辑
 status: published
-prerequisites: []
 objectives:
   - 说明 SQL 的 NULL 表示"未知"而非"空值"，并据此预测比较结果
   - 区分 NULL 比较、IS NULL 谓词与 NOT IN 中的未知传播
@@ -180,10 +179,6 @@ ORDER BY order_id;
 - 聚合结果的分母决定业务指标。`AVG` 忽略 NULL 可能让"平均折扣"偏高，需要在口径上明确 NULL 的处置。
 - 迁移与回填时，`NOT NULL` 约束的添加会因既有 NULL 行失败，需要显式的回填步骤。
 - 生成式工具常写出 `NOT IN (SELECT ...)` 形式的查询，在含 NULL 的子查询上静默返回空结果，看起来"没数据"而不是"写错了"。
-
-## 该委托给工具的部分
-
-具体引擎的 `EXPLAIN` 输出格式、索引提示语法与方言扩展可以查文档。需要保留的是：**NULL 是未知、UNKNOWN 会传播、WHERE 只保留 TRUE** 这三条，它们决定查询返回哪一行。
 
 ## 小结
 
