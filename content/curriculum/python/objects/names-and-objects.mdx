@@ -123,7 +123,7 @@ print("after replace:", data)
 
 ## 复合赋值的两种语义
 
-`x += y` 先对 target 求值一次，再按 `x` 的类型查找对应的 in-place operation（`+=` 找 `__iadd__`）。该 operation 可能修改原对象并返回它，也可能返回另一个对象；无论哪种情形，结果都重新赋给那个 target。类型没有对应的 in-place operation 时走普通二元运算的回退路径，效果等同于 `x = x + y`。
+`x += y` 先对 target 求值一次，再按 `x` 的类型查找对应的 in-place operation（`+=` 找 `__iadd__`）。该 operation 可能修改原对象并返回它，也可能返回另一个对象；无论哪种情形，结果都重新赋给那个 target。类型没有对应的 in-place operation 时走普通二元运算的回退路径，再把结果赋回原 target。target 是简单名称时，其值通常与 `x = x + y` 相同；一般情况下两种语句并不完全等价，因为增强赋值只求值 target 一次。
 
 target 只求值一次这一点与类型无关：`a[f()] += y` 只调用 `f()` 一次，`a[f()] = a[f()] + y` 调用两次。in-place operation 按运算符提供，不按类型提供：列表定义了 `__iadd__`（`+=`），集合与字典对应的是 `|=`（`__ior__`），因此 `+=` 只在 `+` 本身有定义的类型上成立。
 
