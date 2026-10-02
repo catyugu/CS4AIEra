@@ -7,7 +7,7 @@ status: published
 objectives:
   - 用索引与切片取出字符串的一部分，并预测越界时的行为
   - 说明拼接、重复与比较在字符串上的规则
-  - 用 f-string 把值插入文本，并说明它与拼接的差别
+  - 用 f-string 把值插入文本，用 `!r` 与格式说明符控制插入的表示，并说明它与拼接的差别
 ---
 
 字符串是文本在程序里的表示形式。它是序列，可以按位置取值；它不可变，所有「修改」都产生新字符串。
@@ -68,9 +68,11 @@ print("-".join(["a", "b", "c"]))
 ```python run id="py.strings.formatting"
 word = "python"
 count = 6
+padded = "  padded  "
 print(f"{word} has {count} letters")
+print(f"{padded!r} inserts the repr, so the spaces stay visible")
 print("total: " + str(12))
 print("value is", 42)
 ```
 
-f-string 在引号前加 `f`，用 `{}` 插入表达式，插入的值自动转成文本。`print` 接受多个参数并用空格分隔，是最省事的输出方式。
+f-string 在引号前加 `f`，用 `{}` 插入表达式，插入的值自动转成文本。`{}` 里还能写转换标志与格式说明符：`{值!r}` 插入该值的 `repr` 结果，用于显示边界空格、引号与转义（`repr` 见 <CrossRef id="python.programs-and-expressions" />）；`{值:20s}` 一类说明符控制宽度、对齐与类型，本课程用它对齐表格输出。`print` 接受多个参数并用空格分隔，是最省事的输出方式。

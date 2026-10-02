@@ -47,9 +47,13 @@
 
 范围与重点：语言的基本使用（程序、值、控制流、函数、类、内置容器）；程序语义模型（求值、绑定、对象与共享状态、调用、作用域、迭代协议、异常与资源生命周期、属性查找）；数据表示与语言保证的边界；协作式异步的调度模型、异步迭代与异步上下文协议、取消与清理、超时与结构化任务生命周期。重点是把「能写出程序」推进到「能精确预测程序的行为」：对象、调用、迭代三条语义线占据模块主体，语法与标准库清单不进正文。验收标准是：给定一段陌生的 Python，读者能预测其状态变化、控制流与失败行为；不能预测时，知道该构造什么实验来验证。
 
-排除并指定去处：线程、GIL 与共享内存归 `operating-systems`（线程是操作系统的执行模型，本模块只讲语言的协作式异步语义）；剖析与数据驱动的性能调查归 `software-engineering`，它需要成本模型与 I/O 知识在前；`venv`、依赖声明与锁文件归 `software-engineering`，本模块只说明依赖属于环境而不属于源码；异常层次与失败契约设计归 `software-engineering`，语言机制在本模块讲完；结构化并发在本模块讲创建关系、等待边与任务组作用域，以及取消、收尾和异常组的选择性处理，真实并发与 I/O 下的任务生命周期由 `operating-systems` 与 `networks` 重新连接。
+排除并指定去处：线程、GIL 与共享内存归 `operating-systems`（线程是操作系统的执行模型，本模块只讲语言的协作式异步语义）；剖析与数据驱动的性能调查归 `software-engineering`，它需要成本模型与 I/O 知识在前；`venv`、依赖声明与锁文件归 `software-engineering`，本模块只说明依赖属于环境而不属于源码；异常层次与失败契约设计归 `software-engineering`，语言机制在本模块讲完；结构化并发在本模块讲创建关系、等待边与任务组作用域，以及取消、收尾和异常组的选择性处理，真实并发与 I/O 下的任务生命周期由 `operating-systems` 与 `networks` 重新连接。结构模式匹配（`match`）不进入本模块的入门路径：后续课程不使用它，需要时由首次使用它的模块引入。
 
 深度：`python.basics` 以识别与正确使用为主（B）；`python.objects`、`functions`、`iteration` 覆盖语义、不变量与失败行为（C/D）；`python.data-model`、`representation`、`program`、`async` 以 C 级为主，个别主题到 D。
+
+入门层：`python.basics` 是有意设置的 onboarding 层，面向完全没有 Python 经验的读者，必须自洽地提供足以阅读、修改和编写后续课程示例的工作语言。它的知识深度以 B 级为主，但覆盖广度与示例密度可以高于普通 B 级主题。收录判据是该操作是否频繁出现在后续课程的示例中，而不是它能否查文档：`strip`/`split`/`join`、`append`/`sort`/`get`/`items`、推导式、`enumerate`/`zip` 这一级的内容即使属于 Working Knowledge 也在本层教一次。不得因为相关机制会在后续专题课中深入解释，就删掉第一次使用时所需的基本规则；后续专题课（`python.call-semantics`、`python.mutability-and-copy`、`python.equality-and-hashing` 等）拥有完整语义模型，与本层的关系是先建立可工作的第一层规则，再由专题课建立完整模型。删除判据是删掉之后零经验的读者还能否顺畅读后续代码，新增判据是不学它会不会妨碍后续普通代码。
+
+验收标准（本层）：此前没有 Python 经验的读者完成 `python.basics` 后，应能独立阅读课程后续的普通 Python 示例，能编写几十行规模、使用函数、容器、类、模块、文件与异常处理的小程序；遇到更细的语义问题时，知道进入哪一节专题课。
 
 | 子章节 | order | 课时 id | 标题 | 落盘 |
 | --- | --- | --- | --- | --- |
@@ -318,22 +322,23 @@
 | 7 | `python.representation`：数值与浮点、文本与 bytes | 完成 |
 | 8 | `python.program`：语言保证与实现细节、导入边界、类型标注 | 完成 |
 | 9 | `python.async`：coroutine 与调度、异步迭代与上下文、取消与清理、超时与任务生命周期 | 完成 |
-| 10 | `algorithms.complexity`、`algorithms.sequences` | 已落盘待审核（`lower-bounds`、`strings` 待写） |
-| 11 | `algorithms.maps`：哈希表、有序映射、堆 | `hash-tables` 已落盘；其余计划 |
-| 12 | `algorithms.graphs` | 计划 |
-| 13 | `algorithms.techniques`、`algorithms.selection` | 计划 |
-| 14 | `os.processes`、`os.memory` | 计划 |
-| 15 | `os.concurrency`、`os.io`、`os.resources` | 计划 |
-| 16 | `net.foundations`、`net.transport` | 计划 |
-| 17 | `net.application`、`net.operations` | 计划 |
-| 18 | `db.relational`、`db.schema` | 计划（先重写现有六节） |
-| 19 | `db.storage`（含新夹具） | 计划 |
-| 20 | `db.transactions`、`db.operations` | 计划 |
-| 21 | `swe.git`、`swe.design` | 计划 |
-| 22 | `swe.testing`、`swe.delivery`、`swe.debugging` | 计划 |
-| 23 | `dist.foundations`、`dist.communication` | 计划 |
-| 24 | `dist.data`、`dist.architecture`、`dist.operations` | 计划 |
-| 25 | `sec.foundations`、`sec.crypto`、`sec.web`、`sec.systems` | 计划 |
+| 10 | `python` 全章语义审校、工作集补全与大纲冻结 | 完成 |
+| 11 | `algorithms.complexity`、`algorithms.sequences` | 已落盘待审核（`lower-bounds`、`strings` 待写） |
+| 12 | `algorithms.maps`：哈希表、有序映射、堆 | `hash-tables` 已落盘；其余计划 |
+| 13 | `algorithms.graphs` | 计划 |
+| 14 | `algorithms.techniques`、`algorithms.selection` | 计划 |
+| 15 | `os.processes`、`os.memory` | 计划 |
+| 16 | `os.concurrency`、`os.io`、`os.resources` | 计划 |
+| 17 | `net.foundations`、`net.transport` | 计划 |
+| 18 | `net.application`、`net.operations` | 计划 |
+| 19 | `db.relational`、`db.schema` | 计划（先重写现有六节） |
+| 20 | `db.storage`（含新夹具） | 计划 |
+| 21 | `db.transactions`、`db.operations` | 计划 |
+| 22 | `swe.git`、`swe.design` | 计划 |
+| 23 | `swe.testing`、`swe.delivery`、`swe.debugging` | 计划 |
+| 24 | `dist.foundations`、`dist.communication` | 计划 |
+| 25 | `dist.data`、`dist.architecture`、`dist.operations` | 计划 |
+| 26 | `sec.foundations`、`sec.crypto`、`sec.web`、`sec.systems` | 计划 |
 
 「已落盘待审核」表示课时已按 `draft` 落盘、全部可执行单元格已在本地运行，等待逐节通读后改为 `published`。
 

@@ -46,7 +46,7 @@ print(1 + 1, "1" + "1", 1 + 1.5)
 print(isinstance(True, int), True + True)
 ```
 
-`int` 表示整数，`float` 表示浮点数，`str` 表示字符串，`bool` 的值是 `True` 与 `False`。`None` 也是对象，是 `NoneType` 的唯一实例，常用来表示结果缺失；它不等于空字符串或 0。`bool` 是 `int` 的子类型，因此 `isinstance(True, int)` 为真，相加得到 2。
+`int` 表示整数，`float` 表示浮点数，`str` 表示字符串，`bool` 的值是 `True` 与 `False`。`None` 也是对象，是 `NoneType` 的唯一实例，用来表示没有结果或状态缺失；它与 `0`、空字符串、`False` 都不相等，判定「没有值」要用 `is None`（见 <CrossRef id="python.conditionals" />）。`bool` 是 `int` 的子类型，因此 `isinstance(True, int)` 为真，相加得到 2。
 
 `+` 对整数做加法，对字符串做拼接，整数与浮点数相加得到浮点数。字符串与整数之间没有这种加法定义：
 

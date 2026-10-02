@@ -79,7 +79,7 @@ print("t is t:", t is t)
 
 `x` 与 `y` 内容相同但是两个对象，`==` 为真而 `is` 为假。`z` 是 `x` 的别名，两者 `is` 为真。自定义类没有定义 `__eq__` 时，相等退化到身份比较：`Tagged()` 的每个实例只与自身相等。
 
-身份相同必然相等（对行为正常的对象），相等不蕴含身份相同。相等与哈希的完整契约由 <CrossRef id="python.equality-and-hashing" /> 展开。小整数、短字符串与空元组可能被实现缓存而复用同一对象：`int("256") is int("256")` 在这台运行时为真，`int("257") is int("257")` 为假，这是 CPython 的实现行为，不是语言保证。`is` 的正确用途是 `None`、哨兵对象与显式身份判断；`id` 只在对象存活期内有效，对象被回收后地址可能被复用，把 `id` 写入日志或存储后再比对会给出错误结论。
+`is` 与 `==` 是两个独立的判定：同一对象与自身 `is` 恒为真，而 `x = float("nan")` 之后 `x == x` 为假；内容相同而身份不同的对象可以相等，也存在身份相同而 `__eq__` 判定不等的对象（NaN 就是后者）。两者的完整契约由 <CrossRef id="python.equality-and-hashing" /> 展开。小整数、短字符串与空元组可能被实现缓存而复用同一对象：`int("256") is int("256")` 在这台运行时为真，`int("257") is int("257")` 为假，这是 CPython 的实现行为，不是语言保证。`is` 的正确用途是 `None`、哨兵对象与显式身份判断；`id` 只在对象存活期内有效，对象被回收后地址可能被复用，把 `id` 写入日志或存储后再比对会给出错误结论。
 
 ## 不可变对象没有原地修改
 
@@ -123,7 +123,7 @@ print("after replace:", data)
 
 ## 复合赋值的两种语义
 
-`x += y` 先查找 `x` 类型上的 `__iadd__`。列表、集合、字典等提供原地版本，运算结果绑定回原对象；没有原地版本的类型退化为 `x = x + y`，产生新对象。
+`x += y` 先查找 `x` 类型上的 `__iadd__`。类型提供原地版本时，运算结果绑定回原对象；没有时退化为 `x = x + y`，产生新对象。原地方法按运算符提供，不按类型提供：列表定义了 `__iadd__`（`+=`），集合与字典对应的是 `|=`（`__ior__`），因此 `+=` 只在 `+` 本身有定义的类型上成立。
 
 ```python run id="py.names.augmented"
 items = [1]
@@ -141,4 +141,25 @@ print("pair_alias:", pair_alias)
 print("same object:", pair is pair_alias)
 ```
 
-同一个 `+=` 在列表上修改对象（别名看到变化），在元组上重绑定名称（别名不变）。读代码时 `x += y` 与 `x = x + y` 并不等价，区别取决于类型。
+同一个 `+=` 在列表上修改对象（别名看到变化），在元组上重绑定名称（别名不变）：元组没有 `__iadd__`，这一行就是 `x = x + y`。`x += y` 与 `x = x + y` 只在类型定义了原地方法时才出现差别。
+
+集合与字典的原地合并走 `|=`：
+
+```python run id="py.names.augmented-operators"
+numbers = {1, 2}
+alias = numbers
+numbers |= {3}
+print("set  |=", numbers, numbers is alias)
+
+mapping = {"a": 1}
+mapping_alias = mapping
+mapping |= {"b": 2}
+print("dict |=", mapping, mapping is mapping_alias)
+
+try:
+    numbers += {4}
+except TypeError as failure:
+    print("set  +=", type(failure).__name__, "-", failure)
+```
+
+`numbers |= {3}` 修改原集合，`alias` 跟着变化；这里失败的原因是 `+` 没有为集合定义，与原地机制无关。读代码时把 `+=`、`|=`、`&=` 一律当成「原地修改」会在不支持该运算符的类型上给出错误预测。

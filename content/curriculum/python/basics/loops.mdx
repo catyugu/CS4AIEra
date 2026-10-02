@@ -8,6 +8,7 @@ objectives:
   - 用 for 与 range 写出重复执行的代码，并说明 range 的边界
   - 选择 for 或 while，并指出 while 需要自己维护什么
   - 用累加模式把一个序列折叠成单个值
+  - 用 `enumerate` 与 `zip` 在遍历时取得下标，或并行取多个序列的元素
 ---
 
 对一批数据做同样的处理需要循环。循环的正确性依赖两件事：终止条件与每次迭代累积的状态。
@@ -40,9 +41,12 @@ for index, item in enumerate(["x", "y"]):
 
 for name, value in [("a", 1), ("b", 2)]:
     print(name, value)
+
+for letter, number in zip("ab", range(1, 4)):
+    print(letter, number)
 ```
 
-`for` 直接遍历元素。需要下标时用 `enumerate`，需要并行遍历多个序列时用 `zip`。列表里的元组可以直接解包到多个名字。空序列不执行循环体；在循环里增删正在遍历的列表会跳过或重复元素，原因在迭代器的状态上（见 <CrossRef id="python.iteration-protocol" />）。循环结束后循环变量仍然存在，值是最后一次迭代的值，`for` 不创建新的作用域（见 <CrossRef id="python.scope-and-closure" />）。
+`for` 直接遍历元素。需要下标时用 `enumerate`，它每次给出 `(下标, 元素)`；需要并行遍历多个序列时用 `zip`，它每次从各序列各取一个，结果也是元组，因此同样可以直接解包到多个名字。`zip` 在最短的序列耗尽时停止，其余序列多出的元素被忽略。列表里存放的元组可以直接解包。空序列不执行循环体；在循环里增删正在遍历的列表会跳过或重复元素，原因在迭代器的状态上（见 <CrossRef id="python.iteration-protocol" />）。循环结束后循环变量仍然存在，值是最后一次迭代的值，`for` 不创建新的作用域（见 <CrossRef id="python.scope-and-closure" />）。
 
 ## 累加模式
 
