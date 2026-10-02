@@ -92,38 +92,48 @@
 
 ### 3.2 数据结构、算法与复杂度（`algorithms`，order 20）
 
-定位：建立成本模型与表示选择的语言。目标不是算法清单，而是让读者能自己推导复杂度、判断常数与局部性、在真实约束下选择结构。
+定位：建立成本模型与表示选择的语言。目标不是算法清单，而是让读者能自己推导复杂度、构造反例、判断常数与局部性、在真实约束下选择结构。
 
-范围与重点：操作成本模型与输入规模的度量；`O`、`Ω`、`Θ` 与最坏、平均、摊还三种情形的区分；抽象契约与具体表示的分离；线性结构、映射、堆、树、图的表示不变量与操作成本；排序与查找族；分治、贪心、动态规划等技术的正确性论证；在内存与局部性约束下选择结构。重点是用「表示决定成本」这一条线索贯穿全部结构：每个复杂度的论断都带上成本模型、输入规模与它属于哪一类情形。
+范围与重点：主线是「契约与表示 → 成本与正确性 → 线性结构 → 关联结构 → 树与优先结构 → 查找 / 排序 / 选择 → 图 → 算法设计范式 → 综合选择」。`algorithms.complexity` 先建立分析语言（抽象数据类型与表示不变量、输入规模与成本模型、渐进记号、正确性、递归、摊还、期望），其余子章节的每一节课都复用这套语言，不再重复解释。全模块统一的分析框架是：抽象契约 → 表示 → 表示不变量 → 操作 → 不变量保持的论证 → 成本。每节课的必答项与实验优先级见 `doc/CONTENT_GUIDE.md` 第 3.5 节。
 
-每种结构必须回答：它表示什么抽象关系、representation invariant 是什么、支持哪些操作、成本结论采用什么成本模型、属于最坏还是平均或摊还、内存占用与局部性如何、哪些约束改变选择、Python 内置结构与理论模型的差异。Python 只是实验语言，本模块不是 Python 容器教程，也不是面试题集。
+排除并指定去处：冷门命名算法的实现、非教学必要的手写平衡树、排序算法展览（`heap sort` 之外再罗列 shell sort、cocktail sort 等）、排序常数因子对比表属于 A 级（查文档即可），不进正文；复杂性理论与不可近似不属于本模块，`algorithms.lower-bounds` 只做比较模型与决策树下界，NP 完全性与近似困难性如需讲授另设模块；profiling 与基准测试方法论归 `software-engineering`；缓存局部性背后的硬件与虚拟内存机制归 `operating-systems`；B 树、外部内存结构与查询计划在存储引擎中的形态归 `databases`；并发下的数据结构归 `operating-systems`。Python 只是实验语言，本模块不是 Python 容器教程，也不是面试题集。
 
-排除并指定去处：冷门命名算法的实现、非教学必要的手写平衡树、排序常数因子对比表属于 A 级（查文档即可）；并发下的数据结构归 `operating-systems`；查询计划与 B 树在存储引擎中的形态归 `databases`。
-
-深度：`algorithms.complexity`、`algorithms.sequences`、`algorithms.maps` 以 C/D 为主（推导与反例）；`graphs`、`techniques` 覆盖模型与正确性论证；`selection` 是跨模块的连接点。
+深度：以 C/D 为主，推导与反例是主要材料。`algorithms.complexity` 建立分析语言；`sequences`、`maps`、`trees` 覆盖表示不变量、成本分类与失败情形；`ordering`、`graphs` 覆盖正确性论证与模型；`techniques` 把已见过的算法抽象成设计范式；`selection` 是跨模块的连接点。
 
 | 子章节 | order | 课时 id | 标题 | 落盘 |
 | --- | --- | --- | --- | --- |
-| `algorithms.complexity` | 10 | `algorithms.cost-model` | 操作成本与渐进记号 | 草稿 |
-| | 20 | `algorithms.amortized` | 摊还分析 | 草稿 |
-| | 30 | `algorithms.average-and-randomized` | 平均情形与随机化 | 草稿 |
-| | 40 | `algorithms.lower-bounds` | 下界与不可近似 | — |
+| `algorithms.complexity` | 10 | `algorithms.abstractions-and-invariants` | 抽象数据类型、表示与不变量 | — |
+| | 20 | `algorithms.cost-model` | 操作成本与渐进记号 | 草稿 |
+| | 30 | `algorithms.asymptotic-analysis` | 渐进记号与增长率 | — |
+| | 40 | `algorithms.correctness` | 正确性、循环不变量与终止 | — |
+| | 50 | `algorithms.recursion` | 递归、归纳与调用树 | — |
+| | 60 | `algorithms.amortized` | 摊还分析 | 草稿 |
+| | 70 | `algorithms.average-and-randomized` | 平均情形与随机化 | 草稿 |
 | `algorithms.sequences` | 10 | `algorithms.arrays-and-lists` | 数组、动态数组与局部性 | 草稿 |
-| | 20 | `algorithms.stacks-and-queues` | 栈、队列与 deque | 草稿 |
-| | 30 | `algorithms.linked-structures` | 链表与指针结构 | 草稿 |
-| | 40 | `algorithms.strings` | 字符串搜索与表示 | — |
-| `algorithms.maps` | 10 | `algorithms.hash-tables` | 哈希表与关联映射 | 草稿 |
-| | 20 | `algorithms.ordered-maps` | 平衡树与有序映射 | — |
-| | 30 | `algorithms.heaps` | 堆与优先队列 | — |
-| `algorithms.graphs` | 10 | `algorithms.graph-representation` | 图的表示与遍历 | — |
-| | 20 | `algorithms.shortest-paths` | 最短路径 | — |
-| | 30 | `algorithms.dags-and-components` | DAG、拓扑序与连通性 | — |
-| `algorithms.techniques` | 10 | `algorithms.sorting` | 排序与稳定性 | — |
-| | 20 | `algorithms.divide-and-conquer` | 分治 | — |
-| | 30 | `algorithms.greedy` | 贪心与交换论证 | — |
-| | 40 | `algorithms.dynamic-programming` | 动态规划 | — |
-| | 50 | `algorithms.search-and-pruning` | 二分、剪枝与回溯 | — |
-| `algorithms.selection` | 10 | `algorithms.choosing-structures` | 数据结构选择的判据 | — |
+| | 20 | `algorithms.linked-structures` | 链表与指针结构 | 草稿 |
+| | 30 | `algorithms.stacks-and-queues` | 栈、队列与 deque | 草稿 |
+| | 40 | `algorithms.strings` | 字符串匹配与预处理 | — |
+| `algorithms.maps` | 10 | `algorithms.maps-and-sets` | 集合、映射与关联查询 | — |
+| | 20 | `algorithms.hash-tables` | 哈希表与关联映射 | 草稿 |
+| `algorithms.trees` | 10 | `algorithms.tree-representation` | 树、递归结构与遍历 | — |
+| | 20 | `algorithms.ordered-maps` | 二叉搜索树与有序映射 | — |
+| | 30 | `algorithms.heaps` | 优先队列与堆 | — |
+| `algorithms.ordering` | 10 | `algorithms.binary-search` | 二分查找与单调边界 | — |
+| | 20 | `algorithms.sorting` | 排序契约、稳定性与成本 | — |
+| | 30 | `algorithms.comparison-sorting` | 归并、分区与 n log n 排序 | — |
+| | 40 | `algorithms.selection-and-top-k` | 选择、第 k 个元素与 Top-K | — |
+| | 50 | `algorithms.lower-bounds` | 下界与比较模型 | — |
+| `algorithms.graphs` | 10 | `algorithms.graph-representation` | 图的表示与不变量 | — |
+| | 20 | `algorithms.graph-traversal` | 遍历、连通分量与访问不变量 | — |
+| | 30 | `algorithms.dags-and-topological-order` | DAG、拓扑序与环检测 | — |
+| | 40 | `algorithms.shortest-paths` | 最短路径 | — |
+| | 50 | `algorithms.connectivity-and-spanning-trees` | 连通性、并查集与最小生成树 | — |
+| `algorithms.techniques` | 10 | `algorithms.divide-and-conquer` | 分治 | — |
+| | 20 | `algorithms.greedy` | 贪心与交换论证 | — |
+| | 30 | `algorithms.dynamic-programming` | 动态规划 | — |
+| | 40 | `algorithms.search-and-pruning` | 状态空间搜索与剪枝 | — |
+| | 50 | `algorithms.randomized-algorithms` | 随机化算法 | — |
+| `algorithms.selection` | 10 | `algorithms.choosing-structures` | 从操作工作负载选择数据结构 | — |
 | | 20 | `algorithms.complexity-in-practice` | 渐进之外：常数、局部性与内存 | — |
 
 ### 3.3 操作系统（`operating-systems`，order 30）
@@ -309,36 +319,31 @@
 
 ## 4. 写作批次
 
-批次按模块顺序推进，模块内按子章节顺序推进。一个子章节为一个批次：落盘后运行 `npm run check`，再在开发服务器下实机运行该批次的可执行单元格。
+批次按模块顺序推进；模块内一般按子章节顺序推进，一个子章节为一个批次。落盘后运行 `npm run check`，再在开发服务器下实机运行该批次的可执行单元格。模块结构本身可以作为单独批次先行：算法模块的批次 A 只改文档与 `_section.yaml`，不动正文。
 
 | 批次 | 范围 | 状态 |
 | --- | --- | --- |
-| 1 | `python.basics` 精度修订（9 节正文） | 完成 |
-| 2 | `python.classes`、`python.modules-basics`、`python.errors-basics` | 完成 |
-| 3 | `python.objects`：对象与共享状态的三节课 | 完成 |
-| 4 | `python.functions`：调用语义、作用域与闭包、装饰器 | 完成 |
-| 5 | `python.iteration`：迭代协议、generator、异常、上下文管理器 | 完成 |
-| 6 | `python.data-model`：属性查找、特殊方法、继承与 MRO | 完成 |
-| 7 | `python.representation`：数值与浮点、文本与 bytes | 完成 |
-| 8 | `python.program`：语言保证与实现细节、导入边界、类型标注 | 完成 |
-| 9 | `python.async`：coroutine 与调度、异步迭代与上下文、取消与清理、超时与任务生命周期 | 完成 |
-| 10 | `python` 全章语义审校、工作集补全与大纲冻结 | 完成 |
-| 11 | `algorithms.complexity`、`algorithms.sequences` | 已落盘待审核（`lower-bounds`、`strings` 待写） |
-| 12 | `algorithms.maps`：哈希表、有序映射、堆 | `hash-tables` 已落盘；其余计划 |
-| 13 | `algorithms.graphs` | 计划 |
-| 14 | `algorithms.techniques`、`algorithms.selection` | 计划 |
-| 15 | `os.processes`、`os.memory` | 计划 |
-| 16 | `os.concurrency`、`os.io`、`os.resources` | 计划 |
-| 17 | `net.foundations`、`net.transport` | 计划 |
-| 18 | `net.application`、`net.operations` | 计划 |
-| 19 | `db.relational`、`db.schema` | 计划（先重写现有六节） |
-| 20 | `db.storage`（含新夹具） | 计划 |
-| 21 | `db.transactions`、`db.operations` | 计划 |
-| 22 | `swe.git`、`swe.design` | 计划 |
-| 23 | `swe.testing`、`swe.delivery`、`swe.debugging` | 计划 |
-| 24 | `dist.foundations`、`dist.communication` | 计划 |
-| 25 | `dist.data`、`dist.architecture`、`dist.operations` | 计划 |
-| 26 | `sec.foundations`、`sec.crypto`、`sec.web`、`sec.systems` | 计划 |
+| 1 | `python`：整模块完成并冻结（basics onboarding 层，objects / functions / iteration，data-model / representation / program / async） | 完成 |
+| 2 | 算法 A：确定模块结构（本文件、`doc/CONTENT_GUIDE.md`、`_section.yaml`） | 完成 |
+| 3 | 算法 B：`complexity` —— 补抽象与不变量、渐进记号、正确性、递归，重构已落盘的三节 | 计划（`cost-model`、`amortized`、`average-and-randomized` 已草稿落盘） |
+| 4 | 算法 C：`sequences` —— 审核已落盘三节的顺序与所有权，新写 `strings` | 计划（`arrays-and-lists`、`linked-structures`、`stacks-and-queues` 已草稿落盘） |
+| 5 | 算法 D：`maps`、`trees` —— 先写集合与映射契约，再审核 `hash-tables`；新写树、有序映射、堆 | 计划（`hash-tables` 已草稿落盘） |
+| 6 | 算法 E：`ordering` —— 二分查找、排序契约、n log n 排序、选择与 Top-K、下界 | 计划 |
+| 7 | 算法 F：`graphs` —— 表示、遍历、DAG 与拓扑序、最短路、连通性与最小生成树 | 计划 |
+| 8 | 算法 G：`techniques` —— 分治、贪心、动态规划、状态空间搜索、随机化 | 计划 |
+| 9 | 算法 H：`selection` 与全章审校、冻结 | 计划 |
+| 10 | `os.processes`、`os.memory` | 计划 |
+| 11 | `os.concurrency`、`os.io`、`os.resources` | 计划 |
+| 12 | `net.foundations`、`net.transport` | 计划 |
+| 13 | `net.application`、`net.operations` | 计划 |
+| 14 | `db.relational`、`db.schema` | 计划（先重写现有六节） |
+| 15 | `db.storage`（含新夹具） | 计划 |
+| 16 | `db.transactions`、`db.operations` | 计划 |
+| 17 | `swe.git`、`swe.design` | 计划 |
+| 18 | `swe.testing`、`swe.delivery`、`swe.debugging` | 计划 |
+| 19 | `dist.foundations`、`dist.communication` | 计划 |
+| 20 | `dist.data`、`dist.architecture`、`dist.operations` | 计划 |
+| 21 | `sec.foundations`、`sec.crypto`、`sec.web`、`sec.systems` | 计划 |
 
 「已落盘待审核」表示课时已按 `draft` 落盘、全部可执行单元格已在本地运行，等待逐节通读后改为 `published`。
 
@@ -349,3 +354,4 @@
 - 删除课时：先清引用（`<CrossRef>`、术语与示例的使用），再删文件与可能空掉的章节。
 - 调整模块或子章节顺序：改本文件与对应 `_section.yaml` 的 `order`，两者必须一致。
 - 已冻结的模块：`python` 已完成并冻结（见批次表）。冻结的模块只在后续课程暴露 prerequisite 缺口或发现事实错误时回来修改，不主动增加主题；改动仍走本文件的登记流程，并同时改 `doc/CONTENT_GUIDE.md` 中与之相关的写作规则。
+- 尚未落盘的子章节只登记在本文件；它的 `_section.yaml`、`summary` 与第一节内容一起落盘，不预先建目录，否则验证器会报 `empty-section`。因此本文件的树会暂时领先于磁盘，这是有意为之，不是不一致。

@@ -1,5 +1,5 @@
 id: algorithms.maps
-label: 映射与哈希
+label: 集合、映射与哈希
 order: 30
-summary: 哈希函数与桶、冲突处理、负载因子与扩容、期望成本成立的前提，以及 Python 字典作为具体实现。
+summary: 集合与映射的抽象契约（相等、唯一性、有序与范围查询）；哈希函数与桶、冲突处理、负载因子与扩容；期望成本成立的前提，以及 Python 字典作为具体实现。
 status: active

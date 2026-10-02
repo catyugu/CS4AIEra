@@ -1,5 +1,5 @@
 id: algorithms.complexity
-label: 成本模型与复杂度
+label: 算法分析基础
 order: 10
-summary: 操作成本模型、输入规模的度量、渐进记号、最坏 / 平均 / 摊还三种情形的区别与下界。
+summary: 抽象数据类型与表示不变量；输入规模与成本模型；渐进记号与增长率；正确性、循环不变量与终止；递归与递推式；摊还分析；平均情形与期望。
 status: active
