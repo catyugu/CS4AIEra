@@ -675,8 +675,7 @@ a {
 }
 
 .glossary-index .english,
-.glossary-index .aliases,
-.glossary-index .used-by {
+.glossary-index .aliases {
   margin: 0.15rem 0;
   color: var(--muted);
   font-size: 0.85rem;

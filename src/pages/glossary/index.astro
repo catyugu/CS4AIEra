@@ -4,8 +4,6 @@ import CourseLayout from "../../layouts/CourseLayout.astro";
 
 const model = await getCourseModel();
 const entries = [...model.glossary].sort((a, b) => a.term.localeCompare(b.term, "zh"));
-const lessonTitle = new Map(model.lessons.map((lesson) => [lesson.id, lesson.title]));
-const lessonSlug = new Map(model.lessons.map((lesson) => [lesson.id, lesson.slug]));
 ---
 
 <CourseLayout title="术语表" description="课程术语的快速定义，以及指向完整词条的稳定链接。">
@@ -23,17 +21,6 @@ const lessonSlug = new Map(model.lessons.map((lesson) => [lesson.id, lesson.slug
           </h2>
           <p>{entry.short}</p>
           {entry.aliases.length > 0 && <p class="aliases">别名：{entry.aliases.join("、")}</p>}
-          {entry.usedBy.length > 0 && (
-            <p class="used-by">
-              出现于：
-              {entry.usedBy.map((lessonId, index) => (
-                <>
-                  {index > 0 && "、"}
-                  <a href={`${lessonSlug.get(lessonId)}/`}>{lessonTitle.get(lessonId) ?? lessonId}</a>
-                </>
-              ))}
-            </p>
-          )}
         </section>
       ))
     }

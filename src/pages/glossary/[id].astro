@@ -31,9 +31,6 @@ if (!modelEntry) throw new Error(`glossary entry '${entry.id}' is in the content
 const related = modelEntry.related
   .map((id) => model.glossary.find((candidate) => candidate.id === id))
   .filter((candidate) => candidate !== undefined);
-const usedBy = modelEntry.usedBy
-  .map((id) => model.lessons.find((lesson) => lesson.id === id))
-  .filter((lesson) => lesson !== undefined);
 ---
 
 <CourseLayout title={modelEntry.term} description={modelEntry.short} headings={headings}>
@@ -74,21 +71,6 @@ const usedBy = modelEntry.usedBy
                 <>
                   {index > 0 && "、"}
                   <a href={`/glossary/${term.id}/`}>{term.term}</a>
-                </>
-              ))}
-            </dd>
-          </>
-        )
-      }
-      {
-        usedBy.length > 0 && (
-          <>
-            <dt>出现于</dt>
-            <dd>
-              {usedBy.map((lesson, index) => (
-                <>
-                  {index > 0 && "、"}
-                  <a href={`${lesson.slug}/`}>{lesson.title}</a>
                 </>
               ))}
             </dd>
