@@ -15,8 +15,9 @@
     "setup:runtime": "tsx scripts/fetch-runtime.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "check": "tsx scripts/validate-content.ts && tsc --noEmit && vitest run"
+    "sync": "astro sync",
+    "typecheck": "astro sync && tsc --noEmit",
+    "check": "tsx scripts/validate-content.ts && astro sync && tsc --noEmit && vitest run"
   },
   "devDependencies": {
     "@astrojs/markdown-satteri": "^0.4.2",
