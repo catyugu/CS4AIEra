@@ -54,7 +54,7 @@ if (fixture) {
   data-editable={editable ?? "true"}
 >
   <figcaption class="codelab-bar">
-    <span class="codelab-id">{id}</span>
+    <span class="codelab-language">{language === "sql" ? "SQL" : "Python"}</span>
     {session && <span class="codelab-session">session: {session}</span>}
     <span class="codelab-modified" data-cell-modified></span>
     {editable !== "false" && <span class="codelab-hint">点击代码可编辑</span>}

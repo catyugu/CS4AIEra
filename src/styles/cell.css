@@ -1,6 +1,5 @@
 /* Executable code cells and their rendered output. */
 
-
 .codelab {
   margin: 1.4rem 0;
   border: 1px solid var(--line);
@@ -19,13 +18,13 @@
   font-size: 0.8rem;
 }
 
-.codelab-id {
+.codelab-language {
   font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, monospace;
-  color: var(--muted);
+  color: var(--fg);
 }
 
 .codelab-session {
-  color: var(--accent);
+  color: var(--muted);
 }
 
 .codelab-modified {
@@ -178,21 +177,11 @@
 }
 
 .codelab-status[data-kind="error"] {
-  color: #b3261e;
+  color: var(--danger);
 }
 
 .codelab-status[data-kind="ok"] {
-  color: #1c6b3c;
-}
-
-@media (prefers-color-scheme: dark) {
-  .codelab-status[data-kind="error"] {
-    color: #f2b8b5;
-  }
-
-  .codelab-status[data-kind="ok"] {
-    color: #8fd6a6;
-  }
+  color: var(--ok);
 }
 
 .codelab-output {
@@ -226,15 +215,7 @@
 
 .cell-stderr,
 .cell-traceback {
-  color: #b3261e;
-}
-
-@media (prefers-color-scheme: dark) {
-
-  .cell-stderr,
-  .cell-traceback {
-    color: #f2b8b5;
-  }
+  color: var(--danger);
 }
 
 .cell-error {
