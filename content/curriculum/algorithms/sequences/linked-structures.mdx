@@ -18,24 +18,22 @@ objectives:
 
 一个节点是一个对象，保存一个值与一到两个引用：
 
-```text
-Node = (value, next)                单链表
-Node = (value, prev, next)          双向链表
-```
+| 结构 | 节点定义 |
+| --- | --- |
+| 单链表 | `Node = (value, next)` |
+| 双向链表 | `Node = (value, prev, next)` |
 
 结构本身由入口引用定义：`head` 指向第一个节点，空结构用 `None` 表示。这个定义是递归的——「链表剩余部分」也是一个链表（`None` 是它的空情形），因此遍历与长度可以写成递归形式，也可以写成循环形式。表示不变量要保证两件事：每条遍历都终止，而且从 `head` 出发读出的值序列恰好就是该结构所表示的抽象序列。
 
 **表示不变量**是判断一段链式代码正确性的依据：
 
-```text
-单链表的抽象函数：从 head 出发沿 next 前进，得到有限且不重复的节点序列 x_0, ..., x_{n-1}；
-抽象序列就是它们的 value 序列，最后一个节点的 next 是 None。
+单链表的抽象函数：从 `head` 出发沿 `next` 前进，得到有限且不重复的节点序列 $x_0, \dots, x_{n-1}$；抽象序列就是它们的 `value` 序列，最后一个节点的 `next` 是 `None`。
 
 双向链表另外要求：
-  空结构：head is None 当且仅当 tail is None 当且仅当 length == 0
-  非空：x_0 is head，x_{n-1} is tail，head.prev is None，tail.next is None；
-        每个相邻对满足 x_i.next is x_{i+1} 且 x_{i+1}.prev is x_i；length == n
-```
+
+- 空结构：`head is None` 当且仅当 `tail is None` 当且仅当 `length == 0`；
+- 非空：`x_0 is head`，`x_{n-1} is tail`，`head.prev is None`，`tail.next is None`；
+- 每个相邻对满足 `x_i.next is x_{i+1}` 且 `x_{i+1}.prev is x_i`；`length == n`。
 
 这些条件合起来才说明「每个合法具体状态都能解释成一个抽象序列」：`head`、`tail`、正向可达链与 `length` 必须是同一个结构，缺掉其中任何一条都会放过明显非法的状态（例如 `head` 为空而 `tail` 还指着某个节点）。违反任一条的结构在大多数操作上仍然「能用」，只在少数路径上出错：这正是链式代码难调试的原因，也是必须显式检查不变量的原因。不变量被破坏后最常见的表现是遍历不终止——但要注意边界：正常操作把不变量当作前置条件，因此不必每一步自查；只有专门诊断损坏状态的检查器不能依赖正在检查的 `next` 与 `length` 来保证终止，它必须自己记录已访问节点，检测到重复就报告「结构已损坏」，而不是继续走。
 

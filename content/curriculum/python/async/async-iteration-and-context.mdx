@@ -17,7 +17,7 @@ objectives:
 
 `async for` 要求对象提供 `__aiter__`，它直接返回一个异步迭代器；异步迭代器提供 `__anext__`，返回一个可等待对象，取完时抛 `StopAsyncIteration`（见[数据模型](https://docs.python.org/3/reference/datamodel.html#asynchronous-iterators)）。语句的展开是固定的：
 
-```text
+```python
 iterator = iterable.__aiter__()
 while True:
     try: item = await iterator.__anext__()
@@ -163,7 +163,7 @@ await main()
 
 `async with` 的展开与 `with` 逐条对应，区别只在进入与退出都是 `await`（见[语言参考](https://docs.python.org/3/reference/compound_stmts.html#the-async-with-statement)）：
 
-```text
+```python
 manager = expression
 aenter = manager.__aenter__
 aexit = manager.__aexit__

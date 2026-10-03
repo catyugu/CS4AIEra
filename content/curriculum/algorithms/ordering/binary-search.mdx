@@ -32,10 +32,8 @@ objectives:
 
 二分查找容易写错的地方都集中在区间的开闭上。用**半开区间** $[lo, hi)$ 表述可以消除大部分歧义，此时两条不变量是：
 
-```text
-items[0 .. lo)  里的键都 < key
-items[hi .. n)  里的键都 >= key
-```
+1. `items[0 .. lo)` 里的键都 `< key`
+2. `items[hi .. n)` 里的键都 `>= key`
 
 初始时 $lo = 0$、$hi = n$，两条都空成立。每轮取中点 $mid = lo + (hi - lo) // 2$，比较 `items[mid]` 与 `key`：
 

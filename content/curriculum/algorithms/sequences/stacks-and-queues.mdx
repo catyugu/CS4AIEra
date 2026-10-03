@@ -91,11 +91,9 @@ for size in (200, 400, 800):
 
 构造前置是 `capacity` 为正整数，否则下面第二条不变量无法满足。表示不变量有两条，另有一条把物理状态解释回抽象序列的抽象函数：
 
-```text
-0 <= count <= capacity
-0 <= head < capacity
-逻辑顺序的第 i 个元素位于物理位置 (head + i) mod capacity
-```
+1. $0 \le \text{count} \le \text{capacity}$；
+2. $0 \le \text{head} < \text{capacity}$；
+3. 逻辑顺序的第 $i$ 个元素位于物理位置 $(\text{head} + i) \bmod \text{capacity}$。
 
 ```python run id="alg.queue.ring-buffer"
 class RingBuffer:

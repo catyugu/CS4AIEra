@@ -119,18 +119,16 @@ except TypeError as error:
 
 哈希表由哈希函数、桶数组与冲突处理组成。取 `capacity` 个桶、分离链接：
 
-```text
-hash(key) -> 整数
-bucket = hash(key) mod capacity
-桶数组：capacity 个桶，每个桶挂一条链，链上存键值对
-```
+哈希函数把键映射成一个整数，再按容量把它折到桶下标：
+
+$$\text{hash}(key) \rightarrow \text{整数}, \qquad \text{bucket} = \text{hash}(key) \bmod \text{capacity}.$$
+
+桶数组有 `capacity` 个桶，每个桶挂一条链，链上存键值对。
 
 表示不变量有两条：
 
-```text
-任意两个已存条目的键都不相等：每个相等类至多有一个条目
-键 k 只可能出现在 (hash(k) mod capacity) 这个桶的链里
-```
+1. 任意两个已存条目的键都不相等：每个相等类至多有一个条目；
+2. 键 `k` 只可能出现在 `(hash(k) mod capacity)` 这个桶的链里。
 
 第二条把查询限制在一个桶内；第一条保证抽象键集中每个相等类只有一个代表。插入先进入哈希决定的桶，与已有键逐项比较；发现相等键就更新现有条目的值，否则新增条目。查询走同一条链，比较到相等或用完为止。两个操作都不改变不变量：位置由哈希决定，而条目的数量只在没有相等键时增加。
 

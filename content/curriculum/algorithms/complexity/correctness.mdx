@@ -93,11 +93,9 @@ for name, implementation in (("accumulating", running_totals), ("restarting  ", 
 
 这段代码的候选不变量必须比「`totals[k]` 等于前缀和」更强，否则保持步用不了。把 `for value in values` 的进度记作 $i$（本轮开始时已处理 $i$ 个元素），不变量是：
 
-```text
-len(totals) == i
-total == sum(values[:i])
-对每个 0 <= k < i：totals[k] == sum(values[:k+1])
-```
+- `len(totals) == i`
+- `total == sum(values[:i])`
+- 对每个 $0 \le k < i$：`totals[k] == sum(values[:k+1])`
 
 单元格里的 `first_violation` 仍然只检查完整运行之后的后置条件；上面这三条是证明中使用的候选循环不变量——它看不到内部的 `total`，也没有逐轮的 $i$。要把它们做成运行时检查，必须在循环头逐轮检查当时的 $i$、`total` 与 `totals`。三步于是闭合：$i = 0$ 时三条都成立，是初始化；读入 `values[i]` 后 `total` 前进一个元素的和、`totals` 追加一项，得到 $i + 1$ 的版本，是保持；退出时 $i = \text{len}(values)$，输出长度与逐项前缀和都符合后置条件。
 

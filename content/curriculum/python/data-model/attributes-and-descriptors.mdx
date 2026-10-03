@@ -18,12 +18,10 @@ objectives:
 
 普通对象上，读取 `obj.attr` 的顺序是：
 
-```text
-1. type(obj) 上名为 attr 的数据描述符     <- 定义了 __set__ 或 __delete__ 的描述符
-2. obj 自己的属性字典（__dict__）
-3. type(obj) 的 MRO 上名为 attr 的非数据描述符或普通类属性
-4. type(obj) 上的 __getattr__（仅在前三步全部失败时）
-```
+1. `type(obj)` 上名为 `attr` 的数据描述符（定义了 `__set__` 或 `__delete__` 的描述符）；
+2. `obj` 自己的属性字典（`__dict__`）；
+3. `type(obj)` 的 MRO 上名为 `attr` 的非数据描述符或普通类属性；
+4. `type(obj)` 上的 `__getattr__`（仅在前三步全部失败时）。
 
 三条推论：
 

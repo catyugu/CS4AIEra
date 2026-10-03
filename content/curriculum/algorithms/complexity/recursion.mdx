@@ -20,7 +20,7 @@ objectives:
 
 递归定义由**基本情况**与**递归情形**组成。基本情况是不再递归、可以直接处理的状态；递归情形通过一个或多个递归调用处理当前状态，并要求这些调用的良基秩严格下降。基本情况常常就是最小输入，但定义本身只要求「不再递归」，不要求它是某个尺寸的最小值。
 
-```text
+```python
 def total(values):
     if not values:                          # base case
         return 0
@@ -42,7 +42,7 @@ def total(values):
 
 归纳假设是一个参数化命题，把它实例化到每个实际子调用上，就得到那次递归调用的后置条件；论证因此不必展开计算过程。以取最大值为例：
 
-```text
+```python
 def largest(values):
     if len(values) == 1:
         return values[0]
