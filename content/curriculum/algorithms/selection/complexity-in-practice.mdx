@@ -100,6 +100,8 @@ print(f"  struct '1000i':      {sys.getsizeof(packed):>6} bytes"
 **期望常数时间依赖散列函数的行为与负载因子**。哈希表的期望 $O(1)$ 成本来自两条前提：散列把键均匀分散到桶里，并且负载因子受到控制。前者是关于哈希落点或探测序列的概率模型，后者是结构状态与扩容策略维持的条件；二者都是该期望界的前提，但都不是渐进记号本身的含义，也不属于单位成本模型的那三条约定。换一个把全部键映到同一个桶的散列函数，同一份代码就退化了：第 $k$ 次插入要探测 $\Theta(k)$ 个位置，连续插入 $n$ 个键的总探测数是 $\Theta(n^2)$：
 
 ```python run id="alg.practice.probing"
+import random
+
 def probes(keys, buckets, hash_of):
     """Linear probing: count the probes used by every insertion."""
     table = [None] * buckets
