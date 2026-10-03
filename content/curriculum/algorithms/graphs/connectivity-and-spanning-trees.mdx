@@ -12,7 +12,7 @@ objectives:
 
 连接所有顶点、总权重最小的一棵树：在一张加权无向图上，这就是最小生成树。生成树的数量有限，最小的那棵一定存在；问题是不枚举全部生成树就把它找出来。
 
-上一课留下的划分（<CrossRef id="algorithms.union-find" />）在这里不只是查询工具——Kruskal 靠它判断一条边会不会成环，收下的边数则由上一课的 $|E| = |V| - c$ 定出。两个算法都由同一段交换论证支撑：cut 上的 safe edge 引理。
+并查集维护的划分（<CrossRef id="algorithms.union-find" />）在这里不只是查询工具——Kruskal 靠它判断一条边会不会成环，收下的边数则由 $|E| = |V| - c$ 定出，其中 $c$ 是连通分量数。两个算法都由同一段交换论证支撑：cut 上的 safe edge 引理。
 
 ## 最小生成树：目标本身
 
@@ -27,7 +27,7 @@ objectives:
 | 非空断开图 | 没有生成树，但有最小生成森林（每个分量一棵 MST） |
 | 空图 | 不进这一节的讨论 |
 
-权重**允许任意实数，包括负数**。这一点容易与上一节混淆：要求非负权的是 Dijkstra，不是最短路问题本身——Bellman–Ford 就允许负边；真正会让最短行走值降到 $-\infty$ 的是源点可达的负环。最小生成树的候选对象始终是有限多棵无环的生成树，不存在绕环无限下降的问题，所以任意实数边权都不影响它的存在性。
+权重**允许任意实数，包括负数**。要求非负权的是 Dijkstra，不是最短路问题本身——Bellman–Ford 就允许负边；真正会让最短行走值降到 $-\infty$ 的是源点可达的负环。最小生成树的候选对象始终是有限多棵无环的生成树，不存在绕环无限下降的问题，所以任意实数边权都不影响它的存在性。
 
 更重要的是，**最小生成树与最短路树是两个不同的目标**，不能互相替代。看一个三点图：
 
@@ -266,11 +266,11 @@ $$key[v] = \min \lbrace w(u, v) : u \text{ 在树中} \rbrace, \qquad \text{对�
 - **第一层（每个顶点各自）**：$key[v] = \min \lbrace w(u, v) : u \text{ 在 } S \text{ 中} \rbrace$，即「从 $S$ 到 $v$ 这个特定顶点」的最轻边，不是从根到 $v$ 的路径总权重。
 - **第二层（被选中的那个）**：算法再取 $key$ 最小的顶点 $v^*$，它的 parent edge 才是「跨越整个 cut $(S, V \setminus S)$」的最轻边，这一步正是 safe edge 引理所要求的前提。
 
-第一层与路径总权重的区分不是措辞问题：上一节的 Dijkstra 维护 `distance[v]`（从源点到 $v$ 的最轻路径），Prim 维护 `key[v]`（一条边的权重），两者的松弛更新长得很像，含义完全不同。单元格 C 用三角形打出两个数：$key[b] = 1$ 而 $\delta(s, b) = 2$，并核对第二层的等式。
+第一层与路径总权重的区分不是措辞问题：Dijkstra（见 <CrossRef id="algorithms.shortest-paths" />）维护 `distance[v]`（从源点到 $v$ 的最轻路径），Prim 维护 `key[v]`（一条边的权重），两者的松弛更新长得很像，含义完全不同。单元格 C 用三角形打出两个数：$key[b] = 1$ 而 $\delta(s, b) = 2$，并核对第二层的等式。
 
 正确性用同一个引理，不需要新证明：设当前树顶点集合为 $S$，按第二层，被选中的 $v^*$ 的 parent edge 是跨 cut $(S, V \setminus S)$ 的最轻边（并列时取任意一条），$S$ 内部的边不跨这个 cut，于是引理直接给出「加入这条边后仍存在某个最小生成森林包含新的树」。**负边同样允许**，引理里没有任何非负假设。
 
-实现上可以复用上一节 Dijkstra 的堆技法：`heapq` 没有 decrease-key，于是把 `(key, serial, vertex)` 压进堆，pop 时丢弃过期条目；`serial` 计数器保证堆永远不会去比较两个顶点——这也正是排序边时必须显式用权重做 key 的原因，两条约定要一致。成本是 $O(|V| + |E| \log |V|)$：每个顶点至多入树一次，堆操作与上一篇口径相同；$|V|$ 那一项来自必须逐个查看顶点，即使图里大量顶点是孤立点（$|E| = 0$ 时成本是 $\Theta(|V|)$，不是 $O(1)$）。对连通且 $|V| > 1$ 的图有 $|E| \ge |V| - 1$，可以把 $|V|$ 吸收掉，简写成 $O(|E| \log |V|)$。图断开时，对每个连通分量各跑一次，得到最小生成森林。
+实现上可以复用 Dijkstra 的堆技法：`heapq` 没有 decrease-key，于是把 `(key, serial, vertex)` 压进堆，pop 时丢弃过期条目；`serial` 计数器保证堆永远不会去比较两个顶点——这也正是排序边时必须显式用权重做 key 的原因，两条约定要一致。成本是 $O(|V| + |E| \log |V|)$：每个顶点至多入树一次；$|V|$ 那一项来自必须逐个查看顶点，即使图里大量顶点是孤立点（$|E| = 0$ 时成本是 $\Theta(|V|)$，不是 $O(1)$）。对连通且 $|V| > 1$ 的图有 $|E| \ge |V| - 1$，可以把 $|V|$ 吸收掉，简写成 $O(|E| \log |V|)$。图断开时，对每个连通分量各跑一次，得到最小生成森林。
 
 ```python run id="alg.graphs.prim-and-objectives"
 import heapq
@@ -438,7 +438,7 @@ print("  the isolated vertex q contributes no edge, and the two forests have equ
 | Kruskal | 有限无向加权图（允许断开），边列表每条边一次 | $F$ 无环、划分正确、始终可扩展成某个最小生成森林 | $O(\lvert E \rvert \log \lvert E \rvert + (\lvert V \rvert + \lvert E \rvert)\alpha(\lvert V \rvert))$ |
 | Prim | 有限无向加权图（允许断开） | $key[v]$ 是从当前树到 v 的最轻边；被选中的那条是跨整个 cut 的最轻边 | $O(\lvert V \rvert + \lvert E \rvert \log \lvert V \rvert)$ |
 
-这一课与上一课不涉及强连通分量、一般动态删边连通性、有向最小生成树（arborescence）、最小割与最大流、Steiner 树、次小生成树、动态 MST 与 Borůvka 算法。
+本节不涉及强连通分量、一般动态删边连通性、有向最小生成树（arborescence）、最小割与最大流、Steiner 树、次小生成树、动态 MST 与 Borůvka 算法。
 
 ## 小结
 

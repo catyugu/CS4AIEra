@@ -56,7 +56,7 @@ SELECT country FROM customers ORDER BY country;
 SELECT DISTINCT country FROM customers ORDER BY country;
 ```
 
-不加 `DISTINCT` 时，`US` 出现两次：查询返回的是包，行的出现次数有意义，`COUNT(*)` 数出的是出现次数。加 `DISTINCT` 之后结果是集合。这也解释了为什么「连接后的行数」不能直接当作任何一张表的行数，下一课的连接会用到这一点。
+不加 `DISTINCT` 时，`US` 出现两次：查询返回的是包，行的出现次数有意义，`COUNT(*)` 数出的是出现次数。加 `DISTINCT` 之后结果是集合。这也解释了为什么「连接后的行数」不能直接当作任何一张表的行数。
 
 ## 写入被拒绝的三种情形
 
