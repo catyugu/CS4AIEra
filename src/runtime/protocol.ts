@@ -1,5 +1,5 @@
 /**
- * Browser runtime protocol (DESIGN.md section 8.2).
+ * Browser runtime protocol (doc/DESIGN.md, 浏览器执行模型).
  *
  * The UI thread and the worker exchange only these messages. There is no
  * untyped object passing: every field below is either consumed by the worker or
@@ -56,11 +56,10 @@ export type SqlCell =
   | { kind: "blob"; bytes: number };
 
 /**
- * A typed runtime value (DESIGN.md section 10). Never HTML: the UI decides how
+ * A typed runtime value (doc/DESIGN.md, 浏览器执行模型). Never HTML: the UI decides how
  * to render, and text is inserted as text.
  *
- * `image` is part of the design but not of the baseline (DESIGN.md section 24);
- * the worker does not emit it yet.
+ * `image` is not part of the baseline yet; the worker does not emit it.
  */
 export type RuntimeValue =
   | { kind: "text"; text: string }

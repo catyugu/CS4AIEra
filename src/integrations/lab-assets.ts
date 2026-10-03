@@ -8,7 +8,7 @@ import type { Plugin } from "vite";
 import { loadCourseModel } from "../content-model/load";
 
 /**
- * Serve SQL lab fixtures at stable URLs (DESIGN.md section 9.2).
+ * Serve SQL lab fixtures at stable URLs (doc/DESIGN.md, 浏览器执行模型).
  *
  * A fixture is addressed by its lab id — `/labs/<lab-id>/<source>` — not by its
  * path under `content/`, so reorganizing the content tree cannot break a lesson

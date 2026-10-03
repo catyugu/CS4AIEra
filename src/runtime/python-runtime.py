@@ -2,7 +2,7 @@
 
 Cell code never runs in this module's namespace. Each cell is handed a separate
 namespace, so a cell cannot read the runtime's own state, cannot shadow the
-helpers below, and cannot leak names into the next cell (DESIGN.md section 8.3).
+helpers below, and cannot leak names into the next cell (doc/DESIGN.md, 浏览器执行模型).
 
 `handle()` is the only entry point the worker calls. It takes a plain dict and
 returns a JSON string; it never raises, because an exception in a cell is data
@@ -148,7 +148,7 @@ def _connection(session, fixture_sql):
     """A fresh connection per cell, or the session's connection when named.
 
     A named session loads its fixture exactly once. Which fixture belongs to
-    which session is a build-time question (DESIGN.md section 17), so the
+    which session is a build-time question (doc/DESIGN.md, 创作与渲染模型), so the
     runtime does not re-check it here.
     """
     if session is None:
@@ -165,7 +165,7 @@ def _connection(session, fixture_sql):
 
 
 def _tag(value):
-    """Tag a SQLite value so the UI can tell NULL, 0 and '' apart (DESIGN.md 9.4).
+    """Tag a SQLite value so the UI can tell NULL, 0 and '' apart (doc/DESIGN.md, 浏览器执行模型).
 
     SQLite columns carry an affinity, not a type, so the tag records what the
     value actually is in this row rather than what the schema declared.

@@ -1,5 +1,5 @@
 /**
- * In-page contents marker (DESIGN.md section 15).
+ * In-page contents marker (doc/DESIGN.md, 术语、导航与搜索).
  *
  * The list itself is static and complete without script: every heading in the
  * lesson links to its own anchor. What script adds is which of those sections

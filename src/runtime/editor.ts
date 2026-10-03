@@ -4,7 +4,7 @@
  * Deliberately built from individual extensions rather than `basicSetup`: the
  * reader's source must not be altered by the tooling, so there is no
  * auto-closing of brackets and no completion that could rewrite a lesson's
- * example (DESIGN.md section 3).
+ * example (doc/DESIGN.md, 技术基线).
  */
 
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";

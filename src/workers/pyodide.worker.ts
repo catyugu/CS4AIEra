@@ -1,10 +1,10 @@
 /**
- * Pyodide worker (DESIGN.md section 8).
+ * Pyodide worker (doc/DESIGN.md, 浏览器执行模型).
  *
  * One worker per lesson page, created lazily on the first Run. The interpreter
  * and every cell run here, off the UI thread, so a slow or runaway program
  * cannot freeze the page. Stop is implemented by terminating this worker
- * (DESIGN.md section 11): a hard cancel that always works beats cooperative
+ * (doc/DESIGN.md, 浏览器执行模型): a hard cancel that always works beats cooperative
  * cancellation that some workloads cannot honour.
  *
  * The worker is deliberately dumb about scheduling — it handles one request at
@@ -39,7 +39,7 @@ function post(message: RuntimeResponse): void {
 }
 
 // ---------------------------------------------------------------------------
-// Output capture (DESIGN.md section 12)
+// Output capture (doc/DESIGN.md, 浏览器执行模型)
 // ---------------------------------------------------------------------------
 
 /**
@@ -106,7 +106,7 @@ async function load(): Promise<HandleFn> {
     pyodide.setStdout(stdout.writer());
     pyodide.setStderr(stderr.writer());
     // The helpers live in their own module namespace. Cells never execute
-    // there, so a cell can neither read nor shadow them (DESIGN.md 8.3). Only
+    // there, so a cell can neither read nor shadow them (doc/DESIGN.md, 浏览器执行模型). Only
     // the single entry point is exposed to JS.
     pyodide.runPython(BOOTSTRAP, { filename: "cs4ai_bootstrap.py" });
     instance = pyodide;

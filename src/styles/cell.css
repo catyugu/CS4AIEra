@@ -253,7 +253,7 @@
 }
 
 /* NULL is marked by text and by style, so the distinction does not depend on
-   colour alone (DESIGN.md sections 9.4 and 20). */
+   colour alone (doc/DESIGN.md, 浏览器执行模型 and 可访问性). */
 .cell-null {
   color: var(--muted);
   font-style: italic;

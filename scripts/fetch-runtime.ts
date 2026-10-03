@@ -5,7 +5,7 @@
  *   npm run setup:runtime --packages # plus every pinned package wheel
  *
  * The runtime is self-hosted so a build is reproducible and the deployed site
- * never depends on a public CDN (DESIGN.md sections 3 and 21). The files are
+ * never depends on a public CDN (doc/DESIGN.md, 技术基线 and 关键设计决策). The files are
  * third-party build output, so they are not committed: this script is what
  * makes them reproducible.
  *

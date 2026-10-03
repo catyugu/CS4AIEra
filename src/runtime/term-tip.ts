@@ -1,5 +1,5 @@
 /**
- * Term popover placement (DESIGN.md section 14).
+ * Term popover placement (doc/DESIGN.md, 术语、导航与搜索).
  *
  * CSS anchors the tip to the term and reveals it on hover or focus, so the
  * popover exists and is keyboard reachable without script. What CSS cannot

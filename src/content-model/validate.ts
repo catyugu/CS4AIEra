@@ -6,7 +6,7 @@ import { isPinnedPackage, PINNED_PACKAGES } from "./runtime-config";
 import type { CourseModel, GlossaryEntry, Issue, Lesson, Section } from "./types";
 
 /**
- * Build-time content validation (DESIGN.md section 17).
+ * Build-time content validation (doc/DESIGN.md, 创作与渲染模型).
  *
  * Every check here is a hard error unless it is explicitly a warning. The
  * distinction matters: a broken reference must stop the build, while an

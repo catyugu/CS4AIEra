@@ -7,7 +7,7 @@ import {
 } from "./protocol";
 
 /**
- * Lesson runtime client (DESIGN.md sections 8.1 and 11).
+ * Lesson runtime client (doc/DESIGN.md, 浏览器执行模型).
  *
  * Owns the worker's lifecycle: created on the first Run so a lesson page pays
  * nothing until the reader asks for it, terminated on Stop so a runaway program
@@ -106,7 +106,7 @@ export class LessonRuntime {
   /**
    * Cancel whatever is running by terminating the worker.
    *
-   * This is the reliable baseline (DESIGN.md section 11): cooperative
+   * This is the reliable baseline (doc/DESIGN.md, 浏览器执行模型): cooperative
    * cancellation cannot stop every Python workload, and a page that cannot stop
    * a `while True:` is unusable. Named sessions live in the worker, so this
    * discards them too — the UI says so.
@@ -213,7 +213,7 @@ export class LessonRuntime {
             timeoutMs > 0
               ? setTimeout(() => {
                   // A hard timeout cannot ask the worker to stop politely, so it
-                  // is terminated exactly like Stop (DESIGN.md section 12).
+                  // is terminated exactly like Stop (doc/DESIGN.md, 浏览器执行模型).
                   const abort = this.#abort;
                   this.#terminate();
                   abort?.(new RunCancelled("timeout", timeoutMs));

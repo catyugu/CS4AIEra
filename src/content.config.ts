@@ -12,7 +12,7 @@ import { glossaryFrontmatterSchema, lessonFrontmatterSchema } from "./content-mo
  * config exists so Astro can render the MDX bodies.
  *
  * Entry ids are the authoring `id` values, not file paths: identity is stable
- * across file moves (DESIGN.md section 5.3).
+ * across file moves (doc/DESIGN.md, 内容模型).
  */
 export const collections = {
   lessons: defineCollection({

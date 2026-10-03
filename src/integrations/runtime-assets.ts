@@ -11,8 +11,8 @@ import { PYODIDE_VERSION } from "../content-model/runtime-config";
  * Fail the build when a lesson declares executable cells but the self-hosted
  * runtime is not present.
  *
- * The runtime is third-party build output, so it is not committed (DESIGN.md
- * sections 3 and 21). That makes "the assets were never fetched" a real way to
+ * The runtime is third-party build output, so it is not committed (doc/DESIGN.md,
+ * 技术基线 and 关键设计决策). That makes "the assets were never fetched" a real way to
  * ship a site whose every cell fails in front of a reader, and no content check
  * would catch it. Failing here turns a late, silent failure into an immediate
  * one that names the command to run.

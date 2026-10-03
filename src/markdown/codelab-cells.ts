@@ -3,9 +3,9 @@ import { isExecutableFence, parseCellMeta } from "../content-model/mdx-scan";
 /**
  * Wrap executable fenced code in a `<CodeLab>` element.
  *
- * DESIGN.md section 7 makes the fence info string the authoring syntax for an
- * executable cell, so the compiler has to turn that fence into the interactive
- * component. Doing it in the mdast phase, before syntax highlighting, means the
+ * The fence info string is the authoring syntax for an executable cell
+ * (doc/DESIGN.md, 创作与渲染模型), so the compiler has to turn that fence into the
+ * interactive component. Doing it in the mdast phase, before syntax highlighting, means the
  * cell is never highlighted and never rendered twice: the static code path and
  * the interactive path are the same fence, decided once.
  *

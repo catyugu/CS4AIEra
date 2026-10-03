@@ -1,12 +1,11 @@
 /**
  * Code-cell UI: editor, Run/Stop/Reset, and typed output rendering.
  *
- * Loaded only by lesson pages that contain executable cells (DESIGN.md section
- * 19), and it creates the editor and the Pyodide runtime lazily so a reader who
+ * Loaded only by lesson pages that contain executable cells (doc/DESIGN.md, 创作与渲染模型), and it creates the editor and the Pyodide runtime lazily so a reader who
  * never runs anything downloads neither.
  *
  * All output goes through DOM text nodes. Runtime output is untrusted, so it is
- * never parsed as HTML (DESIGN.md section 13).
+ * never parsed as HTML (doc/DESIGN.md, 安全与可复现性).
  */
 
 import { DEFAULT_CELL_TIMEOUT_MS, DEFAULT_MAX_RESULT_ROWS } from "../content-model/runtime-config";
@@ -249,7 +248,7 @@ class Cell {
 }
 
 // ---------------------------------------------------------------------------
-// Output rendering (DESIGN.md sections 9.4 and 10)
+// Output rendering (doc/DESIGN.md, 浏览器执行模型)
 // ---------------------------------------------------------------------------
 
 function renderValue(value: RuntimeValue): Node | undefined {
@@ -269,7 +268,7 @@ function renderValue(value: RuntimeValue): Node | undefined {
 
 /**
  * NULL is marked in text, not only in colour, so the distinction survives a
- * screen reader and a monochrome display (DESIGN.md sections 9.4 and 20).
+ * screen reader and a monochrome display (doc/DESIGN.md, 浏览器执行模型 and 可访问性).
  */
 function renderCell(cell: SqlCell): Node {
   switch (cell.kind) {
