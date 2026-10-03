@@ -23,13 +23,13 @@ objectives:
 
 ## 轮次不变量
 
-要证的只有一句话：**第 $i$ 轮之后，每条至多含 $i$ 条边的 $s \rightsquigarrow v$ 路径，其权重都已经传播到 $distance[v]$（$distance[v] \le$ 该路径的权重）；配合安全性不变量，凡是「最优值能由一条至多 $i$ 条边的路径取到」的顶点 $v$，此刻的 $distance[v]$ 就是它的最终值。** 两个结论都从这里长出来：无源点可达负环时最短行走可取成至多 $|V| - 1$ 条边的简单路径，于是 $|V| - 1$ 轮之后每个有限距离都已是真实最优值；负环检测把它复查的时机定在 $|V| - 1$ 轮之后，靠的也是同一个界。
+要证的只有一句话：**第 $i$ 轮之后，每条至多含 $i$ 条边的 $s \rightsquigarrow v$ 路径，其权重都已经传播到 $distance[v]$（$distance[v] \le$ 该路径的权重）；配合安全性不变量，凡是「最优值能由一条至多 $i$ 条边的路径取到」的顶点 $v$，此刻的 $distance[v]$ 就是它的最终值。** 两个结论都从这里长出来：无源点可达负环时最短游走可取成至多 $|V| - 1$ 条边的简单路径，于是 $|V| - 1$ 轮之后每个有限距离都已是真实最优值；负环检测把它复查的时机定在 $|V| - 1$ 轮之后，靠的也是同一个界。
 
 **为什么这一点成立**：对轮数 $i$ 归纳。设 $P$ 是一条 $s \rightsquigarrow v$、至多 $i$ 条边的路径，末边为 $(u, v, w)$，$P$ 去掉末边得到一条到 $u$ 的、至多 $i - 1$ 条边的路径。按归纳假设，$distance[u]$ 在第 $i - 1$ 轮结束时已不超过这段前缀的权重；$distance$ 只降不升，这个上界进入第 $i$ 轮时仍然成立。这一轮按边序列扫到 $(u, v, w)$ 时，松弛比较 $distance[u] + w$ 与 $distance[v]$，得到 $distance[v] \le distance[u] + w \le P$ 的权重。$i = 0$ 时 $P$ 只含源点，$distance[s] = 0$ 平凡。
 
-**这一步用到哪条假设**：只有「一轮扫遍全部边」与「按 $distance[u] + w < distance[v]$ 取较小者」两条。它不要求 $w \ge 0$——$distance[u]$ 可以比 $distance[v]$ 更晚、更小地被改善，$w$ 取负也照常参与比较。这正是撤掉非负假设后正确性的来源：<CrossRef id="algorithms.dijkstra" /> 的 settle 论证必须在 $w \ge 0$ 下才成立，轮次论证不碰这条条件。
+**这一步用到哪条假设**：只有「一轮扫遍全部边」与「按 $distance[u] + w < distance[v]$ 取较小者」两条。它不要求 $w \ge 0$——$distance[u]$ 可以比 $distance[v]$ 更晚、更小地被改善，$w$ 取负也照常参与比较。这正是撤掉非负假设后正确性的来源：<CrossRef id="algorithms.dijkstra" /> 的确定论证必须在 $w \ge 0$ 下才成立，轮次论证不碰这条条件。
 
-**安全性**是配套的下界：任何时刻每个有限的 $distance[v]$ 都是某条真实 $s \rightsquigarrow v$ 行走的权重——松弛只把标签换成一条真实边的延伸，逐次归纳即得。它与上面的上界夹紧，给出 $distance[v] = \delta(s, v)$，**终止性**随之成立：没有源点可达负环时，$|V| - 1$ 轮之后每个有限距离都达到真实最短距离。
+**安全性**是配套的下界：任何时刻每个有限的 $distance[v]$ 都是某条真实 $s \rightsquigarrow v$ 游走的权重——松弛只把标签换成一条真实边的延伸，逐次归纳即得。它与上面的上界夹紧，给出 $distance[v] = \delta(s, v)$，**终止性**随之成立：没有源点可达负环时，$|V| - 1$ 轮之后每个有限距离都达到真实最短距离。
 
 对**原地**扫描（每一轮直接使用本轮已更新的值），上界写成「$distance[v] \le$ 该路径的权重」，措辞是「有机会传播」：原地扫描在同一轮里可以连续传播多条边，所以 $distance[v]$ 可能已经好于「至多 $i$ 条边」这个界。改用**上一轮距离的副本**做同步松弛，才写成「第 $i$ 轮后 $distance[v]$ 恰等于至多 $i$ 条边的最优值」——那是一个不同的算法（按边数的 DP）。下面正文与单元格都用原地版。
 
@@ -43,7 +43,7 @@ objectives:
 
 **（有可松弛边 $\Rightarrow$ 可达负环）** 反设不存在源点可达的负环。那么每个从 $s$ 可达的顶点 $v$ 都有最短路径，并可取成至多 $|V| - 1$ 条边的简单路径。由轮次不变量，$|V| - 1$ 轮之后 $distance[v] \le \delta(s, v)$；安全性不变量给出 $distance[v] \ge \delta(s, v)$，两边夹紧即 $distance[v] = \delta(s, v)$。取任意一条尾点 $u$ 可达的边 $(u, v, w)$，最短距离的三角不等式给出 $distance[v] = \delta(s, v) \le \delta(s, u) + w = distance[u] + w$，所以这条边不能松弛；每一条尾点有限的边都如此，与「有可松弛边」矛盾。
 
-**检测给出的是存在性结论**：它只报告一个布尔值——存在一条源点可达的负环，而不报告环上有哪些顶点，也不区分哪些顶点受环影响。环本身可以取出来：$|V| - 1$ 轮结束后取一条仍可松弛的边，从它的头点沿 predecessor 走 $|V|$ 步，落点一定在环上，再沿 predecessor 走回它自己就得到环的顶点序列。受可达负环影响的顶点 $v$ 满足 $\delta(s, v) = -\infty$——沿环多绕几圈就有任意轻的行走；这个三值取值分类见 <CrossRef id="algorithms.shortest-paths" />。
+**检测给出的是存在性结论**：它只报告一个布尔值——存在一条源点可达的负环，而不报告环上有哪些顶点，也不区分哪些顶点受环影响。环本身可以取出来：$|V| - 1$ 轮结束后取一条仍可松弛的边，从它的头点沿 predecessor 走 $|V|$ 步，落点一定在环上，再沿 predecessor 走回它自己就得到环的顶点序列。受可达负环影响的顶点 $v$ 满足 $\delta(s, v) = -\infty$——沿环多绕几圈就有任意轻的游走；这个三值取值分类见 <CrossRef id="algorithms.shortest-paths" />。
 
 成本是 $|V| - 1$ 轮各扫一遍全部边，再加一次检测扫描，即 $\Theta(|V| + |V| \cdot |E|)$；只有在 $|E| \ge 1$ 时才能简化成 $\Theta(|V| \cdot |E|)$（$|E| = 0$ 时它是 $\Theta(|V|)$）。
 
@@ -89,7 +89,7 @@ print("negative cycle reachable from s: vertices", cycle)
 | 输入条件 | 算法 | 要证明的核心性质 | 成本 |
 | --- | --- | --- | --- |
 | 单位权（$w(e) = 1$） | BFS | 层号恰为最少边数 | $\Theta(\lvert V_R \rvert + \lvert E_R \rvert)$，邻接表 |
-| 加权且 $w(e) \ge 0$ | Dijkstra | settle 即最终距离（settle 不变量） | 取决于优先队列实现：教科书 decrease-key 为 $O((\lvert V \rvert + \lvert E \rvert) \log \lvert V \rvert)$；`heapq` 版按实际压入条目计 |
+| 加权且 $w(e) \ge 0$ | Dijkstra | 确定即最终距离（确定不变量） | 取决于优先队列实现：教科书 decrease-key 为 $O((\lvert V \rvert + \lvert E \rvert) \log \lvert V \rvert)$；`heapq` 版按实际压入条目计 |
 | 允许负边 | Bellman–Ford | 轮次不变量、源点可达负环检测并报告环 | 最坏 $\Theta(\lvert V \rvert + \lvert V \rvert \cdot \lvert E \rvert)$ |
 
 表中三行的「输入条件」是硬前置：Dijkstra 在负边上没有正确性保证，BFS 在非单位权上算的是另一件事。
