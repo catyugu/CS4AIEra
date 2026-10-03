@@ -5,251 +5,71 @@ order: 20
 title: 二叉搜索树与有序映射
 status: published
 objectives:
-  - 说明二叉搜索树的查找、插入、删除都只沿一条根到叶路径前进，因此单次成本由树高决定，与键的个数没有直接关系
-  - 用同一批键的不同插入顺序说明树高的差别：升序插入退化成链使最坏成本达到线性，随机插入顺序给出对数级的期望高度
-  - 写出有序映射的契约，说明它比哈希映射多要求的键上全序，以及中序遍历为什么恰好给出升序
-  - 说明删除有两个孩子的节点时为什么用中序后继替换，以及平衡不变量（AVL、红黑树）怎样把高度压到对数级
+  - 说明一次查找沿一条根到叶路径前进，单次访问的节点数由树高决定，与键的个数没有直接关系
+  - 用同一批键的两种插入顺序实测高度，说明升序插入退化成链、中位数优先的插入顺序保持对数级高度
+  - 写出有序映射在哈希映射的相等关系之外额外要求的键上全序，并说明最小键、前驱后继与区间查询为什么依赖它
+  - 在小的键集合上追踪区间查询进入与剪掉的子树，推导它的时间上界里高度与输出规模各占哪一项
+  - 说明平衡不变量怎样把最坏高度压到对数级，以及它换来的是什么
 ---
 
-一份按键排序的键值集合要在「某个键存了什么」之外回答一批按序关系的查询：最小的键是谁、某个键的前驱与后继是谁、区间 $[a, b]$ 里有哪些键、按键序把全部键列一遍。哈希映射只用键的相等关系；没有额外的有序索引时，求最小键或前驱后继要扫描键集合，按键序遍历还要另外建立一份顺序（见 <CrossRef id="algorithms.maps-and-sets" />）。
+一批按键排序的键值集合，除了「某个键存了什么」，还要回答一批按序关系的问题：最小的键是谁、某个键的前驱与后继是谁、区间 $[a, b]$ 里有哪些键、按键序把全部键列一遍。哈希映射只按相等关系定位，这些问题它答不了（见 <CrossRef id="algorithms.maps-and-sets" />）。
 
-把键序直接写进表示，一种做法是每个节点保存一个键，左子树只放更小的键，右子树只放更大的键。一次键比较因此就决定往哪边走，查找沿一条从根向下的路径前进。剩下的量只有一个——这条路径有多长。
-
-同一批 500 个键，二叉搜索树的高度可以是 8，也可以是 499；两种形状上最深的一次查找分别访问 9 个和 500 个节点。决定这个成本的量是**树高**，而树高由插入顺序写定：同一批键换个到达顺序，成本可以差出两个数量级。
+同一批 500 个键、同一段查找代码、同一个被查找的键，一次访问 9 个节点，另一次访问 500 个。两次的键个数相同、比较代码相同，差别落在树的形状上；本节要问形状由什么写定，成本落在哪个量上。
 
 ## 成本由高度决定
 
 **表示**：每个节点保存一个键、一个左子树引用与一个右子树引用。
 
-**表示不变量**：对每个节点 $x$，左子树里的所有键都小于 $x$ 的键，右子树里的所有键都大于 $x$ 的键。
+**表示不变量**：对每个节点 $x$，左子树里的所有键都小于 $x$ 的键，右子树里的所有键都大于 $x$ 的键。这条约束管的是整棵子树里的全部键；只检查一个节点与它直接相连的孩子是更弱的条件，满足它的树仍然可以让一次查找走错方向。
 
-这条不变量约束的是**整棵子树里的全部键**。只检查一个节点与它直接相连的孩子是更弱的条件，也是很多人第一反应写下的版本：一棵满足局部比较的树仍然可以让搜索走错方向。
-
-```python run id="alg.trees.bst-invariant"
-class Node:
-    __slots__ = ("key", "left", "right")
-
-    def __init__(self, key, left=None, right=None):
-        self.key = key
-        self.left = left
-        self.right = right
-
-
-def search(root, key, visits=None):
-    """Postcondition: the node holding key, or None. One visit per node on the path."""
-    visits = visits if visits is not None else []
-    while root is not None:
-        visits.append(root.key)
-        if key == root.key:
-            return root
-        root = root.left if key < root.key else root.right
-    return None
-
-
-def invariant_holds(node, low=None, high=None):
-    """Postcondition: True iff every key in the subtree lies strictly between low and high."""
-    if node is None:
-        return True
-    if low is not None and not low < node.key:
-        return False
-    if high is not None and not node.key < high:
-        return False
-    return invariant_holds(node.left, low, node.key) and invariant_holds(node.right, node.key, high)
-
-
-def local_children_ordered(node):
-    """The weaker check people write first: each key orders its own children only."""
-    if node is None:
-        return True
-    if node.left is not None and not node.left.key < node.key:
-        return False
-    if node.right is not None and not node.key < node.right.key:
-        return False
-    return local_children_ordered(node.left) and local_children_ordered(node.right)
-
-
-def inorder(node, out=None):
-    """Postcondition: the subtree's keys in the order the invariant implies."""
-    out = out if out is not None else []
-    if node is not None:
-        inorder(node.left, out)
-        out.append(node.key)
-        inorder(node.right, out)
-    return out
-
-
-wrong = Node(10, Node(5), Node(15, Node(6)))
-print("local parent-child check passes:", local_children_ordered(wrong))
-print("global invariant holds:        ", invariant_holds(wrong))
-print("inorder:", inorder(wrong), "| sorted:", sorted(inorder(wrong)))
-visits = []
-result = search(wrong, 6, visits)
-print("search(6) walks through", visits, "->", "found" if result is not None else "not found")
-```
-
-这棵树满足局部比较：$5 < 10 < 15$，$6 < 15$，每一对父子都合规。但 $6$ 落在 $10$ 的右子树里，全局不变量已经破了，后果直接可见：查找 $6$ 先从 $10$ 错误地进入左子树，到达 $5$ 后再向右走空——键在树里却查不到。中序遍历同时失去升序性质，这是同一处破坏的另一个症状。
-
-**中序产生升序**由不变量直接推出：左子树的键全部小于节点键，右子树全部大于节点键，于是「先左子树、再节点、再右子树」的访问顺序恰好是全序下的升序。反过来，只要中序序列偏离升序，就说明不变量已经破了。
-
-一次查找在每个节点上按键比较决定方向（实现先用小于、再用大于，最多两次），命中就停，因此访问的节点数不超过 $h + 1$，其中 $h$ 是根到最深叶的路径长度（按边计）。插入与删除同样只沿一条向下路径前进，所以查找、插入、删除的单次访问上界都是 $O(h)$；存在把操作逼到最深层的输入，因此它们的最坏成本是 $\Theta(h)$。**仅凭 BST 不变量推不出 $O(\log n)$**，它约束的是键的次序，对树的形状不作任何要求。
-
-形状完全由插入顺序决定。把一批键按升序插入，每个新键都接在当前最右端，得到一条链，$n$ 个键的高度是 $n - 1$，单次操作退化到 $\Theta(n)$。按随机顺序插入时树的期望高度是 $O(\log n)$：这是对「插入顺序是随机排列」这一分布的期望，不适用于任意输入，也不排除某个具体输入退化成链。
+一次键比较因此决定往哪边走，查找沿一条从根向下的路径前进。剩下的量只有一个——这条路径有多长。下面用最少的部件读出这个长度：两种插入顺序写同一批 500 个键，再读回树高与最深的那次查找访问多少节点。
 
 ```python run id="alg.trees.bst-costs"
-import math
-
-
 class Node:
     __slots__ = ("key", "left", "right")
 
     def __init__(self, key, left=None, right=None):
-        self.key = key
-        self.left = left
-        self.right = right
+        self.key, self.left, self.right = key, left, right
 
 
-def insert(root, key, visits):
-    """Postcondition: the key is present exactly once; one visit per non-empty node on the path."""
+def insert(root, key):
     if root is None:
         return Node(key)
-    visits.append(root.key)
     if key < root.key:
-        root.left = insert(root.left, key, visits)
-    elif key > root.key:
-        root.right = insert(root.right, key, visits)
+        root.left = insert(root.left, key)
+    else:
+        root.right = insert(root.right, key)
     return root
-
-
-def search(root, key, visits=None):
-    """Postcondition: the node holding key, or None. One visit per node on the path."""
-    visits = visits if visits is not None else []
-    while root is not None:
-        visits.append(root.key)
-        if key == root.key:
-            return root
-        root = root.left if key < root.key else root.right
-    return None
-
-
-def visits_for(root, key):
-    """Postcondition: the number of nodes one search for key visits."""
-    visits = []
-    search(root, key, visits)
-    return len(visits)
 
 
 def height(node):
-    """Postcondition: the number of edges on a longest root-to-leaf path; -1 for an empty tree."""
-    if node is None:
-        return -1
-    return 1 + max(height(node.left), height(node.right))
-
-
-def detach_min(root, visits):
-    """Postcondition: returns (minimum node, the subtree with that node removed)."""
-    visits.append(root.key)
-    if root.left is None:
-        return root, root.right
-    minimum, root.left = detach_min(root.left, visits)
-    return minimum, root
-
-
-def delete(root, key, visits):
-    """Postcondition: the key is absent; every other previously present key is still present."""
-    if root is None:
-        return None
-    visits.append(root.key)
-    if key < root.key:
-        root.left = delete(root.left, key, visits)
-    elif key > root.key:
-        root.right = delete(root.right, key, visits)
-    else:
-        if root.left is None:
-            return root.right
-        if root.right is None:
-            return root.left
-        replacement, root.right = detach_min(root.right, visits)
-        root.key = replacement.key
-    return root
-
-
-def invariant_holds(node, low=None, high=None):
-    """Postcondition: True iff every key in the subtree lies strictly between low and high."""
-    if node is None:
-        return True
-    if low is not None and not low < node.key:
-        return False
-    if high is not None and not node.key < high:
-        return False
-    return invariant_holds(node.left, low, node.key) and invariant_holds(node.right, node.key, high)
-
-
-def inorder(node, out=None):
-    """Postcondition: the subtree's keys in the order the invariant implies."""
-    out = out if out is not None else []
-    if node is not None:
-        inorder(node.left, out)
-        out.append(node.key)
-        inorder(node.right, out)
-    return out
-
-
-def lcg_shuffle(values, seed=12345):
-    """A deterministic permutation: a linear congruential generator's output order."""
-    # fixed seed and fixed modulus, so every run of this cell gets the same shape
-    state = seed
-    shuffled = list(values)
-    for index in range(len(shuffled) - 1, 0, -1):
-        state = (1103515245 * state + 12345) % (2 ** 31)
-        other = state % (index + 1)
-        shuffled[index], shuffled[other] = shuffled[other], shuffled[index]
-    return shuffled
+    return -1 if node is None else 1 + max(height(node.left), height(node.right))
 
 
 def middle_out(values):
-    """Precondition: values sorted. Returns the order that keeps the shape shallow."""
     if not values:
         return []
     middle = len(values) // 2
     return [values[middle]] + middle_out(values[:middle]) + middle_out(values[middle + 1:])
 
 
-size = 500
-keys = list(range(size))
-orders = {
-    "ascending": keys,
-    "descending": list(reversed(keys)),
-    "middle-out": middle_out(keys),
-    "lcg shuffle": lcg_shuffle(keys),
-}
-probes = (0, 250, 499)
-print(f"{'insertion order':>16} | {'height':>6} | visits for keys {probes}")
-for label, order in orders.items():
+keys = list(range(500))
+for label, order in (("ascending", keys), ("middle-out", middle_out(keys))):
     root = None
     for key in order:
-        root = insert(root, key, [])
-    row = [visits_for(root, key) for key in probes]
-    print(f"{label:>16} | {height(root):6d} | {row}")
-print("log2(500) =", round(math.log2(size), 2), "| the deepest key on the chain costs 500 visits")
-
-root = None
-for key in middle_out(keys):
-    root = insert(root, key, [])
-deleted = []
-root = delete(root, 250, deleted)
-remaining = inorder(root)
-print("delete(250) from the balanced tree: visits", len(deleted), "| invariant", invariant_holds(root),
-      "| key absent", 250 not in remaining, "| still ascending", remaining == sorted(remaining),
-      "| remaining", len(remaining), "| height", height(root))
+        root = insert(root, key)
+    print(f"{label:>10}: height {height(root):3d} | deepest lookup visits {height(root) + 1:3d}")
 ```
 
-同一批 500 个键，只改插入顺序。升序插入得到一条链，高度 499，查找最右端的键 499 要访问 500 个节点；降序插入镜像生成一条左链，查找键 0 同样要 500 个节点。中间优先的顺序（先放中位数）把高度压到 8，与 $\log_2 500$ 同阶，最深的一次查找访问 9 个节点，查找根上的键 250 只访问 1 个节点。固定种子的洗牌顺序介于两者之间，高度 17。**形状由插入顺序决定，成本由形状决定**：普通 BST 给出的最坏成本保证只有 $O(h)$，这个上界在最坏情形达到 $\Theta(h)$——链上就是 $h = 499$。想拿到对数级的保证，必须对形状本身再提出要求；这正是平衡不变量要做的事。
+同一批 500 个键，升序插入让每个新键都接在当前最右节点之后，得到一条链，高度 499；中位数优先的顺序（先放中位，左右两半再各自按同样方式排）得到高度 8 的树，与 $\log_2 500$ 同阶。一次查找在路径上每个非空节点按键比较决定方向（先判相等，再判大小，最多两次比较），命中即停，因此访问的节点数不超过 $h + 1$：链上最深的一次查找是 500 个节点，平衡形状上是 9 个。**成本由高度决定**，而高度完全由插入顺序写定。`height` 把空树的高度取为 $-1$，所以 $h = 8$ 对应 9 个节点的路径。
 
-**实现边界**：`height`、`insert`、`delete` 都用递归写成，递归深度随树高增长，链形状上的调用深度达到 $n$，会先撞到解释器的递归深度上限（见 <CrossRef id="algorithms.recursion" />）；改成沿路径循环只改变常数与栈空间，不改变成本由高度决定这一结论。节点用对象表示时每个节点另带固定的对象开销，上面的数字只计访问的节点数与键比较，不含这类固定开销；长字符串键的一次比较本身随键长增长，比较次数与比较成本要分开算。
+按升序或降序插入 $n$ 个键，高度就是 $n - 1$，单次操作退化到 $\Theta(n)$。对「插入顺序是随机排列」这一分布，树的期望高度是 $O(\log n)$；这是关于分布的期望，它对任意输入都不给出保证，也不排除某个具体输入退化成链。仅凭 BST 不变量推不出 $O(\log n)$：它约束的是键的次序，对树的形状不作任何要求。要拿到对数级的**保证**，需要对形状本身再提出一条要求。
+
+**实现边界**：`height` 与 `insert` 写成递归，调用深度随树高增长，链形状上的深度达到 $n$，会先撞到解释器的递归深度上限（见 <CrossRef id="algorithms.recursion" />）；改成沿路径循环只改变常数与栈空间，不改变成本由高度决定这一结论。上面的数字计的是访问的节点数与键比较次数；节点用对象表示时，每个节点另带固定的对象开销，长字符串键的一次比较本身也随键长增长，比较次数与比较成本要分开算。
 
 ## 有序映射的契约
 
-把表示与不变量要求的东西精确写下来，就是**有序映射**：
+把表示与不变量要求的东西精确写下来，就是**有序映射**（ordered map）：
 
 **抽象状态**：一组 (键, 值) 条目，键互不相等，且键集合上定义了一个全序。
 
@@ -262,222 +82,73 @@ print("delete(250) from the balanced tree: visits", len(deleted), "| invariant",
 | 后继 / 前驱 $k$ | 返回全序下大于 / 小于 $k$ 的最小 / 最大键，不含 $k$ 本身 |
 | 区间 $[a, b]$ | 按升序返回全序落在 $[a, b]$ 内的键 |
 
-契约里的顺序必须是**全序**。用代码里的严格比较 `<` 表述，就是比较具有传递性，并且任意两个不同的键 $a, b$ 中恰有一个满足 $a < b$ 或 $b < a$；相等的键两边都不成立。等价地，用 $\le$ 表述时要求自反、反对称、传递与完全可比。哈希表表示不要求键之间存在这种顺序，它除相等关系之外还需要一个与相等一致的哈希值，Python 因而要求 `dict` 的键可哈希；有序映射在哈希能力之外多要的一条，是键上可比较的全序。
+契约里的顺序必须是**全序**（total order）：比较具有传递性，并且任意两个不同的键 $a, b$ 中恰有一个满足 $a < b$ 或 $b < a$。哈希表表示只要求键之间存在相等关系，另外需要一个与相等一致的哈希值，Python 因而要求 `dict` 的键可哈希；有序映射在哈希能力之外多要的一条，是键上可比较的全序。完整中序遍历按键序访问全部键，不变量直接保证它按升序：左子树的键全部更小、右子树的键全部更大，「先左、再节点、再右」的访问顺序恰好是全序下的升序。
 
-表中的查找、插入、删除各自只沿一条向下路径工作，最小键、最大键、前驱与后继也各自沿一条路径工作；区间查询与整体中序遍历要访问更多节点。于是这一批操作的单价统一落在同一个量上——树高。
+表中前三项各自只沿一条向下路径工作，最小键、最大键、前驱与后继也各自沿一条路径工作；区间查询与完整中序遍历要进入更多节点。这一批操作的单价因此统一落在树高上。
 
-**实现边界**：Python 没有内置的平衡树；`dict` 保证插入顺序，不提供按键序的查找，也不提供前驱、后继与区间操作。需要在语言里直接使用有序映射时，常见做法是第三方平衡树实现或数据库索引。用有序数组承担同一份契约是「查找快、更新贵」的另一端：`bisect` 做查找、`list.insert` 做插入，每次插入要把插入点之后的引用整体移动，最坏是 $\Theta(n)$。这些表示的取舍在 `maps-and-sets` 已经列过，树这一侧补上的是机制。
+## 插入与删除只改一条路径
 
-## 插入与删除
+插入沿一条路径下降到空位置，把新键挂在那里。新键与路径上每个节点的大小关系都检查过，不变量因此在路径上成立；未经过的子树不受影响。已有键在完整映射中只更新值，键集合仍互不相等。
 
-插入沿一条路径下降到空位置，把新键挂在那里：
+删除分三种情况。节点是叶子时直接剪掉；只有一个孩子时用那个孩子顶替它的位置。两个孩子都在时，节点不能直接剪掉，否则两个子树没有位置可放；可行的替身是**右子树的最小键**，也就是该节点的中序后继。它大于左子树的所有键、小于右子树其余所有键，放到节点位置后两条不等式都保持。选前驱做替身同样可行，不变量论证对称。找到后继与把它从原位置摘掉可以在一次下降里完成。
 
-```python
-def insert(root, key, visits):
-    """Postcondition: the key is present; every previously present key is still present."""
-    if root is None:
-        return Node(key)
-    visits.append(root.key)
-    if key < root.key:
-        root.left = insert(root.left, key, visits)
-    elif key > root.key:
-        root.right = insert(root.right, key, visits)
-    return root
-```
+插入与删除都只沿一条向下路径工作，成本为 $O(h)$，最坏是 $\Theta(h)$。以条目数 $n$ 为规模，完整中序遍历访问每个节点恰好一次，因此按键序取出全部键是 $\Theta(n)$。
 
-插入走到空位置挂上新节点；新键与路径上每个节点的大小关系都检查过，不变量因此在路径上成立，未经过的子树不受影响。插入只在键不存在时新增节点，已有键在完整映射中只更新值，因此键集合仍互不相等。
-
-删除分三种情况，前两种直接剪掉节点，第三种要选一个替身：
-
-```python
-def detach_min(root, visits):
-    """Postcondition: returns (minimum node, the subtree with that node removed)."""
-    visits.append(root.key)
-    if root.left is None:
-        return root, root.right
-    minimum, root.left = detach_min(root.left, visits)
-    return minimum, root
-
-
-def delete(root, key, visits):
-    """Postcondition: the key is absent; every other previously present key is still present."""
-    if root is None:
-        return None
-    visits.append(root.key)
-    if key < root.key:
-        root.left = delete(root.left, key, visits)
-    elif key > root.key:
-        root.right = delete(root.right, key, visits)
-    else:
-        if root.left is None:
-            return root.right
-        if root.right is None:
-            return root.left
-        replacement, root.right = detach_min(root.right, visits)
-        root.key = replacement.key
-    return root
-```
-
-两个孩子都在时，节点不能直接剪掉，否则两个子树没有位置可放。可行的替身是**右子树的最小键**（也就是该节点的中序后继）：它大于左子树的所有键、小于右子树其余所有键，放到节点位置后两条不等式都保持。`detach_min` 在一次下降里就摘掉那个最小节点，因此「找到后继」与「把它从原位置移除」不需要走两遍路径。删除两孩子节点时选择中序后继是一种选择——也可以选前驱，两者的不变量论证对称。
-
-插入与删除都按契约改变抽象状态，同时维持 BST 的键序不变量：插入只增加新键，删除只移除指定键，其余键保持不变。操作可能改变树的形状，但完成后中序仍然必须是升序；两者都只沿一条向下路径工作，成本同样是 $O(h)$，最坏是 $\Theta(h)$。上面成本单元格里的删除就在平衡形状上删掉了根（两孩子的情况）：9 次访问，删后不变量仍成立、剩余 499 个键仍升序、高度仍是 8。
-
-**实现边界**：删除两孩子节点时替换的是整个 (键, 值) 条目，上面只保存键的骨架把它写成改键，这层包装不影响键序与高度的论证。若允许重复键，还需要额外的消解规则（计数、链表或明确的取舍），它不由 BST 不变量本身给出。
+**实现边界**：删除两孩子节点时替换的是整个 (键, 值) 条目。若允许重复键，还需要额外的消解规则（计数、链表或明确的取舍），它不由 BST 不变量本身给出。
 
 ## 按键序的查询
 
-契约多出来的那几个操作都靠「不变量给出了方向」这一点：要更大的键就往右走，要更小的往左走。
+契约多出来的那几个操作靠同一点：不变量给出了方向，要更大的键就往右走，要更小的往左走。最小键从根一路向左，后继从根走到叶，各自是一条路径。区间查询按中序剪枝，只进入仍可能包含区间内键的子树——下面这棵 7 个节点的树里，区间 $[25, 65]$ 只进入 5 个节点。
 
 ```python run id="alg.trees.ordered-query"
-import bisect
-
-
 class Node:
     __slots__ = ("key", "left", "right")
 
     def __init__(self, key, left=None, right=None):
-        self.key = key
-        self.left = left
-        self.right = right
+        self.key, self.left, self.right = key, left, right
 
 
-def insert(root, key):
-    if root is None:
-        return Node(key)
-    if key < root.key:
-        root.left = insert(root.left, key)
-    elif key > root.key:
-        root.right = insert(root.right, key)
-    return root
+tree = Node(50, Node(20, Node(10), Node(30)), Node(70, Node(60), Node(80)))
+
+entered = []
 
 
-def build(keys):
-    root = None
-    for key in keys:
-        root = insert(root, key)
-    return root
-
-
-def min_key(node, visits=None):
-    """Postcondition: the smallest key in the subtree, or None if it is empty."""
-    visits = visits if visits is not None else []
+def range_keys(node, low, high):
     if node is None:
-        return None
-    while node.left is not None:
-        visits.append(node.key)
-        node = node.left
-    visits.append(node.key)
-    return node.key
-
-
-def successor(root, key, visits=None):
-    """Postcondition: the smallest key greater than key, or None. One root-to-leaf path."""
-    visits = visits if visits is not None else []
-    candidate = None
-    while root is not None:
-        visits.append(root.key)
-        if root.key > key:
-            candidate = root.key
-            root = root.left
-        else:
-            root = root.right
-    return candidate
-
-
-def range_keys(node, low, high, out=None):
-    """Postcondition: the subtree's keys inside [low, high], ascending."""
-    out = out if out is not None else []
-    if node is None:
-        return out
-    if node.key > low:
-        range_keys(node.left, low, high, out)
+        return []
+    entered.append(node.key)
+    out = range_keys(node.left, low, high) if node.key > low else []
     if low <= node.key <= high:
         out.append(node.key)
     if node.key < high:
-        range_keys(node.right, low, high, out)
+        out.extend(range_keys(node.right, low, high))
     return out
 
 
-def middle_out(values):
-    if not values:
-        return []
-    middle = len(values) // 2
-    return [values[middle]] + middle_out(values[:middle]) + middle_out(values[middle + 1:])
-
-
-def lcg_shuffle(values, seed=12345):
-    """A deterministic permutation, so the cell's numbers are reproducible."""
-    state = seed
-    shuffled = list(values)
-    for index in range(len(shuffled) - 1, 0, -1):
-        state = (1103515245 * state + 12345) % (2 ** 31)
-        other = state % (index + 1)
-        shuffled[index], shuffled[other] = shuffled[other], shuffled[index]
-    return shuffled
-
-
-keys = middle_out(list(range(500)))
-root = build(keys)
-
-visits = []
-print("min:", min_key(root, visits), "in", len(visits), "visits (h + 1 at most)")
-
-visits = []
-key = 250
-print("successor of", key, "is", successor(root, key, visits), "in", len(visits), "visits")
-
-window = range_keys(root, 200, 210)
-print("keys in [200, 210]:", window)
-
-class SortedArray:
-    """The ordered map as a sorted list: search by halving, insert by shifting."""
-    __slots__ = ("keys", "shifts")
-
-    def __init__(self):
-        self.keys = []
-        self.shifts = 0
-
-    def insert(self, key):
-        """Cost model: one element move per element after the insertion point."""
-        position = bisect.bisect_left(self.keys, key)
-        self.keys.insert(position, key)
-        self.shifts += len(self.keys) - 1 - position
-
-
-size = 500
-for label, sequence in (("ascending", range(size)),
-                        ("shuffled", lcg_shuffle(list(range(size)))),
-                        ("descending", range(size - 1, -1, -1))):
-    array = SortedArray()
-    for key in sequence:
-        array.insert(key)
-    print(f"sorted array, {size} {label:>10} inserts: {array.shifts:6d} element moves")
-
-def height(node):
-    """Postcondition: the number of edges on a longest root-to-leaf path; -1 for an empty tree."""
-    if node is None:
-        return -1
-    return 1 + max(height(node.left), height(node.right))
-
-
-def node_count(node):
-    """Postcondition: the number of nodes in the subtree."""
-    return 0 if node is None else 1 + node_count(node.left) + node_count(node.right)
-
-
-print("tree holding the same keys: height", height(root), "nodes", node_count(root))
+window = range_keys(tree, 25, 65)
+print("keys in [25, 65]:", window)
+print("nodes entered:", len(entered), "of 7:", entered)
 ```
 
-后继查询从根走到叶，访问节点数不超过 $h + 1$（平衡形状上是 9 次）；最小键从根一路向左，同样是 9 次；区间查询用中序剪枝，只进入仍可能包含区间键的子树：除输出的 $k$ 个节点外，额外访问被限制在区间两端对应的搜索边界附近，因此时间上界是 $O(k + h)$，而这个界在最坏情形可以达到 $\Theta(k + h)$。这些查询与查找共用同一条下降路径，单价同样是 $O(h)$。
+输出里的 `[30, 50, 60]` 是区间内的键，升序；进入的节点是 `[50, 20, 30, 70, 60]`，节点 10 与 80 被剪掉：20 的键已经小于下界 25，它的整棵左子树不可能落在区间内；70 的键已经大于上界 65，它的右子树同样不可能。区间查询的时间上界是 $O(h + k)$，$k$ 是输出的键数，$h$ 来自两端搜索边界；最坏情形达到 $\Theta(h + k)$。
 
-同一份契约用**有序数组**也能交付，代价落在更新上：升序插入 500 个键只是不断追加，搬移 0 次；固定洗牌顺序搬移 58 791 次；降序插入每次都要把已有元素整体后移，共搬移 124 750 次，平均每次 249.5 次。若数组已有 $n$ 个元素，在位置 $p$ 插入要搬移 $n - p$ 个引用，因此最坏是 $\Theta(n)$；插入位置在各个秩上近似均匀时，期望搬移量也是 $\Theta(n)$。插到末端不搬动已有元素，距末端常数个位置也只需 $O(1)$ 次搬移；考虑动态数组偶尔扩容，末端追加的总成本是摊还 $O(1)$（见 <CrossRef id="algorithms.amortized" />）。上面三个数字测量的只是插入位置造成的元素搬移，不含底层容量扩张时的偶发重新分配。二叉搜索树用形状换来了 $O(h)$ 的更新（最坏情形是 $\Theta(h)$），代价是失去数组的连续存储与随机访问。
+哈希结构只按相等关系定位，最小键、前驱后继与区间内的键都不在它的能力里：要得到区间内的键，必须扫描全部键，代价是 $\Theta(n)$。按键序的查询因此需要在键上定义全序，并把这份顺序写进表示。
 
 ## 把高度压到对数级：平衡树
 
-普通 BST 对形状不作要求，高度可以坏到 $\Theta(n)$，那批路径操作的 $O(h)$ 保证也就可能退化到线性。要拿到对数级保证，需要再维持足以限制形状的**平衡不变量**。AVL 树要求每个节点的左右子树高度差至多为 1；红黑树用节点的颜色约束每条根到叶路径上黑节点的数目，把高度限制在 $2 \log_2(n+1)$ 以内；某些 weight-balanced tree 则对左右子树的规模比例施加固定的定量约束。这类具体的不变量可以推出 $h = O(\log n)$；结合任何二叉树容纳 $n$ 个节点都需要 $h = \Omega(\log n)$，便得到 $h = \Theta(\log n)$。这里关注这个保证本身，不重新推导各方案的具体高度常数。
+普通 BST 对形状不作要求，高度可以坏到 $\Theta(n)$，那批路径操作的 $O(h)$ 保证也就可能退化到线性。要拿到对数级的保证，需要在 BST 不变量之外再维持一条限制形状的**平衡不变量**。自平衡搜索树（self-balancing search tree）按不同方式做这件事：AVL 树要求每个节点的左右子树高度差至多为 1；红黑树（red-black tree）用节点的颜色约束每条根到叶路径上的黑节点数，把高度限制在 $2 \log_2(n + 1)$ 以内；weight-balanced tree 对左右子树的规模比例施加固定的定量约束。这些不变量都能推出 $h = O(\log n)$；再加上任何二叉树容纳 $n$ 个节点都需要 $h = \Omega(\log n)$，便得到 $h = \Theta(\log n)$。这里关注这个保证本身，不重新推导各方案的具体高度常数。
 
-代价主要落在更新维护上：插入或删除之后需要检查并恢复平衡条件，经典平衡二叉搜索树通常使用**旋转**改变少数引用，同时保持中序序列不变；常见实现还会在节点中保存平衡因子、高度、子树大小或颜色等少量元数据。不同平衡方案付出的具体维护成本不同，共同点是：对数高度由这套额外维护换来，BST 不变量本身给不出它。
+代价落在更新维护上：插入或删除之后要检查并恢复平衡条件，经典实现用**旋转**改变少数引用，同时保持中序序列不变；节点中还保存平衡因子、高度、子树大小或颜色等少量元数据。对数高度由这套额外维护换来，BST 不变量本身给不出它。
 
-以条目数 $n$ 为规模、高度 $h$ 为形状参数：非空二叉树满足 $\lceil \log_2(n+1) \rceil - 1 \le h \le n - 1$。每次访问包含常数次按键比较（实现先用小于、再用大于，最多两次）；查找、插入、删除、最小/最大键、前驱与后继的单次时间均为 $O(h)$，并且各自都有达到 $\Theta(h)$ 的最坏情形；完整中序遍历为 $\Theta(n)$；输出 $k$ 个键的区间查询为 $O(h + k)$，该上界在最坏情形是紧的。这些界都不依赖概率或摊还分析。只有在加入能够保证 $h = O(\log n)$ 的平衡不变量之后，路径型操作才获得 $O(\log n)$ 的最坏保证。空间为 $\Theta(n)$ 个节点，具体平衡实现还可能保存常数大小的平衡元数据。
+同一份契约也有别的表示，取舍落在更新一侧：
 
-合起来：普通 BST 交付有序映射的契约，最坏成本保证是 $O(h)$；加上平衡不变量之后 $h = \Theta(\log n)$，契约才附带上对数时间的承诺。
+| 表示 | 键上需要的结构 | 最小键 / 后继 / 区间 | 插入 |
+| --- | --- | --- | --- |
+| 哈希映射（`dict`） | 相等关系与一个一致的哈希值 | 不支持，要扫描全部键 | 摊还 $O(1)$ |
+| 有序数组 | 全序与排好序的连续槽位 | 二分查找 $O(\log n)$，区间一次切片 | 搬移插入点之后的引用，最坏 $\Theta(n)$；末端追加是摊还 $O(1)$（见 <CrossRef id="algorithms.amortized" />） |
+| 普通二叉搜索树 | 全序与每个节点的左右子树引用 | 沿一条路径 $O(h)$，区间 $O(h + k)$ | $O(h)$，$h$ 无保证 |
+| 平衡搜索树 | 全序与平衡元数据 | 沿一条路径 $O(\log n)$，区间 $O(\log n + k)$ | $O(\log n)$ |
+
+Python 没有内置的平衡树；`dict` 保证插入顺序，不提供按键序的查找，也不提供前驱、后继与区间操作。需要在语言里直接使用有序映射时，常见做法是第三方平衡树实现或数据库索引。
+
+合起来：普通 BST 用节点上的次序不变量交付有序映射的契约，查找、插入、删除、最小键、前驱与后继都沿一条根到叶路径前进，单次时间是 $O(h)$，最坏情形是 $\Theta(h)$；只有当插入顺序是随机排列时期望高度才落到 $O(\log n)$，任意输入都可以退化到线性。加上平衡不变量之后 $h = \Theta(\log n)$，契约才附带上对数时间的承诺，代价是更新路径上额外的平衡维护。

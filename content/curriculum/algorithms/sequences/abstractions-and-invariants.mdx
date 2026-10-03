@@ -5,41 +5,21 @@ order: 5
 title: 抽象数据类型、表示与不变量
 status: published
 objectives:
-  - 区分问题规约、抽象契约、表示与算法，指认一条复杂度论断属于哪一层
-  - 为一个自建结构写出表示不变量，并说明它在哪个操作上重新建立
-  - 用不变量检查器把错误定位到破坏它的那次操作
-  - 说明同一契约的两种表示为什么在时间与空间上给出不同结论
+  - 指出同一个最小栈契约的两种表示分别把工作量放在查询还是修改上
+  - 写出单槽最小值缓存的表示不变量，并说明它在哪一次操作上被破坏
+  - 说明每个公开操作在返回前要重新建立表示不变量，以及它为何不属于公开契约
+  - 用比较次数与额外槽位写出扫描版与前缀最小值版的时间、空间成本
 ---
 
-一个能随时回答「当前最小元素是多少」的栈，小到可以一次写在屏幕上。它对外的操作只有三个：压入一个元素、弹出最后压入的元素、查出当前的最小元素。前两个操作由栈的后进先出顺序直接给出；`minimum()` 要在这串仍在不断变化的元素上给出最小值，回答它的代价取决于实现把工作放在哪一步。
+一个栈，支持压入元素、弹出最后压入的元素，还要随时回答当前的最小元素。前两个操作由后进先出顺序直接给出；`minimum()` 要在不断变化的元素上给出最小值，回答它的代价取决于实现把这份工作放在哪一个操作里。把最小值缓存下来，`minimum()` 变成一次读取，代价是每个公开操作返回之前，缓存都要与当时的元素对得上。
 
-## 扫描求最小值
+这份实现只在 `push` 里更新缓存：新元素与记录比较一次，更小就换掉记录。`pop` 弹出元素之后，记录与元素之间的那条关系可能不再成立；关系一旦不成立，`minimum()` 会继续给出一个过时的值。
 
-最直接的做法是让栈里只保存元素本身，不保存任何额外的东西。被问到最小值时，从头到尾比较一遍，返回其中最小的那个。
-
-对一个当前有 $n$ 个元素的栈，这一次查询要做 $n-1$ 次比较，成本随元素个数线性增长。换来的是实现最简单：压入和弹出只碰元素本身，没有别的东西需要维护，任何时刻的答案都是当场算出来的，不会过时。
-
-## 缓存最小值
-
-把最小值存下来，`minimum()` 就能立刻回答。每次压入一个元素时顺手比较一次，记下当前的最小值；此后 `minimum()` 只需读一次这个记录，一次元素比较也不做。
-
-省下的比较并没有消失，只是挪了位置：压入时多做一次比较，栈里多保存一份状态。这份状态必须始终与元素对得上——读到的最小值要正好是当前元素里的最小值。维护它最容易出错的时刻是弹出：弹出最后一个元素之后，如果它恰好是最小值，记录里留下的就不是剩下元素的最小值了。
-
-## pop 之后缓存为什么会错
-
-缓存记录的是一次比较的结果，元素一变它就可能对不上。把「缓存与元素是否一致」写成一个检查函数，每做一次操作就跑一次，就能看出缓存是在哪一次操作之后开始出错的。
+## 缓存失效的那一次 pop
 
 ```python run id="alg.adt.invariant-check"
 class MinStack:
-    """Stack with a cached minimum.
-
-    Abstract state: a sequence S of comparable elements.
-    Representation: _values holds S in order; _cached_min is redundant state
-    added so that minimum() does not have to scan.
-
-    Representation invariant: _cached_min is min(_values), and is None
-    exactly when _values is empty.
-    """
+    """Stack with a cached minimum; only push() updates the cache."""
 
     def __init__(self):
         self._values = []
@@ -51,193 +31,46 @@ class MinStack:
             self._cached_min = value
 
     def pop(self):
-        if not self._values:
-            raise IndexError("pop from an empty stack")
-        value = self._values.pop()
-        self._cached_min = min(self._values) if self._values else None
-        return value
-
-    def minimum(self):
-        if self._cached_min is None:
-            raise IndexError("minimum of an empty stack")
-        return self._cached_min
-
-    def violations(self):
-        """Every way the redundant state disagrees with the elements."""
-        if not self._values:
-            if self._cached_min is None:
-                return []
-            return [f"_cached_min={self._cached_min} on an empty stack"]
-        smallest = min(self._values)
-        if self._cached_min == smallest:
-            return []
-        return [f"_cached_min={self._cached_min}, min(_values)={smallest}"]
-
-
-class ForgetfulMinStack(MinStack):
-    """pop() that returns the right element and leaves the cache stale."""
-
-    def pop(self):
-        if not self._values:
-            raise IndexError("pop from an empty stack")
         return self._values.pop()
 
-
-def drive(stack, values):
-    """Run the operations, checking the invariant after every one of them."""
-    events = []
-    for value in values:
-        stack.push(value)
-        events.append((f"push {value}", stack.violations()))
-    while True:
-        try:
-            popped = stack.pop()
-        except IndexError:
-            return events
-        events.append((f"pop {popped}", stack.violations()))
+    def minimum(self):
+        return self._cached_min
 
 
-for stack in (MinStack(), ForgetfulMinStack()):
-    print(type(stack).__name__)
-    first_bad = None
-    for step, (label, broken) in enumerate(drive(stack, (5, 3, 7))):
-        if broken and first_bad is None:
-            first_bad = label
-        verdict = "OK" if not broken else ("FIRST VIOLATION: " if first_bad == label else "still broken: ") + "; ".join(broken)
-        print(f"  {label:9s} {verdict}")
-    print(f"  first violation after: {first_bad or 'never'}")
+stack = MinStack()
+for value in (5, 3, 7, 3):
+    stack.push(value)
+print("pushed (5, 3, 7, 3): minimum() =", stack.minimum())
+for step in range(3):
+    popped = stack.pop()
+    actual = min(stack._values)
+    print(f"pop {popped}: minimum() = {stack.minimum()}, elements min {actual}, agrees {stack.minimum() == actual}")
 ```
 
-两个版本的差别只有 `pop` 里的一行：返回之前是否重新计算缓存。单元格在每一次修改之后立刻跑一次检查器，因此输出直接给出定位：正确的实现六步全 OK；忘记修正的版本前四步也 OK——弹出 7 时它本来就不是最小值，缓存不需要变——第一次违反出现在弹出 3 之后，因为 3 正是当时的最小值，而缓存仍留着 3。那一刻没有异常，`pop` 也返回了正确的元素；错误要到之后问 `minimum()` 时才表现为答案错。检查器的作用就是把定位提前到破坏它的那一次 `pop`。
+四行 `push` 之后缓存给出的最小值是 3。前两次弹出之后缓存仍然正确：第一次弹出的 3 是当时最小值的一份，元素里还留着另一份，最小值没有变化；弹出 7 也不影响记录。第三次弹出移走了最后一个 3，剩下的元素只有 5，缓存里留着的仍是 3——这是缓存第一次与元素不一致的操作，`minimum()` 从这一刻起给出的就是错值。`pop` 返回的元素正确，也没有抛出异常，错误只在后续查询上显形。
 
-这项检查本身有成本：它扫描全部元素，成本随当前元素个数线性增长。检查器属于调试与教学路径，不属于热路径。
+修正只需要在 `pop` 返回之前补一句，把缓存重算为当前元素里的最小值。这句重算在单槽缓存上要扫描全部元素，花的正是它当初省下的那笔工作；要让修正也便宜，表示就得为每个前缀各留一个最小值。
 
 ## 表示不变量
 
-缓存与元素之间那条必须成立的关系有一个名字：**表示不变量**（representation invariant）。对只记一个最小值的设计，它是：缓存的最小值等于 `_values` 里的最小值，并且当且仅当 `_values` 为空时它是 `None`。
+缓存与元素之间那条必须在每个公开操作返回时成立的关系，是这份实现的**表示不变量**（representation invariant）。对只记一个最小值的设计，它是：缓存等于 `_values` 中的最小值，并且当且仅当 `_values` 为空时它是 `None`。
 
-更一般地，<Term id="invariant">不变量</Term>规定哪些具体状态是合法表示；每个满足它的合法具体状态，都必须能解释为一串调用方看到的状态，而多个合法状态也可以对应同一串状态。缓存里那个最小值不表示元素序列的任何部分，它是为了让 `minimum()` 便宜而加进来的**冗余表示状态**——去掉它，调用方看到的状态不变，只是 `minimum()` 得重新扫描。哈希表出现同一种结构：对外是键到值的映射，内部是桶数组加上探测留下的墓碑。
+更一般地，<Term id="invariant">不变量</Term>规定哪些具体状态是合法表示；每个满足它的合法具体状态都解释为调用方能观察到的某个状态，多个不同的合法状态也可以对应同一个可观察状态。`_cached_min` 不表示元素序列的任何部分，它是为了让 `minimum()` 便宜而添加的**冗余表示状态**：去掉它，调用方看到的状态不变，`minimum()` 重新扫描元素即可。哈希表的桶数组与探测留下的墓碑属于同一类状态——对外它是一个键到值的映射，内部多出一层只为操作成本服务的结构。
 
-在合法状态上，每个操作在返回时必须让表示不变量重新成立。它沿着一条固定的归纳结构被建立与保持：
+在合法状态上，每个操作在返回之前都要让不变量重新成立：
 
 | 步骤 | 义务 |
 | --- | --- |
-| 构造器 | 建立 I：`__init__` 返回时 I 必须成立 |
-| 每个公开操作 | 假设进入这个操作时 I 成立，证明它在正常返回前、以及异常退出前重新成立 |
+| 构造器 | `__init__` 返回时 I 成立 |
+| 每个公开操作 | 假设进入这个操作时 I 成立，证明它在正常返回前与异常退出前重新成立 |
 
-初始化是基例，操作是归纳步，两者合起来才说明「I 在每一次调用边界上都成立」。不变量在操作执行过程中可以暂时不成立：`pop` 先移除元素、再修正缓存，中间那一刻缓存是过时的，要求是操作返回之前重新建立它。正常返回与异常退出都算在「返回之前」里。
+初始化是基例，每个操作是归纳步，两者合起来说明 I 在每一次调用边界上都成立。不变量在操作执行过程中可以暂时不成立：`pop` 先移除元素、再修正缓存，中间那一刻缓存是过时的，义务只在返回之前兑现。
 
-- 它是实现的内部证明义务，不属于调用方可以依赖的公开契约。调用方依赖的是可观察的状态转移、返回值与失败行为；`_cached_min` 这类表示细节以及它的不变量不在公开契约之内。
-- 它让每个操作只需维护少量关系，而不必在每次调用时从头检查全部状态——缓存值能省下扫描，就是因为这些关系被维护住了。
-- 违反不变量通常不会立刻报错。它先让实现所依赖的事实失效，然后在某次看起来无关的调用上表现为错误答案。
-
-## 同一种栈的两种表示
-
-扫描版把工作放在查询上，缓存版放在修改上，两笔账可以分开量。缓存有多种写法：除了只记一个当前最小值，也可以给每个前缀各记一个最小值，`pop` 时同步删掉末尾的槽位，同样免去回扫。让两份实现并排跑同一组操作，就能把查询成本、修改成本与额外空间分别读出来。
-
-```python run id="alg.adt.two-representations"
-class RescanMin:
-    """Stack without redundant state: minimum() scans _values."""
-
-    def __init__(self):
-        self._values = []
-        self._comparisons = 0
-
-    def push(self, value):
-        self._values.append(value)
-
-    def pop(self):
-        if not self._values:
-            raise IndexError("pop from an empty stack")
-        return self._values.pop()
-
-    def minimum(self):
-        if not self._values:
-            raise IndexError("minimum of an empty stack")
-        smallest = self._values[0]
-        self._comparisons = 0
-        for value in self._values[1:]:
-            self._comparisons += 1
-            if value < smallest:
-                smallest = value
-        return smallest
-
-    def minimum_cost(self):
-        """Comparisons spent by the last minimum() call; instrumentation."""
-        return self._comparisons
-
-    def slots(self):
-        return len(self._values)
-
-
-class CachedMin:
-    """Stack whose minimum() reads redundant state kept by push and pop.
-
-    Representation: _values holds S in order; _minima[i] is min(_values[:i+1]).
-    Representation invariant: len(_minima) == len(_values), and
-    _minima[i] == min(_values[:i+1]) for every index i.
-    """
-
-    def __init__(self):
-        self._values = []
-        self._minima = []
-        self._comparisons = 0
-
-    def push(self, value):
-        best = value if not self._minima else min(value, self._minima[-1])
-        self._values.append(value)
-        self._minima.append(best)
-
-    def pop(self):
-        if not self._values:
-            raise IndexError("pop from an empty stack")
-        self._minima.pop()
-        return self._values.pop()
-
-    def minimum(self):
-        if not self._minima:
-            raise IndexError("minimum of an empty stack")
-        self._comparisons = 0
-        return self._minima[-1]
-
-    def minimum_cost(self):
-        """Comparisons spent by the last minimum() call; instrumentation."""
-        return self._comparisons
-
-    def slots(self):
-        return len(self._values) + len(self._minima)
-
-
-def build(implementation, size):
-    stack = implementation()
-    for value in range(size, 0, -1):
-        stack.push(value)
-    return stack
-
-
-header = f"{'n':>5} {'agrees':>7} {'rescan: comparisons':>20} {'cached: comparisons':>20}"
-header += f" {'rescan: slots':>14} {'cached: slots':>14}"
-print(header)
-for size in (128, 256, 512):
-    rescan = build(RescanMin, size)
-    cached = build(CachedMin, size)
-    agrees = rescan.minimum() == cached.minimum()
-    row = f"{size:>5} {str(agrees):>7} {rescan.minimum_cost():>20} {cached.minimum_cost():>20}"
-    row += f" {rescan.slots():>14} {cached.slots():>14}"
-    print(row)
-```
-
-表里的比较次数是查询成本：扫描版每次调用 `minimum()` 要做「当前元素个数减一」次比较，缓存版查询时不做比较，只读一次 `_minima` 的末尾。缓存版把成本移到了别处：除第一个元素外，每次 `push` 都要把新元素与上一项前缀最小值比较一次；每个栈元素还对应 `_minima` 里的一个额外槽位，`pop` 要同步删掉这个槽位。查询 `minimum()` 时不再做元素间比较，只读 `_minima` 的最后一项。
-
-两个实现的公开操作完全一致：`minimum()` 返回同一个最小元素，第一列因此恒为 `True`。计数由 `minimum_cost()` 单独取回，它是为观察机制而加的仪器，不属于公开接口——把它并进 `minimum()` 的返回值，就等于为了测量而改掉了接口，这一课要比较的两份实现也不再是同一个栈的两种表示。
-
-不变量在两种实现里都要维持，缓存版的两句保持性论证是：`push` 把元素接到 `_values` 末尾，同时把「新元素与上一个前缀最小值里较小者」接到 `_minima` 末尾，于是两个列表仍然等长，新位置上的值正是新前缀的最小值；`pop` 同时去掉两个列表的末尾元素，长度关系与前缀关系一起回到更短的前缀上。
-
-两个实现对调用方是同一个栈：同样的三个操作、同样的返回值、空栈上同样的失败行为，差别只在表示。要把这个差别写成精确的复杂度表达式，需要成本模型与渐进记号，见 <CrossRef id="algorithms.cost-model" /> 与 <CrossRef id="algorithms.asymptotic-analysis" />。
+它是实现的内部证明义务；调用方依赖的是可观察的状态转移、返回值与失败行为，`_cached_min` 这类表示细节与它的不变量不在公开契约之内。违反它通常不会立刻报错：它先让实现所依赖的事实失效，再在某次看起来无关的调用上表现为错误答案，上面那行打印出 3 的 `minimum()` 就是这种延迟表现。
 
 ## 抽象契约
 
-这个被两份实现共同满足的对外接口可以精确定义。**抽象状态**是一个序列 $S$，元素按进入顺序排列。整份契约假定所有元素取自同一个可比较的有序域；否则「最小」在这些元素上根本没有定义（`push(1)` 之后 `push("x")`，`<` 对这两个值不成立）。
+两份实现共用的对外接口可以精确定义。抽象状态是一个序列 $S$，元素按进入顺序排列。
 
 | 操作 | 行为 |
 | --- | --- |
@@ -245,16 +78,58 @@ for size in (128, 256, 512):
 | `pop()` | 若 $S$ 非空，返回并移除 $S$ 的最后一个元素；若为空，抛出约定异常 |
 | `minimum()` | 若 $S$ 非空，返回 $S$ 中的最小元素且不改变 $S$；若为空，抛出约定异常 |
 
-抽象状态 $S$、上面这组操作，以及每个操作对 $S$ 的行为，合起来是这份栈的**抽象契约**。其中抽象状态加操作单独拿出来，就是**抽象数据类型**（abstract data type, ADT）：一个抽象状态，加上一组操作，以及每个操作对这个状态做什么。契约只说调用方能观察到的东西，因此下面这些都留在契约之外：元素用什么保存、缓存了什么、字段叫什么名字。
+抽象状态 $S$、上面这组操作，以及每个操作对 $S$ 的行为，合起来是这份栈的**抽象契约**；抽象状态与操作单独拿出来，就是**抽象数据类型**（abstract data type, ADT）。契约只规定调用方能观察到的东西，元素存在哪里、缓存了什么、字段叫什么名字都留在契约之外。整份契约假定所有元素取自同一个可比较的有序域，否则「最小」在这些元素上没有定义。
 
-回到这个例子，沿着它可以数出四层。**问题规约**是「一个栈，支持 push 与 pop，并且能随时回答当前最小元素」；**抽象契约**是上面那张表——抽象状态 $S$ 与三个操作各自对 $S$ 的行为；**表示**是元素用什么保存、最小值是按需重算还是随元素一起缓存；**算法**是每个操作怎样读写这些状态，以及什么时候重新计算缓存。扫描版与缓存版的区别只落在后两层，前两层是同一个。
+同一个问题可以沿它数出四层：**问题规约**是一个栈，支持 `push`、`pop`，并能随时回答当前最小元素；**抽象契约**是上面那张表；**表示**是元素用什么保存、最小值按需重算还是随元素一起缓存；**算法**是每个操作怎样读写这些状态、什么时候重算缓存。扫描版与前缀最小值版的差别只落在后两层，前两层是同一份。
 
-空栈上的行为也被规定，因此它不是未定义行为：契约把这一类输入显式写进了后置条件，调用方可以依赖这个失败行为。**前置条件**是另一条设计路线：它限制一个操作承诺后置条件的输入或抽象状态范围，满足前置条件是调用方的义务，违反前置条件时契约不承诺正常的后置条件。它是契约设计的选择，并不要求「客观上无法定义行为」——二分查找的前置条件是输入已经有序，无序输入当然可以执行，只是正确性承诺不覆盖它。这一课的两条边界各用一种写法：`pop` 与 `minimum` 把空栈写进契约的失败行为，「元素可比较」是整份契约的假设。
+空栈上的行为被写进契约的后置条件，调用方可以依赖这个失败行为。前置条件是另一条路线，它限制一个操作承诺后置条件的输入范围：二分查找以输入已有序为前置条件，违反它时契约不承诺正常的后置条件。这一课的两条边界各用一种写法，空栈写进契约的失败行为，「元素可比较」是整份契约的假设。
 
-契约里不出现数组、下标、缓存这些词，它们都属于表示。功能契约只规定抽象状态与操作的可观察语义，本身不决定复杂度：复杂度结论还要依赖具体表示、算法与成本模型，而实现也可以把复杂度上界额外作为公开的性能保证。同一份功能契约因此可以对应多种表示——同一个 `minimum()`，在一种表示上要扫描全部元素，在另一种表示上只读一次缓存。
+功能契约不决定复杂度：同一个 `minimum()`，在一种表示上要扫描全部元素，在另一种表示上只读一次缓存。具体的量级还要看表示、算法与计价方式，下面把两笔账分别数出来。
 
-## 小结
+## 两种表示的成本
 
-- 契约由抽象状态与操作的行为组成；功能契约不决定复杂度，结论还要依赖表示、算法与成本模型，实现也可以把复杂度上界作为额外的性能保证。
-- 表示不变量是每个公开操作结束时都必须重新建立的性质，属于实现的内部证明义务，不是调用方可以依赖的公开契约。
-- 违反不变量通常延迟表现出错误；把不变量写成检查器能把定位提前到破坏它的那次操作，代价是检查器自身的扫描成本。
+扫描版把工作留在查询上：栈里保存元素本身，`minimum()` 从头比较一遍。前缀最小值版把工作挪到修改上：每个元素多配一个槽位，记录到该元素为止的最小值，`push` 用一次比较更新这个槽位，`pop` 删掉末尾的槽位，`minimum()` 读最后一个槽位。下面两个函数把同一组输入分别交给两条路线，打印出各自的元素比较次数与额外槽位数。
+
+```python run id="alg.adt.two-representations"
+def scan_on_query(values):
+    """A: compare every element when minimum() is asked; keep nothing else."""
+    comparisons = 0
+    smallest = values[0]
+    for value in values[1:]:
+        comparisons += 1
+        if value < smallest:
+            smallest = value
+    return smallest, comparisons
+
+
+def update_on_push(values):
+    """B: one prefix-minimum slot per element; push updates it with one comparison."""
+    minima, comparisons = [], 0
+    for value in values:
+        if minima:
+            comparisons += 1
+        minima.append(value if not minima else min(value, minima[-1]))
+    return minima, comparisons
+
+
+print(f"{'n':>5} {'same minimum':>12} {'A: comparisons at query':>24} {'B: comparisons at push':>23} {'B: extra slots':>14}")
+for size in (100, 200, 400):
+    values = list(range(size, 0, -1))
+    smallest, query = scan_on_query(values)
+    minima, pushes = update_on_push(values)
+    print(f"{size:>5} {str(smallest == minima[-1]):>12} {query:>24} {pushes:>23} {len(minima):>14}")
+```
+
+两个版本对同一个输入给出相同的最小值，差别落在计数上。$n = 100$ 的输入上，扫描版回答一次 `minimum()` 花 99 次元素比较；前缀最小值版在 100 次 `push` 里一共花 99 次比较，另外持有 100 个冗余槽位。$n$ 取 200 与 400 时两组数字分别是 199 与 399，都等于当时的元素个数减一——两个版本的元素比较次数都是 $n - 1$，只是一份花在查询上、另一份花在压入上；查询本身在前缀最小值版里是一次槽位读取，一次元素比较都不做。
+
+把三份表示放在一起，就是这张对照：
+
+| 表示 | 查询 `minimum()` | `push` | `pop` | 额外空间 |
+| --- | --- | --- | --- | --- |
+| 元素本身 | $\Theta(n)$ 次元素比较 | $\Theta(1)$ | $\Theta(1)$ | $0$ |
+| 元素本身加一个当前最小值 | $\Theta(1)$ 次读取 | 新元素一次比较 | 重算缓存要 $\Theta(n)$ 次比较 | $\Theta(1)$ 个槽位 |
+| 元素本身加每个前缀的最小值 | $\Theta(1)$ 次读取 | 新元素一次比较 | 删除末尾一个槽位 | $\Theta(n)$ 个槽位 |
+
+对照的计价方式是单元成本模型下的「一次元素比较记 1，额外保存一个槽位记 1」（见 <CrossRef id="algorithms.cost-model" />），计数对象是上面那段真实运行。三行的差别是把同一笔总成本在查询、修改与额外空间之间换位置：单槽缓存把查询降到常数，却让 `pop` 上的修正是 $\Theta(n)$；前缀最小值版用每个元素一个槽位，把修改也压到 $\Theta(1)$，付出的空间是 $\Theta(n)$。
+
+两份实现对调用方是同一个栈：同样的三个操作、同样的返回值、空栈上同样的失败行为，差别落在表示与算法两条上。表示不变量在每次公开操作返回时重新成立，是这类以额外状态换查询成本的实现能成立的前提：漏掉一次重建，缓存里留下的就是过去元素的答案。

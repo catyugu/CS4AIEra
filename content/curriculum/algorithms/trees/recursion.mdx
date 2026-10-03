@@ -2,21 +2,15 @@
 id: algorithms.recursion
 slug: /algorithms/recursion
 order: 5
-title: 递归、递推式与调用树
+title: 递归：定义、归纳与终止
 status: published
 objectives:
   - 把一个递归定义写成基本情况与递归情形，并为递归状态选择良基度量，说明每次递归调用都使该度量严格下降
   - 用良基归纳论证递归函数的部分正确，并说明归纳假设为什么必须覆盖每一个实际递归子调用
   - 用每次递归调用严格下降的良基度量论证递归在有限步内结束，并说明基本情况的存在不足以保证终止
-  - 把一次递归调用的成本写成基本情形、子调用的规模与个数、每层递归之外的工作量三部分组成的递推式
-  - 把递推式展开成调用树，用每层成本乘层数读出总成本，并让叶层恰好对应基本情况
-  - 从主定理的三条假设判断一个递推式适用哪一条情形，并说明它不再适用时回到调用树逐层求和
-  - 说明调用树给出的递归栈空间与它之外的辅助空间，以及展开递归与改成迭代各自省下什么
+  - 区分终止证明与运行时调用深度限制，说明深度上限触发的错误为什么不能替代度量论证
 ---
-
-循环与递归把同一段计算排成两种形状。循环用循环不变量与良基度量论证一段迭代代码正确并会结束；递归把这两个义务移进函数定义本身，于是论证的形状也跟着定义变。多出来的第三件事是调用树：它给出总成本，也给出递归调用栈这一项的空间；其他辅助空间仍要按同时存活的对象另算。
-
-递归的成本不能靠盯着代码估。一次调用直接花多少、它引发多少次调用，这两句话写下来就是一个递推式；递推式的解就是调用树上所有节点代价的和。三种情形重复出现时，还可以写成主定理直接查表。这一课先建立递归的定义与论证，再把它的一次调用写成递推式、展开成调用树，最后给出覆盖面足够广的主定理。
+一个递归定义由基本情况与递归情形给出。照着它写出函数之后，两个问题落在同一份定义上：这个函数返回的确实是它承诺的结果吗，递归调用又会不会一路走下去、始终走不到基本情况？前者是部分正确性，后者是终止，两者用同一个良基度量论证——而那个度量正是写在递归情形里的那一项。
 
 ## 基本情况与递归情形
 
@@ -29,9 +23,9 @@ def total(values):
     return values[0] + total(values[1:])     # every call is on a shorter list
 ```
 
-每次调用去掉一个元素，序列长度严格减少。「度量严格下降」是定义的一部分：递归情形的调用若落在同样的状态上，定义没有前进，后面的论证都无处落脚。度量不一定是输入的某个直观尺寸——图遍历里图本身并不变小，变的是「尚未访问」的状态；关键是每写一行递归调用，都能说出它让选定的良基秩小了多少。
+每次调用去掉一个元素，序列长度严格减少。「度量严格下降」是定义的一部分：递归情形的调用若落在同样的状态上，定义没有前进，后面的论证都无处落脚。度量可以取输入的直观尺寸之外的对象：图遍历里图本身不变小，度量取「尚未访问」的集合大小；关键是每写一行递归调用，都能说出它让选定的良基秩小了多少。
 
-这段与下面 `largest` 的代码是展示递归结构的伪代码：真实 Python 的 `values[1:]` 会复制出新列表，成本不小；后面的计数实例一律改用下标或区间，避免把切片成本混进模型。
+这段与下面 `largest` 的代码展示递归结构的伪代码形态：真实 Python 的 `values[1:]` 会复制出一份新列表，切片本身有成本。
 
 ## 归纳与递归同形
 
@@ -72,7 +66,7 @@ def largest(values):
 
 某条递归边上选定的度量没有严格下降，只说明这个度量不足以完成终止证明，需要换一个更合适的（组合度量、字典序度量都常见）——它本身推不出程序不终止。例如状态按 $(n, 0) \to (n, 1) \to (n-1, 0)$ 变化时，只看 $n$ 第一步没有下降，也确实不能当作终止证明；但对状态对的字典序换上排名函数 $\mu(n, p) = (n, 1 - p)$ 之后，$\mu(n, 0) = (n, 1) > \mu(n, 1) = (n, 0) > \mu(n-1, 0) = (n-1, 1)$，每一步都严格下降，终止照样可证。
 
-运行时不会让递归无限延伸：深度超过上限时抛 `RecursionError`（当前限制由 [sys.getrecursionlimit](https://docs.python.org/3/library/sys.html#sys.getrecursionlimit) 读取、由 [sys.setrecursionlimit](https://docs.python.org/3/library/sys.html#sys.setrecursionlimit) 调整；它是解释器的运行时配置，不是 Python 算法语义里的常数，可支持的上限还受平台影响，见 <CrossRef id="python.runtime-vs-language" />）。它是防止栈被耗尽的安全网，与算法的终止性属于两个层次：抽象执行模型里问的是调用链是否有穷，这里问的是一条有限的调用链是否还落在当前运行时的深度限制内。因此终止证明完整的递归（例如每步长度严格下降的线性递归）在输入足够大时同样可能触发 `RecursionError`；反过来说，`RecursionError` 不能区分「逻辑上无限递归」与「逻辑上有限但太深」。终止仍要由度量论证。
+运行时不会让递归无限延伸：深度超过上限时抛 `RecursionError`（当前限制由 [sys.getrecursionlimit](https://docs.python.org/3/library/sys.html#sys.getrecursionlimit) 读取、由 [sys.setrecursionlimit](https://docs.python.org/3/library/sys.html#sys.setrecursionlimit) 调整；它属于解释器的运行时配置，Python 算法语义里没有这个常数；可支持的上限还受平台影响，见 <CrossRef id="python.runtime-vs-language" />）。它是防止栈被耗尽的安全网，与算法的终止性属于两个层次：抽象执行模型里问的是调用链是否有穷，这里问的是一条有限的调用链是否还落在当前运行时的深度限制内。因此终止证明完整的递归（例如每步长度严格下降的线性递归）在输入足够大时同样可能触发 `RecursionError`；反过来说，`RecursionError` 不能区分「逻辑上无限递归」与「逻辑上有限但太深」。终止仍要由度量论证。
 
 ```python run id="alg.recursion.termination"
 def hops(remaining, stride):
@@ -102,143 +96,4 @@ result, calls = count_hops(9, 0)
 print(f"remaining=9 stride=0: result={result} calls={calls}")
 ```
 
-三次调用只有 `stride` 一个参数不同，基本情况与递归情形都没有变。`stride` 为 1 或 3 时度量每次调用严格减小，基本情况在有限步内到达；`stride = 0` 是故意撤掉终止条件的实验：状态原封不动地再次调用自身，抽象模型里的调用链是无限的，在当前运行时里这条无限链先被深度限制截断。它不满足上面那条总正确规约，展示的是「写了基本情况并不自动意味着所有参数选择都能到达它」。打印出的 `calls` 数值取决于运行环境与调用上下文（进入 `hops` 之前解释器已有活动的调用帧），本实验关心的是最终触发 `RecursionError`，不是那个常数。
-
-## 递推式与调用树
-
-一个递归实现的成本写下来是三样东西：**基本情形**上直接花的代价，**每个递归子调用的规模与个数**，以及**这一次调用里递归之外的工作量**。规模取 2 的幂时，折半的递归写作
-
-$$
-T(1) = 0, \qquad T(n) = n + 2\,T(n/2)
-$$
-
-这就是一条 <Term id="recurrence">递推式</Term>：$T(1) = 0$ 是基本情形，$2\,T(n/2)$ 是两个规模减半的子调用，$n$ 是这一次调用合并两个半区的工作量。递推式与一份实现一一对应：把同一个问题切成三份，子调用的个数与规模都变，写出来的就是另一条递推式。它描述的是某一份实现的成本结构，问题本身不携带它。
-
-解它不需要技巧，只要把 **<Term id="recursion-tree">调用树</Term>** 展开：每个节点是一次调用，节点上写着这一次调用直接花的代价，总成本是所有节点代价之和。树按推导出来的规模分层——每个节点有 $a$ 个、规模缩小 $b$ 倍的子调用时，第 $i$ 层有 $a^i$ 个节点、每个节点的本层工作量是 $f(n/b^i)$，把每一层节点的工作量相加、再对层数求和，就得到 $T(n) = \sum_i a^i f(n/b^i)$。折半的递归取 $a = 2$、$b = 2$、本层工作为 $n$，每层节点代价之和都是 $n$，共 $\log_2 n$ 层，总计 $\Theta(n \log n)$。**叶层恰好是基本情况**：树展开到 $T(1)$ 的那些节点就是直接返回、不再递归的调用；基本情况直接代价为 0 时，叶层只决定树的层数，对总成本没有贡献。
-
-两种常见形状：
-
-- **链条**：$T(n) = n + T(n-1)$。调用树是一条路径，节点代价依次是 $n, n-1, \dots, 2$（边界 $T(1) = 0$ 没有代价为 1 的节点），和是 $n(n+1)/2 - 1$，量级 $\Theta(n^2)$。
-- **折半**：$T(n) = n + 2\,T(n/2)$。完整调用树有 $\log_2 n + 1$ 个节点层级（含规模 1、直接代价为 0 的那一层），其中 $\log_2 n$ 层是非基本情况的正成本，每层节点代价之和都是 $n$，总计 $\Theta(n \log n)$。
-
-规模不是 2 的幂时两半相差 1，量级结论不变，代码里用 `n // 2` 与 `n - n // 2` 保持两半之和为 $n$。
-
-```python run id="alg.recursion.recurrence"
-import math
-
-
-def chain_work(n):
-    """T(n) = n + T(n-1): the recursion tree is a single path."""
-    if n <= 1:
-        return 0
-    return n + chain_work(n - 1)
-
-
-def halving_work(n):
-    """T(n) = n + 2 T(n/2) for even n: every level sums to n."""
-    if n <= 1:
-        return 0
-    half = n // 2
-    return n + halving_work(half) + halving_work(n - half)
-
-
-print(f"{'n':>6} {'chain':>10} {'chain/n^2':>10} {'halving':>10} {'halving/(n log2 n)':>19}")
-for size in (64, 128, 256, 512):
-    chain = chain_work(size)
-    halving = halving_work(size)
-    print(f"{size:>6} {chain:>10} {chain / size ** 2:>10.2f} {halving:>10} {halving / (size * math.log2(size)):>19.2f}")
-```
-
-两个比值随规模翻倍保持稳定：链条那一列趋近 $1/2$（精确值是 $n(n+1)/2 - 1$ 除以 $n^2$），折半那一列趋近 1。这段代码算出的就是递推式的值：它是成本模型里定义的工作量，不是解释器的操作计数，也不是运行时间。递推式说明这个和式为什么是这个形状，两者的对应给出的是模型与实现的一致性，实测数字只是对这个模型的一次核对。
-
-## 主定理：形式、假设与边界
-
-三种主导机制重复出现时，可以把递推式写成下列形状，直接查主定理（master theorem）。设 $a \ge 1$、$b > 1$ 是两个常数，$f(n)$ 是一个最终非负的成本函数，$T(n)$ 由
-
-$$
-T(n) = a\,T(n/b) + f(n)
-$$
-
-定义（$n/b$ 指 $\lfloor n/b \rfloor$ 或 $\lceil n/b \rceil$，对结论没有影响），并规定基本情形 $T(n) = \Theta(1)$ 对充分小的 $n$ 成立。这里 $a$ 是子调用个数、$b$ 是规模缩小的比例、$f(n)$ 是本层递归之外的工作量，正是递推式的三部分。记 $p = \log_b a$，它是叶层节点数 $n^p$ 的指数。
-
-三条假设各自对应树上的一个量：$a \ge 1$ 与 $b > 1$ 保证每层真的变窄；$n/b$ 取整只带来常数因子差异；把 $f$ 与 $n^p$ 相比，就是比较本层工作与叶层工作两股力量。三种情形按**哪一股力量主导**区分：
-
-- **叶层主导**：$f$ 的增长严格慢于 $n^p$（相差一个多项式因子），所有内层的本层工作加起来也压不过 $n^p$ 个基本情形，$T(n) = \Theta(n^p)$。
-- **每层同阶**：$f$ 与 $n^p$ 同阶，每一层的成本都是 $\Theta(n^p)$，层数 $\log_b n$ 直接乘进去，$T(n) = \Theta(n^p \log n)$。
-- **根附近主导**：$f$ 的增长严格快于 $n^p$，并且满足**正则条件** $a\,f(n/b) \le c\,f(n)$（某个常数 $c < 1$，充分大的 $n$）。正则条件说的是下一层所有节点的本层工作合起来至多是当前层的固定比例，内层逐层几何缩水，于是靠近根部的工作主导，$T(n) = \Theta(f(n))$。这条条件容易被忽略，也容易被说反：没有它，本层工作可以在相邻两层之间振荡，$\Theta(f(n))$ 随之失效。
-
-三种情形都在比较 $f$ 与 $n^p$。$f$ 与 $n^p$ 相差不到一个多项式因子时，定理不给结论；子问题规模不等、或规模不按常数分数缩小时，也化不成单个 $a\,T(n/b) + f(n)$ 的形状。这些位置回到调用树逐层求和：
-
-| 递推式 | 为什么定理不适用 | 答案 |
-| --- | --- | --- |
-| $T(n) = 2T(n/2) + n \log n$ | $f$ 与 $n^1$ 只差一个 $\log$ 因子，两种情形都不覆盖 | 展开得 $\Theta(n \log^2 n)$ |
-| $T(n) = T(n/3) + T(2n/3) + n$ | 两个子问题规模不等，没有单参数 $n/b$ | 展开得 $\Theta(n \log n)$ |
-| $T(n) = T(n-1) + n$ | 规模只减一，不是常数分数 | 展开得 $\Theta(n^2)$ |
-
-自查的顺序是先把递推式化成 $a\,T(n/b) + f(n)$ 再谈情形；化不成，或 $f$ 正好卡在两种情形之间，就回到调用树。下面按三种情形各取一个递推式，把 $T(n)$ 除以对应情形的预测阶：能适用的情形，比值在规模翻倍时基本稳定；落在两种情形之间的 $n \log n$，比值随规模持续增长，那里没有可用的情形。
-
-```python run id="alg.recursion.master-theorem"
-from math import log2, sqrt
-
-
-def tvalue(a, b, f, n):
-    """Exact T(n) for T(n) = a*T(n // b) + f(n) with T(1) = 1."""
-    memo = {1: 1}
-    for size in range(2, n + 1):
-        memo[size] = a * memo[size // b] + f(size)
-    return memo[n]
-
-
-sizes = [64, 128, 256, 512]
-cases = (
-    ("leaf-dominated", 2, 2, sqrt, lambda n: n),
-    ("even levels", 2, 2, lambda n: n, lambda n: n * log2(n)),
-    ("root-dominated", 2, 2, lambda n: n * n, lambda n: n * n),
-)
-print("T(n) = a*T(n//b) + f(n), T(1) = 1: ratio of T(n) to the predicted order")
-for label, a, b, f, guess in cases:
-    ratios = [tvalue(a, b, f, n) / guess(n) for n in sizes]
-    print(f"  {label:15s} " + " ".join(f"{value:6.3f}" for value in ratios))
-gap = [tvalue(2, 2, lambda n: n * log2(n), n) / (n * log2(n)) for n in sizes]
-print(f"  n log n between cases: T/(n log n) {gap[0]:.2f} -> {gap[-1]:.2f}, no case applies")
-```
-
-三条适用情形在最后两个规模之间的比值变化都不到 0.05（叶层主导 3.26 到 3.31，每层同阶 1.13 到 1.11，根附近主导 2.00 到 2.00）；落在两种情形之间的 $n \log n$ 一行从 3.67 涨到 5.11。删掉正则条件后同样会失效：构造一个在相邻两层之间振荡的 $f$，它每一层都比 $n^p$ 大一个多项式因子，却使 $T(n)/f(n)$ 无界增长。
-
-## 调用深度决定递归栈空间
-
-调用树上读两个量：总时间是所有节点直接代价之和，递归栈空间是最大活动调用路径上各栈帧空间之和。**后者只覆盖调用栈这一项**：辅助空间还可以包括仍然存活的中间结果、被祖先持有的容器、备忘表、切片副本或显式 frontier。每帧额外状态为 $O(1)$ 时，递归栈空间是 $\Theta(d)$；只有在没有其他同时存活、渐进更大的辅助对象时，总辅助空间才是 $\Theta(d)$。每个节点的直接工作是常数时，总时间才退化成节点数。栈帧保存本层尚未完成的计算——参数、局部变量、返回位置。两个实现给出同一个答案、同阶的节点数，深度却分成两类。
-
-下面两个辅助函数只在良构状态上被调用（`0 <= index <= len(values)`、`0 <= low <= high <= len(values)`），并且每次递归调用都保持这些条件——这正是终止接口要求的「子调用保持前置条件」那一半。
-
-```python run id="alg.recursion.call-tree"
-def total_by_index(values, index=0, depth=1):
-    """Return (sum, calls, max depth); one call per element, so depth is linear."""
-    if index == len(values):
-        return 0, 1, depth
-    total, calls, deep = total_by_index(values, index + 1, depth + 1)
-    return values[index] + total, calls + 1, max(depth, deep)
-
-
-def total_by_split(values, low=0, high=None, depth=1):
-    """Return (sum, calls, max depth); the range halves, so depth is logarithmic."""
-    high = len(values) if high is None else high
-    if high - low == 1:
-        return values[low], 1, depth
-    middle = (low + high) // 2
-    left, lcalls, ldeep = total_by_split(values, low, middle, depth + 1)
-    right, rcalls, rdeep = total_by_split(values, middle, high, depth + 1)
-    return left + right, lcalls + rcalls + 1, max(depth, ldeep, rdeep)
-
-
-print(f"{'n':>6} {'index sum':>10} {'calls':>6} {'depth':>6} {'split sum':>10} {'calls':>6} {'depth':>6}")
-for size in (16, 64, 256, 512):
-    values = list(range(size))
-    isum, icalls, ideep = total_by_index(values)
-    ssum, scalls, sdeep = total_by_split(values)
-    print(f"{size:>6} {isum:>10} {icalls:>6} {ideep:>6} {ssum:>10} {scalls:>6} {sdeep:>6}")
-```
-
-两个实现的返回值相同（最后一列），调用次数都与节点数同阶，深度却分成两类：按下标推进的写法深度与输入大小同阶（$n = 512$ 时深度 513），折半的写法深度是对数（同一行 10）。把递归调用写在函数最后一步并不能把 Python 的调用帧去掉：在 CPython 里，[What's New in Python 3.14](https://docs.python.org/3/whatsnew/3.14.html#whatsnew314-tail-call-interpreter) 里新增的 tail-call interpreter 指解释器内部 C 函数之间的尾调用，文档明确说明它与 Python 函数的尾调用优化不是一回事，后者目前在 CPython 中并未实现。深度由递归定义的形状给出，与调用是否处于末尾无关。
-
-递归栈那一项由深度决定：每帧额外状态为常数时，深度为 $d$ 的递归栈空间是 $\Theta(d)$，与节点数无关——折半求和以线性时间换来了对数深度。把同一段计算改写成循环，中间状态从栈搬进少数几个变量，空间降到 $\Theta(1)$。改写成自己维护栈的迭代则要看栈怎么用：若显式栈逐帧模拟原递归控制流，它的峰值大小与活动递归帧数同阶；一般迭代算法的工作栈或 frontier 由算法本身决定，不一定与递归深度同阶（见 <CrossRef id="algorithms.graph-traversal" />）。换来的是控制权——可以中断、可以给栈设上界、可以在不增加运行时调用深度的情况下处理超出上限的输入。
+三次调用只有 `stride` 一个参数不同，基本情况与递归情形都没有变。`stride` 为 1 或 3 时度量每次调用严格减小，基本情况在有限步内到达；`stride = 0` 是故意撤掉终止条件的实验：状态原封不动地再次调用自身，抽象模型里的调用链是无限的，在当前运行时里这条无限链先被深度限制截断。它不满足上面那条总正确规约，展示的是「写了基本情况并不自动意味着所有参数选择都能到达它」。打印出的 `calls` 数值取决于运行环境与调用上下文（进入 `hops` 之前解释器已有活动的调用帧），本实验看的是最终触发 `RecursionError` 这一点。

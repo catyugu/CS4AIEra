@@ -5,41 +5,33 @@ order: 20
 title: 哈希表与关联映射
 status: published
 objectives:
-  - 说明哈希表把候选缩小到一个位置、再由相等契约确认目标的机制，以及冲突怎样被吸收
-  - 在各自的模型假设下说出链式与开放寻址的探测长度公式，并指出哪一个对应理想化的均匀探测模型
-  - 分开两条结论的论证依据：探测长度的期望来自哈希函数的随机性，扩容搬移的摊还开销来自几何扩容
-  - 用一次实测说明聚簇怎样让线性探测的不成功查找在高负载因子下急剧恶化，并区分 Python 字典与集合里的语言保证与实现选择
+  - 说明哈希函数把键集收缩成候选区域、再由相等契约确认目标的机制，以及冲突为什么在键数超过槽位数时必然出现
+  - 在同一组键与同一哈希方式下，用实测说出一次查找扫过的槽位数怎样随负载因子变化
+  - 区分冲突退化的两种来源：哈希分配不均匀与对抗性输入
+  - 说明几何扩容为什么让每次插入分摊到的搬移量是常数，以及这条结论依赖什么
+  - 从一次对 Python 字典的观测里区分语言保证与实现选择
 ---
 
-哈希函数算出了键的位置。既然位置已经确定，字典查找为什么还要再做一次相等比较 `==`？
-
-哈希值把候选缩小到落到同一个位置的那一组键，它不证明两个键相等。可能的键比槽位多，两个不同的键完全可以落到同一个位置，这种情形是 <Term id="hash-collision">哈希冲突</Term>。冲突必然发生，因此正确的查找必须在候选之间用相等契约确认目标。
-
-哈希表是映射契约三种表示中的一种（见 <CrossRef id="algorithms.maps-and-sets" />）。它的两条主要结论互相独立：**探测长度的期望**来自哈希函数把键分散开的随机性；**插入的摊还成本**来自按几何因子扩容。本节把它们分开论证。
-
-## 哈希表的组成与不变量
+在一张表里按键查找，最直接的做法是把查询键与每个已存键比较一遍，比较次数随条目数增长。哈希改变了这个起点：先用键算出一个位置，只在它的候选区域里确认目标。这里要问这个位置怎样算出、它把搜索范围缩到多小，以及为什么缩到某个位置之后，一次查找的成本仍然可能失控。
 
 哈希函数把键映射成一个整数，再按容量折到槽位下标：
 
-$$\text{hash}(key) \rightarrow \text{整数}, \qquad \text{bucket} = \text{hash}(key) \bmod \text{capacity} \quad \text{（或由容量参与的等价混合）}.$$
+$$\text{hash}(key) \rightarrow \text{整数}, \qquad \text{bucket} = \text{hash}(key) \bmod \text{capacity}.$$
 
-桶数组有 `capacity` 个槽位；落到同一槽位的多个键由冲突策略容纳。它维持的表示不变量：
+桶数组有 `capacity` 个槽位。落到同一槽位的键由冲突策略容纳：<Term id="separate-chaining">分离链接</Term>在每个槽位挂一个容器，把落进来的条目都放进去；<Term id="open-addressing">开放寻址</Term>把条目直接放进槽位，冲突时按 <Term id="probing">探测</Term> 序列依次检查后续槽位。
+
+这份表示维持两条不变量：
 
 1. 任意两个已存条目的键都不相等：每个相等类至多有一个条目；
-2. 键 `k` 只可能出现在 `(hash(k) mod capacity)` 这个槽位上、它的冲突链里、或它的探测序列上。
+2. 键 `k` 只可能出现在它自己的候选区域里——`(hash(k) mod capacity)` 那个槽位、挂在它上面的冲突容器，或者从它出发的探测序列。
 
-冲突后的行为由两种策略决定：
+哈希把搜索范围从整张表缩到一个槽位附近，缩小的代价是可能的键远多于槽位数：两个不同的键算到同一个槽位是必然的，这种情形是 <Term id="hash-collision">哈希冲突</Term>。冲突来自把很大的键空间装进有限的槽位，与哈希函数的分散程度无关。它不破坏正确性，把成本加到定位之后的候选比较上：查找要在候选之间用相等契约确认目标，候选有几个、探测要走多远，决定一次查找比较多少次。
 
-- <Term id="separate-chaining">分离链接</Term>：每个槽位挂一个容器——链、小数组或第二级结构，落到同一槽位的条目都放进去；删除就是容器内的删除，不留下空槽。
-- <Term id="open-addressing">开放寻址</Term>：条目直接放在槽位里，冲突时按 <Term id="probing">探测</Term> 序列依次检查后续槽位，直到找到目标或遇到空槽；删除因此不能简单清空槽位。线性探测每次前进一格，会产生连续占用区，让不成功查找的探测长度在负载因子较高时上升得比链式快得多，本节末尾会量出来。
-
-**成本模型**：一次键比较记 1，一次槽位访问记 1。查找成本 = 定位一个槽位 + 在冲突链或探测序列中与键比较的次数。
-
-## 从键到桶
+**成本模型**：一次键比较记 1，一次槽位访问记 1。查找成本 = 定位一个槽位 + 在冲突容器或探测序列中与键比较的次数。
 
 ```python run id="alg.hash.bucket-index"
 def bucket_of(key, capacity):
-    """A toy polynomial hash. Real functions mix the bits much more thoroughly."""
+    """A toy polynomial hash; real functions mix the bits much more thoroughly."""
     total = 0
     for character in key:
         total = total * 31 + ord(character)
@@ -56,105 +48,52 @@ for index in sorted(buckets):
     chain = buckets[index]
     marker = "  <- collision" if len(chain) > 1 else ""
     print(f"bucket {index}: {chain}{marker}")
-
-print("keys:", len(keys), "| buckets used:", len(buckets), "| load factor:", len(keys) / capacity)
+print("keys:", len(keys), "| capacity:", capacity, "| buckets used:", len(buckets))
 ```
 
-10 个键放进 8 个桶，冲突必然出现：桶下标只有 8 种取值，键有 10 个。冲突不破坏正确性，它只把成本加到定位之后的候选比较上。
+这十个键放进 8 个槽位，冲突必然出现：槽位下标只有 8 种取值，键有 10 个。五个槽位被用到，其中四个各挂了不止一条键，桶 `0` 上挂了三条。落点由 `keys` 的一项与 `capacity` 共同决定；无论怎么取，用到的槽位数都不超过 `capacity`。
 
-## 负载因子与探测长度的期望
+## 负载因子与探测长度
 
-下面用 $\alpha$ 表示 <Term id="load-factor">负载因子</Term>，它是链长与探测长度的自变量。不同策略、不同查找类型、不同探测方式，探测长度的表达式都不同：
+槽位越满，键越容易挤到一起，探测要走得更远。<Term id="load-factor">负载因子</Term> $\alpha$ 是已存条目数与槽位数之比，也是探测长度的自变量：$\alpha$ 越大，落到同一候选区域的键越多，一次查找扫过的槽位越多。链式表示里这一步对应链长，开放寻址里对应探测序列的长度。
 
-| 策略 | 查找类型 | 经典结论 | 模型假设 |
-| --- | --- | --- | --- |
-| 分离链接 | 成功 | 约 $1 + \alpha/2$ 次链内键比较 | 简单均匀哈希；被查找的已存键等可能 |
-| 分离链接 | 不成功 | $\alpha$ 次链内键比较 | 简单均匀哈希 |
-| 开放寻址 | 不成功 | 至多 $1/(1-\alpha)$ 次槽位探测 | uniform probing：每个键的探测序列按均匀随机排列建模 |
-| 开放寻址 | 成功 | 至多 $\frac{1}{\alpha}\ln\frac{1}{1-\alpha}$ 次槽位探测 | 同上；已存键等可能被查询 |
-| 线性探测 | 成功 | 约 $\frac{1}{2}\left(1 + \frac{1}{1-\alpha}\right)$ 次槽位探测 | 初始哈希位置按随机模型产生，冲突后顺序探测 |
-| 线性探测 | 不成功 | 约 $\frac{1}{2}\left(1 + \frac{1}{(1-\alpha)^2}\right)$ 次槽位探测 | 同上 |
-
-这些是经典分析结论（Knuth《计算机程序设计艺术》第 3 卷 §6.4 的哈希分析）。这里有意保留两种计数单位：分离链接数链内的键比较，开放寻址数访问过的槽位，因此不成功的开放寻址查找包含最后那个确认为空的槽位。六个数字比较的是各表示内部搜索工作的增长形状，不能当成完全相同的机器操作。
-
-这些结论都依赖明确的概率模型，但随机性的对象并不完全相同：链式分析随机化键的桶落点，uniform probing 把整条探测序列建模为随机排列，线性探测则对随机初始落点下形成的聚簇取期望。它们都不是固定恶意输入上的最坏界。把 $1/(1-\alpha)$ 当成「开放寻址」的成本，就会漏掉线性探测在高负载因子下的平方项。
+把 $\alpha$ 压在常数以内，一次查找扫过的槽位数就停在由 $\alpha$ 决定的量级上，查询成本随之有界。这个量级的具体取值取决于哈希把键分散开的程度，本节只给出一个具体实例的观测：固定同一组键与同一个哈希函数，只改容量。为了让观测反映负载因子，下面的散列函数先做一次乘法混合，把键的落点打散。
 
 ```python run id="alg.hash.probe-cost"
 def bucket_of(key, capacity):
+    """A multiplicative bit-mixer; better mixing spreads keys over the slots."""
     total = 0
     for character in key:
-        total = total * 31 + ord(character)
-    return total % capacity
+        total = (total * 131 + ord(character)) & 0xFFFFFFFF
+    total = ((total ^ (total >> 16)) * 2654435761) & 0xFFFFFFFF
+    return (total ^ (total >> 13)) % capacity
 
 
-def build_chained(keys, capacity):
-    table = [[] for _ in range(capacity)]
+def worst_probe(keys, capacity):
+    """Insert by linear probing; return the most slots one key had to scan."""
+    slots, longest = [None] * capacity, 0
     for key in keys:
-        table[bucket_of(key, capacity)].append(key)
-    return table
-
-
-def chained_cost(table, probes, capacity):
-    """Mean comparisons over `probes`: successful (present keys) or unsuccessful (absent)."""
-    total = 0
-    for key in probes:
-        for candidate in table[bucket_of(key, capacity)]:
-            total += 1
-            if candidate == key:
-                break
-    return total / len(probes)
-
-
-def build_probed(keys, capacity):
-    """Linear probing with wraparound; returns the slot array."""
-    slots = [None] * capacity
-    for key in keys:
-        index = bucket_of(key, capacity)
-        while slots[index] is not None and slots[index] != key:
-            index = (index + 1) % capacity
+        index, scanned = bucket_of(key, capacity), 1
+        while slots[index] is not None:
+            index, scanned = (index + 1) % capacity, scanned + 1
         slots[index] = key
-    return slots
+        longest = max(longest, scanned)
+    return longest
 
 
-def probed_cost(slots, probes, capacity, present):
-    """Mean slots probed; an unsuccessful search counts the empty slot it stops on."""
-    total = 0
-    for key in probes:
-        count = 0
-        index = bucket_of(key, capacity)
-        while True:
-            count += 1
-            candidate = slots[index]
-            if candidate is None:
-                break
-            if present and candidate == key:
-                break
-            index = (index + 1) % capacity
-        total += count
-    return total / len(probes)
-
-
-keys = [f"key-{index:05d}" for index in range(4000)]
-absent = [f"absent-{index:05d}" for index in range(500)]
-print(f"{'strategy':>15} {'capacity':>9} {'alpha':>6} {'successful':>11} {'unsuccessful':>13}")
-for capacity in (8192, 4096, 2048, 1024):
-    table = build_chained(keys, capacity)
-    print(f"{'chaining':>15} {capacity:>9} {len(keys) / capacity:>6.2f}"
-          f" {chained_cost(table, keys, capacity):>11.2f} {chained_cost(table, absent, capacity):>13.2f}")
-for capacity in (8192, 5000, 4096):
-    slots = build_probed(keys, capacity)
-    print(f"{'linear probing':>15} {capacity:>9} {len(keys) / capacity:>6.2f}"
-          f" {probed_cost(slots, keys, capacity, True):>11.2f}"
-          f" {probed_cost(slots, absent, capacity, False):>13.2f}")
+keys = [f"key-{index:05d}" for index in range(1000)]
+for capacity in (2000, 1400, 1050):
+    print(f"capacity={capacity:5d}  load factor={len(keys) / capacity:.2f}"
+          f"  worst probe={worst_probe(keys, capacity):4d}")
 ```
 
-同一批键、同样的负载因子，两种策略的差别集中在**不成功查找**上：$\alpha = 0.98$ 时链式平均 1.79 次比较，线性探测平均 493.40 次。
+同一批 1000 个键，容量从 2000 降到 1050，负载因子从 0.50 升到 0.95，一次插入最坏扫过的槽位数从 14 涨到 443。链式表示的成本对应链长，线性探测的成本对应这段连续占用区：$\alpha$ 越接近 1，连续占用区越长，一次查找要走的槽位越多。容量是这里唯一的自变量，它越小、负载因子越高，印出的最坏探测长度越大。
 
-这组实测与上表的随机模型不同源：这里使用一个固定的多项式哈希和一批固定键，理论公式假定相应的随机模型，实测因此可以高于也可以低于公式值（$\alpha = 0.98$ 时线性探测不成功查找的公式约 1250.5，这个实例是 493.40）。这个单元格承担的证据义务更窄：固定同一批键与哈希方式后，随着负载因子升高，链长和线性探测的连续占用区都会增长，线性探测尤其会被聚簇放大。理论公式解释理想模型下这种增长为什么出现，实测展示这一份具体实例实际发生了什么。
+## 扩容与摊还
 
-## 扩容与摊还成本
+把 $\alpha$ 维持在阈值以内，条目增长到阈值后就要扩容。扩容分配更大的槽位数组，并让每个条目按新容量重新落位，因为槽位下标依赖容量。分离链接在 $\alpha > 1$ 时仍然正确，扩容是为控制链长或探测长度而选的表示策略。
 
-若实现要把负载因子维持在某个固定阈值内，元素增长到阈值后就要扩容。分离链接在 $\alpha \gt 1$ 时仍然正确；扩容是为控制链长或探测长度而选的表示策略。扩容要分配更大的桶数组，并让每个条目按新容量重新落位，因为下标依赖容量。
+若容量按几何因子增长，前 $n$ 次插入引起的搬移总量是 $\Theta(n)$，分摊到每次插入是常数；这条论证的是一串操作的总成本（<Term id="amortized-analysis">摊还成本</Term>，见 <CrossRef id="algorithms.amortized" />）。某一次触发扩容时，单是搬移仍然需要 $\Theta(n)$ 工作。下面的实验让容量从 8 起按两倍增长。
 
 ```python run id="alg.hash.resizing"
 def bucket_of(key, capacity):
@@ -165,42 +104,37 @@ def bucket_of(key, capacity):
 
 
 def insert_all(keys, max_load=1.0, initial=8):
-    """A chained table that rehashes when the load factor exceeds max_load."""
+    """A chained table that doubles its bucket array past max_load."""
     capacity = initial
     table = [[] for _ in range(capacity)]
-    size = 0
-    rehashed = 0
-    moved = 0
+    size = moved = 0
     for key in keys:
         if size >= capacity * max_load:
             old_items = [item for chain in table for item in chain]
             capacity *= 2
             table = [[] for _ in range(capacity)]
             moved += len(old_items)
-            rehashed += 1
             for item in old_items:
                 table[bucket_of(item, capacity)].append(item)
         table[bucket_of(key, capacity)].append(key)
         size += 1
-    return rehashed, moved
+    return moved
 
 
 for count in (1000, 2000, 4000):
-    rehashed, moved = insert_all([f"key-{index:05d}" for index in range(count)])
-    print(f"n={count:5d}  rehashes={rehashed:2d}  entries moved={moved:6d}  moved/n={moved / count:.2f}")
+    moved = insert_all([f"key-{index:05d}" for index in range(count)])
+    print(f"n={count:5d}  entries moved={moved:6d}  moved/n={moved / count:.2f}")
 ```
 
-按几何因子扩容时，前 $n$ 次插入引起的搬移总量是 $\Theta(n)$，所以扩容造成的附加搬移开销摊还到每次插入是 $\Theta(1)$（<Term id="amortized-analysis">摊还成本</Term>论证的是一串操作的**总**成本，见 <CrossRef id="algorithms.amortized" />）。某一次触发扩容时，单是搬移就仍然需要 $\Theta(n)$ 工作。
-
-这条摊还结论与哈希概率模型独立，但它只覆盖扩容这一部分。完整插入还包括寻找已有相等键或空位置的成本：这部分的期望界来自前面的哈希/探测模型，最坏情况下仍可退化为 $\Theta(n)$。因此在通常的哈希假设与受控负载因子下，可以得到「期望摊还 $\Theta(1)$ 插入」；去掉哈希假设后，只剩「扩容搬移的摊还附加成本是 $\Theta(1)$」这一条无条件结论。
+$n$ 从 1000 翻到 4000，搬移总数随之增长，`moved/n` 基本停在 1.02 附近：搬移的摊还附加成本是常数。这条结论只覆盖扩容引起的搬移，它与哈希把键分散得多好无关。
 
 ## 冲突退化的两种来源
 
-常数期望可能受到两种不同机制限制，二者要分开。第一种是**模型失效**：哈希分配严重不均匀，键集中到少数初始位置，前面的均匀性假设不再成立。若所有键的哈希值都相同，全部条目落在同一个桶或同一条探测序列上，查找退化为 $\Theta(n)$ 次比较。哈希表把「按键顺序扫描」换成「按哈希位置扫描」：扫描仍在，范围由哈希分配决定。第二种是**探测策略自身的聚簇**：即使初始哈希位置按随机模型产生，线性探测形成的连续占用区也会合并并增长；这一效应已经包含在线性探测自己的期望公式中，当 $\alpha$ 接近 1 时尤其显著。
+把 $\alpha$ 压在常数以内，前提是键大致均匀地落到各候选区域。两种机制会打破这条前提。
 
-当前实验同时使用了结构化键和确定性多项式哈希，因此不能把数值差异全部归因于纯粹的 primary clustering；但在相同初始哈希函数下，链式与线性探测之间额外出现的长连续扫描，确实展示了线性探测如何放大已有的落点集中。线性探测那三行里，$\alpha = 0.49$ 时它的不成功查找已经是 7.59 次，远高于同一负载因子下链式的 0.86 次；到 $\alpha = 0.98$ 时涨到 493.40 次。
+第一种是哈希分配不均匀：哈希函数把大量键算到同一个槽位时，链或探测序列线性增长，一次查找退化为 $\Theta(n)$ 次比较。常量哈希是最直接的例子，所有键都落进同一个槽位。哈希表把「按键顺序扫描」换成「按哈希位置扫描」，扫描仍然存在，范围由哈希分配决定。
 
-两种机制指向同一条断言：**「常数成本」是对哈希与探测模型取的期望界，最坏情形可以退化为 $\Theta(n)$**。
+第二种是对抗性输入：哈希函数本身分布良好，但攻击者能预先算出键的落点时，他可以挑出一批全部落到同一槽位的键。为挡住这种构造，Python 的字符串哈希默认混入不可预测的进程级随机值，同一进程内稳定，不同解释器启动之间默认不可预测（[object.__hash__](https://docs.python.org/3/reference/datamodel.html#object.__hash__)）。随机化降低的是预构造冲突输入的可行性，它不把哈希表变成具有最坏常数时间保证的数据结构。
 
 ## Python 字典是具体实现
 
@@ -217,23 +151,19 @@ for index in range(1000):
         observations.append((len(mapping), current))
         previous = current
 
-print("grow steps (size, bytes):", observations[:6])
-print("lookups are expected constant time:", mapping["key-00999"])
-print("iteration follows insertion order, which is not a cost property:", list(mapping)[:3])
-
-probe = {}
-probe[1] = "int"
-probe[1.0] = "float key that is equal to 1"
-print("1 and 1.0 are the same key:", probe)
+print("growth in bytes (entries, bytes):", observations[:4])
+print("1 == 1.0 and hashes alike:", 1 == 1.0, hash(1) == hash(1.0))
+print("dict keeps one entry for both keys:", {1: "int", 1.0: "float"})
 print("hash(-1) and hash(-2):", hash(-1), hash(-2))
+print("first keys in insertion order:", list(mapping)[:3])
 ```
 
-**体积分档跳变**说明字典的内部存储不随每次插入逐字节增长；`sys.getsizeof` 的观测不足以推出具体增长因子或重建算法。这个单元格只展示可观察到的分档分配行为。
+**体积分档跳变**说明字典的内部存储不随每次插入逐字节增长；`sys.getsizeof` 的观测不足以推出增长因子或重建算法，这里只展示可观察到的分档分配。
 
-**`1` 与 `1.0` 是同一个键**：判等用的是键的相等契约，哈希负责缩小搜索范围。两个类型落在同一个位置，是因为数值哈希用同一条素数取模规则（[sys.hash_info](https://docs.python.org/3/library/sys.html#sys.hash_info) 给出该模数 $P$）。
+**`1` 与 `1.0` 是同一个键**：判等用的是键的相等契约，哈希负责把候选缩小到同一个位置。数值哈希用同一条素数取模规则（[sys.hash_info](https://docs.python.org/3/library/sys.html#sys.hash_info) 给出该模数）。
 
-**哈希随机化只覆盖部分哈希方案。** Python 数据模型明确规定 `str` 与 `bytes` 的哈希默认混入不可预测的进程级随机值：同一进程内保持稳定，不同解释器启动之间默认不可预测，用来提高构造哈希洪泛输入的难度（[object.__hash__](https://docs.python.org/3/reference/datamodel.html#object.__hash__)）。数值类型使用另一套固定的数值哈希规则，不依赖这项随机化；某些类型会复用这些哈希结果，例如可哈希的只读 `memoryview` 与对应的 `bytes` 具有相同哈希。随机化降低的是针对具体进程预构造冲突输入的可行性，并不把哈希表变成具有最坏常数时间保证的数据结构；若攻击者拿到实际的哈希 secret，或运行环境人为采用已知的固定 seed，这层防护也会失去相应作用。
+**迭代顺序属于语言保证**：字典保插入序，从 3.7 起是语言承诺（[stdtypes](https://docs.python.org/3/library/stdtypes.html#dict)），集合不承诺迭代顺序；插入序与成本性质无关，需要按键序迭代要用有序映射（见 <CrossRef id="algorithms.maps-and-sets" />）。
 
-**迭代顺序属于语言保证，与成本性质无关。** 字典保插入序，从 3.7 起是语言承诺；3.6 的 CPython 已经这样实现，但当时只是实现细节。集合不承诺迭代顺序，官方文档明确不给这个保证。需要按键序遍历时要用有序映射（见 <CrossRef id="algorithms.maps-and-sets" />）；哈希表不提供这种能力。
+**实现边界**：CPython 的 `dict` 使用开放寻址与带扰动的探测序列（[dictobject.c](https://github.com/python/cpython/blob/main/Objects/dictobject.c)），本节说明机制时用的是分离链接，两者属于不同的表示；`hash(-1)` 与 `hash(-2)` 都打印为 `-2`，因为 C 层把 `-1` 留作哈希失败的指示值（[PyObject_Hash](https://docs.python.org/3/c-api/object.html#c.PyObject_Hash)）。这些解释的是这份实现的输出，正文的推理只用「哈希缩小候选、相等确认目标」这一条契约。
 
-**实现边界**：CPython 的 `dict` 有自己的增长策略，无删除的连续增长会使表容量成倍增长；这是 CPython 的实现选择，Python 语言契约只承诺查找的期望常数成本。单元格打印的 `hash(-1)` 与 `hash(-2)` 都是 `-2`：C 层把 `-1` 留作哈希失败的指示值（[PyObject_Hash](https://docs.python.org/3/c-api/object.html#c.PyObject_Hash)），`-1` 的哈希因此不能取 `-1`。这两条解释的是 CPython 这份实现的输出，正文的推理只用「哈希缩小候选、相等确认目标」这一条契约。
+本课反复用到「查询是常数成本」这句话：它成立，是因为探测长度被压在了常数以内。这句话里还藏着一个词——「平均」。一次查找的成本取决于哪些键真的落进了同一候选区域，所以它随输入变化；要对成本说一个与具体键集无关的常数，就得先说明这个平均值对什么取：是对输入的分布取平均，还是对固定输入上算法自己掷出的随机位取平均？这个问题与哈希函数、探测策略无关，它问的是「平均」这个词到底对谁取平均。

@@ -5,349 +5,145 @@ order: 40
 title: 选择、第 k 个元素与 Top-K
 status: published
 objectives:
-  - 区分第 k 个顺序统计量、无序 Top-K 与已排序 Top-K 三种契约
-  - 复用分区写出 quickselect，并说明它只递归一侧
-  - 用「等待一次落在中间一半的 pivot」的论证给出期望线性的界，并指出最坏情形
-  - 用大小受 k 限制的堆实现流式 Top-K，说明它的时间与空间
-  - 对照三种契约与完整排序的成本，说明省掉的是什么
+  - 区分第 k 个顺序统计量、无序 Top-K 与已排序 Top-K 三种契约的后置条件
+  - 用一次分区与单侧递归写出 quickselect，并由「等待一次落在中间一半的 pivot」推导期望线性
+  - 用大小受 k 限制的堆在只能单遍读取的输入上维护 Top-K，说明时间与空间各由哪个参数决定
+  - 由每种契约必须保存的结果推导它的典型成本，并在改变 n 与 k 时预测各条成本表达式怎样变化
 ---
 
-<CrossRef id="algorithms.sorting" /> 与 <CrossRef id="algorithms.comparison-sorting" /> 都在构造完整排序：归并排序与堆排序给出 $\Theta(n \log n)$ 的最坏界，而本课程这份快速排序在随机 pivot 模型下期望 $\Theta(n \log n)$、单次运行最坏仍是 $\Theta(n^2)$。但调用方并不总是要完整顺序。这一节改问：当调用方要的东西比完整顺序少时，可以省掉什么。
+同一批数据上，「第 $k$ 个元素」「前 $k$ 个元素」「全部有序」各自要求把结果里不同数量的元素固定下来。这一节问：为每一种需求，算法至少要保存什么，成本因此落在哪条表达式上。可以原地修改的随机访问数组与只能单遍读取的流是两种访问条件，同一种需求在两者上的实现与成本分别给出。
 
-## 三种契约
+## 第 k 个元素：一次分区，只递归一侧
 
-「取前 $k$ 个」在实践中至少对应三种不同的契约：
+秩 $r$ 的顺序统计量（order statistic）是完整排序后位于下标 $r$ 的那个元素，契约要求 $0 \le r < n$，其余元素不要求有序。找到它只需确定落在位置 $r$ 的元素，任何其他元素的最终位置都不必知道。
 
-| 契约 | 后置条件 |
-| --- | --- |
-| 秩 $r$ 的顺序统计量 | 返回完整排序后位于下标 $r$ 的那个元素；其余元素不要求有序 |
-| 无序 Top-K | 返回恰好 $k$ 个最小元素，保留重复元素；这 $k$ 个元素之间的次序不作要求 |
-| 已排序 Top-K | 返回恰好 $k$ 个最小元素，并按非降序排列 |
+quickselect 复用 <CrossRef id="algorithms.comparison-sorting" /> 的分区：一次分区把区间按 pivot 分成两段，并让 pivot 落在它的最终位置 $p$。目标秩小于 $p$ 时答案只可能在左段，大于 $p$ 时只可能在右段，相等就直接返回。无论走哪一边，另一侧连同 pivot 一起被排除，此后不再参与任何比较。
 
-秩 $r$ 的顺序统计量假设 $0 \le r < n$；两种 Top-K 契约假设 $1 \le k \le n$。本节代码照此实现。对单遍流输入，后一条件要求流最终至少包含 $k$ 个元素；库接口可以对 $k > n$ 另有约定，但那不属于本节的 Top-K 契约。
-
-本节用 $r$ 表示从 0 开始的秩（秩 $r$ 就是第 $r + 1$ 小），用 $k$ 表示要求返回的元素个数。这两个量不要混用：秩是「第几个位置」，$k$ 是「要几个」。
-
-契约本身不决定成本，成本还取决于输入怎么被访问。
-
-- 对**可以原地修改的随机访问数组**，随机 quickselect 在期望 $O(n)$ 时间内找到任意固定秩的顺序统计量；同一趟选择得到的无序 Top-K 期望为 $O(n)$；再对这 $k$ 个元素排序后，总成本为期望 $O(n + k \log k)$。完整排序是 $\Theta(n \log n)$，而且要写出全部 $n$ 个元素的顺序。
-- 若输入**只能单遍读取、且只允许保留 $O(k)$ 个元素**，本节后半改用有界堆：最坏时间 $O(n \log(k + 1))$、空间 $O(k)$。写成 $\log(k + 1)$ 是为了让 $k = 1$ 也严格成立；$k \ge 2$ 时通常简写成 $O(n \log k)$。
-
-把契约写清楚很重要：调用方若只需要无序的 Top-K 结果，为它排序是白花的代价；若需要顺序，就必须在某一处付出对这 $k$ 个元素的排序成本。$k = n$ 时「已排序 Top-K」就等于完整排序，而 $1 \le k < n$ 时它要求的信息严格少于完整排序。
-
-## quickselect：只递归一侧
-
-快速排序分区之后要递归两侧，因为两侧都需要有序。选择只需要一侧：目标秩落在哪一边，就往哪一边继续，另一侧整个丢弃。这就是 quickselect。
-
-它维持的循环不变量是：目标秩始终位于当前区间 $[low, high]$ 内，并且已经排除在左侧的元素都不大于候选区间里的元素、已经排除在右侧的元素都不小于候选区间里的元素。第一条保证目标还在区间里，后两条保证被丢掉的部分里不会有更小的候选：
+它维持的循环不变量是：目标秩始终位于当前区间 $[low, high]$ 内，已经排除在左侧的元素都不大于候选区间里的元素，已经排除在右侧的元素都不小于候选区间里的元素。第一条保证目标还在区间里，后两条保证被丢掉的部分里没有更小的候选：
 
 ```python run id="alg.ordering.quickselect"
 from random import Random
 
 
-def partition(items, low, high, counters):
-    """Postcondition: the pivot lands at a legal final index; returns that index."""
-    pivot = items[high]
-    boundary = low
+def partition(items, low, high):
+    """Postcondition: returns the pivot index p with items[low..p) < pivot <= items[p..high]."""
+    pivot, boundary = items[high], low
     for j in range(low, high):
-        counters["comparisons"] += 1
         if items[j] < pivot:
             items[boundary], items[j] = items[j], items[boundary]
-            counters["swaps"] += 1
             boundary += 1
     items[boundary], items[high] = items[high], items[boundary]
-    counters["swaps"] += 1
     return boundary
 
 
-def quickselect(items, low, high, rank, counters, rng):
+def quickselect(items, low, high, rank, rng):
     """Postcondition: returns the element that would sit at index rank after sorting."""
-    while True:
-        if low == high:
-            return items[low]
-        index = rng.randrange(low, high + 1)
-        items[index], items[high] = items[high], items[index]
-        position = partition(items, low, high, counters)
-        if position == rank:
-            return items[position]
-        if position < rank:
-            low = position + 1
-        else:
-            high = position - 1
+    if low == high:
+        return items[low]
+    index = rng.randrange(low, high + 1)
+    items[index], items[high] = items[high], items[index]
+    position = partition(items, low, high)
+    if position == rank:
+        return items[position]
+    if rank < position:
+        print(f"pivot at {position}: recurse into the left, {high - position + 1} elements excluded")
+        return quickselect(items, low, position - 1, rank, rng)
+    print(f"pivot at {position}: recurse into the right, {position - low + 1} elements excluded")
+    return quickselect(items, position + 1, high, rank, rng)
 
 
-size = 128
-rng = Random(20261040)
-for trial in range(6):
-    case = list(range(size))
-    Random(20261040 + trial).shuffle(case)
-    reference = sorted(case)
-    answers = []
-    for rank in range(size):
-        counters = {"comparisons": 0, "swaps": 0}
-        answers.append(quickselect(list(case), 0, size - 1, rank, counters, rng))
-    print(f"trial {trial}: all ranks correct: {answers == reference}")
-
-print()
-print(f"{'n':>6} {'comparisons':>12} {'comparisons / n':>16}")
-for width in (64, 512, 4096):
-    case = list(range(width))
-    Random(20261040).shuffle(case)
-    counters = {"comparisons": 0, "swaps": 0}
-    value = quickselect(case, 0, width - 1, width // 2, counters, rng)
-    print(f"{width:>6} {counters['comparisons']:>12} {counters['comparisons'] / width:>16.2f}")
-    assert value == sorted(case)[width // 2]
-
-width = 256
-sorted_case = list(range(width))
-worst = {"comparisons": 0, "swaps": 0}
-
-
-def quickselect_fixed_pivot(items, low, high, rank, counters):
-    """Last element as pivot: the adversarial case for already ordered input."""
-    while low < high:
-        pivot = items[high]
-        boundary = low
-        for j in range(low, high):
-            counters["comparisons"] += 1
-            if items[j] < pivot:
-                items[boundary], items[j] = items[j], items[boundary]
-                boundary += 1
-        items[boundary], items[high] = items[high], items[boundary]
-        if boundary == rank:
-            return items[boundary]
-        if boundary < rank:
-            low = boundary + 1
-        else:
-            high = boundary - 1
-    return items[low]
-
-
-value = quickselect_fixed_pivot(sorted_case, 0, width - 1, width // 2, worst)
-print()
-print("fixed last-element pivot on already sorted input, n =", width)
-print("  value:", value, "| comparisons:", worst["comparisons"], "| n(n-1)/2 =", width * (width - 1) // 2)
+size = 4096
+case = list(range(size))
+Random(20261040).shuffle(case)
+rank = 16
+value = quickselect(case, 0, size - 1, rank, Random(20261040))
+print("rank", rank, "->", value, "| matches a full sort:", value == sorted(case)[rank])
 ```
 
-初始时区间是整个数组，不变量显然成立。每轮调用一次分区得到位置 $p$：若 $p$ 正好等于目标秩就返回；若 $p$ 小于目标秩，则目标一定在右半段，令 $low = p + 1$；否则在左半段，令 $high = p - 1$。无论走哪一边，目标秩都仍在新区间内，所以不变量保持；区间每轮至少缩短一个元素（$p$ 被排除），因此必定终止。
+这一次运行在 $n = 4096$、目标秩 $r = 16$ 上做了 9 次分区。第一次分区的 pivot 落在下标 2103，右侧 1993 个元素连同 pivot 一起被排除；之后八轮被排除的规模依次是 1824、206、2、44、16、4、5、1。九次分区排除的总数是 4095，等于 $n - 1$：留在区间里的那一个元素就是答案，打印出的值与完整排序的第 16 个元素一致。
 
-**期望线性**的论证不假设每次分区都走运，而是看「等到一次好运」的期望轮数。设当前区间长度为 $m$。随机 pivot 的秩在这个区间里均匀分布，因此它落在中间一半（秩约从 $m/4$ 到 $3m/4$）的概率不低于 $1/2$；只要落在那里，这一轮之后保留的区间长度就至多 $3m/4$。等到这样一次成功所需的轮数期望不超过 2，而等待中的每一轮成本都不超过 $m$ 次比较，所以把区间从 $m$ 收到至多 $3m/4$ 的期望成本是 $O(m)$。于是总期望成本是一个公比为 $3/4$ 的几何级数：
+随机 pivot 的秩在当前区间里均匀分布，因此它落在中间一半（约从 $m/4$ 到 $3m/4$）的概率不低于 $1/2$；只要落在这里，这一轮之后保留的区间长度就至多原来的 $3/4$。设当前区间长度为 $m$，等到一次这样的成功所需的轮数期望不超过 2，等待中每一轮的成本不超过 $m$ 次比较，把区间从 $m$ 收到至多 $3m/4$ 的期望成本是 $O(m)$。总期望成本因此是一个公比为 $3/4$ 的几何级数：
 
-$$O\left(m + \frac{3}{4} m + \left(\frac{3}{4}\right)^2 m + \cdots\right) = O(m).$$
+$$
+O\left(m + \frac{3}{4} m + \left(\frac{3}{4}\right)^2 m + \cdots\right) = O(m).
+$$
 
-同样的结论对任意固定秩都成立：无论要最小、中位数还是第 $n-1$ 个，期望成本都是 $O(n)$。要把任意固定秩的期望 $O(n)$ 上界分别加强为紧界，还需要相应的选择下界；「找最小至少 $n - 1$ 次比较」只覆盖 $r = 0$ 这个特例。一般秩的选择下界不在本节证明。
+这条论证对任意固定秩都成立：要最小、中位数还是第 $n - 1$ 个，期望成本都是 $O(n)$。它依赖键两两不同的假设；二路 `<` / `>=` 分区在大量重复键上会退化，随机 pivot 也避免不了。最坏情形仍是 $\Theta(n^2)$：固定取末元素作 pivot 时，已排序输入每次都把 pivot 放在端点，区间每轮只缩小一个元素；随机化把这种输入变成低概率事件，单次运行的上界不变。
 
-**最坏情形仍是 $\Theta(n^2)$**：固定取末元素作 pivot 时，已排序输入每次都把 pivot 放在端点，区间只缩小一个元素。随机化只把这种输入变成低概率事件，不改变单次运行的上界。确定性的最坏 $O(n)$ 选择需要另一类机制（不依赖单次分区结果），不在本节范围。
+本节实现沿目标秩所在的一侧递归：额外空间随递归深度增长，随机 pivot、键两两不同的模型下期望深度为 $O(\log n)$，单次运行最坏仍可能达到 $O(n)$。
 
-本节给出的 quickselect 是迭代实现，只使用 $O(1)$ 个额外槽位；若按递归形式实现，在随机 pivot、键两两不同的模型下递归深度期望为 $O(\log n)$，最坏仍可能达到 $O(n)$。
+## 前 k 个元素：一个有界堆
 
-**假设**：精确的期望论证假设排序键两两不同。二路 `<` / `>=` 分区在大量重复键上会退化，随机 pivot 也避免不了；重复键的专门分区策略不在本节展开。
+「取前 $k$ 个」最弱的契约只要求恰好 $k$ 个最小元素、保留重复元素，这 $k$ 个之间的次序不作要求；要求它们按非降序排列是更强的契约，比前者多出的工作只是对这 $k$ 个元素排序。
+
+输入只能单遍读取、也不该整份保留时，用一个最大堆装当前见过的 $k$ 个最小元素，堆顶是缓冲里的最大值。新元素先与堆顶比较一次：更小就替换堆顶，否则直接丢弃。缓冲大小因此始终不超过 $k$，堆顶是当前已见元素里第 $k$ 小的门槛值。
 
 ```python run id="alg.ordering.streaming-top-k"
 import heapq
 
 
-def value_stream(count, seed):
-    """A one-pass stream of deterministic keys; it cannot be rewound."""
+def keys(count, seed):
+    """The same deterministic key stream on every run, produced one value at a time."""
     state = seed
     for _ in range(count):
         state = (1103515245 * state + 12345) % 2147483648
         yield state % 100000
 
 
-def stream_top_k(stream, k, counters):
-    """Postcondition: consumes the stream once, returns its k smallest values in some order (assumes 1 <= k <= n)."""
-    buffer = []
-    peak = 0
-    for value in stream:
-        counters["consumed"] += 1
-        if len(buffer) < k:
-            heapq.heappush(buffer, -value)
-            counters["buffer build pushes"] += 1
-        else:
-            counters["gate comparisons"] += 1
-            if value < -buffer[0]:
-                heapq.heapreplace(buffer, -value)
-                counters["replaced"] += 1
-        peak = max(peak, len(buffer))
-    counters["peak buffer"] = peak
-    return [-value for value in buffer]
+def stream_top_k(stream, k):
+    """Postcondition: one pass, returns the k smallest values in order; the heap never exceeds k."""
+    heap = []                                    # max-heap of negatives, size <= k
+    for seen, value in enumerate(stream, start=1):
+        if len(heap) < k:
+            heapq.heappush(heap, -value)
+        elif value < -heap[0]:
+            heapq.heapreplace(heap, -value)
+        if seen % 10000 == 0:
+            print(f"after {seen} values: heap size {len(heap)} of k = {k}, top {-heap[0]}")
+    return sorted(-value for value in heap)
 
 
-count = 50000
-k = 8
-reference = sorted(value_stream(count, 20261040))[:k]
-
-counters = {"consumed": 0, "gate comparisons": 0, "replaced": 0, "peak buffer": 0,
-            "buffer build pushes": 0}
-unordered = stream_top_k(value_stream(count, 20261040), k, counters)
-canonical = sorted(unordered)
-print("stream length:", count, "| k:", k)
-print("returned in arbitrary order:", unordered)
-print("canonicalized for checking:", canonical)
-print("matches a full sort of the same values:", canonical == reference)
-print("the returned order happens to be sorted:", unordered == canonical)
-print("elements consumed:", counters["consumed"], "| gate comparisons:", counters["gate comparisons"])
-print("buffer build pushes:", counters["buffer build pushes"],
-      "| replacements:", counters["replaced"], "| peak buffer length:", counters["peak buffer"])
-
-print("library cross-check (heapq.nsmallest):",
-      heapq.nsmallest(k, value_stream(count, 20261040)) == reference)
-
-stream = value_stream(4, 7)
-print("one pass over a fresh stream:", list(stream), "| second pass:", list(stream))
+count, k = 50000, 8
+result = stream_top_k(keys(count, 20261040), k)
+print("k smallest:", result)
+print("matches a full sort of the same stream:", result == sorted(keys(count, 20261040))[:k])
 ```
 
-这段代码对每个秩都与完整排序的结果逐项比对，6 组固定输入全部一致。中位数选择的实测比较次数与 $n$ 的比值：$n = 64$ 时 63 次（0.98 $n$），$n = 512$ 时 2018 次（3.94 $n$），$n = 4096$ 时 13291 次（3.24 $n$）。上面的论证给的是期望的 $O(n)$ 上界，不是「不超过 $4n$ 次」的逐次保证，因此这三行是单次抽样的观测值，用来看比值是否随 $n$ 保持有界。最后一段换成固定的末元素 pivot 跑同一份已排序输入：每轮只把区间缩小一个元素，$n = 256$ 时就用了 24512 次比较——这正是 $\Theta(n^2)$ 那一支。
+五万条键的流只被遍历一次：每个检查点上堆的大小都是 8，等于 $k$；堆顶依次是 88、38、30、21、18，它是当前已见元素里第 $k$ 小的门槛值，缓冲大小由 $k$ 决定、与 $n$ 无关。取出的八个值 $2, 3, 4, 9, 10, 14, 14, 18$ 与整条流排序后的前 8 个一致。
 
-## 流式 Top-K：一个有界堆
+前 $k$ 个元素用于建立缓冲，每个花 $O(\log(k + 1))$；此后每个元素做一次常数时间的门槛比较，通过门槛的才触发一次 $O(\log(k + 1))$ 的堆替换。若替换发生 $r$ 次，总时间是 $O(k \log(k + 1) + (n - k) + r \log(k + 1))$，最坏 $O(n \log(k + 1))$，空间恒为 $\Theta(k)$。要按非降序给出这 $k$ 个元素，再对缓冲排一次序，附加 $O(k \log k)$。
 
-如果元素是**流式**到来的（不能随机访问、也不该整份保留），Top-K 结果可以用一个大小受 $k$ 限制的堆维护：用一个**最大堆**装当前见过的 $k$ 个最小元素，堆顶是缓冲里的最大值。新元素先与堆顶比较一次：更小就把堆顶换掉，否则直接丢弃。
+Python 的 `heapq.nsmallest()` 与 `heapq.nlargest()` 返回已排序的前 $k$ 个结果；[Sorting HOWTO](https://docs.python.org/3/howto/sorting.html) 把它们描述为单遍处理输入、同时只保留所需数量元素的部分排序工具。当前 CPython 实现通常维护一个大小受 $k$ 限制的堆，并在 $k$ 不小于输入长度时退回完整排序；这些属于具体实现的策略，`heapq` API 不承诺它们。
 
-1. 缓冲大小始终 $\le k$
-2. 堆顶是缓冲中的最大值
-3. 缓冲中始终是「已经见过的元素」中最小的 $k$ 个（不足 $k$ 个时全部保留）
+## 三种需求与完整排序的成本
 
-前 $k$ 个元素用于建立缓冲（每个 $O(\log(k + 1))$）；此后剩下的 $n - k$ 个元素各做一次「与堆顶比较」，只有通过门槛的元素才执行一次堆替换，代价 $O(\log(k + 1))$。若替换发生了 $r$ 次，总时间是 $O\bigl(k \log(k + 1) + (n - k) + r \log(k + 1)\bigr)$，最坏情形为 $O(n \log(k + 1))$，空间恒为 $\Theta(k)$——不需要保存或排序整个输入。若最终还要按序给出这 $k$ 个元素，再对这 $k$ 个元素排一次序即可，附加 $O(k \log k)$。
+四种需求在成本上的差别来自各自必须保存下来的结果有多大，把「要保存什么」写清楚，成本就跟着出来：
+
+- **保存一个值**（第 $k$ 个元素）：只有目标秩最终落在哪个位置需要确定，其余 $n - 1$ 个元素不产生输出。每轮分区把候选区间按常数比例期望缩小，总成本期望 $O(n)$。
+- **保存 $k$ 个值，不管次序**（无序 Top-K）：每个元素与「当前第 $k$ 小」的门槛值比较一次，通过门槛的才做一次 $O(\log k)$ 的缓冲更新，$n$ 个元素合起来 $O(n \log k)$。
+- **保存 $k$ 个有序的值**（已排序 Top-K）：先得到那 $k$ 个值（$O(n \log k)$），再对这 $k$ 个排一次序（$O(k \log k)$），合计 $O(n \log k + k \log k)$。
+- **保存 $n$ 个有序的值**（完整排序，见 <CrossRef id="algorithms.sorting" />）：所有元素都要进入输出顺序。基于比较的排序对每一条输入都至少要做 $\Omega(n \log n)$ 次比较（<CrossRef id="algorithms.lower-bounds" />），归并与堆排序以 $\Theta(n \log n)$ 达到这个阶。
+
+| 需求 | 需要保存的结果 | 典型成本 |
+| --- | --- | --- |
+| 第 $k$ 个元素 | 一个值 | 期望 $O(n)$ |
+| 无序 Top-K | $k$ 个值 | $O(n \log k)$ |
+| 已排序 Top-K | $k$ 个有序值 | $O(n \log k + k \log k)$ |
+| 完整排序 | $n$ 个有序值 | $O(n \log n)$ |
+
+把 $\log k$ 写成 $\log(k + 1)$ 让 $k = 1$ 也严格成立；$k \ge 2$ 时通常简写成 $O(n \log k)$。$k = n$ 时已排序 Top-K 就是完整排序，$1 \le k < n$ 时它要求的信息比完整排序少。
+
+表里的表达式只在 $n$ 与 $k$ 两个参数上变化。下面这个单元格把它们相对「找第 $k$ 个元素」的比值打印成一张表，比值以一趟线性扫描为单位：无序 Top-K 的比值是 $\log_2 k$，已排序 Top-K 的比值是 $\log_2 k (1 + k/n)$，完整排序的比值是 $\log_2 n$。
 
 ```python run id="alg.ordering.three-contracts"
-from random import Random
+from math import log2
 
-
-def partition(items, low, high, counters):
-    pivot = items[high]
-    boundary = low
-    for j in range(low, high):
-        counters["comparisons"] += 1
-        if items[j] < pivot:
-            items[boundary], items[j] = items[j], items[boundary]
-            boundary += 1
-    items[boundary], items[high] = items[high], items[boundary]
-    return boundary
-
-
-def quickselect(items, low, high, rank, counters, rng):
-    """Postcondition: returns the element that would sit at index rank after sorting."""
-    while True:
-        if low == high:
-            return items[low]
-        pivot_index = rng.randrange(low, high + 1)
-        items[pivot_index], items[high] = items[high], items[pivot_index]
-        position = partition(items, low, high, counters)
-        if position == rank:
-            return items[position]
-        if position < rank:
-            low = position + 1
-        else:
-            high = position - 1
-
-
-def merge_sort_counted(items, counters):
-    """Bottom-up merge sort, counted; used only as the full-sort baseline."""
-    width = 1
-    source = list(items)
-    while width < len(source):
-        target = []
-        for start in range(0, len(source), 2 * width):
-            left = source[start:start + width]
-            right = source[start + width:start + 2 * width]
-            i = 0
-            j = 0
-            while i < len(left) and j < len(right):
-                counters["comparisons"] += 1
-                if left[i] <= right[j]:
-                    target.append(left[i])
-                    i += 1
-                else:
-                    target.append(right[j])
-                    j += 1
-            target.extend(left[i:])
-            target.extend(right[j:])
-        source = target
-        width *= 2
-    return source
-
-
-def top_k_buffer(stream, k, counters):
-    """Postcondition: a buffer holding the k smallest elements, as a max-heap of negatives."""
-    import heapq
-    buffer = []
-    for value in stream:
-        if len(buffer) < k:
-            heapq.heappush(buffer, -value)
-            counters["pushed"] += 1
-            continue
-        counters["gate comparisons"] += 1
-        if value < -buffer[0]:
-            heapq.heapreplace(buffer, -value)
-            counters["replaced"] += 1
-    return buffer
-
-
-def insertion_sort_counted(items, counters):
-    for index in range(1, len(items)):
-        current = items[index]
-        position = index - 1
-        while position >= 0:
-            counters["comparisons"] += 1
-            if not items[position] > current:
-                break
-            items[position + 1] = items[position]
-            position -= 1
-        items[position + 1] = current
-    return items
-
-
-size = 4096
-k = 16
-case = list(range(size))
-Random(20261040).shuffle(case)
-reference = sorted(case)
-
-select_counters = {"comparisons": 0, "swaps": 0}
-value = quickselect(list(case), 0, size - 1, k - 1, select_counters, Random(20261040))
-print("k-th order statistic: value", value, "| expected", reference[k - 1], "| correct:", value == reference[k - 1])
-print("  quickselect comparisons:", select_counters["comparisons"], "| n =", size)
-
-heap_counters = {"pushed": 0, "replaced": 0, "gate comparisons": 0}
-buffer = top_k_buffer(case, k, heap_counters)
-canonical = sorted(-value for value in buffer)
-print("unordered Top-K contents correct:", canonical == reference[:k])
-print("  elements pushed:", heap_counters["pushed"], "| replacements:", heap_counters["replaced"],
-      "| gate comparisons:", heap_counters["gate comparisons"])
-
-buffer_counters = {"comparisons": 0}
-ordered_buffer = insertion_sort_counted([-value for value in buffer], buffer_counters)
-print("sorted Top-K: correct:", ordered_buffer == reference[:k])
-print("  buffer sort comparisons:", buffer_counters["comparisons"])
-
-baseline = {"comparisons": 0}
-ordered = merge_sort_counted(case, baseline)
-print("full sort baseline (bottom-up merge sort): correct:", ordered == reference)
-print("  comparisons:", baseline["comparisons"], "| n log2 n =", size * (size.bit_length() - 1))
+print("cost in units of one pass over the input, so the k-th element is the baseline 1 n")
+print(f"{'n':>10} {'k':>8} {'top-k / k-th':>14} {'sorted top-k / k-th':>21} {'full sort / k-th':>18}")
+for n, k in ((2**20, 2**3), (2**20, 2**10), (2**20, 2**17), (2**16, 2**3), (2**24, 2**3)):
+    print(f"{n:>10} {k:>8} {log2(k):>14.1f} {log2(k) + k * log2(k) / n:>21.1f} {log2(n):>18.1f}")
 ```
 
-五万条键的流只遍历一次：返回的缓冲是**无序**的（打印出来是 [18, 14, 14, 4, 9, 3, 10, 2]，并非按序），把它排序后才与「整条流完整排序取前 8 个」以及库函数 `heapq.nsmallest` 一致；缓冲长度峰值恰好是 8，说明这份空间由 $k$ 决定、与 $n$ 无关。注意 `gate comparisons` 这一列统计的是「新元素与堆顶的比较」共 49992 次（正好 $n - k$）：`heapq` 在被接受时内部还会做若干次堆内比较，那部分由标准库执行、不在这个计数里；$O(\log k)$ 的量级来自堆替换的机制，这一列数字只覆盖门槛比较那一部分。最后两行说明流只能单向消费：同一条生成器第二次遍历已经没有任何元素可读。
+表里可以读出三件事：无序 Top-K 相对第 $k$ 个元素的倍数是 $\log_2 k$，只随 $k$ 变（$k = 8$ 时 3.0，$k = 1024$ 时 10.0，$k = 131072$ 时 17.0）；完整排序的倍数是 $\log_2 n$，只随 $n$ 变（$n = 2^{16}$ 时 16.0，$n = 2^{20}$ 时 20.0，$n = 2^{24}$ 时 24.0）；已排序 Top-K 的倍数在 $k$ 小时与无序 Top-K 几乎相同，在 $k$ 接近 $n$ 时被 $k \log_2 k$ 抬到接近完整排序（$k = 2^{17}$ 时 19.1，同一行完整排序为 20.0）。
 
-流式 Top-K 只要求元素之间可比，不要求可随机访问，因此它对「只能读一次的序列」也适用。
-
-`heapq.nsmallest()` 与 `heapq.nlargest()` 返回的是**已排序**的前 $k$ 个结果；Python 的 Sorting HOWTO 把它们描述为单遍处理输入、同时只保留所需数量元素的 partial-sort 工具，尤其适合 $k$ 相对输入规模较小的时候。当前 CPython 实现通常维护一个大小受 $k$ 限制的堆，并在输入可取得长度且 $k \ge n$ 时直接退回完整排序（$k = 1$ 时用 `min()` / `max()`），但这些分支属于实现策略，不是 `heapq` API 的语义保证。`sorted()` 提供的是更强的契约：返回全部元素的稳定全序；$k$ 很小时有界堆通常少做很多工作，而 $k$ 接近 $n$ 时完整排序可能更合适。
-
-## 三种契约的实测对照
-
-同一份 $n = 4096$ 的输入、同样的 $k = 16$，三种契约放在一起看：
-
-
-
-- **第 $k$ 个顺序统计量**用 quickselect 花 6643 次比较，结果与完整排序后的第 16 个元素一致。
-- **无序 Top-K** 用大小 16 的最大堆缓冲：入堆 16 次、替换 96 次，与堆顶的门槛比较 4080 次（正好 $n - k$），结果与完整排序的前 16 个一致。
-- **已排序 Top-K** 在上一行基础上再对 16 个元素的缓冲做一次插入排序，额外 101 次比较。
-- **完整排序**用同一份输入做基线（自底向上归并排序，见 <CrossRef id="algorithms.sorting" />）：44015 次比较，与 $n \log_2 n = 49152$ 同阶。
-
-这几行不能直接拿比较次数做常数级横向比较。quickselect、缓冲区插入排序和归并基线统计了各自显式执行的全部元素比较；Top-K 一行的 `gate comparisons` 只统计新元素与堆顶的门槛比较，不包含 `heapq` 内部维持堆时发生的比较。因此 6643、4080、101 与 44015 不是四个统一口径的完整比较计数。这组实验只承担两项职责：验证三个输出契约都正确，以及把各算法的成本构成暴露出来；渐进结论来自算法分析，而不是这些数字之间的直接大小关系。对固定的 $k$，流式 Top-K 的工作随 $n$ 线性增长；当 $k$ 增长时，每次接受操作又带来对数于 $k$ 的成本。
-
-就稳定性而言，本节构造的两种方法都不给出承诺：选择不产生序列，无需谈稳定性；堆缓冲输出的 Top-K 结果在等键时的次序由堆操作决定。
-
-完整排序的空间取决于具体实现，不能一概而论（原地排序可以是 $O(1)$ 或 $O(\log n)$）；这里能说的是，把只可单遍读取的流先全部物化下来需要 $\Theta(n)$ 存储。
-
-本节证明的是上界：我们构造了在只要求部分顺序时更便宜的算法。至于哪些成本是任何算法都无法突破的，需要先形式化比较模型与决策树；完整排序的 $\Omega(n \log n)$ 比较下界以及「找最小至少 $n - 1$ 次比较」都在 <CrossRef id="algorithms.lower-bounds" /> 中证明，本节不提前给出。
+本节证明的是上界：在只要求部分顺序时，可以构造比完整排序更便宜的算法。至于哪些成本是任何算法都无法突破的，需要先形式化比较模型与决策树；完整排序的 $\Omega(n \log n)$ 比较下界与「找最小至少 $n - 1$ 次比较」都在 <CrossRef id="algorithms.lower-bounds" /> 中证明。

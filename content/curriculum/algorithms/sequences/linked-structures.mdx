@@ -5,19 +5,20 @@ order: 20
 title: 链表与指针结构
 status: published
 objectives:
-  - 区分「已持有节点」与「只知道位置」两种操作模型，写出同一操作在这两种模型下的成本
-  - 写出单链表与双向链表的表示不变量，并用一次操作序列检验它是否保持
-  - 说明只持有目标节点时单链表删除无法完成的原因，以及哨兵节点改变了哪些不变量
-  - 从表示与访问模式论证链式结构与动态数组在逐元素开销与局部性上的差别
+  - 区分已持有节点与只知道位置两种操作模型，写出同一操作在这两种模型下的最坏成本
+  - 推导单链表中按位置插入与访问需要多少次引用跳转，并读出跳数与下标的关系
+  - 陈述单链表的表示不变量，说明不变量被破坏后遍历为什么可能不终止
+  - 说明双向链表的反向引用让已知节点删除变成常数成本，并指出维护它要多写哪一行
+  - 从单位元素开销与访问模式估算链式结构与动态数组的取舍
 ---
 
-把一个 99 插到序列的位置 1，看起来是一个操作。可是调用方手里可能已经拿着那个位置的节点引用，也可能只有一个下标 `1`。这两种情形下要走的代码路径不同，代价也不同。链式结构上，「已持有节点」与「只知道位置」是两种操作模型，关于链表的速度结论几乎都由调用方属于哪一种决定——同一句「在位置 1 插入 99」，在第一种模型里是 $\Theta(1)$，在第二种模型里取最坏是 $\Theta(n)$。
+把一个 99 插到序列的位置 1，是同一个抽象操作。调用方手里可能已经拿着那个位置的节点引用，也可能只有一个下标 `1`。链式结构上这两种情形走的代码路径不同：手里有节点时插入只改两条引用，代价是常数；只有下标时，代码必须先从入口引用沿 `next` 走到那个位置，代价随下标增长。
 
-链式结构不搬动已有元素，它是同一个抽象 sequence 契约的又一种表示（契约见 <CrossRef id="algorithms.arrays-and-lists" />）：代价从「移动元素」转移到「逐节点存储与逐个跳转」。判断一段链式代码是否正确，依据是不变量，不是直觉。
+链式结构不搬动已有的元素，它用逐节点存储和逐个跳转换取「修改时不动其余元素」；同一个抽象 sequence 契约（见 <CrossRef id="algorithms.arrays-and-lists" />）在这里把代价从移动元素转移到走引用。判断一段链式代码是否成立，依据是它的表示不变量。
 
 ## 已持有节点与只知道位置
 
-看同一个「在位置 1 插入 99」的两种实现。`insert_after(node, value)` 在已持有的节点之后插入，只改两条引用，不遍历；`insert_at(head, position, value)` 只有入口引用与下标，必须先走到位置 `position - 1`，再改引用。
+`insert_after(node, value)` 在已持有的节点之后插入，只改两条引用；`insert_at(head, position, value)` 只有入口引用与下标，要走到 `position - 1` 处的前驱再改引用。下面的单元格对同一组值分别用两条路径插入 99，并打印每条路径走过的跳数：
 
 ```python run id="alg.linked.known-node-vs-position"
 class Node:
@@ -25,77 +26,58 @@ class Node:
         self.value = value
         self.next = next
 
-    def __repr__(self):
-        return f"Node({self.value})"
-
 
 def values_of(head):
-    result = []
-    node = head
+    out, node = [], head
     while node is not None:
-        result.append(node.value)
+        out.append(node.value)
         node = node.next
-    return result
+    return out
 
 
 def insert_after(node, value):
-    """Insert behind a node we already hold: no traversal, two structural link writes."""
-    fresh = Node(value, node.next)   # structural write 1: fresh.next
-    node.next = fresh                # structural write 2: node.next
-    return 2                         # link writes; the allocation is one constant
-
-
-def node_at(head, position):
-    """Return (node, next hops) for a 0-based position."""
-    next_hops = 0
-    node = head
-    while node is not None and next_hops < position:
-        node = node.next
-        next_hops += 1
-    return node, next_hops
+    node.next = Node(value, node.next)          # two structural writes, zero hops
 
 
 def insert_at(head, position, value):
-    """Return (head, next hops needed to reach the predecessor)."""
-    if position == 0:
-        return Node(value, head), 0
-    previous, next_hops = node_at(head, position - 1)
-    if previous is None:
-        raise IndexError("position out of range")
+    previous, hops = head, 0
+    while hops < position - 1:
+        previous, hops = previous.next, hops + 1
     insert_after(previous, value)
-    return head, next_hops
+    return head, hops
 
 
 head = Node(1, Node(2, Node(3)))
-writes = insert_after(head.next, 99)
-print("insert behind the node we held:", values_of(head), "| structural link writes:", writes)
-
-for position in (0, 1, 3):
+insert_after(head.next.next, 99)                # we already hold the node for position 2
+print("held node (position 2):", values_of(head))
+for position in (1, 2, 3):
     head = Node(1, Node(2, Node(3)))
     head, hops = insert_at(head, position, 99)
-    print(f"insert at position {position}: next hops={hops}  result={values_of(head)}")
+    print(f"position {position}: hops={hops} -> {values_of(head)}")
 ```
 
-单元格里的两个函数是两个不同的操作：`insert_after(node, value)` 是在这个节点之后插入，`insert_at(head, position, value)` 是抽象契约的「在位置 `position` 插入」。所以位置 1 得到 `[1, 99, 2, 3]`，而在位置 1 的节点之后插入得到 `[1, 2, 99, 3]`。
+已持有的尾节点上插入，跳数是 0；按下标 3 插入，要先走 2 步再改引用。两次的结果都是 `[1, 2, 3, 99]`。定位前驱是「只知道位置」独有的开销。
 
-**成本模型**：一次节点访问（解引用并读取字段）记 1，一次引用赋值记 1，分配一个新节点也记一个常数（标准 pointer-machine 模型）；规模度量是节点数 $n$，下表给的是最坏情形下的操作计数。表按抽象契约的操作列出，并区分调用方手里拿着什么：
+**成本模型**：一次节点访问（解引用并读取字段）记 1，一次引用赋值记 1，分配一个新节点记一个常数（标准 pointer-machine 模型）；规模度量是节点数 $n$，下表给最坏情形下的操作计数。表按抽象契约的操作列出，并区分调用方手里拿着什么：
 
 | 抽象操作 | 已持有相关节点（前驱，或首尾句柄） | 只知道位置 $i$ |
 | --- | --- | --- |
 | `insert(i, x)` | $\Theta(1)$ 次结构写入（$i = 0$ 时改的是 `head`） | 定位前驱 $\Theta(i)$，再加 $\Theta(1)$ 次写入；对 $i$ 取最坏是 $\Theta(n)$ |
-| `delete(i)` | $\Theta(1)$ 次结构写入（双向链表，或单链表已持有前驱） | 定位 $\Theta(i)$，再加 $\Theta(1)$ 次写入 |
-| 读取位置 $i$ 的元素 | 已持有该节点时读它的值是 $\Theta(1)$——但这不是按位置访问 | 沿 `next` 走 $i$ 步，为 $\Theta(i)$；对 $i$ 取最坏是 $\Theta(n)$ |
-| 头部插入与头部删除 | $\Theta(1)$ 次结构写入（移动 `head` 入口引用） | $\Theta(1)$：抽象 `insert(0, x)` 与 `delete(0)` 都只改入口引用 `head`，不需要定位 |
+| `delete(i)` | $\Theta(1)$ 次结构写入（双向链表，或单链表已持有前驱） | 定位 $\Theta(i)$，再加 $\Theta(1)$ 次写入；对 $i$ 取最坏是 $\Theta(n)$ |
+| 读取位置 $i$ 的元素 | 已持有该节点时读它的值是 $\Theta(1)$ | 沿 `next` 走 $i$ 步，为 $\Theta(i)$；对 $i$ 取最坏是 $\Theta(n)$ |
+| 头部插入与头部删除 | $\Theta(1)$ 次结构写入（移动 `head` 入口引用） | $\Theta(1)$：`insert(0, x)` 与 `delete(0)` 都只改入口引用 `head`，不需要定位 |
 
-「已持有相关节点」一列假定节点句柄有效：它当前属于这个结构。否则解链会破坏别的结构——对来自另一个链表的节点调用 `unlink` 就是这样。头部插入还要把新的入口引用交回调用方（返回新 `head`，或把链表封装在容器对象里），否则改动对调用方不可见。
+「已持有相关节点」一列假定这个句柄当前属于该结构；对来自另一个结构的节点调用解链会破坏那边的链接。头部插入要把新的入口引用交回调用方（返回新 `head`，或把链表封装在容器对象里），改动才对调用方可见。
 
-单链表的删除要单独说：只持有目标节点、又拿不到前驱时，删除无法完成——这不是 $\Theta(n)$ 能解决的事；如果同时能访问 `head`，可以从头搜索前驱，最坏 $\Theta(n)$。常见的「把后继的值复制进目标节点，再解链后继」不能算一般的 `delete(node)`：它改变的是传入节点自己的 payload、删掉的是它的后继，因此传入的节点句柄并没有被移除；而且对最后一个节点失效，因为其后继是 `None`。
+单链表上，只持有目标节点、拿不到前驱时，删除无法完成：链接只从前往后走，目标节点的前驱从它本身到达不了。同时能访问 `head` 时可以重新从头搜索前驱，最坏 $\Theta(n)$。把后继的值复制进目标节点、再解链后继的写法改变的是传入节点的 payload、删掉的是它的后继，传入的节点句柄并没有被移除，而且对最后一个节点失效。
 
-同样的区分落在两端。另存尾引用可以让尾插也变成 $\Theta(1)$，但尾删仍要先找到前驱，最坏 $\Theta(n)$；只有维护首尾引用的双向链表，两端插入与删除才能都达到最坏 $\Theta(1)$。双端操作需要连续数组之外的表示——环形缓冲区、分块 `deque` 或链式结构。库设计时选择暴露哪一侧（节点句柄还是下标），直接决定了调用方能达到什么成本。
+两端操作同样受这个区分支配。另存一个尾引用可以让尾插达到 $\Theta(1)$，尾删仍要先找到前驱，最坏 $\Theta(n)$；维护首尾两个引用的双向链表，两端插入与删除都能达到最坏 $\Theta(1)$，代价是每次结构修改要同步两条反向引用。把哪一侧暴露给调用方（节点句柄还是下标），直接决定调用方能达到什么成本。
 
 ## 表示不变量
 
-上面所有成本结论都假定了两件事：手里的节点句柄属于这个结构，而且从入口引用出发的遍历会终止。这两条是表示不变量——判断一段链式代码正确性的依据。**表示不变量**要保证两件事：每条遍历都终止，而且从 `head` 出发读出的值序列恰好就是该结构所表示的抽象序列。
+上面的成本结论依赖两个前提：手里的节点句柄属于这个结构，而且从入口引用出发的遍历会终止。这两条由表示不变量保证。
+
+**表示不变量**：每条从入口引用出发的遍历都终止，且读出的值序列恰好是结构所表示的抽象序列。
 
 一个节点是一个对象，保存一个值与一到两个引用：
 
@@ -104,17 +86,17 @@ for position in (0, 1, 3):
 | 单链表 | `Node = (value, next)` |
 | 双向链表 | `Node = (value, prev, next)` |
 
-结构本身由入口引用定义：`head` 指向第一个节点，空结构用 `None` 表示。这个定义是递归的——「链表剩余部分」也是一个链表（`None` 是它的空情形），因此遍历与长度可以写成递归形式，也可以写成循环形式。
+结构本身由入口引用定义：`head` 指向第一个节点，空结构用 `None` 表示。这个定义是递归的——「链表剩余部分」也是一个链表（`None` 是它的空情形），因此遍历与长度既能写成循环，也能写成递归。
 
-单链表的抽象函数：从 `head` 出发沿 `next` 前进，得到有限且不重复的节点序列 $x_0, \dots, x_{n-1}$；抽象序列就是它们的 `value` 序列，最后一个节点的 `next` 是 `None`。
+单链表的抽象函数是：从 `head` 出发沿 `next` 前进，得到有限且不重复的节点序列 $x_0, \dots, x_{n-1}$，抽象序列就是它们的 `value` 序列，最后一个节点的 `next` 是 `None`。
 
 双向链表另外要求：
 
 - 空结构：`head is None` 当且仅当 `tail is None` 当且仅当 `length == 0`；
-- 非空：`x_0 is head`，`x_{n-1} is tail`，`head.prev is None`，`tail.next is None`；
-- 每个相邻对满足 `x_i.next is x_{i+1}` 且 `x_{i+1}.prev is x_i`；`length == n`。
+- 非空：$x_0$ 是 `head`，$x_{n-1}$ 是 `tail`，`head.prev is None`，`tail.next is None`；
+- 每个相邻对满足 $x_i.next$ 是 $x_{i+1}$ 且 $x_{i+1}.prev$ 是 $x_i$；`length == n`。
 
-这些条件合起来才说明「每个合法具体状态都能解释成一个抽象序列」：`head`、`tail`、正向可达链与 `length` 必须是同一个结构，缺掉其中任何一条都会放过明显非法的状态（例如 `head` 为空而 `tail` 还指着某个节点）。违反任一条的结构在大多数操作上仍然「能用」，只在少数路径上出错：这正是链式代码难调试的原因，也是必须显式检查不变量的原因。不变量被破坏后最常见的表现是遍历不终止——正常操作把不变量当作前置条件，因此不必每一步自查；只有专门诊断损坏状态的检查器不能依赖正在检查的 `next` 与 `length` 来保证终止，它必须自己记录已访问节点，检测到重复就报告「结构已损坏」，不再继续走。
+这些条件合起来说明「每个合法具体状态都能解释成一个抽象序列」：`head`、`tail`、正向可达链与 `length` 必须是同一个结构。违反其中一条的结构在多数操作上仍然「能用」，只在少数路径上出错，最常见的表现是遍历不终止——一处的 `next` 指错，后面的整条遍历跟着错。
 
 ```python run id="alg.linked.build-and-invariants"
 class Node:
@@ -131,40 +113,26 @@ def build(values):
 
 
 def to_list(head):
-    values = []
-    node = head
+    out, node = [], head
     while node is not None:
-        values.append(node.value)
+        out.append(node.value)
         node = node.next
-    return values
-
-
-def is_proper_list(head):
-    """Check reachability and the terminal None without assuming acyclic input."""
-    seen = set()
-    node = head
-    while node is not None:
-        if id(node) in seen:
-            return False
-        seen.add(id(node))
-        node = node.next
-    return True
+    return out
 
 
 head = build([1, 2, 3])
 print("values:", to_list(head))
-print("head is the first element:", head.value)
+print("head holds the first element:", head.value)
 print("tail points nowhere:", head.next.next.next is None)
 print("the rest of a list is a list:", to_list(head.next))
-print("proper list:", is_proper_list(head))
-print("empty list is None:", build([]) is None, to_list(None))
+print("empty structure:", build([]) is None, to_list(None))
 ```
 
-`build` 用头插法构造，因此是 $\Theta(n)$ 次引用赋值且不需要额外遍历。遍历用循环：递归版本的深度等于节点数，会受解释器的递归上限约束（见 <CrossRef id="python.runtime-vs-language" />）。
+`build` 用头插法构造，是 $\Theta(n)$ 次引用赋值。遍历写成了循环：递归版本的调用深度等于节点数，会受解释器的递归上限约束（见 <CrossRef id="python.runtime-vs-language" />）。
 
 ## 只知道位置时仍然逐个走
 
-已持有的节点句柄让修改是 $\Theta(1)$；只有一个位置编号时，链式表示没有捷径。连续数组按下标一次地址计算就取到元素，链式结构只能从入口引用沿 `next` 走下标步数。
+已持有的节点句柄让修改是 $\Theta(1)$；只有一个位置编号时，链式表示没有捷径——连续数组按下标一次地址计算就取到元素，链式结构只能从入口引用沿 `next` 走下标步数。下面的单元格在 1000 个元素上取几个位置，打印走到该位置经历的跳数：
 
 ```python run id="alg.linked.index-access"
 class Node:
@@ -181,150 +149,75 @@ def build(values):
 
 
 def access_by_position(head, position):
-    """Return (value, next hops taken to reach the node)."""
-    next_hops = 0
-    node = head
-    while node is not None:
-        if next_hops == position:
-            return node.value, next_hops
-        node = node.next
-        next_hops += 1
-    raise IndexError(position)
+    node, hops = head, 0
+    while hops < position:
+        node, hops = node.next, hops + 1
+    return node.value, hops
 
 
 head = build(range(1000))
 for position in (0, 10, 500, 999):
     value, hops = access_by_position(head, position)
-    print(f"linked access to position {position:4d}: {hops:4d} next hops  (value={value})")
+    print(f"linked position {position:4d}: hops={hops:4d}  value={value}")
 
 values = list(range(1000))
-print("dynamic array access to position 999 takes one address computation:", values[999])
+print("array position 999:", values[999])
 ```
 
-在同一个单位成本模型下，链式结构的按位置访问是 $\Theta(n)$，而连续数组是 $\Theta(1)$。链表因此不适合「按位置读取」的用途；它的优势在头部修改、双向链表的两端操作与「已持有节点」的修改。
+同一个单位成本模型下，链式结构的按位置访问是 $\Theta(n)$，连续数组是 $\Theta(1)$。位置 0 是例外：`insert(0, x)` 与 `delete(0)` 只改 `head`，单链表上也是 $\Theta(1)$。
 
-换成双向链表也没有改变这一点。反向引用让已持有的节点能直接找到前驱，所以已知节点的删除是 $\Theta(1)$；位置编号本身不指向任何节点，只有位置 $i$ 时，双向链表同样只能从头走过去，代价是 $\Theta(i)$，对 $i$ 取最坏是 $\Theta(n)$。反向引用加快的是从一个已持有节点出发的移动；从位置出发的定位仍要逐个走。
+换成双向链表也不改变按位置访问：反向引用让已持有的节点直接找到前驱，从位置出发仍要逐个走，代价是 $\Theta(i)$，对 $i$ 取最坏是 $\Theta(n)$。反向引用加快的是从一个已持有节点出发的移动。
 
-位置 0 是例外：抽象 `insert(0, x)` 与 `delete(0)` 只改 `head` 这个入口引用，单链表上也是 $\Theta(1)$。把「在头部插入或删除」与「在任意位置插入或删除」分开，是这一列结论的来源。
+## 双向链表与反向引用
 
-## 双向链表、哨兵与不变量检查
-
-双向链表用两个引用换来「已知节点删除是 $\Theta(1)$」，代价是每次结构修改要维护两条反向引用。头插与尾删都要改动入口引用；哨兵节点是另一种表示，它在两端各放一个不存放数据的节点，把「改头」「改尾」并入一般情形，调用方不再需要区分端点——代价是表示不变量随之改变：带哨兵的环状结构里「遇环即损坏」不再成立，遍历永远能走回哨兵，检查器必须换一种方式判断结构是否合法。本课继续采用 `None` 端点，不展开哨兵版本。
+双向链表用一条反向引用换来「已持有节点删除是 $\Theta(1)$」：从目标节点本身就能取到前驱，不必从头搜索。代价是每次结构修改要同时维护正向与反向两条链接。下面的单元格建四个节点、解链第二个，`unlink` 里故意漏掉修正反向指针的那一行：
 
 ```python run id="alg.linked.doubly-invariant-check"
-class DoublyNode:
-    def __init__(self, value):
+class Node:
+    def __init__(self, value, prev=None):
         self.value = value
-        self.prev = None
+        self.prev = prev
         self.next = None
 
-    def __repr__(self):
-        return f"D({self.value})"
+
+def unlink(node):
+    node.prev.next = node.next
+    # node.next.prev = node.prev          # this line is missing
 
 
-class DoublyList:
-    def __init__(self):
-        self.head = None
-        self.tail = None
-        self.length = 0
+a, b, c, d = Node(1), Node(2), Node(3), Node(4)
+a.next, b.prev = b, a
+b.next, c.prev = c, b
+c.next, d.prev = d, c
+unlink(b)
 
-    def append(self, value):
-        node = DoublyNode(value)
-        node.prev = self.tail
-        if self.tail is None:
-            self.head = node
-        else:
-            self.tail.next = node
-        self.tail = node
-        self.length += 1
-        return node
-
-    def unlink(self, node):
-        """Remove a node we already hold; both neighbours are reachable from it."""
-        if node.prev is None:
-            self.head = node.next
-        else:
-            node.prev.next = node.next
-        if node.next is None:
-            self.tail = node.prev
-        else:
-            node.next.prev = node.prev
-        node.prev = None
-        node.next = None
-        self.length -= 1
-
-    def problems(self):
-        """Return the violated invariants, so a broken structure is observable.
-
-        A checker cannot rely on the fields it is checking, so it records visited
-        nodes instead of trusting `next` or `length` to make the walk terminate.
-        """
-        issues = []
-        empty = self.head is None and self.tail is None and self.length == 0
-        if not empty and not (self.head is not None and self.tail is not None and self.length > 0):
-            issues.append("empty structure is inconsistent: head, tail and length disagree")
-        if self.head is not None and self.head.prev is not None:
-            issues.append("head has a predecessor")
-        if self.tail is not None and self.tail.next is not None:
-            issues.append("tail has a successor")
-        counted = 0
-        last = None
-        seen = set()
-        node = self.head
-        while node is not None and id(node) not in seen:
-            seen.add(id(node))
-            if node.next is not None and node.next.prev is not node:
-                issues.append(f"next.prev mismatch at {node.value}")
-            if node.prev is not None and node.prev.next is not node:
-                issues.append(f"prev.next mismatch at {node.value}")
-            counted += 1
-            last = node
-            node = node.next
-        if node is not None:
-            issues.append("traversal revisited a node: the structure has a cycle")
-        elif counted and last is not self.tail:
-            issues.append("the last reachable node is not tail")
-        elif counted != self.length:
-            issues.append(f"length says {self.length} but traversal found {counted}")
-        return issues
-
-    def values(self):
-        result = []
-        node = self.head
-        while node is not None:
-            result.append(node.value)
-            node = node.next
-        return result
-
-
-linked = DoublyList()
-nodes = [linked.append(value) for value in (1, 2, 3, 4)]
-linked.unlink(nodes[2])
-print("after unlinking the middle node:", linked.values(), "| length:", linked.length)
-print("invariants hold:", linked.problems())
-
-linked.unlink(nodes[0])
-linked.unlink(nodes[3])
-print("after removing both ends:", linked.values(), "| head:", linked.head, "| tail:", linked.tail)
-print("invariants hold:", linked.problems())
-
-tail_holder = linked.append(5)
-linked.length += 1
-print("an unmaintained length field is caught:", linked.problems())
-linked.length -= 1
-
-tail_holder.prev = None
-print("breaking the reverse reference is caught:", linked.problems())
-
-linked.head.next.next = linked.head
-print("a cycle is reported instead of hanging:", linked.problems())
+forward, node = [], a
+while node is not None:
+    forward.append(node.value)
+    node = node.next
+backward, node = [], d
+while node is not None:
+    backward.append(node.value)
+    node = node.prev
+print("forward from head:", forward)
+print("backward from tail:", backward)
+print("c.prev is b:", c.prev is b)
 ```
 
-前两次修改没有问题，因为每次解链都同时更新了两侧的反向引用。最后三步故意破坏结构：一次把长度字段改错，一次抹掉尾部节点的反向引用，一次让尾部节点的 `next` 指回前面的节点造出一个环。前面两条由字段一致性检查抓到，环则由遍历本身抓到——`problems()` 记录已访问节点，所以遇到环时报告，不会一直走下去。`problems()` 把违反的不变量逐条列出——这就是表示不变量的用处：它把「结构悄悄坏了」变成可检查的断言，不必等到某个后续操作给出错误结果。长度字段是冗余状态，凡是冗余状态都要有不变量检查或统一的维护点。
+正向遍历从 `a` 出发读到 `[1, 3, 4]`：`2` 被绕过了。反向遍历从 `d` 出发读到 `[4, 3, 2, 1]`：`2` 又出现，因为 `c.prev` 仍指着 `b`。把注释掉的那一行 `node.next.prev = node.prev` 加回 `unlink`，反向遍历变成 `[4, 3, 1]`，双向不变量恢复。`head`、`tail`、`length` 由各自的修改点维护，这里只看节点之间的两条链接。
 
 ## 与动态数组的比较
 
-链式结构与动态数组的选择不能只比渐进量级，还要计入逐元素开销与访问模式。
+链式结构与动态数组的选择要计入逐元素开销与访问模式，不只看渐进量级。下表把需求、链式结构必须保存的结果和典型成本列在一起：
+
+| 需求 | 链式结构要保存的结果 | 典型成本 |
+| --- | --- | --- |
+| 已知位置插入或删除 | 相邻节点的引用 | 改引用，其余元素不动 |
+| 按位置读取 | 从入口引用走到的路径 | 走 $i$ 步 |
+| 两端插入与删除 | 首尾引用（双向还要 `prev`） | 两端最坏 $\Theta(1)$ |
+| 逐元素存储 | 每个元素一个独立节点对象 | 对象头加字段 |
+
+下面的单元格量一下这个逐元素开销与动态数组的差：
 
 ```python run id="alg.linked.memory"
 import sys
@@ -343,30 +236,19 @@ head = None
 for value in reversed(range(count)):
     head = Node(value, head)
 
-node = head
-node_bytes = 0
+node, node_bytes = head, 0
 while node is not None:
     node_bytes += sys.getsizeof(node)
     node = node.next
 
 slots = list(range(count))
-
-print("one node object:", sys.getsizeof(head), "bytes")
-print("1000 node objects:", node_bytes, "bytes | the list container:", sys.getsizeof(slots), "bytes")
-print("empty container header:", sys.getsizeof([]), "bytes | of which per slot:", round(sys.getsizeof(slots) / count, 3), "bytes")
-print("direct sizes only: referenced values and allocator overhead are not counted")
-
-exact = [0] * count
-grown = []
-for value in range(count):
-    grown.append(value)
-print("same length, different growth history:", len(exact), len(grown), "| container bytes:", sys.getsizeof(exact), sys.getsizeof(grown))
+print("one node:", sys.getsizeof(head), "bytes | 1000 nodes:", node_bytes)
+print("list header:", sys.getsizeof([]), "| 1000 slots:", sys.getsizeof(slots))
+print("per slot:", round(sys.getsizeof(slots) / count, 3))
 ```
 
-链式结构的额外开销换来的是双向链表上 $\Theta(1)$ 的最坏两端插入与删除；动态数组用移动元素换取连续的引用槽数组与更小的单位开销。逐节点分配还引入分配器开销：分配与回收的次数与元素个数成正比，独立对象的数量更多，分配器要管理的小块也更零碎。
+一个节点对象占 24 字节，1000 个节点的对象合计 24000 字节；空列表头 28 字节，1000 个槽位的列表 4028 字节，均摊到每个元素 4.028 字节。节点对象是每槽的约 6 倍。链式结构的这个逐元素开销换来的是已知节点修改与双向链表两端操作的最坏常数成本；动态数组用移动元素换取连续的引用槽数组与更小的逐元素开销。
 
-**实现边界**：本课程使用的 CPython/Pyodide 里，每个节点都是一个独立对象；`sys.getsizeof(node)` 统计的是这个对象自身的内存，既不递归计入它引用的 `value`，也不含分配器的额外开销，因此单位元素的开销从「一个引用槽」升到「一个对象头加字段」的量级——上面的数值都是这个实现的直接大小观测，不是语言保证。动态数组那一侧同样只算容器自身，而且列表对象有一个固定头部，「总字节数除以元素数」得到的每槽字节数里含有这部分摊销；容器字节数取决于已分配容量与增长历史（上面的单元格用同长度、不同构造方式的列表展示了这一点），所以它不是一个只由长度决定的常量。
+**实现边界**：本课程使用的 CPython/Pyodide 里，每个节点是一个独立对象；`sys.getsizeof(node)` 统计对象自身的内存，既不递归计入它引用的 `value`，也不含分配器的额外开销，因此单位元素的开销从「一个引用槽」升到「对象头加字段」的量级。列表对象有一个固定头部，「总字节数除以元素数」得到的每槽字节数里含有这部分摊销。标准库没有通用的链表类型；`collections.deque` 由固定长度 block 组成的双向链式结构实现，与这里的逐节点链表不同，提它只为说明这一点（手写链表的用途见 <CrossRef id="algorithms.stacks-and-queues" />）。
 
-标准库没有通用的链表类型——本课程的 CPython/Pyodide 中，`collections.deque` 由固定长度 block 组成的双向链式结构实现，与教科书的逐节点链表不同；这里提到它只为说明这一点。手写链表用于暴露不变量与操作轨迹，不是生产容器的替代品（见 <CrossRef id="algorithms.stacks-and-queues" />）。
-
-访问模式同样不同：CPython 的 `list` 连续的是引用槽数组，payload 对象并不因此连续，遍历时每一槽还要追一次引用；链表的节点在堆上分散分配，同样要逐个追逐引用——在关注内存访问的原生成本模型里，后者的空间局部性更弱。这只是布局层面的推论，推不出某个遍历循环在 Python 层必然更快或更慢：**本运行时无法测量缓存行为**，WebAssembly 环境读不到硬件缓存计数器，也不能把计时差异归因到缓存；局部性收益要在原生环境用性能计数器受控验证。
+访问模式上，CPython 的 `list` 连续的是引用槽数组，payload 对象并不因此连续，遍历时每一槽还要追一次引用；链表的节点在堆上分散分配，也要逐个追逐引用，空间局部性更弱。**本运行时无法测量缓存行为**：WebAssembly 环境读不到硬件缓存计数器，也不能把计时差异归因到缓存；局部性收益要在原生环境用性能计数器受控验证。
