@@ -67,7 +67,7 @@ $-\infty$ 这类回答来自环。**环**（cycle）是一列顶点 $v_0, v_1, \
 
 把距离算出来需要一个共同原语：
 
-**松弛边** $(u, v, weight)$：若 $distance[u] + weight < distance[v]$，则用这个值更新 $distance[v]$。
+<Term id="relaxation">松弛边</Term> $(u, v, weight)$：若 $distance[u] + weight < distance[v]$，则用这个值更新 $distance[v]$。
 
 **安全性不变量**：任何时刻，每个有限的 $distance[v]$ 都是某条真实 $s \rightsquigarrow v$ 行走的权重。
 

@@ -15,7 +15,7 @@ objectives:
 
 ## 分区：一条循环不变量
 
-快速排序的核心是一个原地划分过程：把区间里的元素按「小于 pivot」与「不小于 pivot」分成两段，并让 pivot 落在两段之间的最终位置上。用区间 `items[low .. high]` 与末元素作 pivot，扫描过程把已经处理好的那一段分成相邻的两块，$j$ 是下一个待检查的位置，$boundary$ 是两块的分界：
+快速排序的核心是一个<Term id="in-place">原地</Term>划分过程：把区间里的元素按「小于 pivot」与「不小于 pivot」分成两段，并让 pivot 落在两段之间的最终位置上。用区间 `items[low .. high]` 与末元素作 pivot，扫描过程把已经处理好的那一段分成相邻的两块，$j$ 是下一个待检查的位置，$boundary$ 是两块的分界：
 
 1. `items[low .. boundary)` 里的元素都 `< pivot`
 2. `items[boundary .. j)` 里的元素都 `>= pivot`

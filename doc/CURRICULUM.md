@@ -90,6 +90,8 @@
 
 深度：以 C/D 为主，推导与反例是主要材料。`sequences`、`maps`、`trees` 覆盖表示不变量、成本分类与失败情形；`ordering`、`graphs` 覆盖正确性论证与模型；`techniques` 把已见过的算法抽象成设计范式；`selection` 是跨模块的连接点。
 
+本模块同时维护跨章节复用的术语层。正文只在首次重要出现处标注 `<Term>`，分工与标记判据见 `doc/CONTENT_GUIDE.md` 第 4 节。
+
 | 子章节 | order | 课时 id | 标题 | 落盘 |
 | --- | --- | --- | --- | --- |
 | `algorithms.complexity` | 10 | `algorithms.abstractions-and-invariants` | 抽象数据类型、表示与不变量 | ✓ |
