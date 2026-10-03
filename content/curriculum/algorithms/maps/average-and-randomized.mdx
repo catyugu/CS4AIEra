@@ -110,46 +110,62 @@ print("closed form (n + 1) / 2 =", (size + 1) / 2)
 
 ## 探测长度的期望
 
-哈希表查找的成本是「定位一个桶」加「在冲突链或探测序列中比较的次数」，两部分都由哈希把键落到哪些位置决定；两种冲突策略与桶数组的表示不变量在 <CrossRef id="algorithms.hash-tables" />。键集固定下来以后，剩下的随机性在算法这一侧：哈希函数从某个函数族中选取，探测序列按某个模型生成。取期望的对象是 $E_R[\cdot]$，与输入分布无关。
+哈希表查找的成本是「定位一个桶」加「在冲突链或探测序列中比较的次数」，两部分都由哈希把键落到哪些位置决定；两种冲突策略在 <CrossRef id="algorithms.hash-tables" />。键集固定下来以后，剩下的随机性在算法这一侧：哈希函数从某个函数族中选取，探测序列按某个模型生成。取期望的对象是 $E_R[\cdot]$，与输入分布无关。
 
-把 <Term id="load-factor">负载因子</Term>记作 $\alpha = n/m$——$n$ 个已存键，$m$ 个槽位。均匀探测模型把一次查询的探测序列建模为独立、均匀的槽位取样。查询的第 $i$ 次探测发生，当且仅当前 $i - 1$ 次都落在已占用的槽位上，这个概率是 $\alpha^{i-1}$。把探测次数写成指示器之和 $T = \sum_{i \ge 1}[\text{第 } i \text{ 次探测发生}]$，取期望后由线性性逐项相加：
+把 <Term id="load-factor">负载因子</Term>记作 $\alpha = n/m$——$n$ 个已存键，$m$ 个槽位。**均匀探测**（uniform probing）把一次查询的探测序列建模为槽位的一个随机排列：每次从未探测过的槽位里均匀取一个，取过的不再取。第 $i$ 次探测发生，要求前 $i - 1$ 次都落在已占用的槽位上；第 $j$ 次取到已占槽位的条件概率是 $(n - j + 1)/(m - j + 1)$，已占槽位与剩余槽位同时减少。把探测次数写成指示器之和 $T = \sum_{i \ge 1}[\text{第 } i \text{ 次探测发生}]$，取期望后由线性性逐项相加：
 
 $$
-E[T] = \sum_{i \ge 1} P(\text{第 } i \text{ 次探测发生}) = \sum_{j \ge 0} \alpha^{j} = \frac{1}{1 - \alpha}
+E[T] = \sum_{i \ge 1} \prod_{j = 1}^{i - 1} \frac{n - j + 1}{m - j + 1}.
 $$
 
-$\alpha < 1$ 时几何级数收敛，探测长度的期望由 $\frac{1}{1 - \alpha}$ 控制，$\alpha$ 趋近 $1$ 时它急剧上升。这条推导只用到期望的线性性，与各处探测是否独立无关。
+每一项的因子都不超过 $n/m$：$n \le m$ 时 $\frac{n - j + 1}{m - j + 1} \le \frac{n}{m}$，所以第 $i$ 项不超过 $\alpha^{i - 1}$；无放回地取过 $n$ 个已占槽位之后，下一次必然取到空槽，探测次数因此不超过 $n + 1$。两头夹住这条和式，得到：
 
-固定的桶数与一批固定的键下测出这条曲线：
+$$E[T] \le \sum_{j \ge 0} \alpha^{j} = \frac{1}{1 - \alpha}.$$
+
+$\frac{1}{1 - \alpha}$ 是均匀探测下的**上界**，不是等式：$\alpha$ 小时它已经贴着真值，$\alpha$ 趋近 $1$ 时逐项放缩的累积差与截断一起把它抬高。下面把实测值、精确和式与这条上界并排算出来。
 
 ```python run id="alg.avg.probe-cost"
 import random
 
-capacity, keys = 512, [f"key-{index:03d}" for index in range(500)]
-rng = random.Random(20260605)
+capacity, seed, trials = 512, 20261003, 20000
+rng = random.Random(seed)
 
-def mean_probes(filled, trials=40000):
-    """Uniform probing: each probe samples a slot and stops at the first empty one.
-    Only the number of occupied slots enters, so they are the first `filled` slots."""
+
+def exact_mean(capacity, filled):
+    """Uniform probing: the probe sequence is a permutation of the slots."""
+    total, term = 0.0, 1.0
+    for step in range(filled + 1):
+        total += term
+        term *= (filled - step) / (capacity - step)
+    return total
+
+
+def measured_mean(capacity, filled):
+    """Draw from the unprobed slots and stop at the first empty one."""
     total = 0
     for _ in range(trials):
-        probes = 0
+        probes, occupied_left, slots_left = 0, filled, capacity
         while True:
             probes += 1
-            if rng.randrange(capacity) >= filled:
+            if rng.randrange(slots_left) >= occupied_left:
                 break
+            occupied_left -= 1
+            slots_left -= 1
         total += probes
     return total / trials
 
 
-print(f"capacity = {capacity} slots, {len(keys)} fixed keys")
-for count in (256, 384, 448, 486):
-    alpha = count / capacity
-    print(f"keys = {count:3d}  alpha = {alpha:.3f}  measured = {mean_probes(count):7.2f}"
-          f"  1/(1-alpha) = {1 / (1 - alpha):7.2f}")
+print(f"capacity = {capacity} slots, {trials} searches per row")
+print(f"{'filled':>7} {'alpha':>6} {'measured':>9} {'exact sum':>10} {'1/(1-alpha)':>12}")
+for filled in (256, 384, 448, 486):
+    alpha = filled / capacity
+    print(f"{filled:>7} {alpha:>6.3f} {measured_mean(capacity, filled):>9.2f}"
+          f" {exact_mean(capacity, filled):>10.3f} {1 / (1 - alpha):>12.3f}")
 ```
 
-四行实测值是 $2.01$、$3.99$、$7.95$、$19.74$，同一行的 $1/(1 - \alpha)$ 是 $2.00$、$4.00$、$8.00$、$19.69$，偏差落在抽样波动之内。单元格里每次探测独立取样，$P(\text{命中已占用}) = \alpha$ 精确成立，所以 $\frac{1}{1 - \alpha}$ 是这个模型下的**精确**期望；实际实现把探测序列取成槽位的随机排列（无放回），同一个 $\frac{1}{1 - \alpha}$ 是那条更精细模型的上界。哪几个槽位被占用不进这个期望，只有 $\alpha$ 进。
+表里每行三个数：同一批无放回探测下实测的平均值、上面那条精确和式、以及 $\frac{1}{1 - \alpha}$ 这条上界。通过运行代码的结果可以注意到，这条界在低负载处可以说就是真值，在高负载处只能当作粗略的上界。
+
+均匀探测本身是理想化模型，它要求探测序列是槽位的随机排列。线性探测做不到这一点，它把冲突的键排成连续的占用区间，相邻区间会合并，一次查找扫过的槽位比这条模型多；哈希表里测到的是多次插入中最长的一次探测，与这里的平均探测次数不是同一个量。真实实现里探测序列由哈希函数决定，键集由对手挑出时随机排列的前提不成立，随机化哈希正是为这条前提准备的。
 
 ## 运行时间是随机变量
 
