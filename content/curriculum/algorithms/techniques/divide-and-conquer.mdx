@@ -6,9 +6,8 @@ title: 分治
 status: published
 objectives:
   - 写出分治的正确性骨架，并说明唯一的硬条件是递归路径上的良基度量严格下降
-  - 从递归树展开递推式，并说明主定理三种情形分别对应树的哪一层占主导
-  - 写出主定理的假设与边界，说明缺口、正则条件缺失与不规则划分时该换用什么工具
-  - 用机制计数而不是计时支撑成本结论，并给出让错误版本失败的输入
+  - 从递归树展开递推式，读出哪一种机制主导结论，并用机制计数支撑它
+  - 写出主定理的假设与边界，说明它不适用时该回到哪个工具
 ---
 
 ## 分治的正确性骨架
@@ -82,9 +81,116 @@ T(n) = Theta(n^p) + sum over i = 0 .. log_b n - 1 of a^i * f(n / b^i)
 
 结论就落在这两个部分谁占主导上：叶子的成本按 $n^p$ 增长，本层工作按 $a^i f(n/b^i)$ 逐层累加。三种典型情形由此而来——叶子主导、本层工作主导、两者同阶（此时每一层都贡献同阶的成本，层数 $\log_b n$ 直接乘进去，得到 $\Theta(n^p \log n)$）。
 
+## 机制计数：两个实例
+
+成本结论要靠**计数论证**支撑，而不是靠计时：计数说清「哪些操作被数了、数出的量属于哪种成本类别」，计时只说「这份实现在这台机器上跑得多久」。
+
+**归并排序**是逐层同阶的情形。合并两个已排好的半区时，每个元素最多被取出一次，所以一层里所有合并的比较次数总和至多 $n$。递归树一共 $\lceil \log_2 n \rceil + 1$ 层，但最后一层是叶子、不发生合并，真正干活的是至多 $\lceil \log_2 n \rceil$ 个内部层，乘起来就是比较次数的上界 $n\lceil \log_2 n \rceil$。当 $n = 2^k$ 时，最坏情形的精确值是 $n\log_2 n - n + 1$，它由一种让每层合并都「交错」到几乎耗尽一边的输入达到。单元格 A 用两个输入对比这件事——倒序输入只要 192 次比较，位反转排列要 321 次，而 $n\log_2 n - n + 1 = 321$。
+
+**Karatsuba 乘法**是叶子主导的情形。把两个数各拆成高低两半（$x = x_1 B + x_0$，$y = y_1 B + y_0$），朴素做法要算四个半长乘积；Karatsuba 用三次乘法凑出同一个结果：
+
+```text
+z0 = x0 * y0
+z2 = x1 * y1
+z1 = (x0 + x1) * (y0 + y1) - z0 - z2      # 恰好等于 x0*y1 + x1*y0
+x * y = z2 * B^2 + z1 * B + z0
+```
+
+于是 $a = 3$、$p = \log_2 3 \approx 1.585 < 2$，本层工作是线性的，落在叶子主导的情形，得到 $n^p$ 的成本而不是 $n^2$。单元格 A 里这个实现的乘法次数（1157）高出递归树模型的 $3^k = 729$（$n = 2^k$）不少：模型假设每层都是三个恰好一半规模的乘法，而 $(x_0 + x_1)$ 会多出一位，真实递归树并不整齐。指数 $\log_2 3$ 来自算法分析，不是这组数字推出来的，这组数字只说明实现与模型之间没有简单的一一对应。
+
+**二分查找**是 $a = 1$ 的退化情形：每步只留一个子问题，本层工作是常数，$p = \log_b 1 = 0$，于是 $\Theta(n^0 \log n) = \Theta(\log n)$，与 <CrossRef id="algorithms.binary-search" /> 里逐次折半得到的结论一致。
+
+这三个实例展示的是两种机制：Karatsuba 叶子主导，归并排序与二分查找逐层同阶。第三种情形（本层工作主导）由下一节的实验展示，这里不再另找算法实例。
+
+```python run id="alg.techniques.mechanism-counts"
+from math import ceil, log2
+
+
+def merge_sort_comparisons(values):
+    """Merge sort counting only the element comparisons the merge step performs."""
+    comparisons = 0
+    calls = 0
+
+    def sort(items):
+        nonlocal comparisons, calls
+        calls += 1
+        if len(items) <= 1:
+            return items
+        middle = len(items) // 2
+        left = sort(items[:middle])
+        right = sort(items[middle:])
+        merged, i, j = [], 0, 0
+        while i < len(left) and j < len(right):
+            comparisons += 1
+            if left[i] <= right[j]:
+                merged.append(left[i]); i += 1
+            else:
+                merged.append(right[j]); j += 1
+        merged.extend(left[i:])
+        merged.extend(right[j:])
+        return merged
+
+    ordered = sort(list(values))
+    return ordered, comparisons, calls
+
+
+def bit_reversal(n):
+    """The permutation that makes every merge interleave as long as possible."""
+    bits = int(log2(n))
+    return [int(format(index, "0%db" % bits)[::-1], 2) for index in range(n)]
+
+
+n = 64
+print("merge sort, n =", n, "(a power of two, so every level splits exactly in half)")
+for name, values in (("reversed", list(range(n, 0, -1))), ("bit-reversal", bit_reversal(n))):
+    ordered, comparisons, calls = merge_sort_comparisons(values)
+    print(f"  {name:12s} comparisons {comparisons:4d} | sorted correctly {ordered == sorted(values)}"
+          f" | <= n*ceil(log2 n) = {n * ceil(log2(n))}: {comparisons <= n * ceil(log2(n))}")
+levels = int(log2(n))
+print("  internal levels that perform a merge: at most", levels,
+      "| the tree has", levels + 1, "levels, but the last one holds only leaves")
+print("  each merge level touches n elements in total, so the bound is n * ceil(log2 n) =", n * levels)
+print("  exact worst case for n = 2^k:", int(n * log2(n) - n + 1),
+      "| reached here by the bit-reversal permutation:",
+      merge_sort_comparisons(bit_reversal(n))[1] == int(n * log2(n) - n + 1))
+print("  recursive calls:", merge_sort_comparisons(list(range(n, 0, -1)))[2], "| 2n - 1 =", 2 * n - 1,
+      "| equal:", merge_sort_comparisons(list(range(n, 0, -1)))[2] == 2 * n - 1)
+
+
+def karatsuba(x, y, counter):
+    """Karatsuba on integers; counter records the scalar multiplications reached."""
+    if x < 10 or y < 10:
+        counter[0] += 1
+        return x * y
+    half = max(len(str(abs(x))), len(str(abs(y)))) // 2
+    base = 10 ** half
+    high_x, low_x = divmod(x, base)
+    high_y, low_y = divmod(y, base)
+    z0 = karatsuba(low_x, low_y, counter)
+    z2 = karatsuba(high_x, high_y, counter)
+    z1 = karatsuba(low_x + high_x, low_y + high_y, counter) - z2 - z0
+    return z2 * base * base + z1 * base + z0
+
+
+digits = 64
+x = int("7" * digits)
+y = int("3" * digits)
+counter = [0]
+product = karatsuba(x, y, counter)
+level = int(log2(digits))
+print()
+print("Karatsuba on two", digits, "-digit numbers")
+print("  product correct:", product == x * y)
+print("  scalar multiplications actually performed:", counter[0])
+print("  recursion-tree model: 3 ** log2(n) =", 3 ** level, "vs the naive 4 ** log2(n) =", 4 ** level)
+print("  the model counts three half-size multiplications per level; carries make")
+print("  (low + high) one digit wider, so this implementation's tree is not perfectly even")
+print("  the exponent comes from the algorithm analysis: log2(3) =", round(log2(3), 3), "< 2")
+```
+
 ## 主定理：形式、假设与边界
 
-把上面三种情形写成定理，就是主定理（master theorem）：
+递归树上的三种情形写成定理，就是主定理（master theorem）：
 
 ```text
 设 a >= 1、b > 1 是两个常数，f(n) 是一个最终非负的成本函数，T(n) 由递推式
@@ -215,113 +321,6 @@ print("  every level still satisfies f = Omega(n^2), yet a*f(n/b) <= c*f(n) fail
 print("  and T(n)/f(n) grows without bound: this is what the regularity condition rules out")
 ```
 
-## 机制计数：两个实例
-
-成本结论要靠**计数论证**支撑，而不是靠计时：计数说清「哪些操作被数了、数出的量属于哪种成本类别」，计时只说「这份实现在这台机器上跑得多久」。
-
-**归并排序**对应情形 2。合并两个已排好的半区时，每个元素最多被取出一次，所以一层里所有合并的比较次数总和至多 $n$。递归树一共 $\lceil \log_2 n \rceil + 1$ 层，但最后一层是叶子、不发生合并，真正干活的是至多 $\lceil \log_2 n \rceil$ 个内部层，乘起来就是比较次数的上界 $n\lceil \log_2 n \rceil$。当 $n = 2^k$ 时，最坏情形的精确值是 $n\log_2 n - n + 1$，它由一种让每层合并都「交错」到几乎耗尽一边的输入达到。单元格 A 用两个输入对比这件事——倒序输入只要 192 次比较，位反转排列要 321 次，而 $n\log_2 n - n + 1 = 321$。
-
-**Karatsuba 乘法**对应情形 1。把两个数各拆成高低两半（$x = x_1 B + x_0$，$y = y_1 B + y_0$），朴素做法要算四个半长乘积；Karatsuba 用三次乘法凑出同一个结果：
-
-```text
-z0 = x0 * y0
-z2 = x1 * y1
-z1 = (x0 + x1) * (y0 + y1) - z0 - z2      # 恰好等于 x0*y1 + x1*y0
-x * y = z2 * B^2 + z1 * B + z0
-```
-
-于是 $a = 3$、$p = \log_2 3 \approx 1.585 < 2$，本层工作是线性的，落在叶子主导的情形，得到 $n^p$ 的成本而不是 $n^2$。单元格 A 里这个实现的乘法次数（1157）高出递归树模型的 $3^k = 729$（$n = 2^k$）不少：模型假设每层都是三个恰好一半规模的乘法，而 $(x_0 + x_1)$ 会多出一位，真实递归树并不整齐。指数 $\log_2 3$ 来自算法分析，不是这组数字推出来的，这组数字只说明实现与模型之间没有简单的一一对应。
-
-**二分查找**是 $a = 1$ 的退化情形：每步只留一个子问题，本层工作是常数，$p = \log_b 1 = 0$，情形 2 给出 $\Theta(n^0 \log n) = \Theta(\log n)$，与 <CrossRef id="algorithms.binary-search" /> 里逐次折半得到的结论一致。
-
-这三个实例展示的是两种机制：Karatsuba 是叶子主导（情形 1），归并排序与二分查找是逐层同阶（情形 2）。合并主导的情形 3 由上面对递推式的实验展示，本节不再另找算法实例。
-
-```python run id="alg.techniques.mechanism-counts"
-from math import ceil, log2
-
-
-def merge_sort_comparisons(values):
-    """Merge sort counting only the element comparisons the merge step performs."""
-    comparisons = 0
-    calls = 0
-
-    def sort(items):
-        nonlocal comparisons, calls
-        calls += 1
-        if len(items) <= 1:
-            return items
-        middle = len(items) // 2
-        left = sort(items[:middle])
-        right = sort(items[middle:])
-        merged, i, j = [], 0, 0
-        while i < len(left) and j < len(right):
-            comparisons += 1
-            if left[i] <= right[j]:
-                merged.append(left[i]); i += 1
-            else:
-                merged.append(right[j]); j += 1
-        merged.extend(left[i:])
-        merged.extend(right[j:])
-        return merged
-
-    ordered = sort(list(values))
-    return ordered, comparisons, calls
-
-
-def bit_reversal(n):
-    """The permutation that makes every merge interleave as long as possible."""
-    bits = int(log2(n))
-    return [int(format(index, "0%db" % bits)[::-1], 2) for index in range(n)]
-
-
-n = 64
-print("merge sort, n =", n, "(a power of two, so every level splits exactly in half)")
-for name, values in (("reversed", list(range(n, 0, -1))), ("bit-reversal", bit_reversal(n))):
-    ordered, comparisons, calls = merge_sort_comparisons(values)
-    print(f"  {name:12s} comparisons {comparisons:4d} | sorted correctly {ordered == sorted(values)}"
-          f" | <= n*ceil(log2 n) = {n * ceil(log2(n))}: {comparisons <= n * ceil(log2(n))}")
-levels = int(log2(n))
-print("  internal levels that perform a merge: at most", levels,
-      "| the tree has", levels + 1, "levels, but the last one holds only leaves")
-print("  each merge level touches n elements in total, so the bound is n * ceil(log2 n) =", n * levels)
-print("  exact worst case for n = 2^k:", int(n * log2(n) - n + 1),
-      "| reached here by the bit-reversal permutation:",
-      merge_sort_comparisons(bit_reversal(n))[1] == int(n * log2(n) - n + 1))
-print("  recursive calls:", merge_sort_comparisons(list(range(n, 0, -1)))[2], "| 2n - 1 =", 2 * n - 1,
-      "| equal:", merge_sort_comparisons(list(range(n, 0, -1)))[2] == 2 * n - 1)
-
-
-def karatsuba(x, y, counter):
-    """Karatsuba on integers; counter records the scalar multiplications reached."""
-    if x < 10 or y < 10:
-        counter[0] += 1
-        return x * y
-    half = max(len(str(abs(x))), len(str(abs(y)))) // 2
-    base = 10 ** half
-    high_x, low_x = divmod(x, base)
-    high_y, low_y = divmod(y, base)
-    z0 = karatsuba(low_x, low_y, counter)
-    z2 = karatsuba(high_x, high_y, counter)
-    z1 = karatsuba(low_x + high_x, low_y + high_y, counter) - z2 - z0
-    return z2 * base * base + z1 * base + z0
-
-
-digits = 64
-x = int("7" * digits)
-y = int("3" * digits)
-counter = [0]
-product = karatsuba(x, y, counter)
-level = int(log2(digits))
-print()
-print("Karatsuba on two", digits, "-digit numbers")
-print("  product correct:", product == x * y)
-print("  scalar multiplications actually performed:", counter[0])
-print("  recursion-tree model: 3 ** log2(n) =", 3 ** level, "vs the naive 4 ** log2(n) =", 4 ** level)
-print("  the model counts three half-size multiplications per level; carries make")
-print("  (low + high) one digit wider, so this implementation's tree is not perfectly even")
-print("  the exponent comes from the algorithm analysis: log2(3) =", round(log2(3), 3), "< 2")
-```
-
 ## 终止与空间
 
 终止与深度是两件事，要分开说：
@@ -351,7 +350,7 @@ print("  the exponent comes from the algorithm analysis: log2(3) =", round(log2(
 
 **分治不总是更快**。递推式的解只说明增长阶，常数因子与调用开销要看具体实现。把一个线性扫描求最小值改写成递归对半的版本：如果传的是索引范围，结论仍是 $\Theta(n)$，只是多付了递归调用的常数；如果是每层都切片的写法，每层复制一遍 $\Theta(n)$、共 $\Theta(\log n)$ 层，成本会变成 $\Theta(n \log n)$——同一个想法，两种实现，两个答案。要说明这类差别，机制计数（调用次数、元素移动次数）比计时可靠。
 
-**主定理容易被误用**。上面已经列出四种不适用的情况：$f$ 卡在两种情形之间、正则条件不成立、子问题规模不等、规模不是常数分数。正则条件的反例在单元格 B；单元格 C 展示不等规模的划分与「每次只减一」这两种，并给出它们各自的正确答案。
+**主定理容易被误用**。前面已经列出四种不适用的情况：$f$ 卡在两种情形之间、正则条件不成立、子问题规模不等、规模不是常数分数。正则条件的反例在单元格 B；单元格 C 展示不等规模的划分与「每次只减一」这两种，并给出它们各自的正确答案。
 
 ```python run id="alg.techniques.outside-the-theorem"
 from math import log2
@@ -423,12 +422,6 @@ print("  the answer is Theta(n^2), reached by unfolding the recurrence, not by t
 
 ## 小结
 
-- 分治的骨架是 divide / conquer / combine，唯一的硬条件是递归路径上的良基度量严格下降；「子问题必须互不重叠」「combine 只能用子解」都不是定义条件。
-- 递推式写成 $T(n) = \sum_j T(n_j) + g(n)$，其中 $g(n)$ 是本次调用的全部非递归工作；子问题等规模时特化为 $T(n) = aT(n/b) + f(n)$。
-- 递推式的解可以从递归树读出：叶子层按 $n^p$（$p = \log_b a$）增长，本层工作按 $a^i f(n/b^i)$ 累加，谁主导决定结论。
-- 主定理的三种情形分别对应叶子主导、两者同阶、本层工作主导；每条假设都不可省，尤其情形 3 的正则条件（$a f(n/b) \le c f(n)$，向下几何缩水）。
-- 情形 2 覆盖 $f$ 与 $n^p$ 同阶；情形 1 与情形 3 要求两者之间有多项式级间隔，所以临界点附近只差对数因子的 $f$ 不由这个基本版本覆盖。缺口（$T(n) = 2T(n/2) + n\log n$）、临界指数下方的对数缺口（$T(n) = 2T(n/2) + n/\log n$）、不规则划分（$T(n) = T(n/3) + T(2n/3) + n$）、非常数分数（$T(n) = T(n-1) + n$）都要回到递归树，正则条件的必要性要靠振荡的 $f$ 才能隔离出来。
-- 成本结论用机制计数支撑：归并排序的每层 $n$、Karatsuba 的三次乘法（注意 1157 与 729 的差别来自进位，不构成模型结论）、二分查找的单子问题。
-- 终止与深度分开看：严格下降保证有限终止，比例缩小才给出 $\log n$ 深度；空间是最长活动递归路径乘每帧开销，Python 的递归上限与缺失的尾调用消除都属于实现边界。
-- 本节边界：不重复 <CrossRef id="algorithms.comparison-sorting" /> 里的排序算法实现，不展开记忆化与最优子结构（后面的 <CrossRef id="algorithms.dynamic-programming" />），不讨论 Akra–Bazzi 之类的不规则递推理论、并行分治与缓存无关算法。
-
+- 分治的唯一硬条件是递归路径上的良基度量严格下降；递推式 $T(n) = \sum_j T(n_j) + g(n)$ 记的是本次调用的全部非递归工作，加上全部子调用的成本。
+- 结论由递归树给出：叶子层按 $n^p$（$p = \log_b a$）增长，本层工作按 $a^i f(n/b^i)$ 逐层累加，谁主导就给出主定理的哪一种情形；情形 1 与情形 3 之间的多项式级间隔、以及情形 3 的正则条件，都是结论的一部分。
+- 递推式化不成 $aT(n/b) + f(n)$，或者 $f$ 正好卡在两种情形之间时，回到递归树逐层求和。

@@ -1,5 +1,5 @@
 id: algorithms.techniques
 label: 算法设计范式
 order: 70
-summary: 分治与递推；贪心与交换论证；动态规划与重叠子问题；状态空间搜索与剪枝；随机化算法。
+summary: 把已经见过的算法抽象成设计范式——分治、贪心、动态规划、状态空间搜索与随机化——并说明每种范式靠什么论证成立、在什么条件下失效。
 status: active

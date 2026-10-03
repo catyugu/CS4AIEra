@@ -1,164 +1,31 @@
 ---
 id: algorithms.connectivity-and-spanning-trees
 slug: /algorithms/connectivity-and-spanning-trees
-order: 50
-title: 连通性、并查集与最小生成树
+order: 60
+title: 最小生成树
 status: published
 objectives:
-  - 用「一个划分」的抽象状态描述并查集，并写出 find 的充要契约
-  - 说明并查集支持什么、不支持什么，以及为什么复杂度是摊还的
   - 用 cut 与 safe edge 引理证明 Kruskal 与 Prim 的正确性
+  - 说出 Kruskal 维护的三条不变量，以及等权时输出为什么不唯一
   - 区分最小生成树与最短路树这两个不同的优化目标
 ---
 
-这一节切回**有限简单无向图**：$G = (V, E, w)$，无自环、无平行边，权重属于边。上一节的算法处理有向图上的路径优化；这里的目标是：用一棵生成树连接所有顶点，并在全部生成树中最小化边权总和。
+连接所有顶点、总权重最小的一棵树：在一张加权无向图上，这就是最小生成树。生成树的数量有限，最小的那棵一定存在；问题是不枚举全部生成树就把它找出来。
 
-## 从静态连通性到增量连通性
-
-遍历那一节已经证明：无向图遍历森林的每棵树恰好是一个连通分量。那是一个**静态快照**上的结论：图给定，跑一次 BFS/DFS，连通性就全部知道了。
-
-换一个操作模型，问题就变了。假设边是一条一条加入的（$E_0 \subseteq E_1 \subseteq \cdots$），中间要反复回答同一个问题：「$u$ 和 $v$ 现在连通吗？」设一共问 $q$ 次，第 $j$ 次问的时候图里已经有 $E_{i_j}$，那么每问一次就重跑一遍遍历，总成本是
-
-$$\Theta\left(\sum_{j = 1}^{q} \big(|V| + |E_{i_j}|\big)\right).$$
-
-最自然的用法是每加入一条边就问一次：此时 $q$ 与最终边数同阶，记最终边数为 $M = |E|$，总成本就是 $\Theta(M|V| + M^2)$——平方级。这正是需要一种能**增量维护**连通关系的结构的原因。
-
-## 并查集：维护一个划分
-
-并查集的抽象状态是**顶点集合上的一个划分**：若干个两两不交的块，每个块就是当前图的一个连通分量。`parent`、`size`、`rank` 都只是这个划分的一种表示，不是它的定义。
-
-```text
-find(v)   返回 v 所在块中的某个代表元（不指定是哪一个，只要求同一块内返回值相同）
-union(u, v)   把 u 与 v 所在的两个块合并成一个块
-
-契约：处理完边前缀 E_i 之后，对任意 u, v
-      find(u) == find(v)   <=>   u, v 在 (V, E_i) 中连通
-```
-
-这条充要条件才是并查集的契约。它按加入的边数归纳：$E_0 = \varnothing$ 时每个顶点自成一个块，契约平凡成立；加入边 $(u, v)$ 时，如果 $u, v$ 原本同块，那么图与划分都没有变化，契约保持不变；如果原本异块，新边恰好把这两个连通分量合成一个，而 `union` 也恰好合并这两个块，其余块不受影响，契约同样保持。所以每个前缀 $E_i$ 之后契约都成立。
-
-两个方向在这里都用了：同一块说明它们之间已经有路径；不同块说明它们还没有被任何已加入的边连起来。单元格 A 是对这条归纳的实例验证，不代替证明。
-
-能力边界同样要写清：
-
-```text
-支持：反复做「加入一条边」与「union 两个块」，查询是否同块
-不支持：一般的删边（把一条边去掉后重新分裂块，不是这个结构能做的）
-不给路径：find 只回答「是不是同一块」，不给出连接它们的实际路径
-不是有向工具：它不回答有向可达，也不是强连通分量算法
-```
-
-**复杂度必须写成摊还的**。按大小合并配上路径压缩，$m$ 次操作的整串成本是 $O((n + m)\alpha(n))$，其中 $n$ 是顶点数、$\alpha$ 是增长极慢的反阿克曼函数。这不是说单次 find 最坏也是 $O(\alpha(n))$：按大小合并已经把树高限制在 $O(\log n)$，所以某一次 find 仍可能花 $O(\log n)$；路径压缩保证的是这种昂贵的结构不会持续出现，摊还到整串操作上才得到那个 $\alpha(n)$。
-
-```python run id="alg.graphs.dsu-partition"
-from collections import deque
-
-
-def connected_in(vertices, edges, u, v):
-    """Independent oracle: plain BFS over the current edge set."""
-    adjacency = {vertex: [] for vertex in vertices}
-    for a, b in edges:
-        adjacency[a].append(b)
-        adjacency[b].append(a)
-    seen = {u}
-    queue = deque([u])
-    while queue:
-        current = queue.popleft()
-        for neighbour in adjacency[current]:
-            if neighbour not in seen:
-                seen.add(neighbour)
-                queue.append(neighbour)
-    return v in seen
-
-
-class DisjointSet:
-    """The abstract state is a partition; parent/size are only its representation."""
-
-    def __init__(self, vertices, compress=True, by_size=True):
-        self.parent = {vertex: vertex for vertex in vertices}
-        self.size = {vertex: 1 for vertex in vertices}
-        self.compress = compress
-        self.by_size = by_size
-        self.find_steps = 0
-
-    def find(self, vertex):
-        root = vertex
-        while self.parent[root] != root:
-            root = self.parent[root]
-            self.find_steps += 1
-        if self.compress:
-            while self.parent[vertex] != root:
-                self.parent[vertex], vertex = root, self.parent[vertex]
-        return root
-
-    def union(self, u, v):
-        root_u, root_v = self.find(u), self.find(v)
-        if root_u == root_v:
-            return False
-        if self.by_size and self.size[root_u] < self.size[root_v]:
-            root_u, root_v = root_v, root_u
-        self.parent[root_v] = root_u
-        self.size[root_u] += self.size[root_v]
-        return True
-
-
-vertices = ["a", "b", "c", "d", "e", "f"]
-edge_sequence = [("a", "b"), ("c", "d"), ("b", "c"), ("e", "f"), ("d", "e"), ("a", "f")]
-structure = DisjointSet(vertices)
-prefix = []
-contract_holds = True
-for edge in edge_sequence:
-    prefix.append(edge)
-    structure.union(*edge)
-    for u in vertices:
-        for v in vertices:
-            if (structure.find(u) == structure.find(v)) != connected_in(vertices, prefix, u, v):
-                contract_holds = False
-print("edge list must contain each undirected edge once; |E| =", len(edge_sequence))
-print("find(u) == find(v)  <=>  u, v connected in (V, E_i) after every prefix:", contract_holds)
-roots = {structure.find(vertex) for vertex in vertices}
-print("components after all edges:", len(roots), "| the partition has one block per component")
-
-naive = DisjointSet(vertices, compress=False, by_size=False)
-amortised = DisjointSet(vertices, compress=True, by_size=True)
-for vertex in vertices[:-1]:
-    naive.union(vertex, vertices[-1])
-    amortised.union(vertex, vertices[-1])
-print()
-print("adversarial chain of unions into one hub")
-print("  find steps, no compression / no union by size:", naive.find_steps)
-print("  find steps, compression + union by size:      ", amortised.find_steps)
-print("  amortised O((n + m) alpha(n)) is a statement about the whole sequence, not one find")
-print("  the structure answers same/different only: it never returns an actual path")
-```
-
-单元格 A 把契约逐前缀核对：每加一条边，就对全部顶点两两比较「并查集说同块吗」与「独立 BFS 说连通吗」，两者必须在每个前缀上一致。后半段用同一条对抗性的合并链比较了两种实现的代价，也顺便说明了「摊还」这个词的对象是整串操作。
-
-## 森林、树与成分数
-
-有限无向森林的边数由成分数唯一决定：
-
-```text
-定理：若有限无向图 (V, E) 是森林，其连通分量数为 c，则 |E| = |V| - c。
-      c = 1 就是树，于是非空树的边数恰好是 |V| - 1；空图有 |E| = 0 = |V| - c（c = 0）。
-```
-
-证明按连通分量逐个算：树的边数是顶点数减一（对 $|V|$ 归纳，每次删一个叶子），把 $c$ 棵树加起来就是 $|V| - c$。
-
-这条等式直接解释了两件事：并查集里**每一次成功的 union 都让成分数减一**（它合并两个不同的块）；Kruskal 在一棵生成树上**恰好收下 $|V| - 1$ 条边**。
-
-输入约定也在这里定死，后面不再重复：
-
-```text
-非空连通无向图   有生成树，最小生成树（MST）是它里面权重最小的那棵
-单点图           唯一样生成树是 0 条边的那棵树，权重 0
-非空断开图       没有生成树，但有最小生成森林（每个分量一棵 MST）
-空图             不进这一节的讨论
-```
+上一课留下的划分（<CrossRef id="algorithms.union-find" />）在这里不只是查询工具——Kruskal 靠它判断一条边会不会成环，收下的边数则由上一课的 $|E| = |V| - c$ 定出。两个算法都由同一段交换论证支撑：cut 上的 safe edge 引理。
 
 ## 最小生成树：目标本身
 
 最小生成树的问题是：在 $G$ 的全部生成树中找权重总和最小的一棵。生成树的数量有限，所以最小值一定存在，不需要额外论证。
+
+输入约定在这里定死，后面不再重复：
+
+```text
+非空连通无向图   有生成树，最小生成树（MST）是它里面权重最小的那棵
+单点图           唯一生成树是 0 条边的那棵树，权重 0
+非空断开图       没有生成树，但有最小生成森林（每个分量一棵 MST）
+空图             不进这一节的讨论
+```
 
 权重**允许任意实数，包括负数**。这一点容易与上一节混淆：要求非负权的是 Dijkstra，不是最短路问题本身——Bellman–Ford 就允许负边；真正会让最短行走值降到 $-\infty$ 的是源点可达的负环。最小生成树的候选对象始终是有限多棵无环的生成树，不存在绕环无限下降的问题，所以任意实数边权都不影响它的存在性。
 
@@ -592,20 +459,15 @@ print("  the isolated vertex q contributes no edge, and the two forests have equ
 
 | 算法 | 前置条件 | 维护的不变量 | 成本 |
 | --- | --- | --- | --- |
-| 并查集 | 只做加边与 union | 划分等于当前图的连通分量 | 整串操作摊还 $O((n + m)\alpha(n))$ |
 | Kruskal | 有限无向加权图（允许断开），边列表每条边一次 | $F$ 无环、划分正确、始终可扩展成某个最小生成森林 | $O(\lvert E \rvert \log \lvert E \rvert + (\lvert V \rvert + \lvert E \rvert)\alpha(\lvert V \rvert))$ |
 | Prim | 有限无向加权图（允许断开） | $key[v]$ 是从当前树到 v 的最轻边；被选中的那条是跨整个 cut 的最轻边 | $O(\lvert V \rvert + \lvert E \rvert \log \lvert V \rvert)$ |
 
+这一课与上一课不涉及强连通分量、一般动态删边连通性、有向最小生成树（arborescence）、最小割与最大流、Steiner 树、次小生成树、动态 MST 与 Borůvka 算法。
+
 ## 小结
 
-- 静态连通性由遍历解决（遍历森林的每棵树恰是一个连通分量）；边逐步加入、反复查连通性时，用并查集维护一个划分。
-- 并查集的抽象状态是划分，`parent`/`size`/`rank` 只是表示；契约是 $find(u) = find(v) \iff u, v$ 在当前图中连通。
-- 它只支持加边与合并，不支持一般删边，不给出实际路径，也不是有向可达或强连通分量的工具；成本是摊还 $O((n + m)\alpha(n))$。
-- 有限无向森林满足 $|E| = |V| - c$；树是 $c = 1$ 的特例。每次成功 union 让成分数减一，所以 Kruskal 恰好收下 $|V| - c$ 条边：连通输入（$c = 1$）才是 $|V| - 1$ 条。
-- 最小生成树的输入契约是非空连通无向图；单点图有唯一的 0 条边生成树；断开图给最小生成森林。权重允许任意实数（含负数），因为候选对象是有限多棵无环生成树，不存在负环式的无限下降。
-- 最小生成树与最短路树是两个不同目标，三角形 $w(s,a) = w(s,b) = 2$、$w(a,b) = 1$ 同时说明两个方向都不成立。
+- 最小生成树的输入契约是非空连通无向图；单点图有唯一的 0 条边生成树，断开图给最小生成森林。权重允许任意实数（含负数），因为候选对象是有限多棵无环生成树，不存在负环式的无限下降。
 - Kruskal 与 Prim 的正确性都来自 cut safe edge 引理：cut 不被当前森林 $A$ 跨越时，cut 上任意最轻边都可以安全加入，证明是交换论证。
 - Kruskal 维护三条不变量（第三条写成「某个最小生成森林」，断开图因此不是失败案例），等权时输出不唯一，契约只承诺一棵最小生成树。
 - Prim 的 $key[v]$ 是「从当前树到 $v$」的最轻边，不是从根到 $v$ 的路径总权重；只有被 extract-min 选中的那个顶点，它的父边才是跨整个 cut 的最轻边。
-- 本节边界：不涉及强连通分量、一般动态删边连通性、有向最小生成树（arborescence）、最小割与最大流、Steiner 树、次小生成树、动态 MST 与 Borůvka 算法。
-
+- 最小生成树与最短路树是两个不同目标，三角形 $w(s,a) = w(s,b) = 2$、$w(a,b) = 1$ 同时说明两个方向都不成立。
