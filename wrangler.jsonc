@@ -1,0 +1,23 @@
+// Hosting configuration for the static build: Cloudflare Workers static assets.
+//
+// The public site is produced by exactly one pipeline. `.github/workflows/ci.yml`
+// validates the source, builds `dist/`, and — only on `main` — uploads that exact
+// directory here. Cloudflare never builds anything, so there is no second build
+// path that could publish an unvalidated tree (see `doc/DESIGN.md`, 安全与可复现性).
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "cs4ai-era",
+
+  // Must not be in the future for the clock of the machine that deploys, so it
+  // is a fixed past date rather than "today". The output is static, so no Worker
+  // runtime API level depends on it.
+  "compatibility_date": "2026-10-01",
+
+  "assets": {
+    // Uploaded verbatim. Deliberately no `main` and no binding: an assets-only
+    // Worker runs no code, so a request that matches no file is answered with a
+    // plain 404. That keeps the "no server-side execution" boundary structural
+    // rather than a matter of what the script happens to do.
+    "directory": "./dist"
+  }
+}

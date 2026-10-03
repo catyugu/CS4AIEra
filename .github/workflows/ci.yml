@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The interpreter is self-hosted, so it is gitignored and must be restored
+      # before a build. Core files only: pulling every pinned wheel would add
+      # hundreds of megabytes to a run whose job is to prove check and build.
+      - run: npm run setup:runtime
+
+      - run: npm run check
+
+      - run: npm run build
+
+      # Everything downstream ships these exact bytes. Nothing is rebuilt after
+      # validation, so what is deployed is what was checked.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+  deploy:
+    # Only a validated `main` reaches the public site: `main` is the source of the
+    # published version, and a pull request proves the merge is safe before it lands
+    # (doc/DESIGN.md, 安全与可复现性). No preview deployments exist, so there is no
+    # second, unvalidated copy of the course on the network.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: check
+    runs-on: ubuntu-latest
+    concurrency:
+      # Two merges in quick succession must not race; they deploy in order.
+      group: deploy-main
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `wrangler` is a devDependency, so the deploy tool version is pinned by the
+      # lockfile. It is also the only thing this job needs from npm: the site itself
+      # comes from the `dist` artifact, not from a second build.
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

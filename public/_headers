@@ -1,0 +1,15 @@
+# Response headers for the static build. Cloudflare Workers static assets read this
+# file from the uploaded directory (`wrangler.jsonc`); it is parsed by the platform,
+# never served as an asset.
+#
+# Astro fingerprints the generated bundles under /_assets/, so their content can
+# never change under a given name: they are the "hashed assets are cached for a
+# long time" half of doc/DESIGN.md, 安全与可复现性.
+#
+# Nothing else is set here on purpose. HTML and /pyodide/ keep Cloudflare's default
+# `public, max-age=0, must-revalidate` plus ETag: the runtime files are self-hosted
+# under stable names, and a Pyodide version bump replaces their bytes in place, so
+# a long-lived cache entry would pin a reader to a stale interpreter.
+
+/_assets/*
+  Cache-Control: public, max-age=31556952, immutable
