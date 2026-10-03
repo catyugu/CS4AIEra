@@ -142,7 +142,7 @@ except OverflowError as failure:
 
 ## 双端队列
 
-Python 的 `collections.deque` 是双向链式块结构：两端插入删除都是 $\Theta(1)$ 最坏情形，而不是摊还；这与动态数组的尾部操作不同——扩容发生的时刻不影响两端操作的延迟上界。
+Python 的 `collections.deque` 是双向链式块结构：两端插入删除都是 $\Theta(1)$ 最坏情形，不依赖摊还；扩容发生的时刻不影响两端操作的延迟上界，这一点与动态数组的尾部操作不同。
 
 ```python run id="alg.deque.both-ends"
 from collections import deque
@@ -163,7 +163,7 @@ bounded.appendleft(-1)
 print("pushing on the other end evicts the opposite end:", list(bounded))
 ```
 
-`maxlen` 把容量约束直接写进契约：满时从另一端淘汰元素，而不是抛错。这类「有界 + 淘汰」的语义适合做滑动窗口，但它同时改变了「插入」的含义——调用方必须明确接受丢弃。
+`maxlen` 把容量约束直接写进契约：满时从另一端淘汰元素，不抛错。这类「有界 + 淘汰」的语义适合做滑动窗口，但它同时改变了「插入」的含义——调用方必须明确接受丢弃。
 
 有界队列也可以用动态数组加队首下标实现，成本相差不大；两者的区别在于 deque 的两端操作是最坏 $\Theta(1)$，不需要在扩容时刻承担突发复制，而其中间访问是 $\Theta(n)$，不要按随机访问假定成本。
 

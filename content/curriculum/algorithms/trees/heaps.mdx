@@ -1,0 +1,415 @@
+---
+id: algorithms.heaps
+slug: /algorithms/heaps
+order: 30
+title: 优先队列与堆
+status: draft
+objectives:
+  - 写出优先队列的契约，并说明它与有序映射的契约差在哪里（它不给任意键查询，也不给按键序遍历）
+  - 分开陈述形状不变量与顺序不变量，并说明数组布局为什么让形状不变量「按构造成立」
+  - 说明 push 与 pop 各自只沿一条根到叶路径移动元素，并给出它们维持两条不变量的论证
+  - 用实测比较「逐个插入」与「一次建堆」的比较次数，说明堆化为什么是线性的
+  - 判断 `heapq` 提供了契约的哪些操作，以及堆序为什么不等于排序序
+---
+
+有序映射要求键集合上有一个全序，并交付按键序的查找、前驱、后继与区间查询。许多使用场景并不需要这些：只想知道「当前最小的元素是哪个」，并且反复取出它。这份更弱的契约就是**优先队列**，它的表示是**堆**——上一节留下的接口「堆讨论另一条形状不变量」在这里闭合。
+
+## 优先队列的契约
+
+**抽象状态**：一个有限**多重集**（multiset / bag），其中元素可以重复，元素之间按某个全序比较。
+
+| 操作 | 后置条件 |
+| --- | --- |
+| 插入 $x$ | 增加一个 $x$ 的出现，其余元素不变 |
+| 查最小 | 返回全序下的一个最小元素，不改变状态；空队列报告失败 |
+| 取出最小 | 返回并移除一个最小元素；空队列报告失败 |
+| 替换最小（可选） | 在非空队列中移除一个最小元素并插入新元素，是「取出最小 + 插入」的组合操作 |
+
+「报告失败」的具体机制属于实现契约：下面的 Python 示例与 `heapq` 一样，在空堆访问或弹出时使用 `IndexError`。
+
+契约止于此。它**不**提供：按任意键查找、前驱与后继、按键序整体遍历、按区间取出。这些操作在有序映射里由更强的键序结构支持（见 <CrossRef id="algorithms.ordered-maps" />）；优先队列只保留极值这一组需求，因此可以用更弱的不变量和紧凑的数组表示来实现核心操作。
+
+## 两条不变量
+
+**形状不变量**：堆是一棵**完全二叉树**——除最后一层外每层都填满，最后一层从左到右连续填充。
+
+**顺序不变量**（小顶堆）：每个节点的键不大于它的每个子节点的键。
+
+两条要分开看。顺序不变量只直接约束父子之间，左右孩子之间没有关系。BST 的不变量则要求一个节点的键与左右整棵子树中的所有键满足方向关系。这里说的是不变量约束的强弱，而不是执行一次操作时真的把节点和整棵子树逐项比较。堆的局部父子条件因此更容易在一次沿路径的修改后恢复。
+
+形状不变量在数组布局里**按构造成立**：用一个密集数组存节点，下标 $i$ 的孩子在 $2i+1$ 与 $2i+2$、父节点在 $(i-1)//2$（见 <CrossRef id="algorithms.tree-representation" />）。只要用连续下标 $0, \dots, n-1$ 表示节点，完全二叉树的形状就由表示本身确定，不需要像 BST 那样另做平衡修复。如果表示中真的留下一个空洞，形状不变量才会被破坏；而 Python 的 `list` 删除中间元素会移动后继槽位，因此仍保持连续下标，却可能破坏堆序。基本优先队列不提供「删除任意元素」，是因为抽象契约并不要求定位任意元素，而不是因为这种操作原则上不能实现。
+
+## push 与 pop 怎样维持两条不变量
+
+两条操作各只沿一条路径移动元素，路径长度不超过高度 $h = \lfloor \log_2 n \rfloor$：
+
+- **插入**：把新元素放到数组末尾（这保持了密集，形状不变），然后**向上调整**——只要它比父节点小就与父节点交换，直到不再违反堆序。新元素只可能破坏它与祖先之间的堆序，因此只沿一条根路径向上修正。
+- **取出最小**：最小元素在根上；把数组**最后一个**元素搬到根（这保持了密集），然后**向下调整**——与两个孩子中较小的那个交换，直到它不大于两个孩子。搬上来的元素可能破坏它与后代之间的堆序，因此只沿一条路径向下修正。
+
+```python run id="alg.trees.heap-layout"
+class MinHeap:
+    """Min-heap in a list: the shape lives in the index relations, the order in the keys."""
+
+    __slots__ = ("items", "comparisons", "moves")
+
+    def __init__(self):
+        self.items = []
+        self.comparisons = 0
+        self.moves = 0
+
+    def _less(self, first, second):
+        self.comparisons += 1
+        return self.items[first] < self.items[second]
+
+    def _swap(self, first, second):
+        self.items[first], self.items[second] = self.items[second], self.items[first]
+        self.moves += 2
+
+    def push(self, key):
+        """Postcondition: the key is in the array, the array is dense, the heap order holds."""
+        self.items.append(key)
+        self.moves += 1
+        index = len(self.items) - 1
+        while index > 0:
+            parent = (index - 1) // 2
+            if not self._less(index, parent):
+                break
+            self._swap(index, parent)
+            index = parent
+
+    def peek(self):
+        """Postcondition: the smallest key. Raises IndexError on an empty heap."""
+        return self.items[0]
+
+    def pop(self):
+        """Postcondition: the smallest key is removed, the array stays dense, the order holds."""
+        smallest = self.items[0]
+        last = self.items.pop()
+        self.moves += 1
+        if self.items:
+            self.items[0] = last
+            self.moves += 1
+            index = 0
+            while True:
+                left, right = 2 * index + 1, 2 * index + 2
+                candidate = index
+                if left < len(self.items) and self._less(left, candidate):
+                    candidate = left
+                if right < len(self.items) and self._less(right, candidate):
+                    candidate = right
+                if candidate == index:
+                    break
+                self._swap(index, candidate)
+                index = candidate
+        return smallest
+
+    def shape_holds(self):
+        """A list of length n represents exactly indices 0..n-1, hence a complete shape."""
+        return True
+
+    def order_holds(self):
+        """Postcondition: True iff every parent is at most its children, in this layout."""
+        for index in range(1, len(self.items)):
+            parent = (index - 1) // 2
+            if self.items[parent] > self.items[index]:
+                return False
+        return True
+
+
+def lcg_shuffle(values, seed=20240607):
+    """A deterministic permutation, so this cell's numbers are reproducible."""
+    state = seed
+    shuffled = list(values)
+    for index in range(len(shuffled) - 1, 0, -1):
+        state = (1103515245 * state + 12345) % (2 ** 31)
+        other = state % (index + 1)
+        shuffled[index], shuffled[other] = shuffled[other], shuffled[index]
+    return shuffled
+
+
+keys = lcg_shuffle(list(range(500)))
+heap = MinHeap()
+for key in keys:
+    heap.push(key)
+print("after 500 pushes: comparisons", heap.comparisons, "| moves", heap.moves)
+print("array is dense:", heap.shape_holds(), "| heap order holds:", heap.order_holds())
+print("first eight array slots:", heap.items[:8], "| minimum:", heap.peek())
+print("array equals sorted order:", heap.items == sorted(heap.items))
+
+popped = []
+pop_comparisons = heap.comparisons
+pop_moves = heap.moves
+for _ in range(len(heap.items)):
+    popped.append(heap.pop())
+print("500 pops: comparisons", heap.comparisons - pop_comparisons,
+      "| moves", heap.moves - pop_moves)
+print("popped in ascending order:", popped == sorted(keys), "| empty afterwards:", len(heap.items) == 0)
+```
+
+数组里的键既不按升序也不按降序存放：只有下标 0 是全局最小，按序取出需要连续 pop，也就是下面的堆排序。形状不变量由密集数组保证，顺序不变量分别由插入时的向上调整和取出最小时的向下调整恢复，这就是堆的全部记账。
+
+## 一次建堆：heapify
+
+如果已经拿到一个完整数组，逐个插入是 $n$ 次调整、每次代价 $O(\log n)$。但把整棵树的顺序一次性修好只需要 $O(n)$：
+
+```python
+def sift_down(items, index, counters):
+    """Postcondition: the subtree at index satisfies the heap order, given both children do."""
+    while True:
+        left, right = 2 * index + 1, 2 * index + 2
+        candidate = index
+        if left < len(items):
+            counters["comparisons"] += 1
+            if items[left] < items[candidate]:
+                candidate = left
+        if right < len(items):
+            counters["comparisons"] += 1
+            if items[right] < items[candidate]:
+                candidate = right
+        if candidate == index:
+            return
+        items[index], items[candidate] = items[candidate], items[index]
+        counters["swaps"] += 1
+        index = candidate
+
+
+def heapify(items, counters):
+    """Postcondition: the heap order holds; precondition: none, any dense array will do."""
+    for index in range(len(items) // 2 - 1, -1, -1):
+        sift_down(items, index, counters)
+```
+
+从最后一个**有孩子**的下标往前扫，对每个下标做一次向下调整。之所以从后往前，是为了让「两个孩子已经满足堆序」这个前置条件成立——这与递归函数的归纳假设是同一件事。
+
+线性界可以按「节点还能向下走多少层」计数：能够向下至少 1 层的节点至多约 $n/2$ 个，能够向下至少 2 层的至多约 $n/4$ 个，至少 3 层的至多约 $n/8$ 个，以此类推。所有节点能够执行的向下移动总数因此满足
+
+$$\frac{n}{2} + \frac{n}{4} + \frac{n}{8} + \dots = O(n).$$
+
+每下降一层只做常数次比较与移动，所以总工作是 $O(n)$；另一方面，heapify 要处理 $\lfloor n/2 \rfloor$ 个非叶节点，这已经需要 $\Omega(n)$ 的基本工作，因此总复杂度是 $\Theta(n)$。逐个插入则是 $n$ 条根路径，每条最长 $h = \Theta(\log n)$，最坏总共 $O(n \log n)$；在同样的键上比较这两个数字就能看出差别。
+
+```python run id="alg.trees.heapify"
+import heapq
+import math
+
+def lcg_shuffle(values, seed=20240607):
+    """A deterministic permutation, so this cell's numbers are reproducible."""
+    state = seed
+    shuffled = list(values)
+    for index in range(len(shuffled) - 1, 0, -1):
+        state = (1103515245 * state + 12345) % (2 ** 31)
+        other = state % (index + 1)
+        shuffled[index], shuffled[other] = shuffled[other], shuffled[index]
+    return shuffled
+
+
+def sift_down(items, index, counters):
+    """Postcondition: the subtree at index satisfies the heap order, given both children do."""
+    while True:
+        left, right = 2 * index + 1, 2 * index + 2
+        candidate = index
+        for child in (left, right):
+            if child < len(items):
+                counters["comparisons"] += 1
+                if items[child] < items[candidate]:
+                    candidate = child
+        if candidate == index:
+            return
+        items[index], items[candidate] = items[candidate], items[index]
+        counters["moves"] += 2
+        index = candidate
+
+
+def heapify(items, counters):
+    """Postcondition: the heap order holds; the array stays dense, so the shape holds too."""
+    for index in range(len(items) // 2 - 1, -1, -1):
+        sift_down(items, index, counters)
+
+
+def push(items, key, counters):
+    """Postcondition: the key is in the array and the heap order holds."""
+    items.append(key)
+    counters["moves"] += 1
+    index = len(items) - 1
+    while index > 0:
+        parent = (index - 1) // 2
+        counters["comparisons"] += 1
+        if items[parent] <= items[index]:
+            break
+        items[index], items[parent] = items[parent], items[index]
+        counters["moves"] += 2
+        index = parent
+
+
+def order_holds(items):
+    """Postcondition: True iff every parent is at most its children, in this layout."""
+    for index in range(1, len(items)):
+        if items[(index - 1) // 2] > items[index]:
+            return False
+    return True
+
+
+size = 1000
+keys = lcg_shuffle(list(range(size)))
+
+orders = {
+    "ascending": list(range(size)),
+    "descending": list(range(size - 1, -1, -1)),
+    "shuffled": keys,
+}
+print(f"{'insertion order':>15} | {'n pushes':>10} | {'one heapify':>12}")
+for label, keys_in_order in orders.items():
+    by_pushes, push_counters = [], {"comparisons": 0, "moves": 0}
+    for key in keys_in_order:
+        push(by_pushes, key, push_counters)
+    by_heapify = list(keys_in_order)
+    heapify_counters = {"comparisons": 0, "moves": 0}
+    heapify(by_heapify, heapify_counters)
+    assert order_holds(by_pushes) and order_holds(by_heapify)
+    assert sorted(by_pushes) == sorted(by_heapify) == sorted(keys_in_order)
+    print(f"{label:>15} | {push_counters['comparisons']:10d} | {heapify_counters['comparisons']:12d}")
+print("n =", size, "| n log2(n) =", round(size * math.log2(size)))
+
+comparisons = [0]
+
+
+class CountingKey:
+    """An int wrapper that counts every ordering comparison, so heapq's own work is visible."""
+
+    __slots__ = ("value",)
+
+    def __init__(self, value):
+        self.value = value
+
+    def __lt__(self, other):
+        comparisons[0] += 1
+        return self.value < other.value
+
+
+wrapped = [CountingKey(key) for key in keys]
+heapq.heapify(wrapped)
+heapify_comparisons = comparisons[0]
+ordered = [heapq.heappop(wrapped).value for _ in range(len(wrapped))]
+print("heapq.heapify comparisons:", heapify_comparisons)
+print("heapq 1000 heappops: comparisons", comparisons[0] - heapify_comparisons)
+print("heapq output ascending:", ordered == sorted(keys))
+```
+
+三行使用同样的 1000 个键，只改变到达顺序。升序输入下，每次新键都不小于父节点，因此逐个插入只做一次父子比较而不向上移动；heapify 也不发生交换，但仍要检查父子关系，所以两者在这个输入上都是线性数量的比较。降序输入下，每个新键都是当前最小值，逐个插入会一直浮到根，因而触发了逐个插入的 $\Theta(n \log n)$ 最坏行为；同一输入上的 heapify 仍只有 $\Theta(n)$，渐近上省掉的是一个 $\log n$ 因子。这里实测为 7987 对 1982。
+
+固定洗牌样例得到 2128 对 1809，只能说明在这一个 $n = 1000$ 的输入上两者数值相近、逐个插入的最坏上界没有被触发；单个规模的实验推不出「洗牌输入」的渐近阶。能够无条件下结论的是：逐个插入最坏 $O(n \log n)$，一次建堆始终是 $\Theta(n)$。`heapq.heapify` 在同样的键上给出同一量级的比较次数，它是这套算法的库版本。
+
+## 堆不提供什么
+
+把堆与有序映射放在一起看，缺的那部分就是它换来的便宜：
+
+- **最大键**。小顶堆只保证父节点不大于孩子。至少有一个最大元素位于叶子：如果某个最大元素出现在内部节点，那么它的孩子既不能小于它（堆序），也不能大于全局最大值，因此孩子同样是最大元素；沿这样的孩子继续向下最终会到达一个包含最大元素的叶子。若所有键互不相同，则唯一最大键必定直接位于叶子。于是扫描全部叶子足以求最大值，最坏成本为 $\Theta(n)$。当前 $n = 1000$ 的堆有 500 个叶子，拿第一个叶子作初值后需要 499 次比较。
+- **任意键的查找**。堆序有时可以剪枝：寻找 $x$ 时，如果某节点已经大于 $x$，它的后代都不可能等于 $x$。但它不像 BST 那样能在每一步唯一决定「只走左边还是右边」，因此不存在由堆序给出的 $O(\log n)$ 任意键查找保证；最坏情形仍需检查 $\Theta(n)$ 个节点。这里的 912 次只是这个具体数组顺序下采用线性扫描找到 999 的实测值，不是所有堆查找都固定需要 912 次。
+- **按键序取出**。数组本身不承载全局键序；连续执行 `pop_min` 可以产生升序输出。建堆需要 $\Theta(n)$，随后 $n$ 次取出的总时间上界为 $O(n \log n)$，而最坏情形达到 $\Theta(n \log n)$。这构成一种堆排序。当前样例用了 14 993 次比较，约为 $1.50\,n\log_2 n$，只是这个具体输入与实现的实测常数。
+
+```python run id="alg.trees.heap-limits"
+import math
+
+
+def lcg_shuffle(values, seed=20240607):
+    """A deterministic permutation, so this cell's numbers are reproducible."""
+    state = seed
+    shuffled = list(values)
+    for index in range(len(shuffled) - 1, 0, -1):
+        state = (1103515245 * state + 12345) % (2 ** 31)
+        other = state % (index + 1)
+        shuffled[index], shuffled[other] = shuffled[other], shuffled[index]
+    return shuffled
+
+
+def sift_down(items, index, counters):
+    while True:
+        left, right = 2 * index + 1, 2 * index + 2
+        candidate = index
+        for child in (left, right):
+            if child < len(items):
+                counters["comparisons"] += 1
+                if items[child] < items[candidate]:
+                    candidate = child
+        if candidate == index:
+            return
+        items[index], items[candidate] = items[candidate], items[index]
+        counters["moves"] += 2
+        index = candidate
+
+
+def heapify(items, counters):
+    for index in range(len(items) // 2 - 1, -1, -1):
+        sift_down(items, index, counters)
+
+
+def pop_min(items, counters):
+    """Postcondition: the smallest key is removed and the heap order still holds."""
+    smallest = items[0]
+    last = items.pop()
+    if items:
+        items[0] = last
+        sift_down(items, 0, counters)
+    return smallest
+
+
+def max_by_leaf_scan(items, counters):
+    """Postcondition: the largest key. No invariant points to it, so the leaves get scanned."""
+    largest = items[len(items) // 2]
+    for index in range(len(items) // 2 + 1, len(items)):
+        counters["comparisons"] += 1
+        if items[index] > largest:
+            largest = items[index]
+    return largest
+
+
+def find_by_scan(items, key, counters):
+    """A linear-scan baseline; heap order gives no logarithmic one-path search guarantee."""
+    for item in items:
+        counters["comparisons"] += 1
+        if item == key:
+            return True
+    return False
+
+
+size = 1000
+keys = lcg_shuffle(list(range(size)))
+items = list(keys)
+counters = {"comparisons": 0, "moves": 0}
+heapify(items, counters)
+print("array is sorted:", items == sorted(items), "| root is the minimum:", items[0] == min(keys))
+
+scan = {"comparisons": 0}
+print("largest key by leaf scan:", max_by_leaf_scan(items, scan), "in", scan["comparisons"], "comparisons")
+
+scan = {"comparisons": 0}
+print("present key found by scan:", find_by_scan(items, 999, scan), "in", scan["comparisons"], "comparisons")
+
+sort_counters = {"comparisons": 0, "moves": 0}
+ordered = [pop_min(items, sort_counters) for _ in range(len(items))]
+print("heap sort comparisons:", sort_counters["comparisons"], "| ascending:", ordered == sorted(keys))
+print("n =", size, "| n log2 n =", round(size * math.log2(size)))
+```
+
+优先级队列的契约只承诺「最小」，堆就把其余能力换成了空间与常数：它不需要每个节点保存两个子引用，也不需要平衡不变量，代价是放弃按键序的一切操作。
+
+## 成本类别、空间与假设
+
+**规模参数**是元素数 $n$。对非空完全二叉树，高度由形状直接确定为 $h = \lfloor \log_2 n \rfloor$，不需要另外维护平衡不变量。
+
+**成本模型**：一次按键比较记 1，一次两个数组槽位的交换记 2 次移动。只看堆序修复本身，push 与 pop 最坏都只经过 $O(\log n)$ 层，并各自存在需要走 $\Theta(\log n)$ 层的输入。若进一步把底层动态数组的容量扩张也计入成本，则数组末尾追加使用前面介绍过的摊还模型，因此基于动态数组的 push 总体应理解为摊还 $O(\log n)$。
+
+**成本类别**：查最小为 $O(1)$；插入与取出最小的堆序调整最坏为 $\Theta(\log n)$；一次建堆为 $\Theta(n)$；连续取出全部元素的总时间最坏为 $\Theta(n \log n)$。这里堆结构本身不使用概率分析；摊还只来自底层动态数组的容量管理（见 <CrossRef id="algorithms.amortized" />）。
+
+**空间**：需要 $\Theta(n)$ 个数组槽位；在 Python 中这些槽位本身保存对象引用，但堆不需要为每个节点另外保存左、右孩子引用，因为父子关系由下标算术表达。动态数组的容量可能暂时大于元素数，这是容量与逻辑长度分离的常见情形。
+
+**假设**：元素之间存在全序，且比较是常数成本；相等元素的相对次序不在契约内（堆序只要求父子之间 `<=`），需要稳定次序时要另外保存序号；数组密集这一条由实现保证，任何允许删除任意位置操作的实现都必须自己重新维持形状。
+
+**实现对照**。Python 的 `heapq` 把堆当作普通 `list` 上的函数集合：`heapq.heapify` 一次建堆，`heapq.heappush` 与 `heapq.heappop` 分别是插入与取出最小，`heapq.heapreplace` 合并「取出最小再插入」，`heapq.nlargest` / `nsmallest` 是部分选择。库不提供按键序遍历，也不保证相等键的次序；需要按键序遍历时用 `sorted`，那已经离开了堆的契约。
+
+## 小结
+
+- 优先队列的契约只有插入、查最小、取出最小（以及可选的替换最小），不提供任意键查询与按键序遍历。
+- 堆有两条不变量：形状（完全二叉树）与顺序（父不大于子）；数组布局让形状按构造成立。
+- 插入沿一条路径向上调整，取出最小把最后一个元素搬到根再向下调整，两者都在 $O(\log n)$ 内维持两条不变量。
+- 一次建堆是 $\Theta(n)$：按「还能下降多少层」计数，总和是 $n/2 + n/4 + \dots = O(n)$，而处理 $\lfloor n/2 \rfloor$ 个非叶节点已经给出 $\Omega(n)$；逐个插入最坏只有 $O(n \log n)$。
+- 堆序与排序序是两件事：数组顺序不承载键序，最大键要扫描叶子，任意键的查找没有单路径保证（最坏 $\Theta(n)$），按键序取出需要连续 pop（最坏 $\Theta(n \log n)$）。

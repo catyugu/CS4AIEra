@@ -1,0 +1,257 @@
+---
+id: algorithms.binary-search
+slug: /algorithms/binary-search
+order: 10
+title: 二分查找与单调边界
+status: draft
+objectives:
+  - 写出二分查找的循环不变量，并用它解释半开区间 $[lo, hi)$ 的选择
+  - 说明每轮搜索区间至少减半，从而给出比较次数的上界
+  - 把精确查找写成 lower_bound 的一个特例，并处理重复元素与不存在的键
+  - 用单调谓词的边界定位描述二分查找的适用范围
+  - 指出常见的区间错误会如何改变结果，并用实测说明失配
+---
+
+有序映射那一节留下了「有序数组查找快、更新贵」的取舍，也把 `bisect` 当作工具用过；这一节把其中的查找独立出来看。当序列有序时，位置与键之间存在单调对应：键越大，它的位置越靠后。二分的全部内容就是利用这条单调性，每轮把候选区间砍掉一半。
+
+## 契约
+
+**前置条件**：序列 `items` 按非降序排列（重复元素允许）。
+
+| 操作 | 后置条件 |
+| --- | --- |
+| lower_bound | 返回第一个满足 `items[i] >= key` 的下标；不存在则返回 `len(items)` |
+| upper_bound | 返回第一个满足 `items[i] > key` 的下标；不存在则返回 `len(items)` |
+| 精确查找 | 若键存在，返回第一个等于 `key` 的位置；不存在则返回缺失标志 |
+
+精确查找可以建在 lower_bound 之上：先定位，再比较该位置的键是否等于目标。这样就避开了「找到就返回、否则缩小区间」里散布的相等判断，也把重复元素的情形统一处理掉。
+
+## 循环不变量与终止
+
+二分查找容易写错的地方都集中在区间的开闭上。用**半开区间** $[lo, hi)$ 表述可以消除大部分歧义，此时两条不变量是：
+
+```text
+items[0 .. lo)  里的键都 < key
+items[hi .. n)  里的键都 >= key
+```
+
+初始时 $lo = 0$、$hi = n$，两条都空成立。每轮取中点 $mid = lo + (hi - lo) // 2$，比较 `items[mid]` 与 `key`：
+
+- 若 `items[mid] < key`，由有序性可知下标不超过 $mid$ 的元素都小于 `key`，这些位置都不可能是 lower_bound，于是 $lo = mid + 1$；
+- 否则 `items[mid] >= key`，答案不会位于 $mid$ 的右侧，但 $mid$ 本身仍可能就是第一个满足位置，于是 $hi = mid$。
+
+循环在 $lo = hi$ 时结束，此时 $[lo, hi)$ 已经是空区间，两条不变量说明 $[0, lo)$ 全部小于 `key`、$[lo, n)$ 全部不小于 `key`。这个公共边界 $lo$ 正是第一个满足条件的位置；若所有元素都小于 `key`，它就是 $n$。
+
+**每轮至少减半**：设当前候选区间长度 $L = hi - lo > 0$，取 $mid = lo + \lfloor L/2 \rfloor$。若进入 $hi = mid$ 分支，新长度是 $\lfloor L/2 \rfloor$；若进入 $lo = mid + 1$ 分支，新长度是 $L - \lfloor L/2 \rfloor - 1 \le \lfloor L/2 \rfloor$。因而每轮之后都有 $L' \le \lfloor L/2 \rfloor$。从初始长度 $n$ 出发，经过 $t$ 轮有 $L_t \le \lfloor n / 2^t \rfloor$；对 $n \ge 1$，当 $2^t > n$ 时右边为 0，因此最坏迭代次数不超过 $\lfloor \log_2 n \rfloor + 1 = \lceil \log_2 (n+1) \rceil$。
+
+空数组 $n = 0$ 不做任何比较。每轮恰好做一次 `items[mid] < key` 的顺序比较，所以这就是 lower_bound 的最坏顺序比较次数，并且由某些输入达到——这也解释了 $n = 64$ 需要最多 7 次，而不是 $\lfloor \log_2 64 \rfloor = 6$ 次。
+
+```python run id="alg.ordering.lower-bound"
+import bisect
+import math
+
+
+def lower_bound(items, key, counters=None):
+    """Postcondition: the first index i with items[i] >= key, or len(items)."""
+    counters = counters if counters is not None else []
+    lo, hi = 0, len(items)
+    while lo < hi:
+        mid = lo + (hi - lo) // 2
+        counters.append(mid)
+        if items[mid] < key:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+
+def invariant_holds(items, key, lo, hi):
+    """Postcondition: True iff both halves of the [lo, hi) invariant hold."""
+    left = all(item < key for item in items[:lo])
+    right = all(item >= key for item in items[hi:])
+    return left and right
+
+
+size = 64
+items = [2 * index for index in range(size)]
+probes = list(range(-2, 2 * size + 3))
+
+mismatches = 0
+worst = 0
+invariant_ok = True
+for key in probes:
+    counters = []
+    position = lower_bound(items, key, counters)
+    worst = max(worst, len(counters))
+    if position != bisect.bisect_left(items, key):
+        mismatches += 1
+    if not invariant_holds(items, key, position, position):
+        invariant_ok = False
+
+print("probes:", len(probes), "| mismatches against bisect.bisect_left:", mismatches)
+print("worst comparisons:", worst, "| ceil(log2(n+1)) =", math.ceil(math.log2(size + 1)))
+print("invariant holds at every exit:", invariant_ok)
+```
+
+这 133 个探针键覆盖了小于全部元素、命中已有元素、落在相邻元素之间、大于全部元素四类边界情形；结果都与 `bisect_left` 一致，退出时两条不变量成立，实测最坏比较次数为 7，与 $\lceil \log_2 (64+1) \rceil$ 一致。
+
+## 重复元素与「不存在」
+
+序列允许重复，lower_bound 与 upper_bound 一起给出**等值区间**：所有等于 `key` 的元素恰好占据下标 $[lb, ub)$，出现次数是 $ub - lb$。
+
+```python run id="alg.ordering.equal-range"
+import bisect
+
+
+def lower_bound(items, key, counters=None):
+    counters = counters if counters is not None else []
+    lo, hi = 0, len(items)
+    while lo < hi:
+        mid = lo + (hi - lo) // 2
+        counters.append(mid)
+        if items[mid] < key:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+
+def upper_bound(items, key, counters=None):
+    """Postcondition: the first index i with items[i] > key, or len(items)."""
+    counters = counters if counters is not None else []
+    lo, hi = 0, len(items)
+    while lo < hi:
+        mid = lo + (hi - lo) // 2
+        counters.append(mid)
+        if items[mid] <= key:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+
+def count_by_scan(items, key):
+    """Postcondition: the number of elements equal to key, counted one by one."""
+    return sum(1 for item in items if item == key)
+
+
+size = 40
+items = sorted(index % 5 for index in range(size))
+
+print(f"{'key':>4} {'lower':>6} {'upper':>6} {'upper-lower':>12} {'scan':>6} {'found':>6}")
+counts_agree = True
+for key in range(-1, 7):
+    lower = lower_bound(items, key, [])
+    upper = upper_bound(items, key, [])
+    present = lower < len(items) and items[lower] == key
+    scanned = count_by_scan(items, key)
+    counts_agree = counts_agree and upper - lower == scanned
+    print(f"{key:>4} {lower:>6} {upper:>6} {upper - lower:>12} {scanned:>6} {str(present):>6}")
+
+print("equal range matches the scan count:", counts_agree)
+print("upper_bound agrees with bisect_right for all probes:",
+      all(upper_bound(items, key, []) == bisect.bisect_right(items, key) for key in range(-1, 7)))
+```
+
+上表里 $key = 3$ 出现 8 次，等值区间是 $[24, 32)$；不存在的键（如 $-1$、$5$）得到空区间，`upper - lower` 为 0，精确查找据此报告缺失。这一份契约只依赖「非降序」，不需要元素互不相同。
+
+## 单调谓词的边界定位
+
+把 lower_bound 的比较方向抽象出来，它找的是**第一个使谓词成立的位置**：定义 $p(i)$ 为 `items[i] >= key`，则 $p$ 在序列上是单调的（前面全假、后面全真），lower_bound 返回第一个真值的位置。
+
+这层抽象是二分查找适用范围的关键。设有限离散候选域按全序排列、谓词 $p$ 呈「前面全假、后面全真」的单调形态，并且我们能按下标或数值区间取中点，就可以定位第一个真值的位置；全部为假时，答案取候选域的右边界。典型问题是「求最小的整数 $x$ 使某个性质成立」：把可能的 $x$ 包在一个已知区间里，每轮在中点算一次判定函数。若一次判定的成本至多为 $T$、候选范围含 $m$ 个位置，二分部分的总成本是 $O(T \log m)$；若判定成本随 $x$ 变化，就要累加各轮的实际成本。搜索连续数值域时还必须另外指定精度或其他终止条件，不能指望有限次比较给出任意精度的实数边界。
+
+## 常见的区间错误
+
+同一份不变量写成不同的开闭形式都能得到正确的代码，把两种形式混用则会产生错误结果。常见的一处是把「$mid$ 已满足谓词」当成「越过答案」，写成 $hi = mid - 1$：这会跳过第一个满足位置本身。
+
+```python run id="alg.ordering.interval-hazards"
+import bisect
+import math
+
+
+def lower_bound(items, key, counters=None):
+    counters = counters if counters is not None else []
+    lo, hi = 0, len(items)
+    while lo < hi:
+        mid = lo + (hi - lo) // 2
+        counters.append(mid)
+        if items[mid] < key:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+
+def overshooting(items, key, steps=None):
+    """The tempting variant: a satisfied predicate at mid is treated as an overshoot."""
+    steps = steps if steps is not None else []
+    lo, hi = 0, len(items)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        steps.append(mid)
+        if len(steps) > 5 * len(items) + 10:
+            return None
+        if items[mid] >= key:
+            hi = mid - 1
+        else:
+            lo = mid + 1
+    return lo
+
+
+size = 64
+items = [2 * index for index in range(size)]
+shallow = [4 * index for index in range(size)]
+
+print(f"{'n':>6} {'worst comparisons':>18} {'ceil(log2(n+1))':>16}")
+for width in (8, 64, 512):
+    payload = [2 * index for index in range(width)]
+    worst = 0
+    for key in range(-2, 2 * width + 3):
+        counters = []
+        lower_bound(payload, key, counters)
+        worst = max(worst, len(counters))
+    print(f"{width:>6} {worst:>18} {math.ceil(math.log2(width + 1)):>16}")
+
+probes = range(-2, 2 * size + 3)
+mismatches = 0
+nonterminating = 0
+first_mismatch = None
+for key in probes:
+    got = overshooting(items, key, [])
+    expected = bisect.bisect_left(items, key)
+    if got is None:
+        nonterminating += 1
+    elif got != expected:
+        mismatches += 1
+        if first_mismatch is None:
+            first_mismatch = (key, got, expected)
+print("overshooting variant: mismatches", mismatches, "| did not terminate", nonterminating,
+      "| first mismatch (key, returned, expected):", first_mismatch)
+sparse_mismatches = sum(1 for key in probes if overshooting(shallow, key, []) != bisect.bisect_left(shallow, key))
+print("a sparser array (keys 0, 4, 8, ...): mismatches", sparse_mismatches, "of", len(list(probes)))
+```
+
+三行里最坏比较次数分别是 4、7、10，与 $\lceil \log_2 (n+1) \rceil$ 逐个相等：$n$ 翻 8 倍带来 3 次额外比较。而 $hi = mid - 1$ 的变体在 133 个探针里有 62 个给出错误结果（换成更稀疏的键时是 64 个），第一次失配出现在 $key = 1$：正确答案是 1，变体返回 0。原因是谓词在 $mid$ 成立时，答案可能就是 $mid$ 本身，越过它就把正确答案丢掉了。
+
+## 成本类别、空间与假设
+
+**规模参数**是数组长度 $n$。
+
+**成本模型**：一次按键比较记 1，随机访问一个元素记常数成本。
+
+**成本类别**：lower_bound 与 upper_bound 最多执行 $\lceil \log_2 (n+1) \rceil$ 次顺序比较，最坏时间为 $\Theta(\log n)$。基于 lower_bound 的精确查找还要做至多一次相等性检查，因此是「至多 $\lceil \log_2 (n+1) \rceil$ 次顺序比较 + 1 次存在性检查」，总时间仍是 $\Theta(\log n)$。等值区间需要一次 lower_bound 和一次 upper_bound，比较次数量级最多翻倍，仍为 $O(\log n)$。这些界不依赖期望或摊还，唯一的前提是序列有序。
+
+**空间**：迭代写法只用常数个额外变量，是 $O(1)$。递归写法会把区间长度的一半作为下一次的规模，占用 $\Theta(\log n)$ 栈空间，没有收益。
+
+**假设**：序列按非降序排列（维持这份顺序的代价见 <CrossRef id="algorithms.ordered-maps" />：有序数组插入要搬移元素，平衡树用形状换来 $O(\log n)$ 的更新）；支持 $O(1)$ 随机访问；比较是常数成本——长字符串或复杂键要把比较成本与比较次数分开计。
+
+**实现对照**。Python 的 `bisect` 模块直接实现这类边界定位：`bisect_left` 给出左边界，`bisect_right` 给出右边界。它们定位的是插入位置，比较过程使用 `<` 而不需要调用 `==`，因此精确查找仍要在拿到位置后自行检查元素是否等于目标。`insort_left` / `insort_right` 先二分定位，再调用序列的插入操作；对 Python `list` 来说，$O(\log n)$ 的定位会被后续 $O(n)$ 的元素搬移支配。使用 `key=` 参数时，排序与搜索还必须保持同一套键序规则。需要按键序做区间遍历时，库不提供额外结构，`bisect` 给出的是下标区间，取值仍要自己按区间切片。
+
+## 小结
+
+- 二分查找依赖「位置与键的单调对应」，它找的是第一个使单调谓词成立的位置。
+- 用半开区间 $[lo, hi)$ 与两条不变量描述循环：左侧全小于、右侧全不小于目标。
+- 每轮把候选区间缩到至多原来的一半；从 $n$ 个候选位置开始，lower_bound 最坏进行 $\lceil \log_2 (n+1) \rceil$ 次顺序比较，因此时间为 $\Theta(\log n)$。
+- 精确查找是 lower_bound 加一次相等检查；重复元素的出现次数由 $ub - lb$ 给出。
+- 区间开闭混用（例如 $hi = mid - 1$）会跳过第一个满足位置，实测会在多数探针上给出错误结果。

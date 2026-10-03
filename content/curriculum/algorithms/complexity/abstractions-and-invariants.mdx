@@ -7,7 +7,8 @@ status: draft
 objectives:
   - 区分问题规约、抽象契约与具体表示，并指出一条复杂度论断属于哪一层
   - 为一个自建结构写出表示不变量，并说明每个操作在什么位置重新建立它
-  - 用不变量检查器把错误定位到破坏它的那次操作，而不是等它变成错误答案
+  - 用不变量检查器把错误定位到破坏它的那次操作上
+  - 说明一份具体表示如何对应抽象状态，并指出其中哪些状态是冗余的
   - 说明同一契约的两种表示为什么在时间与空间上给出不同结论
 ---
 
@@ -22,22 +23,40 @@ objectives:
 | 层 | 这个例子里是什么 |
 | --- | --- |
 | 问题规约 | 一个栈，支持 push 与 pop，并且能随时回答当前最小元素 |
-| 抽象契约 | push(x) 之后 x 在栈顶；pop() 返回并移除栈顶；minimum() 返回当前元素中的最小值 |
+| 抽象契约 | 抽象状态是一个序列 $S$，加三个操作各自对 $S$ 的行为，见下表 |
 | 表示 | 元素用什么保存；最小值是按需重算，还是随元素一起缓存 |
 | 算法 | 每个操作怎样读写这些状态，以及什么时候重新计算缓存 |
 
-第二层单独拿出来就是**抽象数据类型**（abstract data type, ADT）：一组操作的集合，以及每个操作承诺什么，其中不含状态怎样保存。契约只描述调用方能观察到的东西：每个操作的前置条件与后置条件。前置条件由调用方负责——`pop` 要求栈非空，空栈上调用它的行为由契约规定（抛错、返回哨兵值或另有说明），实现不必承诺别的。后置条件由实现负责：`pop` 返回的值必须是此前 push 进去、且尚未被弹出的值里最后进入的那个。
+第二层单独拿出来就是**抽象数据类型**（abstract data type, ADT）：一个抽象状态，加上一组操作，以及每个操作对这个状态做什么。契约只说调用方能观察到的东西，因此下面这些都留在契约之外：元素用什么保存、缓存了什么、字段叫什么名字。
 
-契约里不出现数组、下标、缓存这些词，它们都属于表示。同一份契约可以有多种表示，而**复杂度论断属于表示与算法，不属于契约**：同一个 `minimum()`，在一种表示上要扫描全部元素，在另一种表示上只读一次缓存。下两节各给出一个例子。
+**抽象状态**是一个序列 $S$，元素按进入顺序排列。整份契约假定所有元素取自同一个可比较的有序域；否则「最小」在这些元素上根本没有定义（`push(1)` 之后 `push("x")`，`<` 对这两个值不成立）。
+
+| 操作 | 行为 |
+| --- | --- |
+| `push(x)` | 把 x 接到 $S$ 末尾 |
+| `pop()` | 若 $S$ 非空，返回并移除 $S$ 的最后一个元素；若为空，抛出约定异常 |
+| `minimum()` | 若 $S$ 非空，返回 $S$ 中的最小元素且不改变 $S$；若为空，抛出约定异常 |
+
+空栈上的行为也被规定，因此它不是未定义行为：契约把这一类输入显式写进了后置条件，调用方可以依赖这个失败行为。**前置条件**是另一条设计路线：它限制一个操作承诺后置条件的输入或抽象状态范围，满足前置条件是调用方的义务，违反前置条件时契约不承诺正常的后置条件。它是契约设计的选择，并不要求「客观上无法定义行为」——后面二分查找的前置条件是输入已经有序，无序输入当然可以执行，只是正确性承诺不覆盖它。这一课的两条边界各用一种写法：`pop` 与 `minimum` 把空栈写进契约的失败行为，「元素可比较」是整份契约的假设。
+
+契约里不出现数组、下标、缓存这些词，它们都属于表示。功能契约只规定抽象状态与操作的可观察语义，本身不决定复杂度：复杂度结论还要依赖具体表示、算法与成本模型，而实现也可以把复杂度上界额外作为公开的性能保证。同一份功能契约因此可以对应多种表示——同一个 `minimum()`，在一种表示上要扫描全部元素，在另一种表示上只读一次缓存。下两节各给出一个例子。
 
 ## 表示不变量
 
-表示确定之后，内部状态里就有一些关系必须始终成立。对「按需重算」的版本，关系就是元素列表本身；对「缓存最小值」的版本，还多一条：<Term id="invariant">不变量</Term>——**缓存的最小值等于当前所有元素的最小值，且只有栈空时它才为空**。
+**每个满足表示不变量的合法具体状态，都必须能解释为一个抽象状态**：非法状态不必有抽象含义，多个合法状态也可以对应同一个抽象状态。两种实现都用 `_values` 保存元素本身，`_values` 就直接表示 $S$；缓存实现里的 `_minima` 不表示 $S$ 的任何部分，它是为了让 `minimum()` 便宜而加进来的**冗余表示状态**——去掉它，抽象状态不变，只是 `minimum()` 得重新扫描。后面到哈希表会出现同一种结构：抽象状态是键到值的映射，具体状态是桶数组加上探测留下的墓碑。
 
-不变量是每组操作返回之前都必须成立的性质：
+**表示不变量**规定哪些具体状态是合法表示；在合法状态上，每个操作都必须实现抽象契约要求的状态转移。对「按需重算」的版本，内部关系只有 `_values` 本身；对缓存版本，还多一条：<Term id="invariant">不变量</Term>——`_minima` 与 `_values` 等长，且 `_minima[i]` 等于 `_values[:i+1]` 的最小值。
 
-- 它在操作执行过程中可以暂时不成立。`pop` 先移除元素、再修正缓存，中间那一刻缓存是过时的；要求是操作返回之前重新建立它。
-- 它只对实现可见。调用方看到的是 `minimum()` 的返回值，看不到缓存；换一种表示，不变量也跟着换。
+表示不变量沿着一条固定的归纳结构被建立与保持：
+
+```text
+构造器          建立 I：__init__ 返回时 I 必须成立
+每个公开操作     假设进入这个操作时 I 成立，证明它在正常返回前、
+                以及契约规定的异常退出前重新成立
+```
+
+初始化是基例，操作是归纳步，两者合起来才说明「I 在每一次调用边界上都成立」；这是后面每一节「不变量为什么保持」的统一模板。不变量在操作执行过程中可以暂时不成立：`pop` 先移除元素、再修正缓存，中间那一刻缓存是过时的，要求是操作返回之前重新建立它。正常返回与契约规定的异常退出都算在「返回之前」里。
+- 它是实现的内部证明义务，不属于调用方可以依赖的公开契约。调用方依赖的是契约规定的状态转移、返回值与失败行为；`_cached_min`、`_minima` 这些表示细节以及它们的不变量不在契约之内。
 - 它让每个操作只需维护少量关系，而不必在每次调用时从头检查全部状态——缓存值能省下扫描，就是因为这些关系被维护住了。
 - 违反不变量通常不会立刻报错。它先让实现所依赖的事实失效，然后在某次看起来无关的调用上表现为错误答案。
 
@@ -49,61 +68,84 @@ objectives:
 class MinStack:
     """Stack with a cached minimum.
 
-    Representation invariant: `minimum` equals the smallest live element,
-    and is None exactly when the stack is empty.
+    Abstract state: a sequence S of comparable elements.
+    Representation: _values holds S in order; _cached_min is redundant state
+    added so that minimum() does not have to scan.
+
+    Representation invariant: _cached_min is min(_values), and is None
+    exactly when _values is empty.
     """
 
     def __init__(self):
-        self.values = []
-        self.minimum = None
+        self._values = []
+        self._cached_min = None
 
     def push(self, value):
-        self.values.append(value)
-        if self.minimum is None or value < self.minimum:
-            self.minimum = value
+        self._values.append(value)
+        if self._cached_min is None or value < self._cached_min:
+            self._cached_min = value
 
     def pop(self):
-        value = self.values.pop()
-        self.minimum = min(self.values) if self.values else None
+        if not self._values:
+            raise IndexError("pop from an empty stack")
+        value = self._values.pop()
+        self._cached_min = min(self._values) if self._values else None
         return value
 
+    def minimum(self):
+        if self._cached_min is None:
+            raise IndexError("minimum of an empty stack")
+        return self._cached_min
+
     def violations(self):
-        """Every way the cached minimum disagrees with the elements."""
-        if not self.values:
-            if self.minimum is None:
+        """Every way the redundant state disagrees with the elements."""
+        if not self._values:
+            if self._cached_min is None:
                 return []
-            return [f"stack is empty, minimum={self.minimum}"]
-        smallest = min(self.values)
-        if self.minimum == smallest:
+            return [f"_cached_min={self._cached_min} on an empty stack"]
+        smallest = min(self._values)
+        if self._cached_min == smallest:
             return []
-        return [f"minimum={self.minimum}, smallest live element={smallest}"]
+        return [f"_cached_min={self._cached_min}, min(_values)={smallest}"]
 
 
 class ForgetfulMinStack(MinStack):
-    """pop() that returns the right value and leaves the cache stale."""
+    """pop() that returns the right element and leaves the cache stale."""
 
     def pop(self):
-        return self.values.pop()
+        if not self._values:
+            raise IndexError("pop from an empty stack")
+        return self._values.pop()
 
 
-def drain(stack):
-    for value in (5, 3, 7):
+def drive(stack, values):
+    """Run the operations, checking the invariant after every one of them."""
+    events = []
+    for value in values:
         stack.push(value)
-    trace = [f"pushed 5, 3, 7 -> minimum {stack.minimum}"]
-    for _ in range(2):
-        trace.append(f"popped {stack.pop()} -> minimum {stack.minimum}")
-    trace.append(f"violations: {stack.violations() or 'none'}")
-    return trace
+        events.append((f"push {value}", stack.violations()))
+    while True:
+        try:
+            popped = stack.pop()
+        except IndexError:
+            return events
+        events.append((f"pop {popped}", stack.violations()))
 
 
-for label, stack in (("restores:", MinStack()), ("forgets :", ForgetfulMinStack())):
-    for line in drain(stack):
-        print(label, line)
+for stack in (MinStack(), ForgetfulMinStack()):
+    print(type(stack).__name__)
+    first_bad = None
+    for step, (label, broken) in enumerate(drive(stack, (5, 3, 7))):
+        if broken and first_bad is None:
+            first_bad = label
+        verdict = "OK" if not broken else ("FIRST VIOLATION: " if first_bad == label else "still broken: ") + "; ".join(broken)
+        print(f"  {label:9s} {verdict}")
+    print(f"  first violation after: {first_bad or 'never'}")
 ```
 
-两个版本的差别只有 `pop` 里的一行：返回之前是否重新计算缓存。前两行输出完全相同——第一次弹出的 7 恰好不是最小值，缓存不需要变；差别出现在第三行：栈里只剩 5，缓存还留着 3。此时没有异常，`pop` 也返回了正确的值，错误只在下一次问 `minimum()` 时暴露，而且表现出来的是答案错，不是原因错。检查器把定位提前到那一次 `pop`。
+两个版本的差别只有 `pop` 里的一行：返回之前是否重新计算缓存。单元格在每一次修改之后立刻跑一次检查器，因此输出直接给出定位：正确的实现六步全 OK；忘记修正的版本前四步也 OK——弹出 7 时它本来就不是最小值，缓存不需要变——第一次违反出现在弹出 3 之后，因为 3 正是当时的最小值，而缓存仍留着 3。那一刻没有异常，`pop` 也返回了正确的元素；错误要到之后问 `minimum()` 时才表现为答案错。检查器的作用就是把定位提前到破坏它的那一次 `pop`。
 
-这项检查本身有成本：它遍历全部元素，把一次常数时间的调用变成 $O(n)$ 的扫描。所以检查器属于调试与教学路径，不属于热路径。
+这项检查本身有成本：它扫描全部元素，成本随当前元素个数线性增长。检查器属于调试与教学路径，不属于热路径。
 
 ## 同一个契约，两种表示
 
@@ -111,51 +153,75 @@ for label, stack in (("restores:", MinStack()), ("forgets :", ForgetfulMinStack(
 
 ```python run id="alg.adt.two-representations"
 class RescanMin:
-    """minimum() scans the live elements; nothing is cached."""
+    """Stack without redundant state: minimum() scans _values."""
 
     def __init__(self):
-        self.values = []
+        self._values = []
+        self._comparisons = 0
 
     def push(self, value):
-        self.values.append(value)
+        self._values.append(value)
 
     def pop(self):
-        return self.values.pop()
+        if not self._values:
+            raise IndexError("pop from an empty stack")
+        return self._values.pop()
 
     def minimum(self):
-        comparisons = 0
-        smallest = None
-        for value in self.values:
-            comparisons += 1
-            if smallest is None or value < smallest:
+        if not self._values:
+            raise IndexError("minimum of an empty stack")
+        smallest = self._values[0]
+        self._comparisons = 0
+        for value in self._values[1:]:
+            self._comparisons += 1
+            if value < smallest:
                 smallest = value
-        return smallest, comparisons
+        return smallest
+
+    def minimum_cost(self):
+        """Comparisons spent by the last minimum() call; instrumentation."""
+        return self._comparisons
 
     def slots(self):
-        return len(self.values)
+        return len(self._values)
 
 
 class CachedMin:
-    """minimum() reads a cache that push and pop keep correct."""
+    """Stack whose minimum() reads redundant state kept by push and pop.
+
+    Representation: _values holds S in order; _minima[i] is min(_values[:i+1]).
+    Representation invariant: len(_minima) == len(_values), and
+    _minima[i] == min(_values[:i+1]) for every index i.
+    """
 
     def __init__(self):
-        self.values = []
-        self.minima = []
+        self._values = []
+        self._minima = []
+        self._comparisons = 0
 
     def push(self, value):
-        best = value if not self.minima else min(value, self.minima[-1])
-        self.values.append(value)
-        self.minima.append(best)
+        best = value if not self._minima else min(value, self._minima[-1])
+        self._values.append(value)
+        self._minima.append(best)
 
     def pop(self):
-        self.minima.pop()
-        return self.values.pop()
+        if not self._values:
+            raise IndexError("pop from an empty stack")
+        self._minima.pop()
+        return self._values.pop()
 
     def minimum(self):
-        return self.minima[-1], 0
+        if not self._minima:
+            raise IndexError("minimum of an empty stack")
+        self._comparisons = 0
+        return self._minima[-1]
+
+    def minimum_cost(self):
+        """Comparisons spent by the last minimum() call; instrumentation."""
+        return self._comparisons
 
     def slots(self):
-        return len(self.values) + len(self.minima)
+        return len(self._values) + len(self._minima)
 
 
 def build(implementation, size):
@@ -165,26 +231,30 @@ def build(implementation, size):
     return stack
 
 
-header = f"{'n':>5} {'rescan: comparisons':>20} {'cached: comparisons':>20}"
+header = f"{'n':>5} {'agrees':>7} {'rescan: comparisons':>20} {'cached: comparisons':>20}"
 header += f" {'rescan: slots':>14} {'cached: slots':>14}"
 print(header)
 for size in (128, 256, 512):
     rescan = build(RescanMin, size)
     cached = build(CachedMin, size)
-    _, rescan_comparisons = rescan.minimum()
-    _, cached_comparisons = cached.minimum()
-    row = f"{size:>5} {rescan_comparisons:>20} {cached_comparisons:>20}"
+    agrees = rescan.minimum() == cached.minimum()
+    row = f"{size:>5} {str(agrees):>7} {rescan.minimum_cost():>20} {cached.minimum_cost():>20}"
     row += f" {rescan.slots():>14} {cached.slots():>14}"
     print(row)
 ```
 
-按需重算的表示把成本放在 `minimum()` 上：每问一次就扫一遍元素，比较次数等于当前元素个数。缓存表示把成本摊在每个元素上：为每个元素多保存一份「到这个位置为止的最小值」，`push` 与 `pop` 各多一次读写，而 `minimum()` 是读一次列表末尾。
+表里的比较次数是查询成本：扫描版每次调用 `minimum()` 要做「当前元素个数减一」次比较，缓存版查询时不做比较，只读一次 `_minima` 的末尾。缓存版把成本移到了别处：除第一个元素外，每次 `push` 都要把新元素与上一项前缀最小值比较一次；每个栈元素还对应 `_minima` 里的一个额外槽位，`pop` 要同步删掉这个槽位。查询 `minimum()` 时不再做元素间比较，只读 `_minima` 的最后一项。
 
-两种表示都满足契约，也各自维护自己的不变量；差别来自表示，不来自契约。所以「`minimum()` 是 $O(1)$」这句话本身不可检验，完整的写法是：在缓存表示上，`minimum()` 是 $O(1)$ 次读取，代价是每个元素多一个槽位以及 `push`、`pop` 上的额外读写；在按需重算的表示上，同一个操作是 $\Theta(n)$ 次比较。规模、表示与成本模型要跟结论一起给出，见 <CrossRef id="algorithms.cost-model" />。
+两个实现的公开操作完全一致：`minimum()` 返回同一个最小元素，第一列因此恒为 `True`。计数由 `minimum_cost()` 单独取回，它是为观察机制而加的仪器，不属于 ADT 契约——把它并进 `minimum()` 的返回值，就等于为了测量而改掉了契约，这一课要比较的两份实现也不再是同一份功能契约的两种表示。
+
+不变量在两种实现里都要维持，缓存版的两句保持性论证是：`push` 把元素接到 `_values` 末尾，同时把「新元素与上一个前缀最小值里较小者」接到 `_minima` 末尾，于是两个列表仍然等长，新位置上的值正是新前缀的最小值；`pop` 同时去掉两个列表的末尾元素，长度关系与前缀关系一起回到更短的前缀上。
+
+两种表示都满足契约，差别来自表示：同一个 `minimum()`，一种实现把成本放在每次查询上，另一种放在每次修改上。要把这个差别写成精确的复杂度表达式，需要成本模型与渐进记号，见 <CrossRef id="algorithms.cost-model" /> 与 <CrossRef id="algorithms.asymptotic-analysis" />。
 
 ## 小结
 
-- 问题规约、抽象契约与表示是三个不同的层次；复杂度论断属于表示与算法，不属于契约。
-- 表示不变量是每个操作返回之前都必须重新建立的性质；前置条件由调用方负责，两者不能互相替代。
-- 违反不变量通常延迟表现为错误答案；把不变量写成检查器可以把定位提前到破坏它的那次操作，代价是检查器自身的成本。
-- 同一契约的不同表示在时间与空间上给出不同结论；报出成本时必须同时给出表示、规模与成本模型。
+- 契约由抽象状态与操作的行为组成；功能契约不决定复杂度，复杂度结论还要依赖表示、算法与成本模型，实现也可以把复杂度上界作为额外的性能保证。
+- 每个满足表示不变量的合法具体状态都必须能解释为一个抽象状态，多个合法状态可以对应同一个抽象状态，其中一部分状态可以是冗余的。
+- 表示不变量是每个公开操作结束时都必须重新建立的性质，属于实现的内部证明义务，不是调用方可以依赖的公开契约。
+- 违反不变量通常延迟表现为错误答案；把不变量写成检查器可以把定位提前到破坏它的那次操作，代价是检查器自身的扫描成本。
+- 同一契约的不同表示在时间与空间上给出不同结论；把差别写成复杂度表达式需要下一课的成本模型与渐进记号。

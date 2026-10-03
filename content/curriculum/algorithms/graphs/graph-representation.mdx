@@ -1,0 +1,327 @@
+---
+id: algorithms.graph-representation
+slug: /algorithms/graph-representation
+order: 10
+title: 图的表示与不变量
+status: draft
+objectives:
+  - 把图写成显式的抽象数据类型：顶点集合、边集合、有向与无向、权重属于边
+  - 说明为什么顶点集合必须显式保存，孤立顶点不能因为「没有邻接项」而消失
+  - 写出邻接表、邻接矩阵与边列表三种表示各自的表示不变量
+  - 把「枚举一个顶点的邻居」「扫描全部邻接项」「查询某一特定边」当作三个不同的操作来计成本
+  - 给出遍历的成本口径：单源遍历只覆盖可达子图，最坏才是 $O(|V| + |E|)$
+---
+
+树是图的一种特例，哈希表的桶、递归的调用树、结构之间的引用，前面已经出现过图。这一节把它们当作显式结构来处理：把图建立成一个抽象数据类型，说清它的结构与不变量，以及后面几节的算法要依赖哪些操作接口。
+
+## 抽象状态
+
+图的基本抽象状态由顶点与边组成；加权图再附带一个定义在边上的权重函数：
+
+```text
+未加权图：G = (V, E)
+加权图：  G = (V, E, w)，其中 w: E -> W
+
+V: 有限顶点集合；允许为空
+E: 边集合；无向图的边是无序对 {u, v}，有向图的边是有序对 (u, v)
+w(e): 边 e 的权重；表示层不对权重的正负作任何限制
+```
+
+哪些算法要求单位权、非负权或允许负权，是后续最短路径算法自己的前置条件，不属于表示层。
+
+围绕这对集合，有四件事必须在契约里说清楚，它们决定了后面每一节能用什么操作、不能用什么操作。
+
+- **有向还是无向**。无向边是对称关系：$u$ 与 $v$ 相邻，等价于 $v$ 与 $u$ 相邻。有向边不是。
+- **加权还是无权**。**权重是边的属性**，不是顶点的属性：一条边有自己的成本、长度或容量。无权图可以看成所有边都具有同一个单位成本；这只是特例，表示层不必为此专设一种结构。
+- **顶点集合显式保存**。孤立顶点（度为 0）仍然属于 $V$。如果表示里只保存边，就无法区分「这个顶点不存在」和「这个顶点存在但没有边」。这一条在后面每一节都会用到：连通分量的计数、可达性与距离里的「不可达但存在」、最小生成树里的孤立点，都依赖它。
+- **本条主线默认有限简单图**：没有平行边（同一对顶点之间至多一条边），也没有自环。若允许自环，一条 $u \to u$ 的有向边立即构成一个长度 1 的有向环，这对后面的拓扑序与环检测是直接相关的差异。平行边与多重图不在本条主线范围。除非后续课时另行说明，`graphs` 的五节都沿用这个默认；某个算法额外依赖的条件仍在该课时局部重申（例如拓扑序要求有向图、Dijkstra 要求非负权、最小生成树要求无向加权图）。
+
+规模参数一律写作 $|V|$ 与 $|E|$，不用单个 $n$。在本节默认的无自环简单图中，$|E|$ 的取值范围是
+
+$$0 \le |E| \le \frac{|V|(|V| - 1)}{2} \quad \text{（无向）}, \qquad 0 \le |E| \le |V|(|V| - 1) \quad \text{（有向）}.$$
+
+两种情况下 $|E|$ 都可能达到 $\Theta(|V|^2)$，所以图的成本几乎总是由这两个量共同决定。稀疏与稠密的区别，正是由 $|E|$ 相对 $|V|^2$ 的大小描述的。
+
+## 邻接表
+
+最常用的表示是一个字典：每个顶点映射到它的邻居列表。
+
+```text
+表示不变量（无向简单图）
+1. adjacency 的键恰好覆盖 V；孤立顶点对应空邻居表
+2. v 出现在 adjacency[u] 里，当且仅当 u 出现在 adjacency[v] 里      （对称性）
+3. 每个邻居在同一个邻居表里至多出现一次                            （无平行边）
+4. u 不出现在 adjacency[u] 里                                     （无自环）
+5. 因此每条无向边恰好对应两个邻接项                               （表示冗余）
+```
+
+第 3 条与第 4 条是「有限简单图」这个默认在表示层的落地。少了它们，连续两次 `add_edge(u, v)` 仍然保持对称性，却已经违反课程默认的模型。
+
+对称性不是自动成立的：它由每一次插入与删除操作负责维持。删边时要删掉两个方向，只删一个方向就把结构留在了违反不变量的状态。这一点值得单独检查，因为许多图算法只要求「能枚举邻居」，而在不对称的表示上仍会给出看似合理的错误结果。
+
+无向邻接表的表示规模是 $|V| + 2|E| = \Theta(|V| + |E|)$：字典里的 $|V|$ 个表头加上 $2|E|$ 个邻接项。把常数写成 $|V| + 2|E|$ 是为了让「一条无向边占两个邻接项」这件事在数字上可见；笼统的 $O(|V| + |E|)$ 会丢掉这一项。注意这里的两个量不要混：**邻接项**只有 $2|E|$ 个，$|V|$ 那部分来自表头。
+
+## 邻接矩阵
+
+第二种表示是一个 $|V| \times |V|$ 的表。无向图的邻接矩阵是对称的：边 $\{u, v\}$ 存在时，第 $u$ 行第 $v$ 列与第 $v$ 行第 $u$ 列同时为真。
+
+```text
+表示不变量（无向简单图）
+1. matrix[i][j] 为真，当且仅当边 {u, v} 存在（i = index(u)，j = index(v)）
+2. matrix[i][j] 与 matrix[j][i] 恒等                        （对称性）
+3. matrix[i][i] 恒为假                                     （无自环）
+```
+
+若顶点本身不是 $0, \dots, |V| - 1$ 的连续整数，矩阵表示还需要一个双射
+
+$$index: V \to \{0, \dots, |V| - 1\}.$$
+
+因此实际的表示是「显式顶点集合 / 索引映射 + 矩阵」：索引映射用 $\Theta(|V|)$ 空间，矩阵用 $\Theta(|V|^2)$ 空间，总体仍是 $\Theta(|V|^2)$。孤立顶点正是由索引映射里的条目保留下来，只是它对应的整行没有边。
+
+无权图可以用布尔值，加权图用「不存在」的哨兵值（例如无穷大）与权重共存。矩阵的空间是 $\Theta(|V|^2)$，与 $|E|$ 无关。查询某一特定边只需要一次查表，这是它相对邻接表的优势；代价是枚举一个顶点的邻居必须扫一整行。
+
+## 边列表
+
+第三种表示是「一次扫描全部边」的表示：一个边序列，每项形如 $(u, v)$ 或 $(u, v, w)$。
+
+```text
+表示不变量（无向简单图）
+1. 顶点集合 V 单独保存，不能只保存边                    （否则孤立顶点消失）
+2. 每个边项 {u, v} 的两个端点都属于 V
+3. u != v                                             （无自环）
+4. 同一无向边至多出现一次；(u, v) 与 (v, u) 不作为两条不同的边重复出现
+5. 因此每条边在边列表里只保存一个边项
+```
+
+边列表的项数是 $|E|$，加上显式的 $|V|$ 个顶点，空间是 $\Theta(|V| + |E|)$。它对「枚举某个顶点的邻居」和「查询某条边」都不方便（都要扫一遍），但它把**全部边形成一个连续可迭代的序列**当作直接接口提供出来。邻接表和邻接矩阵也能导出同样的边序列：前者在无向图里要处理重复的方向，后者必须扫描大量不存在边的矩阵槽位。后续最短路径要反复扫描所有边做松弛、最小生成树要取出全部边按权重排序，这两类操作因此特别自然地使用边列表。
+
+## 三个操作，三种成本
+
+「图的成本」这个说法只有在指明操作之后才有意义。至少要把下面三件事分开：
+
+下表假定邻接表的每个邻居容器是**普通顺序列表**（若把邻居另存为哈希集合，查边的期望成本会变，那已经是另一种具体表示）。
+
+| 操作 | 邻接表 | 邻接矩阵 | 边列表 |
+| --- | --- | --- | --- |
+| 枚举顶点 $u$ 的全部邻居 | $\Theta(1 + \deg(u))$ | $\Theta(\lvert V \rvert)$ | $\Theta(1 + \lvert E \rvert)$ |
+| 扫描全部邻接项（有向图即全部出边项） | $2\lvert E \rvert = \Theta(\lvert E \rvert)$（有向：$\lvert E \rvert$） | $\Theta(\lvert V \rvert^2)$ | $\lvert E \rvert = \Theta(\lvert E \rvert)$ |
+| 查询特定边 $\{u, v\}$ | 最坏 $\Theta(1 + \deg(u))$ | $\Theta(1)$ | 最坏 $\Theta(1 + \lvert E \rvert)$（可能早停） |
+
+无向图有 $2|E|$ 个邻接项，所以第二行邻接表那一格是 $2|E|$；有向图只保存实际方向，出边项恰好 $|E|$ 个，第一行也改用出度 $\deg^+(u)$。
+
+这里最容易混的是两个量：**邻接项**只有 $2|E|$ 个，而**表示规模 / 全图工作量** $|V| + 2|E|$ 里的 $|V|$ 项来自每个顶点自己的表头与状态。把 $|V| + 2|E|$ 称作「邻接项的个数」是错的——$|V|$ 那一部分不是邻接项。这个区分正是下一节复杂度证明的基础。
+
+```python run id="alg.graphs.representation-costs"
+def build_adjacency_list(vertices, edges):
+    """Undirected adjacency list: every edge appears in both endpoints' lists."""
+    adjacency = {vertex: [] for vertex in vertices}
+    for u, v in edges:
+        adjacency[u].append(v)
+        adjacency[v].append(u)
+    return adjacency
+
+
+def build_adjacency_matrix(vertices, edges):
+    """Undirected adjacency matrix: a symmetric |V| by |V| table of booleans."""
+    index = {vertex: position for position, vertex in enumerate(vertices)}
+    size = len(vertices)
+    matrix = [[False] * size for _ in range(size)]
+    for u, v in edges:
+        matrix[index[u]][index[v]] = True
+        matrix[index[v]][index[u]] = True
+    return matrix, index
+
+
+vertices = ["a", "b", "c", "d", "e", "f"]
+edges = [("a", "b"), ("a", "c"), ("b", "c"), ("c", "d"), ("d", "e")]
+adjacency = build_adjacency_list(vertices, edges)
+matrix, index = build_adjacency_matrix(vertices, edges)
+edge_list = list(edges)
+
+items = sum(len(neighbours) for neighbours in adjacency.values())
+print("|V| =", len(vertices), "| |E| =", len(edges), "| isolated vertex: f")
+print("adjacency items:", items, "= 2|E|:", 2 * len(edges))
+print("adjacency list slots including the empty headers:",
+      len(vertices) + items, "= |V| + 2|E|")
+print("matrix slots:", len(vertices) ** 2, "| true slots:", sum(row.count(True) for row in matrix))
+print("edge list entries:", len(edge_list), "| explicit vertex list:", len(vertices))
+print("isolated f present in every representation:",
+      "f" in adjacency, "|", "f" in index,
+      "|", "f" in vertices, "| degree of f:", len(adjacency["f"]))
+
+print()
+print("query the specific edge (a, d):")
+steps = 0
+for neighbour in adjacency["a"]:
+    steps += 1
+print("  adjacency list: inspected", steps, "items | degree of a =", len(adjacency["a"]))
+print("  adjacency matrix: inspected 1 slot | value:", matrix[index["a"]][index["d"]])
+steps = 0
+found = False
+for u, v in edge_list:
+    steps += 1
+    if (u, v) == ("a", "d") or (v, u) == ("a", "d"):
+        found = True
+        break
+print("  edge list: inspected", steps, "entries | found:", found)
+
+print()
+print("enumerate the neighbours of a:")
+print("  adjacency list: read", len(adjacency["a"]), "items ->", adjacency["a"])
+steps = 0
+neighbours = []
+for position in range(len(vertices)):
+    steps += 1
+    if matrix[index["a"]][position]:
+        neighbours.append(vertices[position])
+print("  adjacency matrix: read", steps, "slots ->", neighbours)
+steps = 0
+neighbours = []
+for u, v in edge_list:
+    steps += 1
+    if u == "a":
+        neighbours.append(v)
+    elif v == "a":
+        neighbours.append(u)
+print("  edge list: read", steps, "entries ->", neighbours)
+```
+
+同一个图（$|V| = 6$、$|E| = 5$）在三行上的实测读数：查询边 $(a, d)$ 分别检查 2 个邻接项、1 个矩阵槽位、5 个边项；枚举 $a$ 的邻居分别读 2 个邻接项、6 个矩阵槽位、5 个边项。矩阵那一行的常数与 $|V|$ 绑定，边列表那一行与 $|E|$ 绑定——这正是上表两列的差别。三种表示都保留了度数为 0 的孤立顶点 $f$。
+
+无向图的对称性是一条需要操作来维持的不变量，下面这个单元格在一次插入、一次删除之后逐次检查它，并故意写入半条边看看检查器是否报警。
+
+```python run id="alg.graphs.undirected-invariant"
+def add_edge(adjacency, u, v):
+    """Postcondition: both directions exist, so the symmetry invariant holds."""
+    adjacency[u].append(v)
+    adjacency[v].append(u)
+
+
+def remove_edge(adjacency, u, v):
+    """Postcondition: neither direction survives."""
+    adjacency[u].remove(v)
+    adjacency[v].remove(u)
+
+
+def check_symmetry(adjacency):
+    """Invariant: v appears in u's list exactly when u appears in v's list."""
+    for u, neighbours in adjacency.items():
+        for v in neighbours:
+            if u not in adjacency[v]:
+                return False, (u, v)
+    return True, None
+
+
+vertices = ["a", "b", "c", "d"]
+adjacency = {vertex: [] for vertex in vertices}
+
+for step, (u, v) in enumerate([("a", "b"), ("b", "c"), ("c", "d"), ("d", "a")], 1):
+    add_edge(adjacency, u, v)
+    ok, witness = check_symmetry(adjacency)
+    print(f"insert {step}: {u}-{v} | symmetric: {ok} | adjacency items:",
+          sum(len(items) for items in adjacency.values()))
+
+remove_edge(adjacency, "b", "c")
+ok, witness = check_symmetry(adjacency)
+print("after removing b-c | symmetric:", ok, "| adjacency items:",
+      sum(len(items) for items in adjacency.values()))
+
+adjacency["a"].append("c")
+ok, witness = check_symmetry(adjacency)
+print("after writing only half of the edge a-c | symmetric:", ok, "| first witness:", witness)
+adjacency["a"].remove("c")
+ok, witness = check_symmetry(adjacency)
+print("after undoing that half edge | symmetric:", ok)
+```
+
+删边之后对称性依然成立；只写入一个方向的 $a$-$c$ 立刻被检查器抓住，并指出见证 $(a, c)$。这个检查器只覆盖表示不变量中的对称性这一项；完整表示还必须维持无重复邻居、无自环等简单图约束。这类「不变量检查器」比注释更有用：它是可执行的断言，能在外来代码或迁就性的快速修改上直接失败。
+
+边列表的项数等于 $|E|$，而邻接表在同一个图上要访问 $2|E|$ 个邻接项、矩阵则占用 $|V|^2$ 个槽位。下面换一个更大的稀疏图，把这些量与权重一起量出来。
+
+```python run id="alg.graphs.edge-list-and-density"
+def read_adjacency_items(adjacency):
+    """Count every adjacency item in the whole representation."""
+    steps = 0
+    for neighbours in adjacency.values():
+        for _ in neighbours:
+            steps += 1
+    return steps
+
+
+def scan_edge_list(weighted_edges):
+    """Count one pass over the global edge sequence."""
+    steps = 0
+    for _ in weighted_edges:
+        steps += 1
+    return steps
+
+
+vertices = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
+weighted_edges = [("a", "b", 3), ("a", "c", 1), ("b", "d", 4), ("c", "d", 1),
+                  ("d", "e", 5), ("e", "f", 9), ("f", "g", 2), ("g", "a", 6),
+                  ("c", "g", 5), ("b", "e", 3), ("d", "h", 5), ("h", "a", 8)]
+adjacency = {vertex: [] for vertex in vertices}
+for u, v, _ in weighted_edges:
+    adjacency[u].append(v)
+    adjacency[v].append(u)
+
+items = read_adjacency_items(adjacency)
+print("|V| =", len(vertices), "| |E| =", len(weighted_edges), "| isolated vertex: i")
+print("adjacency items:", items, "= 2|E|:", 2 * len(weighted_edges))
+print("representation size including the empty headers:",
+      len(vertices) + items, "= |V| + 2|E|")
+print("one pass over the edge list:", scan_edge_list(weighted_edges),
+      "= |E| =", len(weighted_edges))
+print()
+print("the isolated vertex keeps its own empty list:", len(adjacency["i"]), "items",
+      "| still present in the vertex collection:", "i" in adjacency)
+print("total weight by scanning the global edge list:",
+      sum(weight for _, _, weight in weighted_edges),
+      "| weights read:", len(weighted_edges))
+print("degree of d via adjacency list:", len(adjacency["d"]))
+print()
+matrix_slots = len(vertices) ** 2
+edge_list_entries = len(weighted_edges) + len(vertices)
+print("slots for the same graph:")
+print("  adjacency matrix:", matrix_slots, "slots, of which", items, "are edge slots")
+print("  edge list plus explicit vertices:", edge_list_entries, "entries")
+print("  density |E| / |V|^2 =", round(len(weighted_edges) / matrix_slots, 3),
+      "-> the matrix stores mostly empty slots here")
+```
+
+三个表示都保留了孤立顶点 $i$：它在邻接表里是一条空邻居表，在索引映射里有自己的条目（因此矩阵里也有一行），在显式顶点集合里有一个元素。稀疏图（这里 $|E| / |V|^2 = 0.148$）上矩阵的大部分槽位是空的，而边列表的项数恰好是 $|E|$。
+
+## 遍历的成本口径
+
+后面两节会写遍历。在那之前先把成本口径定下来，否则同一个 $O(|V| + |E|)$ 会被用出不同的含义。
+
+在邻接表上，标准遍历的工作分成两类，分开算才不会把 $|V|$ 误当成「凑出经典公式」的常数项：
+
+```text
+顶点状态与 frontier 操作：每个被发现的顶点只做常数次        -> Theta(|V_R|)
+邻接项检查：每个已到达顶点的邻居表扫描一次                  -> Theta(|E_R|)
+```
+
+第二类里，有向图共检查 $|E_R|$ 个出边项，无向图共检查 $2|E_R|$ 个邻接项，两者都是 $\Theta(|E_R|)$。于是单源遍历的总成本是
+
+$$\Theta(|V_R| + |E_R|),$$
+
+其中 $V_R$ 是源点可达的顶点集合、$E_R$ 是这一段里的边。当源点能到达全部顶点时，它退化为 $\Theta(|V| + |E|)$。对无向图，这个条件等价于「源点所在的连通分量就是整张图」；对有向图不能把这句简称为「图连通」。
+
+要处理全部顶点，需要从每个尚未发现的顶点重新开始一次遍历。邻接表下各次遍历的顶点集合与邻接项合起来各自只被处理一次，因此全图遍历仍是 $\Theta(|V| + |E|)$。
+
+其它两种表示的单源遍历成本不同。矩阵表示下每发现一个顶点要扫描它的一整行，成本是 $\Theta(|V_R| \cdot |V|)$——只有 $V_R = V$（或做完整全图遍历）时才成为 $\Theta(|V|^2)$。普通边列表则不适合按顶点扩展邻居：每扩展一个顶点都可能重新扫描全部 $|E|$ 条边，这样实现遍历最坏可达 $\Theta(|V_R| \cdot |E|)$；它的优势是全局扫描边，而不是按顶点索引邻居。
+
+因此稀疏图上的 BFS 与 DFS 通常使用邻接表或其它按顶点索引邻居的稀疏表示，而不是稠密邻接矩阵：$|E| \ll |V|^2$ 时，扫描大量空槽位是纯粹的浪费。
+
+上面的 $\Theta(|V_R| + |E_R|)$ 假定访问状态按需建立（未出现在状态表中的顶点视作未发现），或者状态存储已由外层环境初始化好。若一次单源调用先显式初始化全部 $|V|$ 个顶点的状态，那一步本身就要另计 $\Theta(|V|)$，整个调用的成本是 $\Theta(|V| + |E_R|)$——这是下一节实现遍历时必须遵守的接口。
+
+## 小结
+
+- 未加权图的抽象状态是 $G = (V, E)$，加权图是 $G = (V, E, w)$，其中 $w: E \to W$；$V$ 必须显式保存，孤立顶点不能因为「没有邻接项」而消失。
+- 有向与无向、加权与无权都是契约的一部分；权重属于边，不属于顶点；本条主线默认有限简单图，自环会立即构成有向环。
+- 三种表示各有不变量：邻接表的对称性（无向）、矩阵的对称性与对角线语义、边列表中「顶点单独保存」这一条。
+- 邻接表的空间写作 $|V| + 2|E| = \Theta(|V| + |E|)$；矩阵是 $\Theta(|V|^2)$；边列表是 $\Theta(|V| + |E|)$，它提供的接口是「把边当成一个整体序列」。
+- 枚举一个顶点的邻居、扫描全部邻接项、查询特定边是三个不同的操作，成本分别是 $\Theta(1 + \deg(u))$ / $2|E| = \Theta(|E|)$ / 各表所示，不能笼统写成「图的成本」；邻接项只有 $2|E|$ 个，$|V|$ 那部分来自每个顶点的表头与状态。
+- 邻接表上的单源遍历工作量为 $\Theta(|V_R| + |E_R|)$（假定访问状态按需建立）；当源点能够到达全部顶点时成为 $\Theta(|V| + |E|)$。对有向图不能把「源点能够到达全部顶点」简称为「图连通」。覆盖全体顶点的重启遍历同样是 $\Theta(|V| + |E|)$。
+- 规模参数统一使用 $|V|$ 与 $|E|$，稀疏与稠密的区别靠 $|E|$ 与 $|V|^2$ 的相对大小描述。

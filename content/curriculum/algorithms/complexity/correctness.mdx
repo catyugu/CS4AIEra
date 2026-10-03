@@ -1,0 +1,171 @@
+---
+id: algorithms.correctness
+slug: /algorithms/correctness
+order: 40
+title: 正确性、循环不变量与终止
+status: draft
+objectives:
+  - 把一段代码的规约写成前置条件与后置条件，说清什么样的初始状态允许执行、结束后必须成立什么性质
+  - 区分部分正确与终止，并说明为什么两者必须分开论证
+  - 为一个循环写出不变量，并按初始化、保持、退出三步论证后置条件
+  - 用每轮严格下降的良基度量论证终止
+  - 用一个反例推翻过强的主张，并说明搜索没找到反例为什么不是证明
+---
+
+前两课把成本写成了可检验的量，这一课处理另一个问题：这段代码算出的答案对不对。正确性主张必须写成足够明确、可以判定真假的命题。「这个函数返回最大值」还不是一条足够完整的正确性主张——它没有写清输入域与「最大值」的契约；「对任意非空、且元素属于同一个全序域的有限列表，返回值是列表中不小于任何元素的元素」才写清了适用范围与必须满足的性质。检验它的方式有两种：证明，和反例。
+
+## 规约：前置条件与后置条件
+
+一段代码的**规约**由前置条件与后置条件组成。前置条件描述允许执行开始时具有什么状态；后置条件描述执行结束后必须成立的性质，它可以关联初始状态、最终状态与返回结果。对纯函数，后置条件通常退化成输入与返回值的关系；对会修改数据结构的操作（后面的 `push`、`insert`、`delete`），后置条件还必须说明状态怎样改变，而且可能没有有意义的返回值。如果契约允许把异常当作一种结果，就要写明「抛出什么」属于哪种情况——空栈 `pop` 这类操作以后会用上这一条。
+
+以从列表里取最大值的一族实现为例。后置条件是：返回值属于输入列表，且输入中不存在比它更大的元素。前置条件还要覆盖实现真正用到的操作：这一族实现在比较元素，所以契约必须要求元素属于同一个全序域（两两可比，且比较满足全序的公理）——只说「非空」不够，`[1, "x"]` 满足非空却无法比较。边界情况按同样的原则处理：要么要求列表非空，要么让契约规定空输入时的行为（例如返回 `None`）。两种选择都可以，但必须选一个写下来。
+
+后置条件描述输出与输入的关系，实现方式不属于规约：「返回输入中的最大值」是后置条件，「先排序再取最后一个元素」不是——那是实现，换一种写法不改变契约。边界情况必须由规约覆盖：要么一般条件已经涵盖它（「全部相等」「重复元素」通常已被后置条件涵盖），要么由前置条件排除，要么为它规定专门的结果或异常行为。漏掉的那条会在别人调用时变成争论。
+
+## 部分正确与终止是两件事
+
+**部分正确**：对每个满足前置条件的初始状态，如果执行结束，则结束状态与结果满足后置条件。**终止**：对每个满足前置条件的初始状态，执行都在有限步内结束。两条一起成立才是**总正确**。两者的定义域相同，都只讨论满足前置条件的那些状态。
+
+分开的理由是它们各自会单独成立：一个永不返回的循环从不给出错误答案，部分正确成立而毫无用处；一个迅速返回但答案算错的函数终止成立而毫无用处。证明终止也使用与证明答案正确不同的工具，见下文。
+
+## 循环不变量
+
+**循环不变量**是在**循环头**——每次检查循环条件之前——都成立的性质。这个位置既包括第一次检查，也包括最后一次条件为假、循环即将退出时的检查。它对循环体的要求是：若循环头满足不变量且循环条件为真，则执行一次循环体后，回到下一次循环头时不变量仍然成立。
+
+它与 <CrossRef id="algorithms.abstractions-and-invariants" /> 里的 <Term id="invariant">表示不变量</Term> 共用「不变量」这个词，作用域却不同。表示不变量约束一个数据结构的合法状态，在两次操作之间成立；循环不变量约束一段循环的局部状态，在每轮迭代的边界上成立。两者都是「必须在某处成立、且被操作或循环体维持」的性质，把作用域写清楚就不会混。
+
+论证一个循环满足后置条件分三步，写成程序状态的形式（$P$ 是前置条件，$B$ 是循环条件，$Q$ 是后置条件；$\{A\}\ S\ \{B\}$ 表示「若执行 $S$ 前的状态满足 $A$，那么该次执行一旦结束，结束状态就满足 $B$」——花括号只括状态断言，整个三元组才表达程序关系，而且它本身不声称 $S$ 一定终止）：
+
+1. **初始化**：$\{P\}\ S_{\text{init}}\ \{I\}$——从满足前置条件的状态执行循环之前的初始化代码之后，第一次到达循环头时 $I$ 成立。循环之前若没有初始化代码，这一步退化成 $P \Rightarrow I$。
+2. **保持**：$\{I \wedge B\}\ S_{\text{body}}\ \{I\}$——若循环头满足 $I$ 且循环条件为真，执行一次循环体之后，回到下一次循环头时 $I$ 仍然成立。这一步必须带上循环体这次状态转移；写成 $I \wedge B \Rightarrow I$ 是恒真的逻辑命题，没有表达「执行」。这一步用循环体的代码说话。
+3. **退出**：$I \wedge \neg B \Rightarrow Q$——循环条件为假时，不变量与条件的否定一起推出后置条件。
+
+第三步不证明循环会结束，它只是把循环结束时的状态与后置条件接上；循环是否结束是终止论证的义务。两条义务都完成，才算证明了这个循环。
+
+## 例子：前缀和与它的不变量
+
+```python run id="alg.correctness.loop-invariant"
+def running_totals(values):
+    """Precondition: values is a finite sequence of integers.
+
+    Postcondition: result[k] == sum(values[:k+1]) for every k, and the
+    result has the same length as the input.
+    """
+    totals = []
+    total = 0
+    for value in values:
+        total += value
+        totals.append(total)
+    return totals
+
+
+def per_element_totals(values):
+    """Same signature; the running total restarts at every element."""
+    totals = []
+    for value in values:
+        totals.append(value)
+    return totals
+
+
+def first_violation(values, totals):
+    """Check the postcondition position by position on a finished run.
+
+    It reports the first index where the output departs from the spec
+    totals[j] == sum(values[:j+1]), or a length mismatch.
+    """
+    for index in range(min(len(totals), len(values))):
+        expected = sum(values[:index + 1])
+        if totals[index] != expected:
+            where = f"index {index}: totals[{index}]={totals[index]}, expected {expected}"
+            return where
+    if len(totals) != len(values):
+        return f"produced {len(totals)} values for {len(values)} inputs"
+    return None
+
+
+sample = [3, 1, 4, 1, 5]
+for name, implementation in (("accumulating", running_totals), ("restarting  ", per_element_totals)):
+    totals = implementation(sample)
+    print(f"{name} output={totals}  first violation={first_violation(sample, totals)}")
+```
+
+第二个实现在 index 1 就被检查器抓住——它的输出只有第一个位置与正确输出相同。检查器给出的是**第一个违反后置条件的输出位置**，而不是循环内部第一次破坏不变量的位置：它说明最终结果从哪里开始违约，不说明内部状态在哪一步首次偏离。这里检查的是完整运行之后的后置条件；要在循环头逐步检查候选不变量，必须在循环体里插入断言，见 <CrossRef id="algorithms.abstractions-and-invariants" /> 里的不变量检查器（那里展示的是同一种运行时断言技术，检查的谓词与作用域不同）。即使在循环体里加了断言，它也只能检查实际执行过的那些轨迹；跑再多次没有触发断言，仍然替代不了初始化与保持性的证明。
+
+这段代码的候选不变量必须比「`totals[k]` 等于前缀和」更强，否则保持步用不了。把 `for value in values` 的进度记作 $i$（本轮开始时已处理 $i$ 个元素），不变量是：
+
+```text
+len(totals) == i
+total == sum(values[:i])
+对每个 0 <= k < i：totals[k] == sum(values[:k+1])
+```
+
+单元格里的 `first_violation` 仍然只检查完整运行之后的后置条件；上面这三条是证明中使用的候选循环不变量——它看不到内部的 `total`，也没有逐轮的 $i$。要把它们做成运行时检查，必须在循环头逐轮检查当时的 $i$、`total` 与 `totals`。三步于是闭合：$i = 0$ 时三条都成立，是初始化；读入 `values[i]` 后 `total` 前进一个元素的和、`totals` 追加一项，得到 $i + 1$ 的版本，是保持；退出时 $i = \text{len}(values)$，输出长度与逐项前缀和都符合后置条件。
+
+## 终止需要良基度量
+
+终止的一种标准证明方式，是给出一个**取值于良基集合、并在每轮严格下降的度量**（分治那一课用的是同一个概念）：它在每次迭代后严格减小，并且取值落在没有无穷下降链的集合上（非负整数、有限集合的大小都属于这类）。「严格递减 + 有下界」不够：$1, 1/2, 1/4, \dots$ 严格递减且有下界，却可以无限进行；真正起作用的是取值集合本身没有无穷下降链。另外，在每次循环体执行本身终止的前提下，良基度量每轮严格下降才排除了无限多轮——循环体里若还含有可能不终止的子过程，这一步说明不了问题。
+
+按序列长度迭代的循环，这个度量就是「尚未处理的元素个数」。`while n > 0: n //= 2` 的下降度量是 `n`：对非负整数 $n$ 每轮至少减半，因此 $n \ge 1$ 时迭代次数不超过 $\lfloor \log_2 n \rfloor + 1$ 次。保证终止的是 $n$ 取值于非负整数（不存在无穷下降链），而不是「有下界 0」这个事实本身。
+
+反过来，忘记推进的循环没有可用的下降度量：循环体若从不改变 `index`，`while index < len(values)` 就永远为真，终止主张不成立。这不是「跑一会儿看看会不会停」能回答的问题——终止是一条对所有输入成立的主张，观测只能覆盖跑过的那些输入。成本与终止都靠机制论证，这也是两课共同的纪律。
+
+## 反例推翻主张
+
+一个反例就足以推翻一条全称主张，而且最小的反例往往很短。反例还必须满足前置条件：不满足前置条件的输入不在主张的作用范围内，用它「反驳」是无效的。
+
+```python run id="alg.correctness.counterexample"
+from itertools import product
+
+
+def largest(values):
+    """Precondition: values is a non-empty finite sequence of integers.
+
+    Postcondition: return an element of values that no element exceeds.
+    """
+    best = values[0]
+    for value in values[1:]:
+        if value > best:
+            best = value
+    return best
+
+
+def largest_from_zero(values):
+    """Same preconditions and postcondition claimed; the running best starts at 0."""
+    best = 0
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+def first_counterexample(implementation, bounds, max_length):
+    """Smallest enumerated input where the implementation breaks the contract."""
+    for length in range(1, max_length + 1):
+        for candidate in product(bounds, repeat=length):
+            if implementation(candidate) != max(candidate):
+                return candidate, implementation(candidate), max(candidate)
+    return None
+
+
+bounds = range(-3, 4)
+for name, implementation in (("largest           ", largest), ("largest_from_zero ", largest_from_zero)):
+    found = first_counterexample(implementation, bounds, 3)
+    if found is None:
+        print(f"{name} no counterexample up to length 3 with values in -3..3")
+    else:
+        candidate, actual, expected = found
+        print(f"{name} counterexample {candidate}: returned {actual}, contract says {expected}")
+```
+
+第二个实现把所有元素都小于 0 的输入算错，长度为 1 的输入 `(-3,)` 就足以暴露它。注意它违反的是后置条件的第一条：返回的 `0` 并不属于输入列表，所以「最大值」不能只写成一个大小比较条件。第一个实现的输出是「这个范围里没找到反例」，这不构成证明：范围之外可能还有反例，而这个实现之所以正确，靠的是循环不变量——`best` 始终是已扫描部分的最大值，退出时已扫描部分是整个列表，于是满足后置条件。
+
+两种证据的分工值得记住：反例用于推翻，搜索用于定位；证明用于确立。一段代码通过再多测试，也只说明在这些输入上没发现问题。
+
+## 小结
+
+- 规约由前置条件与后置条件组成；后置条件写执行结束后必须成立的性质，可以关联初始状态、最终状态与结果，实现方式不属于规约。
+- 部分正确与终止在同一前置条件下分开论证：永不返回的程序仍可能满足部分正确性，返回错误答案的程序也可能满足终止性；总正确要求两者同时成立。
+- 循环不变量在循环头成立，包括最后一次条件为假的检查；初始化与保持各自证明相应程序片段建立、保持 $I$（$\{P\}\ S_{\text{init}}\ \{I\}$ 与 $\{I \wedge B\}\ S_{\text{body}}\ \{I\}$），退出证明 $I \wedge \neg B \Rightarrow Q$，退出步不证明循环会结束。
+- 表示不变量约束数据结构的合法状态，循环不变量约束循环的局部状态；名称相同，作用域不同。
+- 终止由每轮严格下降的良基度量证明（严格递减加有下界不够），且以循环体本身终止为前提；观测不能替代它。
+- 反例必须满足前置条件，一个就推翻主张；搜索没找到反例不是证明，运行时断言也只覆盖执行过的轨迹。

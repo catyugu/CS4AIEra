@@ -1,0 +1,364 @@
+---
+id: algorithms.dags-and-topological-order
+slug: /algorithms/dags-and-topological-order
+order: 30
+title: DAG、拓扑序与环检测
+status: draft
+objectives:
+  - 给出拓扑序的定义与两种等价表述，并证明「存在拓扑序等价于无有向环」
+  - 用三色 DFS 检测有向环，写出回边与环之间的双向论证
+  - 证明 DFS 完成后 finish 顺序的反转是拓扑序，并区别边的三种情形
+  - 写出按入度出队的 Kahn 算法，证明输出是拓扑序，并用「输出不足 |V| 个顶点」判定环
+  - 给出拓扑序唯一的 Kahn 单候选判据，并用小规模穷举核对
+---
+
+<CrossRef id="algorithms.graph-traversal" /> 建立了访问状态、parent forest 与两类成本，但那里的结论对无向图和有向图都只说「从源点可达的部分」。有向图上还有一个新问题：能不能把顶点排成一条线，使所有边都从左指向右。这一节回答它，并顺带给出环的存在性判定。
+
+本节沿用前面的默认表示：有限简单**有向**图（无自环、无平行边），邻接表保存出边，顶点集合 $V$ 显式保存。规模参数一律用 $|V|$ 与 $|E|$。
+
+## 有向可达与环
+
+有向图里的「可达」沿有向路径定义，方向不可逆。上一节已经说明，从每个未发现顶点重启的遍历在有向图上只得到一个**遍历森林**，它的划分可能依赖顶点的处理顺序，因此不能当作分量的分解。
+
+**有向环**是一列顶点 $v_0, v_1, \dots, v_k$，满足 $k \ge 1$、$v_k = v_0$、$v_0, \dots, v_{k-1}$ 两两不同，并且对每个 $0 \le i < k$ 都有有向边 $(v_i, v_{i+1})$。
+
+「除首尾外两两不同」这个条件是定义的一部分：只要求「闭合的有向行走」会把更松的重复结构也算进来，而下面所有论证（回边、Kahn 判环）用的都是这个精确形状。它直接给出几个推论：
+
+```text
+有向简单图（本节默认）：最短的有向环是 u -> v -> u，两条边
+若允许自环：v -> v 是长度 1 的有向环
+无向简单图：一条边不能单独成环，环至少有 3 条边
+```
+
+判定方法对含自环的图同样有效，本节只是默认不出现自环。
+
+```text
+关键区别
+无向图：一条边不能单独构成环，环至少需要 3 条边
+有向图：两条方向相反的有向边 (u, v) 与 (v, u) 构成长度为 2 的环
+```
+
+## 拓扑序
+
+**定义**：有向图的一个**拓扑序**是一个顶点排列 $\pi$，使得对每条有向边 $(u, v)$ 都有 $\pi(u) < \pi(v)$。
+
+把顶点排成一行而让所有边都从左指向右，这样的排列是否存在，完全由环决定：
+
+**定理**：有向图存在拓扑序，当且仅当它没有有向环（这样的图称为 **DAG**，有向无环图）。
+
+```text
+（存在拓扑序 => 无环）若 v1 -> v2 -> ... -> vk -> v1 是一个环，
+  则拓扑序要求 pos(v1) < pos(v2) < ... < pos(vk) < pos(v1)，矛盾。
+
+（无环 => 存在拓扑序）取一条最长的有向路径，它的起点没有入边：
+  若起点有入边 (x, start)，把 x 接在路径前面会得到一条更长的有向路径
+  （沿路径不可能回到 x，否则路径上有环），矛盾。
+  于是每个**非空**有限无环图都有入度为 0 的顶点，称为源点。
+  把这个源点输出、从图中删去，剩下的图仍然无环，可以重复归纳。
+  空图的空排列本身就是它唯一的拓扑序，下面的论证只对非空图使用。
+```
+
+第二个方向直接给出 Kahn 算法的构造：反复删除当前入度为 0 的顶点。DFS 那一路走的是另一条路线——利用完成时间的偏序关系得到拓扑序。
+
+## 三色 DFS 检测环
+
+上一节把访问状态定义成三个语义明确的状态，这里正是它们派上用场的地方：
+
+```text
+undiscovered：尚未被首次发现
+discovered：已经发现，但它的邻接扫描尚未完成——在递归 DFS 里它正处于当前调用栈上
+finished：它的邻接扫描已经完成
+```
+
+在递归 DFS 中，`discovered` 的顶点恰好就是**当前递归栈上的顶点**。于是判环只需要一个观察：
+
+**定理**：在从每个尚未发现顶点重启、最终覆盖整个 $V$ 的三色 DFS 中，图存在有向环，当且仅当扫描过程中出现一条指向 `discovered` 顶点（而不是 `finished` 顶点）的边。
+
+「覆盖整个 $V$」是定理的一部分：只做单源 DFS 时，它只能检测从该源点可达的那部分里的环。
+
+```text
+（这样的边 => 有环）记这条边为 (u, v) 且 v 是 discovered。
+  v 在栈上，从 v 到 u 恰好是栈上的一段路径，于是 v ~> u -> v 是一个环。
+
+（有环 => 这样的边）设图中存在有向环，取这个环上最先被 DFS 发现的顶点 v，
+  记 u 为环上 v 的前驱。v 被发现的瞬间，环上其余顶点都还是 undiscovered。
+  从 v 沿环可以到达 u；而 v 只有在它递归到的后继全部返回之后才会被标成 finished，
+  所以 DFS 最终会在 v 仍为 discovered 时发现并处理 u。
+  当 u 扫描环上的边 (u, v) 时，v 仍在递归栈上，于是得到一条指向 discovered 顶点的边。
+```
+
+第二种边在文献里叫**回边**，它的特征是「目标仍在当前递归栈上」。指向 `finished` 顶点的边不是环的证据：目标可能是同一次 DFS 里已经完成的后代或子树，也可能来自先前已经完成的遍历树，两种情况在 DAG 中都很常见。单元格里对一个带环图的环见证是 $b \to c \to b$，对无环图则不产生任何回边。
+
+由此得到这个实现必须遵守的契约：finish 顺序对**任何**有向图都存在，但它只有在没有发现回边时才能反转并当作拓扑序返回；一旦发现回边，正确的返回是「不是 DAG，不存在拓扑序」，而不是把 finish 顺序反转后当成结果。
+
+## 拓扑序 = finish 顺序的反转
+
+三色 DFS 还能直接给出拓扑序。原因是对每条边分类讨论：
+
+| 扫描边 $(u, v)$ 时 $v$ 的状态 | 情形 | 结论 |
+| --- | --- | --- |
+| undiscovered | $v$ 成为 $u$ 的后代 | $v$ 先 finished |
+| discovered | 回边，存在环 | DAG 中不会出现 |
+| finished | 另一次遍历或同一次遍历的更早部分 | $v$ 已经先 finished |
+
+在 DAG 中三种情形都指向同一个结论：$finish(v) < finish(u)$。于是把 finish 顺序整个反转，每条边 $(u, v)$ 都有 $u$ 出现在 $v$ 之前——这正是拓扑序的定义。
+
+```text
+定理：若图是 DAG，则 DFS 的 finish 顺序反转是一个拓扑序。
+```
+
+这条定理给出的算法成本与遍历相同：$\Theta(|V| + |E|)$（顶点状态与 frontier 操作 $\Theta(|V|)$，邻接项检查 $\Theta(|E|)$，沿用上一节的两类计数）。
+
+```python run id="alg.graphs.topological-order"
+def build_out_adjacency(vertices, arcs):
+    """Directed graph: adjacency[u] holds the out-neighbours of u."""
+    adjacency = {vertex: [] for vertex in vertices}
+    for u, v in arcs:
+        adjacency[u].append(v)
+    return adjacency
+
+
+def classify_by_dfs(adjacency):
+    """Three-colour DFS. Returns the finish order and a cycle witness if one exists."""
+    color = {}
+    finish_order = []
+    cycle = None
+
+    def visit(vertex, stack):
+        nonlocal cycle
+        color[vertex] = "discovered"
+        for neighbour in adjacency[vertex]:
+            if color.get(neighbour, "undiscovered") == "undiscovered":
+                stack.append(neighbour)
+                visit(neighbour, stack)
+                stack.pop()
+            elif color[neighbour] == "discovered":
+                if cycle is None:
+                    cycle = stack[stack.index(neighbour):] + [neighbour]
+        color[vertex] = "finished"
+        finish_order.append(vertex)
+
+    for vertex in adjacency:
+        if color.get(vertex, "undiscovered") == "undiscovered":
+            visit(vertex, [vertex])
+    return finish_order, cycle
+
+
+def verify_topological_order(adjacency, order):
+    position = {vertex: index for index, vertex in enumerate(order)}
+    return all(position[u] < position[v] for u in adjacency for v in adjacency[u])
+
+
+vertices = ["shirt", "tie", "jacket", "belt", "socks", "shoes", "watch"]
+arcs = [("shirt", "tie"), ("tie", "jacket"), ("shirt", "belt"),
+        ("belt", "jacket"), ("socks", "shoes"), ("belt", "shoes")]
+adjacency = build_out_adjacency(vertices, arcs)
+finish_order, cycle = classify_by_dfs(adjacency)
+topological = list(reversed(finish_order))
+print("finish order:", " ".join(finish_order))
+print("reversed finish order:", " ".join(topological))
+print("  every arc goes left to right:", verify_topological_order(adjacency, topological))
+print("  cycle found:", cycle)
+
+cyclic_vertices = ["a", "b", "c", "d"]
+cyclic_arcs = [("a", "b"), ("b", "c"), ("c", "b"), ("c", "d")]
+cyclic_adjacency = build_out_adjacency(cyclic_vertices, cyclic_arcs)
+cyclic_finish, cyclic = classify_by_dfs(cyclic_adjacency)
+print()
+print("on a graph with a cycle: cycle witness", cyclic)
+print("  the witness is a closed walk along arcs:",
+      all((cyclic[i], cyclic[i + 1]) in cyclic_arcs for i in range(len(cyclic) - 1)))
+print("  no topological order exists for it:", cyclic is not None)
+```
+
+单元格里 finish 顺序是 $jacket\,tie\,shoes\,belt\,shirt\,socks\,watch$，反转后每条边都从左指向右。$watch$ 是真正的孤立顶点，可以出现在拓扑序的任意位置；$socks$ 只是入度为 0 的**源点**，它仍受边 $socks \to shoes$ 约束，必须排在 $shoes$ 之前。多个同时可用的源点是拓扑序可能不唯一的来源之一，但「入度为 0」并不意味着可以无条件放在任意位置。
+
+## Kahn 算法
+
+第二个构造更直接：按入度出队。
+
+```text
+1. 计算每个顶点的入度
+2. 把所有入度为 0 的顶点放进队列
+3. 反复取出队首顶点 v，输出 v，并把它每条出边 (v, w) 的 w 的入度减一；
+   若某个 w 的入度减到 0，就把 w 放入队列
+4. 队列为空时结束
+```
+
+```text
+运行不变量（把 in_degree 读作「剩余入度」）
+1. 对每个尚未输出的顶点 v，in_degree[v] 恰等于「尚未输出的顶点指向 v 的边数」，
+   也就是剩余子图里 v 的入度
+2. 队列恰好保存当前尚未输出、且剩余入度为 0 的顶点
+3. 每条边 (u, v) 只在 u 被输出时处理一次，并把 v 的剩余入度恰好减一
+```
+
+**正确性**：算法在任何时刻产生的 output 都是一个合法的**拓扑前缀**——一个顶点只有在它的所有尚存前驱都已经输出之后才可能进入队列。因此，如果算法最终输出了全部 $|V|$ 个顶点，output 就是整张图的拓扑序；如果队列提前为空而仍有顶点未输出，算法应当返回失败，此时那段部分输出只是拓扑前缀，不是整张图的拓扑序。
+
+这个区分是必要的：有环的图上 Kahn 会提前停住，此时它手上并不存在「一个拓扑序」——那样的图连长度为 $|V|$ 的合法排列都没有。
+
+**环判定**：算法输出全部 $|V|$ 个顶点，当且仅当图无环。
+
+```text
+若算法提前停止，剩余子图非空，而且其中每个顶点的剩余入度都大于 0。
+反设剩余子图无环：那么按前面已经证明的「非空有限 DAG 必有源点」，
+它应该存在一个剩余入度为 0 的顶点，与「每个剩余顶点的剩余入度都大于 0」矛盾。
+所以剩余子图含有有向环。
+反过来，若原图无环，则每个非空剩余子图仍然无环，因此始终存在一个源点，
+Kahn 不会在处理完全部顶点之前卡住。
+```
+
+成本同样是 $\Theta(|V| + |E|)$：每个顶点入队出队各一次，每条边被检查一次（在计算入度时和在其尾点被输出时各一次，仍是常数次）。队列空间 $O(|V|)$。
+
+两种方法给出的顺序一般不相等（DFS 版本还受邻居枚举顺序影响），两者都只承诺「是一个拓扑序」。
+
+```python run id="alg.graphs.kahn-indegree"
+from collections import deque
+
+
+def build_out_adjacency(vertices, arcs):
+    adjacency = {vertex: [] for vertex in vertices}
+    for u, v in arcs:
+        adjacency[u].append(v)
+    return adjacency
+
+
+def kahn(adjacency):
+    """Queue by remaining in-degree; returns the output and the vertices left behind."""
+    in_degree = {vertex: 0 for vertex in adjacency}
+    for u in adjacency:
+        for v in adjacency[u]:
+            in_degree[v] += 1
+    queue = deque(vertex for vertex in adjacency if in_degree[vertex] == 0)
+    output = []
+    peak_queue = 0
+    while queue:
+        peak_queue = max(peak_queue, len(queue))
+        vertex = queue.popleft()
+        output.append(vertex)
+        for neighbour in adjacency[vertex]:
+            in_degree[neighbour] -= 1
+            if in_degree[neighbour] == 0:
+                queue.append(neighbour)
+    processed = set(output)
+    remaining = [vertex for vertex in adjacency if vertex not in processed]
+    return output, remaining, peak_queue
+
+
+def verify_topological_order(adjacency, order):
+    position = {vertex: index for index, vertex in enumerate(order)}
+    return all(position[u] < position[v] for u in adjacency for v in adjacency[u])
+
+
+vertices = ["shirt", "tie", "jacket", "belt", "socks", "shoes", "watch"]
+arcs = [("shirt", "tie"), ("tie", "jacket"), ("shirt", "belt"),
+        ("belt", "jacket"), ("socks", "shoes"), ("belt", "shoes")]
+adjacency = build_out_adjacency(vertices, arcs)
+output, remaining, peak_queue = kahn(adjacency)
+print("Kahn output:", " ".join(output))
+print("  topological order:", verify_topological_order(adjacency, output))
+print("  vertices processed:", len(output), "= |V| =", len(vertices))
+print("  largest queue seen:", peak_queue)
+
+cyclic_vertices = ["a", "b", "c", "d"]
+cyclic_arcs = [("a", "b"), ("b", "c"), ("c", "b"), ("c", "d")]
+cyclic_adjacency = build_out_adjacency(cyclic_vertices, cyclic_arcs)
+cyclic_output, cyclic_left, _ = kahn(cyclic_adjacency)
+left_set = set(cyclic_left)
+print()
+print("on a graph with a cycle: Kahn output", " ".join(cyclic_output))
+print("  vertices left behind:", sorted(cyclic_left))
+print("  every leftover vertex has a remaining in-edge from the leftover set:",
+      all(any(u in left_set for u in cyclic_vertices if (u, v) in cyclic_arcs) for v in cyclic_left))
+print("  output shorter than |V|:", len(cyclic_output) < len(cyclic_vertices))
+```
+
+同一张图上，Kahn 的输出是 $shirt\,socks\,watch\,tie\,belt\,jacket\,shoes$，与 finish 反转得到的顺序不同，但都满足每条边从左到右。在带环的图上它只输出 $a$，剩下 $b, c, d$：剩下的每个顶点都还有一条来自剩余集合的入边，这正是上面那条论证的实例。
+
+## 拓扑序什么时候唯一
+
+拓扑序一般不唯一，但可以问：什么时候唯一？
+
+**定理**：对一个 DAG，拓扑序唯一，当且仅当 Kahn 算法在每一个仍有未处理顶点的步骤中恰好只有一个入度为 0 的候选。
+
+```text
+（=>）若某一步队列里有两个不同的候选 x 与 y，它们当前的剩余入度都是 0，
+  也就是都没有尚未处理的前驱。无论先输出 x 还是先输出 y，
+  都可以在剩余 DAG 上继续把 Kahn 跑完，于是至少存在两个不同的拓扑序。
+
+（<=）若每一步都只有一个候选，那么任何拓扑序的第一项都只能是这个唯一的源点；
+  删掉它以后，对剩余 DAG 重复同一论证，归纳得到整个顺序被唯一确定。
+```
+
+这个判据有一个实际后果：判定唯一性不需要枚举排列，只要在一次 Kahn 运行里检查队列长度是否始终为 1，成本仍是 $\Theta(|V| + |E|)$。下面的单元格用它和一个**测试 oracle** 对照：`count_topological_orders` 枚举 $|V|!$ 个排列，只有在顶点很少时才可行，它的阶乘成本本身就说明它不能当作实际判定算法。
+
+```python run id="alg.graphs.topological-uniqueness"
+from collections import deque
+from itertools import permutations
+
+
+def build_out_adjacency(vertices, arcs):
+    adjacency = {vertex: [] for vertex in vertices}
+    for u, v in arcs:
+        adjacency[u].append(v)
+    return adjacency
+
+
+def count_topological_orders(adjacency):
+    """Small-graph oracle: every permutation that puts each arc left to right."""
+    vertices = sorted(adjacency)
+    total = 0
+    for order in permutations(vertices):
+        position = {vertex: index for index, vertex in enumerate(order)}
+        if all(position[u] < position[v] for u in adjacency for v in adjacency[u]):
+            total += 1
+    return total
+
+
+def has_unique_topological_order(adjacency):
+    """One Kahn run: all vertices processed, and never two candidates at once."""
+    in_degree = {vertex: 0 for vertex in adjacency}
+    for u in adjacency:
+        for v in adjacency[u]:
+            in_degree[v] += 1
+    queue = deque(vertex for vertex in adjacency if in_degree[vertex] == 0)
+    processed = 0
+    unique = True
+    while queue:
+        if len(queue) != 1:
+            unique = False
+        vertex = queue.popleft()
+        processed += 1
+        for neighbour in adjacency[vertex]:
+            in_degree[neighbour] -= 1
+            if in_degree[neighbour] == 0:
+                queue.append(neighbour)
+    return processed == len(adjacency) and unique
+
+
+chain = build_out_adjacency(["a", "b", "c", "d"],
+                            [("a", "b"), ("b", "c"), ("c", "d")])
+diamond = build_out_adjacency(["a", "b", "c", "d"],
+                              [("a", "b"), ("a", "c"), ("b", "d"), ("c", "d")])
+cyclic = build_out_adjacency(["a", "b", "c"],
+                             [("a", "b"), ("b", "c"), ("c", "a")])
+empty = build_out_adjacency([], [])
+
+for name, graph in (("chain", chain), ("diamond", diamond), ("cycle", cyclic), ("empty graph", empty)):
+    print(f"{name}: topological orders {count_topological_orders(graph) if len(graph) <= 4 else 'skipped'}"
+          f" | unique by the Kahn test {has_unique_topological_order(graph)}")
+print()
+print("the cycle has no topological order at all, and the Kahn test reports False for it")
+print("the empty graph has exactly one topological order -- the empty permutation -- and the test agrees")
+```
+
+## 小结
+
+- 有向可达沿有向路径定义，方向不可逆；从每个未发现顶点重启的遍历在有向图上只得到遍历森林，其划分可能依赖处理顺序，不是分量分解。
+- 拓扑序是把顶点排成一行、让所有边从左指向右的排列；它存在当且仅当图无环。两个方向分别由「沿环的 pos 严格递增会矛盾」与「每个非空有限无环图都有入度为 0 的顶点（取最长有向路径）」给出；空图的空排列是它唯一的拓扑序。
+- 三色 DFS 判环（要求 DFS 覆盖整个 $V$）：在递归 DFS 中 `discovered` 的顶点恰在当前调用栈上，因此「存在指向 discovered 顶点的边」等价于「存在环」。指向 `finished` 顶点的边不是环的证据——它可能来自同一次遍历的已完成子树，也可能来自先前的遍历树。
+- 若图是 DAG，DFS 的 finish 顺序反转就是拓扑序；对每条边按 $v$ 的状态分三种情形（undiscovered / discovered / finished）都能得到 $finish(v) < finish(u)$。
+- Kahn 算法按剩余入度出队，任何时刻的输出都是拓扑前缀，输出全部 $|V|$ 个顶点当且仅当图无环；提前停住时反设剩余子图无环，会与「非空有限 DAG 必有源点」矛盾。
+- 两种方法成本都是 $\Theta(|V| + |E|)$；顺序一般不相等，两者都只承诺「是一个拓扑序」。
+- 拓扑序唯一当且仅当 Kahn 每一步恰好只有一个入度为 0 的候选；判定唯一性只需在一次 Kahn 运行里看队列长度，成本仍是 $\Theta(|V| + |E|)$。
+- 本节不涉及强连通分量（另一类算法）与最短路径；环判定在这里只服务于 DAG 的识别。

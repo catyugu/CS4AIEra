@@ -1,0 +1,242 @@
+---
+id: algorithms.recursion
+slug: /algorithms/recursion
+order: 50
+title: 递归、归纳与调用树
+status: draft
+objectives:
+  - 把一个递归定义写成基本情况与递归情形，并为递归状态选择良基度量，说明每次递归调用都使该度量严格下降
+  - 用良基归纳论证递归函数的部分正确，并说明归纳假设为什么必须覆盖每一个实际递归子调用
+  - 用每次递归调用严格下降的良基度量论证递归在有限步内结束，并说明基本情况的存在不足以保证终止
+  - 从递推式与调用树推出递归函数的成本
+  - 说明调用树给出的递归栈空间与它之外的辅助空间，以及展开递归与改成迭代各自省下什么
+---
+
+循环与递归把同一段计算排成两种形状。前面的课用循环不变量与良基度量论证一段迭代代码正确并会结束；递归把这两个义务移进函数定义本身，于是论证的形状也跟着定义变。多出来的第三件事是调用树：它给出总成本，也给出递归调用栈这一项的空间；其他辅助空间仍要按同时存活的对象另算。
+
+递归的成本不能靠盯着代码估。一次调用直接花多少、它引发多少次调用，这两句话写下来就是一个递推式；递推式的解就是调用树上所有节点代价的和。这一课把定义、论证与计数放在同一张树上。
+
+## 基本情况与递归情形
+
+递归定义由**基本情况**与**递归情形**组成。基本情况是不再递归、可以直接处理的状态；递归情形通过一个或多个递归调用处理当前状态，并要求这些调用的良基秩严格下降。基本情况常常就是最小输入，但定义本身只要求「不再递归」，不要求它是某个尺寸的最小值。
+
+```text
+def total(values):
+    if not values:                          # base case
+        return 0
+    return values[0] + total(values[1:])     # every call is on a shorter list
+```
+
+每次调用去掉一个元素，序列长度严格减少。「度量严格下降」是定义的一部分：递归情形的调用若落在同样的状态上，定义没有前进，后面的论证都无处落脚。度量不一定是输入的某个直观尺寸——后面的图遍历里图本身并不变小，变的是「尚未访问」的状态；关键是每写一行递归调用，都能说出它让选定的良基秩小了多少。
+
+这段与下面 `largest` 的代码是展示递归结构的伪代码：真实 Python 的 `values[1:]` 会复制出新列表，成本不小；后面的计数实例一律改用下标或区间，避免把切片成本混进模型。
+
+## 归纳与递归同形
+
+递归函数的正确性用良基归纳论证，步骤与定义一一对应。与上一课一样，先证**部分正确**，再独立证明终止（见 <CrossRef id="algorithms.correctness" />）：
+
+1. **基本情况**：每个基本情况上的返回值满足后置条件。
+2. **递归情形**：归纳假设是「对所有满足前置条件、且良基秩严格更小的递归状态 $y$，调用一旦返回，其返回值就满足相应的后置条件」；再证明每个递归子调用都满足前置条件，由它的后置条件推出当前调用一旦返回就满足后置条件。
+
+归纳假设只说「若子调用返回」，因此这里没有偷偷假设终止——终止是下一节的独立义务。对纯函数，它可以简化成「若子调用返回，则其返回值满足后置条件」。
+
+归纳假设是一个参数化命题，把它实例化到每个实际子调用上，就得到那次递归调用的后置条件；论证因此不必展开计算过程。以取最大值为例：
+
+```text
+def largest(values):
+    if len(values) == 1:
+        return values[0]
+    rest = largest(values[1:])
+    return values[0] if values[0] > rest else rest
+```
+
+前置条件：`values` 是非空有限序列，元素属于同一个全序域。后置条件：返回值是输入中的元素，且输入中不存在比它更大的元素。基本情况里唯一的元素即答案；递归情形里，进入分支时有 `len(values) > 1`，所以 `values[1:]` 仍非空，递归调用满足前置条件；按归纳假设 `rest` 是 `values[1:]` 中不小于任何元素的值，返回值取 `values[0]` 与 `rest` 中较大者，它既不小于 `values[0]`，也不小于 `values[1:]` 中的任何元素，后置条件成立。调用满足前置条件这一句必须写出来，它是调用规约闭合的另一半。
+
+命题实例化到子问题上，前提是后置条件说的量与该次调用的参数对得上。一个从下标 `index` 开始求和的辅助函数，后置条件是「返回值等于 `values[index:]` 的和」；若把一个带初值 `running` 的累加版本也写成这条后置条件，归纳假设覆盖的命题与它实际返回的量（`running` 加上后缀和）就不是同一个，论证再整齐也不成立。
+
+归纳假设要覆盖每一个实际递归子调用。一次调用可能沿多于一条更小的路径下去：斐波那契的递归情形用到规模 $n-1$ 与 $n-2$ 两个调用，只假设 $n-1$ 这一个点成立就覆盖不到另一个分支。逻辑上必须做到的是覆盖所有实际子调用；「对所有良基秩更小的状态成立」是达成它的统一模板，也让归纳与终止共用同一个度量。
+
+与 <CrossRef id="algorithms.correctness" /> 的循环论证对照：循环的三步是初始化、保持、退出，性质要在每个迭代边界成立；递归只有两步，其中「保持」被换成了归纳假设。共同的纪律是覆盖所有路径——遗漏一轮迭代与遗漏一个递归分支，同样让论证失效。
+
+## 终止由度量给出
+
+基本情况存在并不保证终止。对每个满足前置条件的调用，终止接口由三件事组成：
+
+1. 本次调用中**除递归子调用之外**的工作会终止；
+2. 每个递归子调用仍满足前置条件；
+3. 每个递归子调用的良基秩严格下降。
+
+由良基归纳即可推出所有满足前置条件的调用都在有限步内结束。度量取值落在没有无穷下降链的集合上（非负整数、序列长度、有限集合的大小都属于这类）；「严格递减 + 有下界」不够，$1, 1/2, 1/4, \dots$ 严格递减且有下界却可以无限进行。
+
+某条递归边上选定的度量没有严格下降，只说明这个度量不足以完成终止证明，需要换一个更合适的（组合度量、字典序度量都常见）——它本身推不出程序不终止。例如状态按 $(n, 0) \to (n, 1) \to (n-1, 0)$ 变化时，只看 $n$ 第一步没有下降，也确实不能当作终止证明；但对状态对的字典序换上排名函数 $\mu(n, p) = (n, 1 - p)$ 之后，$\mu(n, 0) = (n, 1) > \mu(n, 1) = (n, 0) > \mu(n-1, 0) = (n-1, 1)$，每一步都严格下降，终止照样可证。
+
+运行时不会让递归无限延伸：深度超过上限时抛 `RecursionError`（当前限制由 [sys.getrecursionlimit](https://docs.python.org/3/library/sys.html#sys.getrecursionlimit) 读取、由 [sys.setrecursionlimit](https://docs.python.org/3/library/sys.html#sys.setrecursionlimit) 调整；它是解释器的运行时配置，不是 Python 算法语义里的常数，可支持的上限还受平台影响，见 <CrossRef id="python.runtime-vs-language" />）。它是防止栈被耗尽的安全网，与算法的终止性属于两个层次：抽象执行模型里问的是调用链是否有穷，这里问的是一条有限的调用链是否还落在当前运行时的深度限制内。因此终止证明完整的递归（例如每步长度严格下降的线性递归）在输入足够大时同样可能触发 `RecursionError`；反过来说，`RecursionError` 不能区分「逻辑上无限递归」与「逻辑上有限但太深」。终止仍要由度量论证。
+
+```python run id="alg.recursion.termination"
+def hops(remaining, stride):
+    """Precondition: remaining and stride are integers, and stride > 0.
+
+    Postcondition: hops of length stride needed to reach 0 or below.
+    """
+    hops.calls += 1
+    if remaining <= 0:
+        return 0
+    return 1 + hops(remaining - stride, stride)
+
+
+def count_hops(remaining, stride):
+    hops.calls = 0
+    try:
+        result = hops(remaining, stride)
+    except RecursionError as error:
+        return f"{type(error).__name__}: {error}", hops.calls
+    return result, hops.calls
+
+
+for stride in (1, 3):
+    result, calls = count_hops(9, stride)
+    print(f"remaining=9 stride={stride}: result={result} calls={calls}")
+result, calls = count_hops(9, 0)
+print(f"remaining=9 stride=0: result={result} calls={calls}")
+```
+
+三次调用只有 `stride` 一个参数不同，基本情况与递归情形都没有变。`stride` 为 1 或 3 时度量每次调用严格减小，基本情况在有限步内到达；`stride = 0` 是故意撤掉终止条件的实验：状态原封不动地再次调用自身，抽象模型里的调用链是无限的，在当前运行时里这条无限链先被深度限制截断。它不满足上面那条总正确规约，展示的是「写了基本情况并不自动意味着所有参数选择都能到达它」。打印出的 `calls` 数值取决于运行环境与调用上下文（进入 `hops` 之前解释器已有活动的调用帧），本实验关心的是最终触发 `RecursionError`，不是那个常数。
+
+## 递推式与调用树
+
+把一次调用直接花的代价，加上它引发的所有调用的代价，得到递推式。规模取 2 的幂时，折半的递归写作：
+
+$$
+T(1) = 0, \qquad T(n) = n + 2\,T(n/2)
+$$
+
+解它不需要技巧，只要把调用树读出来：每个节点是一次调用，节点上写着这一次调用直接花的代价，总成本是所有节点代价之和。两种常见形状：
+
+- **链条**：$T(n) = n + T(n-1)$。调用树是一条路径，节点代价依次是 $n, n-1, \dots, 2$（边界 $T(1) = 0$ 没有代价为 1 的节点），和是 $n(n+1)/2 - 1$，量级 $\Theta(n^2)$。
+- **折半**：$T(n) = n + 2\,T(n/2)$。完整调用树有 $\log_2 n + 1$ 个节点层级（含规模 1、直接代价为 0 的那一层），其中 $\log_2 n$ 层是非基本情况的正成本，每层节点代价之和都是 $n$，总计 $\Theta(n \log n)$。
+
+分治递推有通用结论（主定理），它属于可查表的内容；调用树上每层代价可见时，直接写和式比套公式更能说明常数与层数从哪来。规模不是 2 的幂时两半相差 1，量级结论不变，代码里用 `n // 2` 与 `n - n // 2` 保持两半之和为 $n$。
+
+```python run id="alg.recursion.recurrence"
+import math
+
+
+def chain_work(n):
+    """T(n) = n + T(n-1): the recursion tree is a single path."""
+    if n <= 1:
+        return 0
+    return n + chain_work(n - 1)
+
+
+def halving_work(n):
+    """T(n) = n + 2 T(n/2) for even n: every level sums to n."""
+    if n <= 1:
+        return 0
+    half = n // 2
+    return n + halving_work(half) + halving_work(n - half)
+
+
+print(f"{'n':>6} {'chain':>10} {'chain/n^2':>10} {'halving':>10} {'halving/(n log2 n)':>19}")
+for size in (64, 128, 256, 512):
+    chain = chain_work(size)
+    halving = halving_work(size)
+    print(f"{size:>6} {chain:>10} {chain / size ** 2:>10.2f} {halving:>10} {halving / (size * math.log2(size)):>19.2f}")
+```
+
+两个比值随规模翻倍保持稳定：链条那一列趋近 $1/2$（精确值是 $n(n+1)/2 - 1$ 除以 $n^2$），折半那一列趋近 1。这段代码算出的就是递推式的值：它是成本模型里定义的工作量，不是解释器的操作计数，也不是运行时间。递推式说明这个和式为什么是这个形状，两者的对应给出的是模型与实现的一致性，实测数字只是对这个模型的一次核对。
+
+## 调用深度决定递归栈空间
+
+调用树上读两个量：总时间是所有节点直接代价之和，递归栈空间是最大活动调用路径上各栈帧空间之和。**后者只覆盖调用栈这一项**：辅助空间还可以包括仍然存活的中间结果、被祖先持有的容器、备忘表、切片副本或显式 frontier。每帧额外状态为 $O(1)$ 时，递归栈空间是 $\Theta(d)$；只有在没有其他同时存活、渐进更大的辅助对象时，总辅助空间才是 $\Theta(d)$。每个节点的直接工作是常数时，总时间才退化成节点数。栈帧保存本层尚未完成的计算——参数、局部变量、返回位置。三个实现给出同一个答案、同阶的节点数，深度却分成两类。
+
+下面三个辅助函数只在良构状态上被调用（`0 <= index <= len(values)`、`0 <= low <= high <= len(values)`），并且每次递归调用都保持这些条件——这正是上一节要求的「子调用保持前置条件」那一半。
+
+```python run id="alg.recursion.call-tree"
+class Run:
+    """Calls made and the deepest nesting reached during one run."""
+
+    def __init__(self):
+        self.calls = 0
+        self.depth = 0
+        self.current = 0
+
+    def enter(self):
+        self.calls += 1
+        self.current += 1
+        self.depth = max(self.depth, self.current)
+
+    def leave(self):
+        self.current -= 1
+
+
+def total_by_index(values, index, run):
+    """Precondition: 0 <= index <= len(values).
+
+    Postcondition: the sum of values[index:]; one call per element.
+    """
+    run.enter()
+    try:
+        if index == len(values):
+            return 0
+        return values[index] + total_by_index(values, index + 1, run)
+    finally:
+        run.leave()
+
+
+def total_by_accumulator(values, index, running, run):
+    """Precondition: 0 <= index <= len(values).
+
+    Postcondition: running plus the sum of values[index:]; the call is last.
+    """
+    run.enter()
+    try:
+        if index == len(values):
+            return running
+        return total_by_accumulator(values, index + 1, running + values[index], run)
+    finally:
+        run.leave()
+
+
+def total_by_split(values, low, high, run):
+    """Precondition: 0 <= low <= high <= len(values).
+
+    Postcondition: the sum of values[low:high]; the range is halved at each call.
+    """
+    run.enter()
+    try:
+        if high - low == 0:
+            return 0
+        if high - low == 1:
+            return values[low]
+        middle = (low + high) // 2
+        return total_by_split(values, low, middle, run) + total_by_split(values, middle, high, run)
+    finally:
+        run.leave()
+
+
+print(f"{'n':>6} {'index: calls':>13} {'depth':>7} {'accumulator: depth':>19} {'split: calls':>13} {'depth':>7} {'totals agree':>13}")
+for size in (16, 64, 256, 512):
+    values = list(range(size))
+    runs = [Run(), Run(), Run()]
+    totals = (
+        total_by_index(values, 0, runs[0]),
+        total_by_accumulator(values, 0, 0, runs[1]),
+        total_by_split(values, 0, size, runs[2]),
+    )
+    print(
+        f"{size:>6} {runs[0].calls:>13} {runs[0].depth:>7} {runs[1].depth:>19} "
+        f"{runs[2].calls:>13} {runs[2].depth:>7} {str(len(set(totals)) == 1):>13}"
+    )
+```
+
+三个实现的返回值相同（最后一列），调用次数都随输入线性增长，深度却分成两类：按下标推进与用累加器累积的写法，深度与输入大小同阶；折半的写法深度是对数。累加器把递归调用放在最后一步，深度仍然线性增长：在 CPython 里，把递归调用写在函数最后并不会消除 Python 函数的调用帧；[What's New in Python 3.14](https://docs.python.org/3/whatsnew/3.14.html#whatsnew314-tail-call-interpreter) 里新增的 tail-call interpreter 指解释器内部 C 函数之间的尾调用，文档明确说明它与 Python 函数的尾调用优化不是一回事，后者目前在 CPython 中并未实现。深度由定义的形式给出，与调用是否处于末尾无关。
+
+递归栈那一项由深度决定：每帧额外状态为常数时，深度为 $d$ 的递归栈空间是 $\Theta(d)$，与节点数无关——折半求和以线性时间换来了对数深度。把同一段计算改写成循环，中间状态从栈搬进少数几个变量，空间降到 $\Theta(1)$。改写成自己维护栈的迭代则要看栈怎么用：若显式栈逐帧模拟原递归控制流，它的峰值大小与活动递归帧数同阶；一般迭代算法的工作栈或 frontier 由算法本身决定，不一定与递归深度同阶（图遍历那一课会给出两者的差别）。换来的是控制权——可以中断、可以给栈设上界、可以在不增加运行时调用深度的情况下处理超出上限的输入。
+
+## 小结
+
+- 递归定义由基本情况与递归情形组成；每次递归调用必须让选定的良基度量严格下降（后续图遍历里度量是「尚未访问」的状态，图本身并不变小）。
+- 先证部分正确：基本情况加递归情形，归纳假设「若子调用返回则满足后置条件」覆盖每一个实际子调用，并保持前置条件；再独立证明终止。
+- 终止接口三件事：调用自身的非递归工作终止、子调用保持前置条件、每个递归边的良基秩严格下降；候选度量不下降只说明该度量不适合这一步证明，基本情况存在也不足以保证终止。
+- 递推式是调用树的读数：链条形状给出 $\Theta(n^2)$，折半形状给出 $\Theta(n \log n)$。
+- 时间是所有节点直接代价之和；调用树直接给出的是调用栈那一项，其他辅助空间要单独算。改成循环省下的是深度那一项，显式栈只在逐帧模拟递归时才与递归深度同阶。

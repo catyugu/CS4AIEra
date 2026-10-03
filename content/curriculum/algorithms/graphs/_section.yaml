@@ -1,0 +1,5 @@
+id: algorithms.graphs
+label: 图
+order: 60
+summary: 图的表示与不变量；遍历与访问状态；DAG 与拓扑序；三种条件下的最短路径；连通性与最小生成树。
+status: active

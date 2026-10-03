@@ -1,0 +1,298 @@
+---
+id: algorithms.sorting
+slug: /algorithms/sorting
+order: 20
+title: 排序契约、稳定性与成本
+status: draft
+objectives:
+  - 写出排序的基本后置条件：输出非降序，且是输入的一个排列
+  - 把稳定性当作独立的契约属性，并用键相等的记录解释它的含义
+  - 区分比较次数、元素写入次数与辅助空间三种互相独立的成本
+  - 用循环不变量论证插入排序，用递归式论证归并排序的 $\Theta(n \log n)$
+  - 判断一个实现是否稳定、是否原地，并说明两者互不蕴含
+---
+
+上一节的二分查找有一个前提：输入已经按非降序排列。这一节回答这份顺序从哪里来，以及得到它要付出什么代价。排序也是第一个必须同时谈正确性与成本的基本操作：正确性有两层（排好、且不丢不增），成本有三个互相独立的量。
+
+## 契约
+
+**前置条件**：`key(x)` 的结果属于一个全序域；排序算法只根据这些键决定记录之间的先后。本节用记录表示被排序的元素，用 `key` 表示参与排序比较的字段。
+
+| 后置条件 | 内容 |
+| --- | --- |
+| 有序 | 输出按非降序排列 |
+| 是排列 | 输出的多重集与输入相同：每个值出现的次数不变 |
+
+「是排列」这一条不免费。只在比较与交换上做动作的实现天然满足它；一旦实现里出现就地覆盖、按索引写回、丢弃某个分支这类操作，就必须单独论证没有元素被覆盖或遗漏。
+
+**稳定性**是基本排序契约之外的一条可选后置条件：键相等的元素在输出中保持输入里的相对次序。未承诺稳定性时，任意等键次序都仍满足「有序＋是排列」这两条基本后置条件；一旦接口承诺稳定性，破坏等键记录的相对次序就是契约错误。
+
+## 三种互相独立的成本
+
+排序的成本不能只用一个数字概括，至少要分开三个量：
+
+- **比较次数**：调用元素比较的次数。当比较本身很贵（长字符串、复杂结构）时它是主导项。
+- **元素写入次数**：把元素写进数组槽位的次数。一次普通数组赋值计一次写入；一次交换按两个数组槽位被写入，计两次写入。局部变量赋值不计入这个量。
+- **辅助空间**：除输出之外额外占用的槽位。
+
+三者是彼此不能互相推出的成本维度。这份插入排序在已排序输入上做 $n-1$ 次比较和 $n-1$ 次数组写入；这份选择排序每轮都执行交换，因此固定执行 $n-1$ 次交换，即按本节口径计 $2(n-1)$ 次数组写入；归并排序的比较次数是 $\Theta(n \log n)$ 量级，常见的数组实现可以复用一块 $\Theta(n)$ 的工作缓冲。这里的 $\Theta(n)$ 缓冲是这种常规实现的空间选择，而不是「任何归并排序实现都必然需要 $\Theta(n)$ 辅助空间」的下界。
+
+## 插入排序：用前缀不变量论证
+
+插入排序维持一条不变量：
+
+```text
+items[0 .. i) 已经按非降序排列，并且是原输入前 i 个元素的一个排列
+```
+
+初始时 $i = 1$，前缀只有原输入的第一个元素，因此不变量成立。第 $i$ 轮先把新加入的元素 `items[i]` 保存为 `current`。内层循环只把键严格大于 `current` 的元素向右移动；循环停止时要么 `position == -1`，要么当前位置的键不大于 `current`。因此把 `current` 写入 `position + 1` 后，新的前缀仍然非降序。整个过程只移动已有记录，并最终把暂存的 `current` 写回，所以前 $i+1$ 个位置仍然恰好包含原输入前 $i+1$ 个记录。内层循环每继续一次都令 `position` 减 1，而它的下界是 $-1$，所以必然终止；外层 `for` 只取有限个索引，也必然终止。最后 $i$ 覆盖整个输入，于是全部 $n$ 个元素有序，并且仍是原输入的一个排列。
+
+```python run id="alg.ordering.insertion-sort"
+from random import Random
+
+
+def insertion_sort(items, key, counters):
+    """Postcondition: items is non-decreasing by key, and a permutation of the input."""
+    for index in range(1, len(items)):
+        current = items[index]
+        position = index - 1
+        while position >= 0:
+            counters["comparisons"] += 1
+            if not key(items[position]) > key(current):
+                break
+            items[position + 1] = items[position]
+            counters["writes"] += 1
+            position -= 1
+        items[position + 1] = current
+        counters["writes"] += 1
+
+
+def sorted_by_key(items, key):
+    return all(not key(items[i]) > key(items[i + 1]) for i in range(len(items) - 1))
+
+
+def permutation_of(items, original):
+    return sorted(items) == sorted(original)
+
+
+def equal_key_inversions(items, key, input_position):
+    """Postcondition: count of equal-key pairs whose output order flips the input order."""
+    flips = 0
+    for left in range(len(items)):
+        for right in range(left + 1, len(items)):
+            if key(items[left]) == key(items[right]):
+                if input_position[items[left][1]] > input_position[items[right][1]]:
+                    flips += 1
+    return flips
+
+
+size = 512
+key_of = lambda record: record[0]
+records = sorted(((index % 8, index) for index in range(size)), key=key_of)
+shuffled = list(records)
+Random(20261003).shuffle(shuffled)
+cases = {
+    "already sorted": list(records),
+    "reversed (8 keys)": list(reversed(records)),
+    "fixed shuffle": shuffled,
+    "distinct reversed": [(size - index, index) for index in range(size)],
+}
+
+print(f"{'input':>19} {'comparisons':>12} {'writes':>9} {'sorted':>7} {'permutation':>12} {'flips':>6}")
+for name, case in cases.items():
+    original = list(case)
+    input_position = {record[1]: position for position, record in enumerate(case)}
+    counters = {"comparisons": 0, "writes": 0}
+    insertion_sort(case, key=key_of, counters=counters)
+    flips = equal_key_inversions(case, key_of, input_position)
+    print(f"{name:>19} {counters['comparisons']:>12} {counters['writes']:>9} "
+          f"{str(sorted_by_key(case, key_of)):>7} "
+          f"{str(permutation_of(case, original)):>12} {flips:>6}")
+
+print("n(n-1)/2 =", size * (size - 1) // 2)
+```
+
+四行给出同一份契约在不同输入上的代价。已排序输入做 511 次比较和 511 次数组写入。逆序但只有 8 个不同键时，严格大于当前键的元素一共发生 114 688 次移位，另外有 504 次比较在遇到相等键时停止，因此总比较次数是 115 192。键两两不等且严格递减时，每一对元素都形成一次严格逆序，所以比较次数和移位次数都达到 $n(n-1)/2 = 130\,816$。注意「移位次数」不是全部「写入次数」：每一轮最后还要把 `current` 写回一次，所以严格递减这一行的数组写入总数是 $130\,816 + (n-1) = 131\,327$。四行的 `flips` 都是 0，因为实现只越过键严格更大的记录，不会越过等键记录。
+
+## 归并排序：用递归式论证
+
+归并排序把问题对半分，递归排好两半，再合并两个有序序列。合并用两个游标向前走：每次比较两侧当前元素，取较小者写入缓冲；某一侧用完之后把另一侧余下的部分直接接上。合并一次恰好把 $n$ 个元素写进缓冲一次，所以是 $\Theta(n)$。
+
+当 $n$ 是 2 的幂时可以直接写成 $T(n) = 2T(n/2) + \Theta(n)$；对一般的 $n$，更精确地写是 $T(n) = T(\lfloor n/2 \rfloor) + T(\lceil n/2 \rceil) + \Theta(n)$。两者都解为 $\Theta(n \log n)$（见 <CrossRef id="algorithms.cost-model" />）：递归树有 $\Theta(\log n)$ 层，每层所有合并合计处理 $\Theta(n)$ 个元素。
+
+稳定的实现只有一个细节：合并时两侧键相等就取左侧，这样相等键不会因为合并而换位。
+
+```python run id="alg.ordering.merge-sort"
+from random import Random
+
+
+def merge_sort(records, key, counters):
+    """Postcondition: (sorted records, largest merged-list length); stable by key."""
+    if len(records) <= 1:
+        return list(records), 0
+    middle = len(records) // 2
+    left, left_peak = merge_sort(records[:middle], key, counters)
+    right, right_peak = merge_sort(records[middle:], key, counters)
+    merged = []
+    i = 0
+    j = 0
+    while i < len(left) and j < len(right):
+        counters["comparisons"] += 1
+        if key(left[i]) <= key(right[j]):
+            merged.append(left[i])
+            i += 1
+        else:
+            merged.append(right[j])
+            j += 1
+    merged.extend(left[i:])
+    merged.extend(right[j:])
+    counters["writes"] += len(merged)
+    return merged, max(left_peak, right_peak, len(merged))
+
+
+def equal_key_inversions(records, key, input_position):
+    """Postcondition: count of equal-key pairs whose output order flips the input order."""
+    flips = 0
+    for left in range(len(records)):
+        for right in range(left + 1, len(records)):
+            if key(records[left]) == key(records[right]):
+                if input_position[records[left][1]] > input_position[records[right][1]]:
+                    flips += 1
+    return flips
+
+
+print(f"{'n':>6} {'comparisons':>12} {'n log2 n':>10} {'ratio':>7} {'largest merged':>15} {'flips':>6}")
+for size in (8, 64, 512, 4096):
+    records = [(index % 8, index) for index in range(size)]
+    Random(20261003).shuffle(records)
+    input_position = {record[1]: position for position, record in enumerate(records)}
+    counters = {"comparisons": 0, "writes": 0}
+    ordered, peak = merge_sort(records, key=lambda record: record[0], counters=counters)
+    reference = size * (size.bit_length() - 1)
+    flips = equal_key_inversions(ordered, lambda record: record[0], input_position)
+    print(f"{size:>6} {counters['comparisons']:>12} {reference:>10} "
+          f"{counters['comparisons'] / reference:>7.2f} {peak:>15} {flips:>6}")
+```
+
+四行的比较次数与 $n \log_2 n$ 的比值分别是 0.67、0.79、0.83、0.86，处于同一量级。`largest merged` 恰好等于 $n$，因为顶层合并最终产生一个长度为 $n$ 的列表；这个数字不是这段 Python 程序的真实峰值内存——递归切片、左右子结果和正在构造的 `merged` 会同时存在，它只是「单次合并规模增长到 $n$」的可观测证据。这份实现的峰值额外列表存储仍是 $\Theta(n)$；常见的数组归并排序可以显式复用一个长度为 $n$ 的工作缓冲，再加 $O(\log n)$ 的递归栈，总辅助空间为 $\Theta(n)$。`flips` 全为 0，说明合并时「相等取左」确实保住了次序。
+
+## 稳定与原地是两条独立的轴
+
+这两个属性经常被一起提到，但它们互不蕴含。同一份输入交给三种实现，能观察到四格里的三格：
+
+```python run id="alg.ordering.stability-and-in-place"
+from random import Random
+
+
+def insertion_sort(records, key, counters):
+    """Stable and in-place: holds one record while shifting the rest."""
+    for index in range(1, len(records)):
+        current = records[index]
+        position = index - 1
+        while position >= 0:
+            counters["comparisons"] += 1
+            if not key(records[position]) > key(current):
+                break
+            records[position + 1] = records[position]
+            counters["writes"] += 1
+            position -= 1
+        records[position + 1] = current
+        counters["writes"] += 1
+    return records, 1
+
+
+def selection_sort(records, key, counters):
+    """In-place but unstable: the smallest search may swap across equal keys."""
+    for start in range(len(records) - 1):
+        smallest = start
+        for index in range(start + 1, len(records)):
+            counters["comparisons"] += 1
+            if key(records[index]) < key(records[smallest]):
+                smallest = index
+        records[start], records[smallest] = records[smallest], records[start]
+        counters["writes"] += 2
+    return records, 0
+
+
+def merge_sort(records, key, counters):
+    """Stable but grows a merged list of up to n records."""
+    if len(records) <= 1:
+        return list(records), 1
+    middle = len(records) // 2
+    left, left_peak = merge_sort(records[:middle], key, counters)
+    right, right_peak = merge_sort(records[middle:], key, counters)
+    merged = []
+    i = 0
+    j = 0
+    while i < len(left) and j < len(right):
+        counters["comparisons"] += 1
+        if key(left[i]) <= key(right[j]):
+            merged.append(left[i])
+            i += 1
+        else:
+            merged.append(right[j])
+            j += 1
+    merged.extend(left[i:])
+    merged.extend(right[j:])
+    counters["writes"] += len(merged)
+    return merged, max(left_peak, right_peak, len(merged))
+
+
+def first_inversion(records, key, input_position):
+    """Postcondition: the first equal-key pair whose output order flips, or None."""
+    for left in range(len(records)):
+        for right in range(left + 1, len(records)):
+            if key(records[left]) == key(records[right]):
+                if input_position[records[left][1]] > input_position[records[right][1]]:
+                    return (records[left], records[right])
+    return None
+
+
+size = 64
+key_of = lambda record: record[0]
+records = [(index % 4, index) for index in range(size)]
+Random(20261003).shuffle(records)
+input_position = {record[1]: position for position, record in enumerate(records)}
+
+print(f"{'implementation':>16} {'tracked slots':>14} {'example inversion':>30}")
+for name, function in (("insertion", insertion_sort), ("merge", merge_sort), ("selection", selection_sort)):
+    counters = {"comparisons": 0, "writes": 0}
+    case = list(records)
+    ordered, aux = function(case, key_of, counters)
+    inversion = first_inversion(ordered, key_of, input_position)
+    print(f"{name:>16} {aux:>14} {str(inversion):>30}")
+
+tiny = [(1, "a"), (1, "b"), (0, "c")]
+first = list(tiny)
+first, _ = selection_sort(first, key_of, {"comparisons": 0, "writes": 0})
+second = list(tiny)
+second, _ = insertion_sort(second, key_of, {"comparisons": 0, "writes": 0})
+print("selection on", tiny, "->", first)
+print("insertion on", tiny, "->", second)
+```
+
+插入排序与归并排序的 `example inversion` 都是 `None`，选择排序给出了具体的逆序对：键相等的两条记录在输出中互换了位置。`tracked slots` 不是解释器的真实峰值内存，而是三个实现中的空间见证：插入排序显式暂存一条记录，选择排序不建立随 $n$ 增长的记录缓冲，归并排序中单个合并结果的规模增长到 64。由实现结构可以分别得到 $O(1)$、$O(1)$ 与 $\Theta(n)$ 的额外空间级别。
+
+最小的例子说明得更清楚：输入 `[(1, "a"), (1, "b"), (0, "c")]` 上，选择排序把最小的 $(0, "c")$ 换到开头，顺带把两个键为 1 的记录换成了 `b` 在前——输出 `[(0, 'c'), (1, 'b'), (1, 'a')]`；插入排序的输出是 `[(0, 'c'), (1, 'a'), (1, 'b')]`，`a` 仍在 `b` 前面。
+
+## 成本类别、空间与假设
+
+**规模参数**是元素数 $n$，另一个规模参数是比较键本身的成本。
+
+**成本类别**：插入排序最好 $\Theta(n)$（已排序输入），最坏 $\Theta(n^2)$（键两两不等且严格递减）；这份归并排序的最好情形和最坏情形在渐进阶上都是 $\Theta(n \log n)$。输入顺序会改变具体的比较次数，但不会把它从这一渐进阶降到 $\Theta(n)$ 或推高到 $\Theta(n^2)$。两者的差别不在哪一个「更快」，而在最坏情形是否退化。
+
+**空间**：插入排序与选择排序原地，辅助空间 $O(1)$；归并排序这份实现需要 $\Theta(n)$ 的额外列表存储，常见数组实现改为显式复用一个长度为 $n$ 的工作缓冲。
+
+**假设**：元素之间存在全序比较，比较是常数成本；被排序的是记录本身，键只是其中一个字段，因此「输出是排列」要连记录一起保持。
+
+需要前 $k$ 个或第 $k$ 个元素时，不必为全部元素排出顺序；这类需求留给 `ordering` 后续的 `selection-and-top-k` 一节；「任何基于比较的排序都需要 $\Omega(n \log n)$ 次比较」这一结论需要比较模型的形式化，留给 `lower-bounds` 一节。
+
+**实现对照**。Python 的 `sorted()` 与 `list.sort()` 保证稳定；官方文档把 Python 的排序算法描述为 Timsort，并明确指出它会利用输入中已经存在的顺序：完全有序的输入可以在线性级的比较工作内处理，含有较长已有有序片段的数据通常也能少做很多工作；但「局部有序」本身并不足以保证比较次数接近线性。`list.sort()` 原地修改列表并返回 `None`，`sorted()` 构造一个新的已排序列表。`key=` 决定用于比较的键，而且内置排序对每个输入记录只计算一次键；`reverse=` 改变排序方向，但仍保持稳定性，因此可以先按次要字段排序、再稳定地按主要字段排序。排序过程使用 `<` 建立先后关系：没有 `key=` 时比较元素本身，有 `key=` 时实际参与排序比较的是键值；因此直接排序自定义类型时可以通过一致的 `__lt__` 提供排序关系，而提供 `key=` 时记录本身甚至不必可比较。
+
+## 小结
+
+- 排序的契约有两条后置条件：输出非降序，且是输入的一个排列。
+- 稳定性是独立的可选属性：键相等时保留输入次序，供多轮排序组合使用。
+- 比较次数、元素写入次数、辅助空间是三个互相独立的成本量，不能用一个「时间」概括。
+- 插入排序用前缀有序不变量论证，最坏 $\Theta(n^2)$、最好 $\Theta(n)$；归并排序用 $T(n) = 2T(n/2) + \Theta(n)$ 论证 $\Theta(n \log n)$，代价是 $\Theta(n)$ 的额外列表存储。
+- 稳定与原地互不蕴含：插入排序两者兼备，归并排序稳定但非原地，选择排序原地但不稳定。

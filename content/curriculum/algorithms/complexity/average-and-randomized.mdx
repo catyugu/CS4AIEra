@@ -5,30 +5,78 @@ order: 70
 title: 平均情形与随机化
 status: draft
 objectives:
-  - 说明一个平均情形结论必须先给出输入分布，以及分布改变时结论如何失效
-  - 区分「假定输入随机」与「算法自己掷硬币」两种机制，并说明后者的结论强在哪里
-  - 用一个固定输入的实验展示随机化如何拿掉对手的杠杆
-  - 说明期望界对单次运行不作出承诺，以及重复执行如何把错误概率降到可接受
+  - 把运行时间写成随机变量，并说明平均情形的结论为什么必须先给出输入分布
+  - 区分对输入分布取期望与对固定输入的算法随机位取期望，并识别「对每个输入成立」时的量词位置
+  - 用指示器随机变量与期望的线性性把总成本拆成各部分的期望之和，并说明线性性不需要独立性
+  - 说明期望界为什么不提供确定性的单次运行保证，以及样本均值为什么只是对期望的估计
 ---
 
-上一课用摊还分析处理了一串操作的总成本，其中不需要任何随机性假设。另一种「平均」是对**输入**取期望，或者让**算法自己**掷硬币。
+上一课用摊还分析处理了一串操作的总成本，其中不需要任何随机性假设。另一种「平均」把成本当成随机变量：随机性要么来自输入，要么来自算法内部。本课只建立这套分析语言；具体随机算法的分类、设计与契约属于 `techniques` 子章节的随机化算法一课（Las Vegas 与 Monte Carlo、全域哈希、随机化快速排序、用重复降低错误概率都在那里）。
 
-这两者经常被混为一谈，后果是把一个条件性结论当成无条件结论使用：说「哈希表查找是 $O(1)$」时省略了「在什么假设下」，说「快速排序是 $n \log n$」时省略了「对什么分布」。把假设写出来之后可以看到，随机化把结论从「对随机输入平均」升级为「对该算法可能产生的每一次随机选择平均」——后者对每个输入都成立，包括对手精心构造的输入。
+## 两种随机性来源
 
-## 平均情形与期望
+**平均情形**先固定规模，再对输入分布取平均。规模为 $n$ 时用一族分布 $D_n$ 描述输入，平均成本是一个以规模为自变量的函数：
 
-- **平均情形**是对输入分布取期望：$E[\text{cost}] = \sum P(\text{input}) \cdot \text{cost}(\text{input})$。没有分布就没有结论；同一个算法在不同分布下的平均成本可以差一个数量级。
-- **期望**由随机性来源决定。两种来源必须分开：
-  - 输入是随机的（假定或实测的分布）——结论只对该分布成立；
-  - 算法内部的随机选择（掷硬币）——结论对**每一个**输入都成立，随机性由算法掌控。
-- **随机化的价值在对抗场景里最明显**：确定性算法的对手可以预先构造输入让它进入最坏情形；随机化算法让对手无法预知会走哪条路径，因而无法针对某一次运行构造输入。
-- **随机化算法有两类**：
-  - Las Vegas：结果始终正确，运行时间随机（随机化快速排序）；
-  - Monte Carlo：运行时间固定或有界，结果有可控制的错误概率（随机点上的多项式判等、概率素性测试）。
-- **期望界不约束单次运行**：期望 $n \log n$ 允许某次运行更慢，甚至退化为最坏情形。需要单次上界时用最坏情形；需要把「偶尔很慢」变成「几乎不会很慢」时，用重复执行与集中不等式（本课演示前者，后者只需知道存在）。
-- **期望不是平均值**：实验测出的样本均值只是对期望的估计，它验证实现是否符合模型；结论本身来自对分布或随机选择的计数论证，测得「平均很快」不构成复杂度结论（见 <CrossRef id="algorithms.cost-model" />）。
+```text
+C_avg(n) = E_{X ~ D_n}[C(X)] = Σ_{x: |x| = n} D_n(x) · C(x)
+```
 
-## 平均情形需要分布
+没有分布就没有结论；换掉分布后，原来的结论必须重新验证，结果可能改变。
+
+**随机化算法**把随机性放进算法内部：输入固定，算法自己掷硬币。用 $R$ 表示算法这一次的随机选择，对固定输入 $x$ 有 $E_R[C(x, R)]$；量词位置不同——前者是「对这个分布平均」，后者是「对这个输入、对算法的随机选择平均」。
+
+「随机化算法有对每个输入都成立的期望界」是一条需要另行证明的论断；写成量词就是存在常数 $c > 0$ 与规模门槛 $n_0$，使每个满足 $\lvert x \rvert \ge n_0$ 的输入都满足 $E_R[C(x, R)] \le c \cdot f(\lvert x \rvert)$——隐藏常数不许依赖 $x$，「统一」就是指这一点。它不是「算法自己掷硬币」这个事实的直接后果。确定性算法的对手可以在运行之前构造出让最坏情形发生的输入；随机位在输入之后才产生时，对手无法预知这一次会走哪条路径。这个保证也有条件：被挡住的是「在随机位之前固定输入」的对手，能在运行过程中观察并继续构造输入的适应性对手另当别论。
+
+说「哈希表查找是 $O(1)$」或「快速排序是 $n \log n$」时省略的正是这两句假设：前者是哈希假设下的期望，后者是随机基准点下、对每个输入成立的期望。
+
+## 随机变量与期望
+
+一次运行的成本是随机变量 $T$，取值由随机性来源决定。取值有限时，期望是按概率的加权平均：$E[T] = \sum_t t \cdot P(T = t)$。
+
+**指示器随机变量**把事件变成 0/1 计数。事件 $A$ 的指示器满足 $E[[A]] = P(A)$，于是一个总次数可以写成若干指示器之和，期望随之拆成若干概率之和：
+
+```text
+线性查找的比较次数 = Σ_{i=0}^{n-1} [第 i 次比较发生]
+E[比较次数] = Σ_{i=0}^{n-1} P(第 i 次比较发生)
+```
+
+**期望的线性性**是这条拆分成立的依据：对本课讨论的、期望有限的随机变量，$E[X + Y] = E[X] + E[Y]$ 恒成立；更一般地，若 $T = T_1 + \cdots + T_k$，则 $E[T] = \sum_j E[T_j]$。各部分之间通常明显相关（第 $i + 1$ 次比较是否发生取决于第 $i$ 次的结果），线性性照样成立。独立性不是线性性的前提：只有当某一步明确依赖独立性——例如一般性地把联合概率分解为概率之积，或调用一个以独立性为前提的概率界——才需要证明独立性。若只是要让协方差项为零，零协方差本身已经足够，独立性只是更强的充分条件。
+
+下面的例子故意取两个相关的指示器：第二个事件包含第一个事件，所以它们不独立。
+
+```python run id="alg.avg.linearity"
+import random
+
+size = 100
+threshold = 40
+trials = 20000
+generator = random.Random(4)
+
+
+def draw():
+    """Return two dependent indicators from one draw of two values."""
+    first = generator.randrange(size)
+    second = generator.randrange(size)
+    below_first = 1 if first < threshold else 0
+    below_either = 1 if (first < threshold or second < threshold) else 0
+    return below_first, below_either
+
+
+pairs = [draw() for _ in range(trials)]
+mean_first = sum(x for x, _ in pairs) / trials
+mean_either = sum(y for _, y in pairs) / trials
+mean_sum = sum(x + y for x, y in pairs) / trials
+
+p = threshold / size
+print(f"E[X] estimate={mean_first:.4f} closed form={p:.4f}")
+print(f"E[Y] estimate={mean_either:.4f} closed form={1 - (1 - p) ** 2:.4f}")
+print(f"E[X + Y] estimate={mean_sum:.4f} sum of closed forms={p + 1 - (1 - p) ** 2:.4f}")
+print("joint outcomes observed:", sorted({(x, y) for x, y in pairs}))
+```
+
+三行的样本均值都与闭式相符——恒等式本身来自期望的线性性，实验只用于核对实现与模型。而联合取值只有三种：$X = 1$ 时 $Y$ 必然是 1，所以 $P(Y = 0 \mid X = 1) = 0$，而 $P(Y = 0) > 0$——两者明显不独立。线性性不需要独立性，这正是它能作为主线工具的原因。估计与闭式之间的差距来自样本量，不是模型误差。
+
+## 平均情形要先写分布
 
 线性查找的成本取决于目标在序列中的位置。同一个实现，两种分布，两个结论。
 
@@ -59,154 +107,22 @@ print(f"keys that are absent: mean comparisons={sum(absent_cost) / len(absent_co
 print("closed forms: (n + 1) / 2 =", (size + 1) / 2, "| n =", size)
 ```
 
-两种分布的差别不是常数因子：均匀分布下平均比较次数趋近 $(n + 1)/2$，而「查找一个不存在的键」时每次都要走完全程，平均等于 $n$。**同一段代码，同一个规模，两个不同的结论**。任何「线性查找平均是 $n/2$」的说法都隐含了「目标等可能地出现在任意位置」这一假设。
+这两种分布给出不同的**精确**期望，渐进量级却都仍是 $\Theta(n)$：目标位置均匀时期望恰为 $(n + 1)/2$（这是精确值，实验均值只是它在有限样本上的估计），目标必然不存在时恰为 $n$。**同一段代码，同一个规模，两个不同的结论**。用指示器写出来就是：等可能命中时第 $i$ 次比较发生的概率是 $(n - i)/n$，求和得 $(n + 1)/2$；目标不存在时每个位置都发生，求和得 $n$。换别的分布还可能改变量级——目标总在第一个位置是 $\Theta(1)$，目标总不存在是 $\Theta(n)$。常见的 $(n + 1)/2$ 推导采用「目标等可能地位于任意位置」的分布；只给出这个期望而不声明所采用的分布，论断是不完整的。
 
-## 随机化拿掉对手的杠杆
+## 运行时间是随机变量
 
-确定性快速排序取首元素为基准点：对已经有序的输入，每次划分都极不均衡，成本是 $\Theta(n^2)$。随机化版本按随机顺序取基准点，同一个输入下的成本变成期望 $O(n \log n)$。
+期望界不提供确定性的单次运行保证：$E[T] = O(n \log n)$ 并不排除某次运行成本更大，甚至达到算法的最坏情形。接口要求「每次运行都有硬上界」时用最坏情形分析；要求「超过某个阈值的概率很小」时，还要另行证明尾概率界——只有期望值并不等价于高概率保证（对非负随机变量，期望经由 Markov 不等式给出的尾界通常很弱）。这与摊还界不等于硬延迟界是平行的两件事。
 
-```python run id="alg.avg.randomized-quicksort"
-import math
-import random
+实验测出的样本均值只是对期望的估计，它用来核对实现是否符合模型；结论本身来自计数论证（见 <CrossRef id="algorithms.cost-model" />）。在独立同分布、单次成本方差为 $\sigma^2$ 时，$m$ 次运行的样本均值方差是 $\sigma^2 / m$，随 $1 / m$ 下降，但它始终是估计，不是期望本身。
 
-
-def quicksort(items, pivot_choice):
-    """Sort in place, return the number of comparisons."""
-    comparisons = 0
-    stack = [(0, len(items) - 1)]
-    while stack:
-        low, high = stack.pop()
-        if low >= high:
-            continue
-        index = pivot_choice(low, high)
-        items[low], items[index] = items[index], items[low]
-        pivot = items[low]
-        boundary = low
-        for scan in range(low + 1, high + 1):
-            comparisons += 1
-            if items[scan] < pivot:
-                boundary += 1
-                items[boundary], items[scan] = items[scan], items[boundary]
-        items[low], items[boundary] = items[boundary], items[low]
-        stack.append((low, boundary - 1))
-        stack.append((boundary + 1, high))
-    return comparisons
-
-
-size = 300
-sorted_input = list(range(size))
-generator = random.Random(1)
-
-fixed_pivot = lambda low, high: low
-random_pivot = lambda low, high: generator.randrange(low, high + 1)
-
-fixed_cost = quicksort(sorted_input.copy(), fixed_pivot)
-random_costs = [quicksort(sorted_input.copy(), random_pivot) for _ in range(20)]
-
-print(f"deterministic pivot on sorted input: {fixed_cost} comparisons ({size * (size - 1) // 2} is the worst case)")
-print(f"random pivot on the same input: mean={sum(random_costs) / len(random_costs):.0f} worst={max(random_costs)}")
-print("n log2 n for reference:", round(size * math.log2(size)))
-```
-
-同一份已排序输入：固定基准点是 44850 次比较（$n(n-1)/2$，最坏情形），随机基准点的平均约 2000 多次，最坏的一次也远离最坏情形。**输入没有变，变的只是算法自己的随机选择。**
-
-结论的形式也不同。固定基准点的 $\Theta(n^2)$ 是对这个输入说的；随机基准点的期望 $O(n \log n)$ 是对**每一个**输入说的——对手知道你会随机选，但不知道这一次选到哪，因此无法构造让它必然退化的输入。
-
-输出的第三行 `n log2 n` 只是量级参考，不是这个实现的常数：常数由划分与移动的具体写法决定，属于实现，不属于成本模型。
-
-## 哈希函数的随机化
-
-哈希表在「简单均匀哈希」假设下期望 $O(1)$；固定哈希函数给了对手构造全冲突键集的机会。随机化从一族函数里抽取，让任何**固定**键集在期望上分布均匀。
-
-```python run id="alg.avg.universal-hashing"
-import random
-
-
-def bucket_sizes(keys, hash_function, buckets):
-    counts = [0] * buckets
-    for key in keys:
-        counts[hash_function(key) % buckets] += 1
-    return counts
-
-
-buckets = 64
-prime = 1000003
-trials = 200
-
-# an adversarial key set for the fixed function "key % 64": every key is a multiple of 64
-keys = [offset * buckets for offset in range(400)]
-
-fixed_sizes = bucket_sizes(keys, lambda key: key, buckets)
-print(f"fixed hash on an adversarial key set: max bucket={max(fixed_sizes)} over {len(keys)} keys")
-
-generator = random.Random(2)
-maxima = []
-for _ in range(trials):
-    a = generator.randrange(1, prime)
-    b = generator.randrange(0, prime)
-    maxima.append(max(bucket_sizes(keys, lambda key, a=a, b=b: (a * key + b) % prime, buckets)))
-
-# control: hand every key a uniform random bucket, without any hash function
-control = [max(bucket_sizes(keys, lambda key: generator.randrange(buckets), buckets)) for _ in range(trials)]
-
-even_load = len(keys) / buckets
-print(f"family {trials} times on the same keys: mean max bucket={sum(maxima) / len(maxima):.2f} worst={max(maxima)}")
-print(f"uniformly random assignment as a control: mean max bucket={sum(control) / len(control):.2f} worst={max(control)}")
-print(f"even loading would be {even_load} keys per bucket, but the largest of 64 random buckets is above it")
-print("family trials with a bucket above twice the even load:", sum(1 for value in maxima if value > 2 * even_load))
-```
-
-固定函数把 400 个键全部放进同一个桶：目标明确、构造简单，而程序本身没有任何异常信号。随机化后用同一批键，最大桶的平均值降到 8.5 左右，最坏一次 44，全部落在「几十」这个量级上，而固定函数是 400。
-
-注意**不要**把随机化理解为「桶会很均匀」：200 次抽取里有 6 次出现了超过均匀负载两倍的桶。把每个键真正均匀随机地分配到 64 个桶里做对照，平均最大桶反而更大（见输出）。原因是「64 个桶中的最大值」本身就是一个大于平均负载的量——即使每次分配完全独立均匀，也总会有桶偏多。
-
-这是**全域哈希**（universal hashing）的实际形态：从一族函数中随机抽取，使任意两个固定键冲突的概率不超过 $1 / \text{buckets}$。它约束的是期望与冲突概率，不是每次抽取的桶占用；用它推理时该问的是「期望查找成本」，而不是「最大桶不超过多少」。随机数生成器的质量就是算法的一部分：可预测的伪随机数让对手重新获得预知能力，固定种子的生成器只适合可复现的实验。随机化与摊还可以叠加，但结论要分开写——哈希表查找的 $O(1)$ 期望来自哈希假设，扩容的摊还来自势函数，混在一句里会让假设与结论都失去含义。不可预测也不等于更快：随机化的价值在于消除对手的针对性，常数因子通常比确定性版本略大。
-
-语言实现把同一条思路用作防护——字符串的哈希值在进程间随机化，正是为了不让外部输入预知哈希函数（见 <CrossRef id="python.equality-and-hashing" />）。哈希表结构本身见 <CrossRef id="algorithms.hash-tables" />。
-
-## 期望之外：错误概率与重复
-
-Monte Carlo 算法用**可控的错误概率**换取确定的运行时间。判等是标准例子：在两个多项式的差上随机取点求值，非零多项式只有一个很小的概率取到零。
-
-```python run id="alg.avg.monte-carlo"
-import random
-
-field = 101
-generator = random.Random(3)
-
-
-def same_at(first, second, point):
-    return (first(point) - second(point)) % field == 0
-
-
-p = lambda x: (x * x + 1) % field
-r = lambda x: (x * x + x + 1) % field      # differs from p at every point except x = 0
-
-trials = 2000
-
-
-def verdict(points):
-    """Declare the polynomials equal unless some point shows a difference."""
-    return all(same_at(p, r, generator.randrange(field)) for _ in range(points))
-
-
-single = sum(1 for _ in range(trials) if verdict(1))
-repeated = sum(1 for _ in range(trials) if verdict(3))
-
-print(f"one random point: wrong verdicts={single} of {trials} ({single / trials:.4f}, theory {1 / field:.4f})")
-print(f"three random points: wrong verdicts={repeated} of {trials} (theory {1 / field ** 3:.2e})")
-print("the two polynomials agree only at x = 0, one point out of", field)
-```
-
-一次随机取点的错误概率是 $1/101$（两个多项式只在 $x = 0$ 处相等），实测接近理论值；取三个独立点后错误概率降到 $(1/101)^3 \approx 10^{-6}$，2000 次试验里一次都没有失败。**这就是 Monte Carlo 结论的形态**：运行时间固定，错误概率由重复次数控制，而单次结果无法从这一次运行看出来对不对——算法自己也不知道这次的「相等」是真是假，只有重复与独立性能把它压下去。
-
-Las Vegas 算法相反：结果永远正确，代价花在时间上（前面随机化的快速排序）。两者都需要重复的策略：Las Vegas 在超时后重启，Monte Carlo 用独立的多次运行降低错误概率。重复的前提是独立性——同一个种子、同一次采样结果重用不会降低错误概率。
+期望与摊还是两个可以叠加、但必须分开陈述的维度：一个操作的期望成本与一串操作的摊还成本是两条独立论断（见 <CrossRef id="algorithms.amortized" />）。
 
 ## 小结
 
-- 平均情形是对输入分布取期望；没有分布就没有结论。
-- 随机化算法把随机性放进算法内部，结论对每个输入成立，对手无法针对单次运行构造输入。
-- Las Vegas 正确性确定、时间随机；Monte Carlo 时间确定、正确性有可控错误概率。
-- 全域哈希从函数族中随机抽取，使任意固定键集的最大桶期望可控；语言对字符串哈希做随机化是同一思路。
-- 期望界不约束单次运行；重复与独立性把 Monte Carlo 的错误概率降到可接受水平。
-- 实验用于验证模型，模型由计数论证给出。
+- 随机性来源决定成本是哪个随机变量：平均情形先固定规模、再对输入分布族 $D_n$ 取期望，随机化算法对固定输入取算法随机位 $R$ 上的期望。
+- 平均情形必须先写分布；换掉分布后，原来的结论必须重新验证，结果可能改变。
+- 指示器随机变量把总次数拆成 0/1 之和；期望的线性性对期望有限的随机变量恒成立，独立性不是它的前提。
+- 期望界不提供确定性的单次运行保证；高概率保证是另一回事，需要另行证明尾概率界。
+- 样本均值只是对期望的估计，复杂度结论来自计数论证。
+- 期望与摊还是两个独立维度，可以叠加但要分开陈述。
+- 本课留下的四个接口：$D_n$ 上的平均情形、固定输入上对随机位取期望、期望的线性性、高概率保证不同于期望保证。具体随机算法（Las Vegas 与 Monte Carlo、全域哈希、随机化快速排序、概率放大）的设计与契约属于 `techniques` 的随机化算法一课。

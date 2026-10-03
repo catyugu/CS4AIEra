@@ -39,7 +39,7 @@
 
 每个模块给出：定位、范围与重点、有意排除并指定去处的主题、深度分配。深度级别（A/B/C/D）的定义见 `doc/CONTENT_GUIDE.md` 第 2 节，这里只写该模块的取舍。
 
-状态列：`✓` 已发布，`草稿` 已落盘但不进入站点，`—` 计划中。
+状态列：`✓` 已发布；`已冻结` 已过逐段评审但尚未发布；`草稿` 已落盘待评审；`—` 计划中。
 
 ### 3.1 Python 语言（`python`，order 10）
 
@@ -102,33 +102,37 @@
 
 | 子章节 | order | 课时 id | 标题 | 落盘 |
 | --- | --- | --- | --- | --- |
-| `algorithms.complexity` | 10 | `algorithms.abstractions-and-invariants` | 抽象数据类型、表示与不变量 | — |
-| | 20 | `algorithms.cost-model` | 操作成本与渐进记号 | 草稿 |
-| | 30 | `algorithms.asymptotic-analysis` | 渐进记号与增长率 | — |
-| | 40 | `algorithms.correctness` | 正确性、循环不变量与终止 | — |
-| | 50 | `algorithms.recursion` | 递归、归纳与调用树 | — |
-| | 60 | `algorithms.amortized` | 摊还分析 | 草稿 |
-| | 70 | `algorithms.average-and-randomized` | 平均情形与随机化 | 草稿 |
-| `algorithms.sequences` | 10 | `algorithms.arrays-and-lists` | 数组、动态数组与局部性 | 草稿 |
+| `algorithms.complexity` | 10 | `algorithms.abstractions-and-invariants` | 抽象数据类型、表示与不变量 | 已冻结 |
+| | 20 | `algorithms.cost-model` | 输入规模与成本模型 | 已冻结 |
+| | 30 | `algorithms.asymptotic-analysis` | 渐进记号与增长率 | 已冻结 |
+| | 40 | `algorithms.correctness` | 正确性、循环不变量与终止 | 已冻结 |
+| | 50 | `algorithms.recursion` | 递归、归纳与调用树 | 已冻结 |
+| | 60 | `algorithms.amortized` | 摊还分析 | 已冻结 |
+| | 70 | `algorithms.average-and-randomized` | 平均情形与随机化 | 已冻结 |
+| `algorithms.sequences` | 10 | `algorithms.arrays-and-lists` | 数组、动态数组与局部性 | 已冻结 |
 | | 20 | `algorithms.linked-structures` | 链表与指针结构 | 草稿 |
 | | 30 | `algorithms.stacks-and-queues` | 栈、队列与 deque | 草稿 |
-| | 40 | `algorithms.strings` | 字符串匹配与预处理 | — |
-| `algorithms.maps` | 10 | `algorithms.maps-and-sets` | 集合、映射与关联查询 | — |
-| | 20 | `algorithms.hash-tables` | 哈希表与关联映射 | 草稿 |
-| `algorithms.trees` | 10 | `algorithms.tree-representation` | 树、递归结构与遍历 | — |
-| | 20 | `algorithms.ordered-maps` | 二叉搜索树与有序映射 | — |
-| | 30 | `algorithms.heaps` | 优先队列与堆 | — |
-| `algorithms.ordering` | 10 | `algorithms.binary-search` | 二分查找与单调边界 | — |
-| | 20 | `algorithms.sorting` | 排序契约、稳定性与成本 | — |
-| | 30 | `algorithms.comparison-sorting` | 归并、分区与 n log n 排序 | — |
-| | 40 | `algorithms.selection-and-top-k` | 选择、第 k 个元素与 Top-K | — |
-| | 50 | `algorithms.lower-bounds` | 下界与比较模型 | — |
-| `algorithms.graphs` | 10 | `algorithms.graph-representation` | 图的表示与不变量 | — |
-| | 20 | `algorithms.graph-traversal` | 遍历、连通分量与访问不变量 | — |
-| | 30 | `algorithms.dags-and-topological-order` | DAG、拓扑序与环检测 | — |
-| | 40 | `algorithms.shortest-paths` | 最短路径 | — |
-| | 50 | `algorithms.connectivity-and-spanning-trees` | 连通性、并查集与最小生成树 | — |
-| `algorithms.techniques` | 10 | `algorithms.divide-and-conquer` | 分治 | — |
+| | 40 | `algorithms.strings` | 字符串匹配与预处理 | 草稿 |
+| `algorithms.maps` | 10 | `algorithms.maps-and-sets` | 集合、映射与关联查询 | 已冻结 |
+| | 20 | `algorithms.hash-tables` | 哈希表与关联映射 | 已冻结 |
+| `algorithms.trees` | 10 | `algorithms.tree-representation` | 树、递归结构与遍历 | 已冻结 |
+| | 20 | `algorithms.ordered-maps` | 二叉搜索树与有序映射 | 已冻结 |
+| | 30 | `algorithms.heaps` | 优先队列与堆 | 已冻结 |
+| `algorithms.ordering` | 10 | `algorithms.binary-search` | 二分查找与单调边界 | 已冻结 |
+| | 20 | `algorithms.sorting` | 排序契约、稳定性与成本 | 已冻结 |
+| | 30 | `algorithms.comparison-sorting` | 比较排序：分区、快速排序与堆排序 | 已冻结 |
+| | 40 | `algorithms.selection-and-top-k` | 选择、第 k 个元素与 Top-K | 已冻结 |
+| | 50 | `algorithms.lower-bounds` | 下界与比较模型 | 已冻结 |
+| `algorithms.graphs` | 10 | `algorithms.graph-representation` | 图的表示与不变量 | 已冻结 |
+| | 20 | `algorithms.graph-traversal` | 遍历、连通分量与访问不变量 | 已冻结 |
+| | 30 | `algorithms.dags-and-topological-order` | DAG、拓扑序与环检测 | 已冻结 |
+| | 40 | `algorithms.shortest-paths` | 最短路径：单位权、非负权与负边 | 已冻结 |
+| | 50 | `algorithms.connectivity-and-spanning-trees` | 连通性、并查集与最小生成树 | 已冻结 |
+
+评审给 `connectivity-and-spanning-trees` 定的边界与硬条件（batch 8）：顺序为静态连通性回顾 → 并查集 → 生成树/森林 → MST 目标 → cut safe-edge 引理 → Kruskal → Prim 短对照 → 断开图与最小生成森林；明确切回有限简单无向图；Kruskal 的边列表必须让每条无向边只出现一次（不能把 $2|E|$ 个邻接项当 $|E|$ 条边排序）；并查集的抽象状态是「一个划分」，parent/rank/size 只是表示，契约写成 $find(u)=find(v) \iff u,v$ 在 $(V,E_i)$ 中连通；能力边界要说清（支持边的加入、不支持一般删除、不给实际路径、不是有向可达或 SCC）；复杂度写摊还 $O(n+m)\alpha(n)$，不写成每次常数；闭合森林边数公式 $|E|=|V|-c$；输入契约取「非空连通无向图」，单点图有唯一 0 边生成树、断开图给最小生成森林、空图不卷入争论；MST 允许任意实数权重（含负边，与 shortest-path tree 的目标不同，用三角形 $w(s,a)=2,w(s,b)=2,w(a,b)=1$ 强制区分）；正确性走 cut safe-edge 引理的 exchange 证明，Kruskal 维护三条不变量（已接受边无环、划分等于 $(V,F)$ 的连通分量、始终存在某个最小生成森林包含 $F$，连通图是 $c = 1$ 的特例）；输出只承诺「返回一棵 MST」；Prim 的 key 分两层——$key[v]$ 是从当前树到该顶点的最轻边，只有 extract-min 选中者的父边才是跨整个 cut 的 light edge——两者都不是路径总权重，lazy heap 复用 $(key, serial, vertex)$；断开图由 Kruskal 自然返回森林而不是中途失败；复杂度把排序与 DSU 分开写；oracle 与生产算法独立（枚举 $\binom{|E|}{|V|-1}$ 个候选边集的组合爆炸对照），测试覆盖负边、等权多解（用两种输入顺序得到两棵边集不同、总权相同的最小生成树）、单点图、断开图、孤立点；Prim 与 Kruskal 在主图上比较的是 canonical 无向边集（同一集合、构造顺序不同），不要用列表顺序冒充边集差异；明确排除强连通分量、一般动态删边连通性、有向 arborescence、最小割/最大流、Steiner tree、second-best MST、动态 MST、Borůvka。
+
+「落盘」列记录评审状态：`—` 表示尚未落盘，`草稿` 表示已落盘待审校，`已冻结` 表示已过评审且在本批次内冻结。跨批次的 CrossRef 只要求目标 ID 已登记且稳定，不要求上游课时已经冻结。
+| `algorithms.techniques` | 10 | `algorithms.divide-and-conquer` | 分治 | 已冻结 |
 | | 20 | `algorithms.greedy` | 贪心与交换论证 | — |
 | | 30 | `algorithms.dynamic-programming` | 动态规划 | — |
 | | 40 | `algorithms.search-and-pruning` | 状态空间搜索与剪枝 | — |
@@ -325,13 +329,13 @@
 | --- | --- | --- |
 | 1 | `python`：整模块完成并冻结（basics onboarding 层，objects / functions / iteration，data-model / representation / program / async） | 完成 |
 | 2 | 算法 A：确定模块结构（本文件、`doc/CONTENT_GUIDE.md`、`_section.yaml`） | 完成 |
-| 3 | 算法 B：`complexity` —— 补抽象与不变量、渐进记号、正确性、递归，重构已落盘的三节 | 计划（`cost-model`、`amortized`、`average-and-randomized` 已草稿落盘） |
-| 4 | 算法 C：`sequences` —— 审核已落盘三节的顺序与所有权，新写 `strings` | 计划（`arrays-and-lists`、`linked-structures`、`stacks-and-queues` 已草稿落盘） |
-| 5 | 算法 D：`maps`、`trees` —— 先写集合与映射契约，再审核 `hash-tables`；新写树、有序映射、堆 | 计划（`hash-tables` 已草稿落盘） |
-| 6 | 算法 E：`ordering` —— 二分查找、排序契约、n log n 排序、选择与 Top-K、下界 | 计划 |
-| 7 | 算法 F：`graphs` —— 表示、遍历、DAG 与拓扑序、最短路、连通性与最小生成树 | 计划 |
-| 8 | 算法 G：`techniques` —— 分治、贪心、动态规划、状态空间搜索、随机化 | 计划 |
-| 9 | 算法 H：`selection` 与全章审校、冻结 | 计划 |
+| 3 | 算法 B：`complexity` —— 补抽象与不变量、渐进记号、正确性、递归，重构已落盘的三节 | 进行中（七节均已草稿落盘：`abstractions-and-invariants`、`cost-model`、`asymptotic-analysis`、`correctness`、`recursion`、`amortized`、`average-and-randomized`。逐节评审按 order 推进：`abstractions-and-invariants`、`cost-model`、`asymptotic-analysis`、`correctness`、`recursion`、`amortized` 已过评审并**已冻结**，70 `average-and-randomized` 收缩后也已冻结——`complexity` 七课（order 10–70）全部冻结，可视为完成。已冻结的口径：成本模型只含操作与单价，规模度量与量化方式另行固定；最坏/平均/摊还不是互斥分类，摊还用 $F(m)/m$ 定义且不假设分布；$\Theta$ 是紧确的渐进界而不是精确值，多参数界定义在合法参数域上并要求 $n_1 + \cdots + n_k \ge N$ 统一成立，$f + g = \Theta(\max\{f, g\})$ 只在 $f = O(g)$ 时才化简为 $\Theta(g)$；摊还的对象是合法操作序列 $\sigma$，$T(\sigma)/m$ 只是该序列的实际平均成本，摊还收费由论证构造且不唯一，界必须覆盖任意合法前缀，势能法要求所有可达状态满足 $\Phi_k \ge \Phi_0$，确定性摊还与期望分析是两个独立维度；正确性的规约是状态关系（前置条件约束初始状态，后置条件可关联初始状态、最终状态与结果，异常也是一种可规定的结果），部分正确与终止在同一前置条件下分开论证，循环证明模板固定为 $\{P\}\ S_{\text{init}}\ \{I\}$、$\{I \wedge B\}\ S_{\text{body}}\ \{I\}$、$I \wedge \neg B \Rightarrow Q$（Hoare 三元组只保证部分正确、不含终止），终止用每轮严格下降的良基度量（「严格递减 + 有下界」不成立）；递归先证部分正确（归纳假设只说「子调用一旦返回」）再独立证终止，递归调用要求所选良基秩严格下降而不是输入尺寸变小，终止接口是「调用自身的非递归工作终止 + 子调用保持前置条件 + 每条递归边的良基秩严格下降」，候选度量不下降只说明该度量不足以完成证明；`RecursionError` 属运行时资源限制，与算法终止性分层；调用树直接给出总成本与递归栈空间，其余辅助空间（备忘表、存活容器、切片、frontier）另行计算，显式栈只在逐帧模拟递归时才与递归深度同阶。其余一节待审。评审口径：`average-and-randomized` 要**实质收缩**为「概率与期望的分析语言」（随机变量、期望、线性性、运行时间作为随机变量、输入分布 vs 算法随机性），Las Vegas/Monte Carlo、概率放大与具体随机算法移入 `techniques/randomized-algorithms`，不是保留原文再加一句 CrossRef。收缩已执行：本课从约 13.0k 字符降到 4.4k，删去随机化快速排序、全域哈希、Monte Carlo 三个单元格与「随机化拿掉对手的杠杆」「哈希函数的随机化」「期望之外：错误概率与重复」三节，改以「两种随机性来源」（量词位置、适应性对手的条件）+「随机变量与期望」（指示器、线性性不需要独立性，新增相关指示器单元格）+「平均情形要先写分布」（保留线性查找单元格）+「运行时间是随机变量」（期望界不约束单次运行、样本均值只是估计、期望与摊还分开陈述）组织，原三节内容留给 `techniques/randomized-algorithms`。冻结口径：平均情形固定规模并用分布族 $D_n$ 定义 $C_{\text{avg}}(n) = E_{X \sim D_n}[C(X)]$，随机化一侧对固定输入取算法随机位上的期望 $E_R[C(x, R)]$，「对每个输入成立」必须写成显式统一量词（$\exists c > 0, n_0, \forall x: \lvert x \rvert \ge n_0 \Rightarrow E_R[C(x, R)] \le c \cdot f(\lvert x \rvert)$，隐藏常数不许依赖 $x$）而不是 $\forall x, E_R[\cdot] = O(\cdot)$；期望的线性性对期望有限的随机变量恒成立、不是独立性的推论，独立性只在概率之积分解或以独立性为前提的概率界处才需要，零协方差不必由独立性推出；线性查找两种分布给出不同**精确**期望而渐进量级同为 $\Theta(n)$，分布改变量级的例子是 $\Theta(1)$ 与 $\Theta(n)$；「期望界不提供确定性的单次运行保证」与「高概率保证需另证尾概率界」分开，与摊还界 ≠ 硬延迟界平行；样本均值方差 $\sigma^2/m$ 但样本均值始终是估计。这课给 `techniques/randomized-algorithms` 留下四个出口：$D_n$ 上的平均情形、固定输入上对随机位取期望、期望的线性性、期望保证与高概率保证的区别，该课不再重复铺设基础概率分析语言） |
+| 4 | 算法 C：`sequences` —— 审核已落盘三节的顺序与所有权，新写 `strings` | 进行中（四节均已草稿落盘，顺序经评审确认不动；`strings` 已过评审并按六处修正改定；`arrays-and-lists` 已按 `complexity` 冻结口径审校并**已冻结**：抽象 sequence 先定义抽象状态（有限序列 $S$，元素来自定义了相等关系的域）再列操作契约，非法下标的调用明确写成「不在契约范围内、本契约不规定其结果」（Python `list` 的负索引与 `insert` 截断属于具体类型自己的语义，不写成本课的契约规定），相等关系属于契约层而「一次相等判定的成本」属于成本模型（只能说「最多 $n$ 次相等比较」）；成本一律带模型限定——下标访问在固定宽度槽位 + 单位成本地址访问下是 $\Theta(1)$，`insert(i)` 移动 $n - i$ 个已有元素、总成本 $\Theta(n - i + 1)$，`delete(i)` 总成本 $\Theta(n - i)$（合法删除 $n - i \ge 1$），头部 $\Theta(n)$、靠近尾部 $\Theta(1)$、按位置取最坏才是 $\Theta(n)$，头删 $m$ 次是 $\Theta(nm)$（$n$ 初始长度、$1 \le m \le n$）；几何扩容只对「固定常数增长因子 $g > 1$ 的模型」断言 $O(\log n)$ 次扩容与 $\Theta(n)$ 总复制，空闲比例按确定性峰值陈述；`sys.getsizeof` 的证据只支持「容量不是每次追加都增长」，按比例 over-allocation 归实现事实，容器字节数还取决于已分配容量与增长历史（同长度不同历史的两个列表实测不同）；局部性只推出布局性质（间接寻址、通常更弱的空间局部性），不推出 Python 层 wall-clock 性能）；`linked-structures`、`stacks-and-queues` 待按同一框架审校） |
+| 5 | 算法 D：`maps`、`trees` —— 先写集合与映射契约，再审核 `hash-tables`；新写树、有序映射、堆 | 完成（`maps` 两节与 `trees` 三节均已通过评审并冻结，接口链已闭合） |
+| 6 | 算法 E：`ordering` —— 二分查找、排序契约、n log n 排序、选择与 Top-K、下界 | **完成**（`ordering` 五节全部过评审并冻结：`binary-search`、`sorting`、`comparison-sorting`、`selection-and-top-k`、`lower-bounds`；冻结前的接口闭合检查已做——CrossRef 目标、$r$ / $k$ 用词、四条成本轴口径、`_section.yaml` 的 summary 均已统一。`sorting.mdx` 有一处 CrossRef 指向 `algorithms.cost-model`（批次 B，仍为草稿），按「目标 ID 稳定即可依赖」的口径接受） |
+| 7 | 算法 F：`graphs` —— 表示、遍历、DAG 与拓扑序、最短路、连通性与最小生成树 | **完成**（五课全部过评审并冻结：`graph-representation`（含 edge list 接口）、`graph-traversal`、`dags-and-topological-order`、`shortest-paths`、`connectivity-and-spanning-trees`。冻结前的接口与口径检查已做：表示层锁死 $G=(V,E,w)$、显式顶点集合、三种表示与三个操作成本、简单图默认（无平行边/无自环）、$|V|$/$|E|$ 口径；遍历层锁死三态访问机语义（discovered = 已发现但邻接扫描未完成；finished = 扫描完成）与「发现时标记」，迭代 DFS 用显式栈帧与递归同序；DAG 层把环的定义收紧到简单有向环，判环要求 DFS 覆盖整个 $V$，Kahn 只承诺拓扑前缀；最短路层统一三值 $\delta(s,v)$（下确界定义 + 分类定理）、predecessor 只作见证（存在性不变量）、Dijkstra settle 不变量指明非负条件用在后缀、Bellman–Ford 双向判据与逐顶点 $-\infty$ 闭包、heapq 用 $(key, serial, vertex)$；连通性层把并查集写成「划分 + 充要契约 $find(u)=find(v) \iff$ 连通」，统一到最小生成森林契约，Prim 的 key 分两层。跨课依赖：weight 属于边（表示）→ 遍历不读权重（遍历）→ 三色 DFS（DAG）→ 非负权前置（最短路）→ 无向切回 + 并查集（连通性）。`sorting.mdx` 指向 `algorithms.cost-model` 的 CrossRef 仍按「目标 ID 稳定即可依赖」的口径接受。五课 frontmatter 保持 `status: draft`，发布留到 `algorithms` 整模块通过 module-level release gate 后统一进行） |
+| 8 | 算法 G：`techniques` —— 分治、贪心、动态规划、状态空间搜索、随机化 | 进行中（已建 `techniques` 子章节；`divide-and-conquer` 已落盘、经四轮评审落地并**已冻结**（正文口径：分治骨架只要求良基度量严格下降，$f(n)$ 是本层全部非递归工作，主定理含基本情形与正则条件方向，终止与深度分两层，Fibonacci 用 $C(n)+1$ 的移位形式），其余四节待写。边界已定：`greedy` 以「每次贪心选择后仍存在与之兼容的最优解」为主不变量，交换论证作为保持该不变量、并保留 0/1 背包按价值密度贪心失败的反例，拟阵最多作旁注不展开 basis/rank/intersection；`dynamic-programming` 按「有限状态递推 + 状态复用」定义，完整写 LCS 与 0/1 背包、编辑距离作同一套二维前缀状态的短对照、区间 DP 只示范按区间长度的拓扑顺序，明确 $O(nW)$ 是伪多项式并只留统一的最短路/拓扑视角小节；`search-and-pruning` 区分回溯与分支定界，只讲可行性剪枝与最优性剪枝两条义务，不纳入 minimax/alpha-beta/MCTS；`randomized-algorithms` 与 `complexity` 的 `average-and-randomized` 硬切分——前者是「随机化作为设计手段与契约」（Las Vegas/Monte Carlo、期望与高概率两类承诺、one-sided/two-sided error），后者收缩为「概率与期望的分析语言」） |
+| 9 | 算法 H：`selection` 与全章审校、冻结 | 计划（收尾顺序固定为：冻结 `divide-and-conquer` → 按 order 逐节评审并冻结 `complexity` → 冻结 `sequences` → 依次写并评审 `greedy`、`dynamic-programming`、`search-and-pruning`、`randomized-algorithms` → 写并评审 `selection` 两节 → 整个 `algorithms` 模块做一次 integration audit 后整体冻结；不接受「先全写完再统一审」。`choosing-structures` 定位为按语义契约先过滤、再比较工作负载成本；`complexity-in-practice` 定位为渐进阶相同或模型过粗时的现实成本，不复述 $O/\Theta$ 定义） |
 | 10 | `os.processes`、`os.memory` | 计划 |
 | 11 | `os.concurrency`、`os.io`、`os.resources` | 计划 |
 | 12 | `net.foundations`、`net.transport` | 计划 |
@@ -345,7 +349,14 @@
 | 20 | `dist.data`、`dist.architecture`、`dist.operations` | 计划 |
 | 21 | `sec.foundations`、`sec.crypto`、`sec.web`、`sec.systems` | 计划 |
 
-「已落盘待审核」表示课时已按 `draft` 落盘、全部可执行单元格已在本地运行，等待逐节通读后改为 `published`。
+「冻结」与「发布」是两件正交的事，仓库里各有各的载体：
+
+```text
+冻结   内容治理状态：本课已过逐段评审，除事实错误、前置缺口与跨章节接口问题外不再主动扩写。记录在本文件的「落盘」列。
+发布   部署状态：生产静态站是否为该课生成路由。记录在课时 frontmatter 的 status 字段（draft/review 只在 dev 的 includeUnpublished 下可见，生产路由只接受 published）。
+```
+
+因此课时一律以 `status: draft` 落盘并参与 dev 验证；逐节评审通过后在本文件标记「已冻结」，但仍保持未发布。等整个模块全部冻结并通过模块级发布检查后，用一个独立的发布提交一次性完成：批量把该模块课时的 `status` 改为 `published`；更新本文件的模块/批次发布状态（完成（已冻结，待发布）→ 完成（已发布））；跑生产校验与构建，确认课程路由数量按预期增加；核对已发布课时的 `CrossRef` 不指向生产环境不可见的 draft 课时。子章节 `_section.yaml` 的 `status: active` 保持不变，它与课时的 `LessonStatus` 是两套枚举。
 
 ## 5. 维护
 

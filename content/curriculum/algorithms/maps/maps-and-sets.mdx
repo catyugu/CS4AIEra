@@ -1,0 +1,281 @@
+---
+id: algorithms.maps-and-sets
+slug: /algorithms/maps-and-sets
+order: 10
+title: 集合、映射与关联查询
+status: draft
+objectives:
+  - 写出集合与映射的抽象契约：成员、插入、删除各自的前置条件与后置条件，以及「唯一性」由什么关系定义
+  - 说明映射为什么要求键的相等关系与哈希保持一致，以及两者不一致时实际发生什么
+  - 对同一个查询工作负载比较位图、有序数组与哈希表三种表示的成本类别
+  - 给出哈希映射的表示不变量，并说明插入与查询各自如何保持它
+  - 构造让所有键落入同一个桶的输入，说明「字典查询是常数成本」在什么前提下成立
+  - 指出无序映射的契约做不到哪些操作，以及要做这些操作需要换成什么契约
+---
+
+前两节的序列按位置组织数据，位置是下标或指针；这一节的组织方式换成了**键**。代价是契约多了一层：唯一性与相等语义必须由键自己承担，否则「同一个键」这句话没有定义。收益是查询改按键定位，不再依赖顺序。
+
+集合与映射是同一个东西的两面：集合是「键到无值」的映射，映射是「带值的集合」。它们的无关部分——相等、唯一性——先钉死，再谈表示与成本。
+
+## 契约：成员、唯一性与键的相等
+
+**映射** $M$ 是一组键到值的对应。它承诺的操作与后置条件：
+
+| 操作 | 前置条件 | 后置条件 |
+| --- | --- | --- |
+| `M[k]` | 无（缺失键的处理单独约定） | 键 $k$ 对应的值；键不存在时按约定报错或返回缺省 |
+| `M[k] = v` | 无 | 键 $k$ 的值变为 $v$；若 $k$ 原本不存在，键集增加 $k$ |
+| `k in M` | 无 | $k$ 在键集中时为真 |
+| `del M[k]` | $k$ 在键集中 | 键集去掉 $k$ |
+| 迭代 | 无 | 遍历键集（顺序由契约决定：有序映射承诺次序，无序映射不承诺） |
+
+集合的成员、插入与删除与之对应：`x in s`、`s.add(x)`、`s.remove(x)`；其中 `remove` 在元素缺失时失败。`s.discard(x)` 是另一种删除契约，它把缺失元素也定义为成功且不改变集合。
+
+**唯一性**是这套契约的核心：键集是一个集合，同一个键只出现一次。这句话里的「同一个」需要由一条等价关系定义——自反、对称、传递。若这些性质不成立，键就不能稳定地划分成等价类；例如传递性失败时，插入与查询结果可能依赖操作顺序。Python 允许用户自行定义 `__eq__`，不会替用户验证这些性质；对于可哈希对象，数据模型另外要求相等对象必须具有相同哈希值。
+
+在 Python 里，相等关系由 `__eq__` 给出，而键的定位依赖 `__hash__`。两者必须一致：**相等则哈希相等**。这条要求是哈希表示的表示不变量的前提，语言的数据模型也直接约束它（见 <CrossRef id="python.equality-and-hashing" />）。
+
+```python run id="alg.maps.key-equality"
+class ByValue:
+    """__eq__ and __hash__ both read the value: the pair agrees."""
+
+    def __init__(self, value):
+        self.value = value
+
+    def __eq__(self, other):
+        return isinstance(other, ByValue) and self.value == other.value
+
+    def __hash__(self):
+        return hash(self.value)
+
+    def __repr__(self):
+        return "ByValue(" + repr(self.value) + ")"
+
+
+class IdentityHash:
+    """__eq__ reads the value; __hash__ is kept explicitly as object's identity hash,
+    so the two disagree. Defining __eq__ alone would make the type unhashable."""
+
+    __hash__ = object.__hash__
+
+    def __init__(self, value):
+        self.value = value
+
+    def __eq__(self, other):
+        return isinstance(other, IdentityHash) and self.value == other.value
+
+    def __repr__(self):
+        return "IdentityHash(" + repr(self.value) + ")"
+
+
+class ValueOnly:
+    """__eq__ without __hash__: the data model removes hashing."""
+
+    def __eq__(self, other):
+        return True
+
+
+left, right = ByValue("k"), ByValue("k")
+print("ByValue   : equal =", left == right, "| hashes agree =", hash(left) == hash(right))
+consistent = {left: 1}
+consistent[right] = 2
+print("ByValue   : entries after writing both =", len(consistent), "| value =", consistent[left])
+
+left, right = IdentityHash("k"), IdentityHash("k")
+print("Identity  : equal =", left == right, "| hashes agree =", hash(left) == hash(right))
+inconsistent = {left: 1}
+inconsistent[right] = 2
+print("Identity  : entries after writing both =", len(inconsistent),
+      "| values =", inconsistent[left], inconsistent[right])
+try:
+    inconsistent[IdentityHash("k")]
+except KeyError:
+    print("Identity  : a fresh key equal to both finds neither entry")
+
+print("ValueOnly : __hash__ is", ValueOnly.__hash__)
+try:
+    {ValueOnly(): 1}
+except TypeError as error:
+    print("ValueOnly : in a dict ->", type(error).__name__, "-", error)
+```
+
+一致的一对把两个相等的键合并成一个条目；不一致的一对让它们各自存在，先写的值并没有被覆盖，而两次「相等」的查询却按哈希落点返回不同的东西。语言只约束到「相等则哈希相等」这一层：它保证一致的实现可用，不检查也不阻止不一致的实现。至于 `__eq__` 不带 `__hash__`，数据模型直接把类型设为不可哈希，`TypeError` 在插入那一刻抛出，映射没有被创建出来。
+
+## 表示：同一个契约的三种成本形态
+
+契约只承诺行为，表示决定成本。同一份成员查询工作负载，可以有三种表示：
+
+| 表示 | 成员查询 | 插入 | 删除 | 迭代顺序 | 空间 |
+| --- | --- | --- | --- | --- | --- |
+| 位图（全集有界且编码为常数成本） | 最坏 $\Theta(1)$ | 最坏 $\Theta(1)$ | 最坏 $\Theta(1)$ | 全集次序 | $\Theta(U)$ 位 |
+| 有序数组 + 二分 | 最坏 $\Theta(\log n)$ | 最坏 $\Theta(n)$ 搬移 | 最坏 $\Theta(n)$ 搬移 | 键的次序 | $\Theta(n)$ |
+| 哈希表（负载因子受常数上界） | 期望 $\Theta(1)$，最坏 $\Theta(n)$ | 期望摊还 $\Theta(1)$，最坏 $\Theta(n)$ | 期望 $\Theta(1)$，最坏 $\Theta(n)$ | 不承诺键序 | $\Theta(n)$ |
+
+三行都能满足上一节的契约，差别在于哪一项操作便宜；成本模型沿用序列那一节，一次键比较记 1，一次槽位访问记 1（见 <CrossRef id="algorithms.cost-model" />）。有序数组的成员查询最坏需要 $\Theta(\log n)$ 次比较，而插入或删除在最坏情况下要搬移线性数量的元素；哈希表在负载因子受控制、哈希与相等比较按常数计价，并采用合适的哈希概率模型时，按键定位具有期望常数成本（见 <CrossRef id="algorithms.hash-tables" />）。
+
+**有序映射是一份更强的契约**：除按键查找外，还提供最小键、最大键、前驱、后继与区间查询。表示仍然可以有多种选择：有序数组已经保存键序，因而能以对数时间定位前驱、后继和区间起点，但插入与删除最坏需要线性搬移；普通哈希表没有保存键序，做这些查询通常需要扫描全部键。后面的 `ordered-maps` 会加入树表示，讨论怎样同时让按序查询与更新保持对数成本。
+
+## 哈希映射的表示不变量
+
+哈希表由哈希函数、桶数组与冲突处理组成。取 `capacity` 个桶、分离链接：
+
+```text
+hash(key) -> 整数
+bucket = hash(key) mod capacity
+桶数组：capacity 个桶，每个桶挂一条链，链上存键值对
+```
+
+表示不变量有两条：
+
+```text
+任意两个已存条目的键都不相等：每个相等类至多有一个条目
+键 k 只可能出现在 (hash(k) mod capacity) 这个桶的链里
+```
+
+第二条把查询限制在一个桶内；第一条保证抽象键集中每个相等类只有一个代表。插入先进入哈希决定的桶，与已有键逐项比较；发现相等键就更新现有条目的值，否则新增条目。查询走同一条链，比较到相等或用完为止。两个操作都不改变不变量：位置由哈希决定，而条目的数量只在没有相等键时增加。
+
+链长决定了比较次数：链越长，一次查询要比较的键越多。于是**哈希函数把键分散到桶里的均匀程度，就是成本结论的假设**。
+
+```python run id="alg.maps.chaining-cost"
+class ChainingMap:
+    """Separate chaining. Invariant: key k lives only in bucket hash(k) % capacity,
+    and no key appears twice."""
+
+    def __init__(self, capacity, hash_function):
+        self.buckets = [[] for _ in range(capacity)]
+        self.hash_function = hash_function
+        self.comparisons = 0
+        self.slot_accesses = 0
+
+    def _bucket(self, key):
+        self.slot_accesses += 1
+        return self.buckets[self.hash_function(key) % len(self.buckets)]
+
+    def set(self, key, value):
+        bucket = self._bucket(key)
+        for index, (existing, _) in enumerate(bucket):
+            self.comparisons += 1
+            if existing == key:
+                bucket[index] = (key, value)
+                return
+        bucket.append((key, value))
+
+    def get(self, key, default=None):
+        for existing, value in self._bucket(key):
+            self.comparisons += 1
+            if existing == key:
+                return value
+        return default
+
+    def invariant_holds(self):
+        for index, bucket in enumerate(self.buckets):
+            keys = [key for key, _ in bucket]
+            if len(set(keys)) != len(keys):
+                return False
+            if any(self.hash_function(key) % len(self.buckets) != index for key in keys):
+                return False
+        return True
+
+
+def polynomial_hash(key, base=31):
+    total = 0
+    for char in key:
+        total = total * base + ord(char)
+    return total
+
+
+def constant_hash(key):
+    return 0
+
+
+keys = ["key" + str(index).rjust(4, "0") for index in range(256)]
+for label, function in (("polynomial", polynomial_hash), ("constant", constant_hash)):
+    table = ChainingMap(64, function)
+    for key in keys:
+        table.set(key, len(key))
+    before = table.comparisons
+    for key in keys:
+        table.get(key)
+    lookups = table.comparisons - before
+    longest = max(len(bucket) for bucket in table.buckets)
+    print(f"{label:>10}: comparisons for {len(keys)} lookups = {lookups:6d}"
+          f" ({lookups / len(keys):.2f} per lookup), longest chain = {longest:3d},"
+          f" invariant holds = {table.invariant_holds()}")
+print("capacity = 64, keys = 256 -> an even hash leaves average chain length 4")
+```
+
+同一个数据结构，同一个不变量，两次运行只有哈希函数不同。多项式哈希把 256 个键摊到 64 个桶上，一次查询平均比几个键；常量哈希把所有键塞进一个桶，链长 256，一次查询平均比一百多个键，这个数字随键数线性增长。
+
+这组实验说明的是另一件事：在相同键集与相同负载因子下，实际查询成本会随着哈希分配发生巨大变化。这里的多项式哈希与常量哈希都是确定函数，因此 4.70 与 128.50 是这两个具体实例的实际平均比较次数，本身并不证明任何期望复杂度结论。要得到期望 $\Theta(1)$，还必须给出概率模型，例如对固定键集从合适的哈希函数族中随机选择哈希函数，并在负载因子保持常数时对这个随机选择取期望。
+
+要构造所有键同桶，只需要让所选键满足 `hash_function(key) % capacity` 相同；常量哈希是最直接的例子。哈希函数取值域小于桶数只说明部分桶永远无法被使用，并不意味着所有键都会冲突。
+
+## 迭代顺序与范围查询
+
+无序契约在哪里不够用，取决于工作负载。两类需求最容易暴露差别：按序迭代，以及按序查询。
+
+```python run id="alg.maps.ordered-gap"
+def successor_by_scan(keys, query):
+    """Postcondition: the smallest key >= query, or None; no order is stored, so scan."""
+    best, comparisons = None, 0
+    for key in keys:
+        comparisons += 1
+        if key >= query and (best is None or key < best):
+            best = key
+    return best, comparisons
+
+
+def successor_by_bisect(sorted_keys, query):
+    """Precondition: sorted_keys is ascending. Postcondition: the same answer,
+    with the key comparisons the binary search itself spends."""
+    low, high = 0, len(sorted_keys)
+    comparisons = 0
+    while low < high:
+        middle = (low + high) // 2
+        comparisons += 1
+        if sorted_keys[middle] < query:
+            low = middle + 1
+        else:
+            high = middle
+    return (sorted_keys[low] if low < len(sorted_keys) else None), comparisons
+
+
+keys = [index * 3 for index in range(500)]
+sorted_keys = sorted(keys)
+queries = [1, 2, 501, 1496, 2000]
+print(f"{'query':>6} {'scan':>5} {'scan comparisons':>17} {'bisect':>7} {'bisect comparisons':>19} agree")
+for query in queries:
+    scanned, scan_cost = successor_by_scan(keys, query)
+    divided, bisect_cost = successor_by_bisect(sorted_keys, query)
+    print(f"{query:>6} {str(scanned):>5} {scan_cost:>17} {str(divided):>7} {bisect_cost:>19} {scanned == divided}")
+
+inserted = ["beta", "alpha", "gamma", "alpha"]
+mapping = {}
+for position, word in enumerate(inserted):
+    mapping[word] = position
+print("dict keys in insertion order:", list(mapping) == ["beta", "alpha", "gamma"], list(mapping))
+print("set iteration is not a contract:", sorted(set(inserted)) == ["alpha", "beta", "gamma"])
+```
+
+「最小键不小于 $q$」在没有键序的表示里最坏要检查全部 $n$ 个键；保存有序数组后，二分以 $\Theta(\log n)$ 次比较定位候选位置。这个差别随规模增长，而且换不来——除非表示自己保存顺序。
+
+Python 的 `dict` 保插入序，这是语言层面的承诺，不是某一实现的巧合（[stdtypes](https://docs.python.org/3/library/stdtypes.html#dict)）；`set` 不承诺迭代顺序。两者都属于无序契约：插入序与键的次序是两件事，前者不回答「哪个键最小」。
+
+## 成本类别、空间与假设
+
+**成本类别。** 位图的行与有序数组的成员查询是最坏情形结论（前提是全集有界、数组已排序）。哈希表的行是期望结论：对哈希函数在键集上的分布取期望，前提是键的比较与哈希计算都按常数计价。若一次哈希本身需要 $H(k)$ 时间，那么哈希表操作还要加上这部分成本；把哈希记作 $\Theta(1)$ 是成本模型的一项假设。某些内容型键的首次哈希会依赖键长度，而具体运行时也可能缓存已经算出的哈希值（见 <CrossRef id="algorithms.strings" />）。
+
+**空间。** 位图占 $\Theta(U/8)$，与元素个数无关——全集很大而元素稀疏时它比另外两行差得多。哈希表在 $\Theta(n)$ 之外还要留出空桶：负载因子越低冲突越少，桶数组越大。有序数组只要 $\Theta(n)$ 个槽位，代价是插入时的搬移。
+
+**假设。** 三类结论各自的假设：位图需要全集有界且可编码成整数；有序数组需要每次插入后重新建立有序不变量；哈希表需要哈希函数在键集上分散，且键的相等关系是等价关系、与哈希一致。这些前提失效的后果并不相同：哈希分散性差会破坏期望成本界；有序数组失去排序会直接破坏二分查找的正确性；相等与哈希不一致则破坏映射表示与抽象键唯一性之间的对应。
+
+**实现对照。** Python 的 `dict` 与 `set` 都提供基于哈希的唯一性与成员查询，但它们的迭代契约不同：`dict` 的插入顺序是语言保证，`set` 不承诺插入顺序。冲突处理属于具体实现；当前 CPython 的 `dict` 使用 compact ordered hash table，以开放寻址和带扰动的探测序列处理冲突（[dictobject.c](https://github.com/python/cpython/blob/main/Objects/dictobject.c)），与本课用于推导的分离链接不是同一种表示。语言级契约不要求实现采用挂链、开放寻址或某一种探测公式。
+
+## 小结
+
+- 集合与映射是同一份契约的两面，核心是唯一性；唯一性由键的相等关系定义，而它必须是等价关系。
+- 键的相等与哈希必须一致：相等则哈希相等。不一致时语言不报错，映射却会同时存在两个「相等」的键。
+- 位图、有序数组、哈希表都能交付这份契约，成本形态不同；契约与表示必须分开命名。
+- 哈希映射的不变量是「每个相等类至多有一个条目」与「键只出现在其哈希决定的桶中」；插入与查询各自保持它。
+- 哈希表的期望常数界必须连同概率模型与受控负载因子一起陈述；确定性的多项式哈希与常量哈希实验只说明具体哈希分配会怎样改变实际成本。
+- 普通哈希表示没有保存键序，前驱、后继与范围查询通常要扫描键集；有序数组已经能二分定位，但更新昂贵，后面的树表示讨论怎样同时支持高效的有序查询与更新。

@@ -1,0 +1,5 @@
+id: algorithms.ordering
+label: 排序、查找与选择
+order: 50
+summary: 单调性把查找变成边界定位；二分与其循环不变量；排序契约与稳定性；基于比较的 n log n 排序；选择与 Top-K；比较模型下的下界与模型边界。
+status: active
