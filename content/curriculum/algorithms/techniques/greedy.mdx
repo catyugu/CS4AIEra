@@ -11,7 +11,7 @@ objectives:
   - 给出贪心算法的终止论证与成本推导，并说明哪些前提一旦失效结论就不再成立
 ---
 
-贪心算法一次做一个不可撤回的选择，之后不回头修改。<CrossRef id="algorithms.divide-and-conquer" /> 抽象的是「拆成更小的同类子问题」；贪心不拆问题，只把候选逐个锁定下来，每一步选错都没有回头路。要让这条路线站得住，先挑一道规则一眼能想出来、最优解又能穷举核对的具体题目：区间调度。
+贪心算法一次做一个不可撤回的选择，之后不回头修改，每一步选错都没有回头路。一条规则看起来合理，不足以保证结论正确；它站得住，靠的是你能把这一步选中的对象塞进某个最优解。下面从一道规则一眼能想出来、最优解又能穷举核对的具体题目做起：区间调度。
 
 ## 区间调度
 
@@ -26,7 +26,7 @@ objectives:
 
 本课用半开区间 $[s, f)$，因此 $[0,1)$ 与 $[1,2)$ 相容，而闭区间 $[0,1]$ 与 $[1,2]$ 在点 1 相交。不重叠的判据依赖这条约定，换约定必须重新陈述契约。
 
-最自然的规则是按结束时刻升序扫描：维护上一个被选中区间的结束时刻 `last_finish`，当区间开始时刻不早于 `last_finish` 时选入。结束得越早，后面留给其他区间的位置越多，这是这条规则的全部直觉。用一个小实例把它跑出来，再穷举所有子集核对。
+最自然的规则是按结束时刻升序扫描：维护上一个被选中区间的结束时刻 `last_finish`，当区间开始时刻不早于 `last_finish` 时选入。结束得越早，后面留给其他区间的位置越多，这是这条规则的全部直觉。用几个小实例把它跑出来，再穷举所有子集核对。
 
 ```python run id="alg.greedy.interval-scheduling"
 def by_finish(intervals):
@@ -71,35 +71,28 @@ def optimum(intervals):
 
 
 counterexample = [(0, 10), (1, 2), (3, 4)]
-best_size, witnesses = optimum(counterexample)
-print("the three start times are distinct: only the sort key differs")
-print("  input          ", counterexample)
-print("  by finish time ", by_finish(counterexample), "size", len(by_finish(counterexample)))
-print("  by start time  ", by_start(counterexample), "size", len(by_start(counterexample)))
-print("  optimum size   ", best_size, "| witnesses", witnesses)
+cases = (
+    ("one long interval plus two short", counterexample),
+    ("three intervals with late finishes", [(0, 4), (1, 2), (2, 3)]),
+    ("touching half-open intervals", [(0, 3), (3, 5), (4, 6), (5, 6)]),
+    ("one interval nested over three", [(1, 9), (2, 3), (4, 5), (6, 7)]),
+)
+print(f"{'input':33s} {'by finish':>9} {'by start':>8} {'optimum':>7}")
+for label, intervals in cases:
+    reference, _ = optimum(intervals)
+    print(f"{label:33s} {len(by_finish(intervals)):>9} "
+          f"{len(by_start(intervals)):>8} {reference:>7}")
 
 print()
-print("the main invariant on the same input: every greedy prefix lies inside an optimum")
+print("the main invariant on", counterexample, ": every greedy prefix stays extendable")
+_, witnesses = optimum(counterexample)
 for length in range(len(by_finish(counterexample)) + 1):
     prefix = by_finish(counterexample)[:length]
     extends = any(set(prefix) <= set(witness) for witness in witnesses)
     print(f"  prefix of size {length}: {prefix}  ->  extendable: {extends}")
-
-print()
-pool = [(0, 3), (1, 2), (2, 4), (3, 5), (4, 6), (1, 4)]
-instances = mismatches = 0
-for mask in range(1, 1 << len(pool)):
-    intervals = [pool[i] for i in range(len(pool)) if mask >> i & 1]
-    chosen = by_finish(intervals)
-    reference, _ = optimum(intervals)
-    instances += 1
-    if len(chosen) != reference or not disjoint(chosen):
-        mismatches += 1
-print(f"every non-empty subset of one fixed pool: {instances} instances, "
-      f"mismatches against the oracle: {mismatches}")
 ```
 
-第一个例子给出开始时刻规则的反例：三个开始时刻互不相同，只有排序键变了，解就从 2 降到 1。第二个输出在同一个输入上逐前缀核对一条性质——每一步的部分解都还落在某个最优解里。最后一段穷举固定候选池的全部非空子集：每个子集都是一个小实例，结束时刻规则在全部实例上都与穷举最优解一致，返回的集合也确实两两不重叠。
+表格把两种排序键与穷举最优解并排：结束时刻规则在四个实例上都取到最优，开始时刻规则在其中的三个上落后——第一、二行从 2 降到 1，第四行从 3 降到 1。两条规则共用同一段扫描，差别只在排序键。最后一段在反例输入上逐前缀核对一条性质：每一步的部分解都还落在某个最优解里。四个小实例只提供证据，把「它对所有输入都对」交给交换论证。
 
 ## 证明最早结束规则
 
@@ -138,11 +131,9 @@ print(f"every non-empty subset of one fixed pool: {instances} instances, "
 
 工作量的两处落在找到合适的 $x$ 与证明 $O'$ 可行上。选定的规则决定了这两件事能否完成：区间调度的最早结束规则让两件事都完成，密度规则一件也完不成。一对一交换覆盖的只是贪心里的一族；一次替换多个对象、或改用割性质与局部结构变换的证明不在本课范围内。
 
-主不变量还有一个等价的读法，它需要一个定义。选定 $G$ 之后，**残余可行族**是 $F_G = \lbrace X \subseteq C \setminus G : G \cup X \in F \rbrace$，残余问题就在这个族上求最大权重。$G$ 可扩展等价于残余问题里存在一个完成 $X$，使 $G \cup X$ 是原问题的全局最优解。残余问题不是「删掉几个不能加入的候选」：0/1 背包装下一部分物品之后，残余容量是 $W - \sum_{i \in G} w_i$（$w_i$ 是物品重量，目标是 $\sum_i v_i$），可行族的形状随之改变。分治把问题拆成同类子问题递归求解；贪心的证明在每次选择之后的残余实例上重复同一件事——论证主不变量仍然成立，即当前部分解仍可扩展成原问题的全局最优解。残余实例保持同类只让同一个证明可以继续用下去，它本身推不出贪心正确：本课的 0/1 背包选完一件物品后剩下的仍是容量减少的同类实例，密度贪心照样失败。两者的区别还在于贪心一步只排除一部分候选，不把问题拆成多个。
+区间调度这类问题上，「贪心前缀不落后于最优解前缀」的 greedy-stays-ahead 论证是同一个构造的另一种写法，翻译回交换语言不增加内容。由此得到一条实践规则：贪心规则逐题证明，在别处成立不能迁移过来。
 
-区间调度这类问题上，「贪心前缀不落后于最优解前缀」的 greedy-stays-ahead 论证是同一个构造的另一种写法，翻译回交换语言不增加内容。
-
-在有限、非空且具有继承性的可行集族上，使「按非增权重扫描、能加就加」对任意非负权重函数都得到最大权可行集的，恰好是**拟阵**（matroid）。图中的无环边集构成 graphic matroid；<CrossRef id="algorithms.connectivity-and-spanning-trees" /> 的 Kruskal 用的是同一拟阵贪心结构的最小权基版本——按边权非减扫描，在不成环时加入边。区间调度的可行族不是拟阵：取 $A = \lbrace [0,10) \rbrace$ 与 $B = \lbrace [0,1),[2,3),[4,5) \rbrace$，$A$ 的势更小，而 $B$ 中每个元素都与 $[0,10)$ 重叠，交换性质不成立；它的正确性来自上面的交换论证。由此得到一条实践规则：贪心规则逐题证明，在别处成立不能迁移过来。
+**扩展阅读**：本课的一般形状落到更强的结构上就是拟阵（matroid）——在有限、非空且具有继承性的可行集族上，使「按非增权重扫描、能加就加」对任意非负权重函数都得到最大权可行集的，恰好是拟阵，图中的无环边集构成 graphic matroid，<CrossRef id="algorithms.connectivity-and-spanning-trees" /> 的 Kruskal 是同一结构的最小权基版本。区间调度的可行族不是拟阵，它的正确性来自上面的交换论证，一般理论在此不展开。
 
 ## 反例：0/1 背包按密度选择
 
@@ -216,33 +207,17 @@ for subset in optima:
         rest = subset[:dropped] + subset[dropped + 1:] + [(6, 8)]
         print(f"    drop one item from {subset} and add (6, 8): weight "
               f"{sum(w for w, _ in rest)} <= capacity: {sum(w for w, _ in rest) <= capacity}")
-
-print()
-pool = [(1, 1), (2, 3), (3, 4), (4, 6), (5, 7), (2, 2)]
-capacity = 8
-runs = hits = 0
-worst = 1.0
-for mask in range(1, 1 << len(pool)):
-    subset = [pool[i] for i in range(len(pool)) if mask >> i & 1]
-    _, _, value = greedy_by_density(subset, capacity)
-    optimal = best_value(subset, capacity)
-    runs += 1
-    hits += value == optimal
-    if optimal:
-        worst = min(worst, value / optimal)
-print(f"all {runs} non-empty item subsets of one fixed pool, capacity {capacity}:"
-      f" optimum reached {hits} times, worst greedy/optimum value ratio {worst:.3f}")
 ```
 
 第一个输出给出失败：容量 10、物品 (6, 8) 与两个 (5, 5) 时，密度规则先取 (6, 8)，剩余 4 装不下任何一件，值停在 8；穷举最优解是两件 (5, 5)，值 10。交换步在这里无论如何都完不成：最优解里只有两件 (5, 5)，从其中去掉一件再放进 (6, 8) 会得到重量 11，超出容量，去掉两件则势下降。所以「最密的物品在某个最优解里」这条见证从第一步就不存在，主不变量在整个算法里都不成立。
 
 同一份数据在**分数松弛**下反而让密度规则变成最优：允许切开物品时，最后一件可以只取一部分把容量填满，得到 12 的上界。两者的差别在 $F$ 上——分数版允许以任意比例取物品，可以连续调整占用的容量，本例里所有物品的总重量超过容量，所以能恰好把容量填满；0/1 版的取值只有装与不装，剩余容量只能空着。同一条选择规则在两个可行集族上一个给出最优值、一个给出次优值，差别来自结构。
 
-第三段穷举一个固定物品池的全部非空子集：63 个实例里密度规则有 45 个达到最优，最差的一次拿到最优值的 0.818。这个比值不构成近似比的结论——它只是一个规模固定的枚举，真正的近似比要按问题规模的下界陈述。
+留作练习：把候选池换成 $\lbrace (1,1), (2,3), (3,4), (4,6), (5,7), (2,2) \rbrace$、容量 8，枚举全部非空子集，数一数密度规则有多少次拿不到穷举最优值，最差的一次相差多少。这类固定规模的枚举给出的比值不构成近似比结论，真正的近似比要按问题规模的下界陈述。
 
 密度相同：不同的平局处理可能改变选中的集合，甚至改变最终价值，这是规则不成立的又一症状；稳定排序只是把输入顺序当作平局规则，修不好密度贪心的一般错误。
 
-失效的原因落在候选集族的结构上：可行族在残余实例里换了形状，继承性与可扩展性再也给不出那个见证。
+失效的原因落在选择规则与可行族的相互作用上：$O \setminus G$ 中没有一件物品能换成密度最高的那件而不超重，构造 $O'$ 的条件不成立，可扩展性拿不到见证。
 
 ## 终止与成本
 
@@ -254,4 +229,4 @@ print(f"all {runs} non-empty item subsets of one fixed pool, capacity {capacity}
 - **空间**：排序产生一份长度为 $\Theta(n)$ 的引用副本（计价方式见 <CrossRef id="algorithms.arrays-and-lists" />），贪心状态本身是 $\Theta(1)$，输出另计。
 - **背包的密度规则**同样是 $\Theta(n \log n)$ 次比较加 $\Theta(n)$ 次容量检查。这个数字描述的是这段实现，与它返回的答案是否最优无关。
 
-贪心不回退，因此不需要为撤销保存中间状态，通常比动态规划省空间；这是实现方式的副产品，不是正确性的理由：动态规划把「复用什么」显式写进状态，代价是要保存一张状态表。
+**实现边界**：贪心不回退，不需要为撤销保存中间状态，通常比动态规划省空间；这是实现方式的副产品，不改变上面任何一条正确性结论。动态规划把「复用什么」显式写进状态，代价是要保存一张状态表。

@@ -5,60 +5,33 @@ order: 60
 title: 摊还分析
 status: published
 objectives:
-  - 用聚合、记账与势能三种方法证明一串操作的总成本，并说明三者的关系
-  - 推导动态数组追加的摊还常数成本，并写出所用的势函数与不变式
-  - 区分「摊还上界」与「单次最坏界」，说明前者为什么不能作为延迟保证
-  - 判断一段序列的成本上界来自每次操作，还是来自元素在一生中被处理的次数
+  - 用聚合、记账与势能三种写法为同一串操作给出总成本上界，并说明它们构造出的收费为什么可以不同
+  - 推导动态数组几何扩容的摊还常数成本，写出所用的势函数与它依赖的扩容策略
+  - 区分摊还上界与单次最坏成本，说明为什么前者不能当作单次延迟保证
+  - 说明确定性摊还证明与平均情形的分布假设是两条独立论断，以及期望摊还成本怎样组合两者
 ---
 
-成本模型那课把最坏、平均与摊还三种成本论断分开了。其中摊还可以变成可计算的东西：给出一串操作的总成本上界，并说明这个上界用什么代价换来。
+给一个按需增长的数组连续追加 $m$ 个元素。绝大多数追加只写一个槽位；当底层存储已经放满时，这一次追加要把已存的全部元素搬进一块更大的存储。以「满载时容量精确翻倍」这个实现为例，容量沿 $1, 2, 4, 8, \dots$ 增长，在规模为 $c$ 的那一次追加要搬走 $c$ 个元素，于是同一个循环里的两次追加可以相差几十倍工作量：一次写一个元素，下一次搬走整块。要判断这个实现能不能用，需要的是**整串追加的总成本**有多高，以及能否把它平均到每次追加上一个常数。
 
-对象是一串操作，不是一个规模。设 $\sigma = (op_1, \dots, op_m)$ 是一个合法操作序列，$T(\sigma) = \sum_{i=1}^{m} c_i$ 是它的真实总成本。摊还分析要给出**对所有合法序列统一成立**的总成本界；如果还能给每次操作规定一个摊还收费 $\hat a_i$，使任意合法序列都满足 $T(\sigma) \le \sum_i \hat a_i$，这组收费就给出该序列的摊还上界。特别地，如果总能取 $\hat a_i \le C$，就得到 $T(\sigma) \le C \cdot m$，即每次操作 $O(1)$ 的摊还上界；聚合分析常常直接证明 $T(\sigma) = O(m)$，不必真的给每一步分配收费。
+分析对象是一串操作序列，总成本由序列本身决定。设 $\sigma = (op_1, \dots, op_m)$ 是一个合法操作序列，$T(\sigma) = \sum_{i=1}^{m} c_i$ 是它的真实总成本，其中 $c_i$ 是第 $i$ 次操作的**真实工作量**。摊还分析要给出一条**对所有合法序列统一成立**的总成本界；如果还能给每次操作规定一个摊还收费 $\hat a_i$，使任意合法序列都满足 $T(\sigma) \le \sum_{i=1}^{m} \hat a_i$，这组收费就给出该序列的摊还上界。如果总能取 $\hat a_i \le C$，就得到 $T(\sigma) \le C \cdot m$，即每次操作 $O(1)$ 的摊还上界。
 
-$T(\sigma) / m$ 是这个具体序列上的**实际平均成本**，$\hat a_i$ 则是论证中人为构造的**收费**：两者不是一个量，收费也不由真实序列唯一确定（后文「势能法看动态数组」的例子会同时给出 2 与 3，两者都有效）。摊还分析不需要任何随机性假设，也不需要哈希或分布均匀；平均情形是另一种取平均的方式，它对输入分布取期望，因而需要说明分布假设（见 <CrossRef id="algorithms.cost-model" />）。本课的摊还证明都是确定性的，摊还与期望是两个独立维度、可以组合成期望摊还界，概率这一维留给 <CrossRef id="algorithms.average-and-randomized" />。
+$T(\sigma) / m$ 是这个具体序列上的**实际平均成本**，$\hat a_i$ 则是论证中人为构造的**收费**：两者不是一个量，后文会看到同一串追加的收费可以取 2 也可以取 3，两个都是有效的上界。摊还证明不依赖输入分布，也不需要哈希或分布均匀；**期望摊还成本**是另一维，它对输入的随机性（或算法的随机位）取期望之后再摊还，因而需要写出所采用的分布，平均情形处理那一维（见 <CrossRef id="algorithms.cost-model" />），概率与期望留给 <CrossRef id="algorithms.average-and-randomized" />。两者可以组合，组合出的结论要把两个维度分开陈述。
 
-## 摊还成本的定义
+## 聚合分析：对整串追加计数
 
-摊还界是一条对**所有**合法操作序列成立的界：若存在收费 $\hat a_i$，使任意长度 $m$ 的合法序列 $\sigma$ 都满足
-
-$$
-T(\sigma) = \sum_{i=1}^{m} c_i \;\le\; \sum_{i=1}^{m} \hat a_i,
-$$
-
-这组收费就是该序列的摊还收费。收费一致有上界时（$\hat a_i \le C$）得到常数摊还成本 $T(\sigma) \le C \cdot m$。序列可以任意长、也可以在任意位置结束，而前缀本身也是一个合法序列，所以界必须覆盖每一个前缀。
-
-聚合、记账与势能三种方法都用来证明对合法操作序列成立的总成本界，但构造出的收费方式和常数不必相同：
-
-| 方法 | 做法 | 需要什么 |
-| --- | --- | --- |
-| 聚合分析 | 直接求 $T(m)$ 的上界，再除以 $m$ | 对整串操作计数 |
-| 记账法 | 给操作预先规定摊还收费，多收的部分存成「信用」，用来支付后续的昂贵操作 | 一个信用不变式，保证余额不为负 |
-| 势能法 | 定义状态函数 $\Phi$，令摊还成本 $\hat a_i = c_i + \Phi_i - \Phi_{i-1}$ | 一个非负的势函数 |
-
-势能法与记账法等价：势可以解释为系统中尚未花掉的总信用（数学上的势函数可以很抽象，不必对应某一批实体硬币）。势能法更适合写证明，因为对每个前缀 $k$ 都有恒等式
+逐次界定一次追加的成本很难，整串追加的总成本却可以直接数出来。复制只发生在从容量 $2^{j-1}$ 扩到 $2^j$ 的那一次追加上，这样的复制搬运的元素数依次是 $1, 2, 4, \dots$，前 $j$ 次复制加起来不到 $2^j$，因此 $m$ 次追加里复制搬运的总元素数小于 $m$；再加上每次追加写入一个新元素、共 $m$ 次写入，得到
 
 $$
-\sum_{i=1}^{k} \hat a_i = \sum_{i=1}^{k} c_i + \Phi_k - \Phi_0,
+T(m) \;<\; 2m .
 $$
 
-因此只要对每个可达状态都有 $\Phi_k \ge \Phi_0$（最常见的规范化是 $\Phi_0 = 0$ 且 $\Phi$ 非负），第 $k$ 步停下时摊还收费之和仍然不低于真实成本：$T(\sigma_{1:k}) \le \sum_{i \le k} \hat a_i$。任何前缀都不会透支，靠的正是这条条件。
+把整串的总成本除以操作次数，就得到 $T(m) / m < 2$：每一次追加摊到不到两次基本操作。这条论证只用了对整串操作的计数，没有为任何一次操作单独定价，也不要求序列停在某个特定长度上。
 
-**摊还上界主张什么、不主张什么**：
-
-- 主张：对任意合法操作序列、包括任意合法前缀，真实总成本不超过所证明的摊还收费之和。序列在任意位置停下都成立。
-- 不主张：某一次操作的**真实**成本不超过它自己那次收费。单次最坏成本仍然可以远高于摊还收费。
-- 不主张：概率。本课的确定性摊还证明不需要输入分布，也不需要随机化；摊还与期望是两个可以组合的维度。
-- 不主张：没花掉的信用会被兑现。摊还收费之和可以严格大于已经发生的真实成本，这不影响上界成立。
-
-因此能否用摊还结论，取决于系统关心的是**吞吐**还是**单次延迟**：批量导入、按批处理的流水线适合前者；若接口需要硬性的单次延迟保证，就必须分析单次最坏成本，而统计意义上的尾延迟还需要相应的分布或高分位信息——摊还界两者都提供不了。序列很短时，渐进记号隐藏的常数与初始化成本可能主导实际时间，仅凭一个 $O(1)$ 的摊还记号不足以判断性能。
-
-## 势能法看动态数组
-
-动态数组的追加操作大多数是常数时间，偶尔一次要复制全部已有元素。对本节这个「只追加、满载时容量精确翻倍」的动态数组，取势函数 $\Phi = 2 \cdot \text{size} - \text{capacity}$，所有取值都在完整操作的边界上算。这个势不是「动态数组」这一抽象结构天然拥有的：换成一倍半扩容、允许删除或别的缩容策略，势函数都要重新设计。数组满载时 $\text{size} = \text{capacity} = c$，于是 $\Phi_{\text{before}} = 2c - c = c$，正好等于那次追加要复制的 $c$ 个元素。这次追加复制 $c$ 个元素并写入一个新元素，所以 $c_i = c + 1$；操作结束后 $\text{size} = c + 1$、$\text{capacity} = 2c$，$\Phi_{\text{after}} = 2(c + 1) - 2c = 2$。于是 $\hat a_i = (c + 1) + (2 - c) = 3$。
+下面这段代码把 16 次追加逐次记录下来，容量与真实成本两列就是聚合计数要核对的量。
 
 ```python run id="alg.amortized.potential"
 class GrowingArray:
-    """A dynamic array that reports the potential of each append."""
+    """A dynamic array that doubles its capacity and reports each append's cost."""
 
     def __init__(self):
         self.capacity = 0
@@ -76,105 +49,83 @@ class GrowingArray:
             real_cost = 1
         self.size += 1
         after = self.potential()
-        return self.capacity, real_cost, after - before, real_cost + after - before
+        charge = real_cost + after - before
+        return self.capacity, real_cost, after - before, charge
 
 
 array = GrowingArray()
 rows = [array.append() for _ in range(16)]
 
-print(f"{'n':>3} {'capacity':>8} {'real':>5} {'dPhi':>5} {'amortized':>9}")
-for step, (capacity, real, delta, amortized) in enumerate(rows, start=1):
-    print(f"{step:>3} {capacity:>8} {real:>5} {delta:>5} {amortized:>9}")
+print(f"{'n':>3} {'capacity':>8} {'real':>5} {'dPhi':>5} {'charge':>6} {'balance':>7}")
+balance = 0
+for step, (capacity, real, delta, charge) in enumerate(rows, start=1):
+    balance += charge - real
+    print(f"{step:>3} {capacity:>8} {real:>5} {delta:>5} {charge:>6} {balance:>7}")
 
 total_real = sum(real for _, real, _, _ in rows)
-total_amortized = sum(amortized for _, _, _, amortized in rows)
+total_charge = sum(charge for _, _, _, charge in rows)
 print("real costs:", [real for _, real, _, _ in rows])
-print("amortized costs:", [amortized for _, _, _, amortized in rows])
-print("sum of real costs:", total_real, "| sum of amortized costs:", total_amortized)
-print("final potential:", array.potential())
-print("identity T + Phi_m - Phi_0 = sum of amortized:", total_real + array.potential() == total_amortized)
+print("sum of real costs:", total_real, "| average T/m:", round(total_real / len(rows), 2))
+print("sum of charges:", total_charge, "| final potential:", array.potential())
 print("worst single operation:", max(real for _, real, _, _ in rows))
+print("identity T + Phi_m - Phi_0 = sum of charges:", total_real + array.potential() == total_charge)
 ```
 
-每一个发生了复制的步骤都落回同一水平：`dPhi` 在大操作上是负的（信用被花掉），在小操作上是正的（信用被存入），两者相加得到固定的摊还收费 3。
+表里 16 次追加的真实成本是 $1, 2, 3, 1, 5, 1, 1, 1, 9, 1, 1, 1, 1, 1, 1, 1$，总和 31，平均 $31 / 16 = 1.94$，落在 2 以内；单次最大的一次是 9，出现在把容量从 8 扩到 16 的那一次追加上。整串成本随追加次数线性增长，单次成本却在 1 与 9 之间摆动，聚合计数给出的是前者的界。
 
-同一个真实成本序列可以有不同的有效摊还证明：聚合计数给出 $T(m) < 2m$，所以 2 是一个更紧的一致上界；这个势函数构造出的逐次收费至多 3，是另一个有效但更松的上界。三个数要分清：$T(16)/16 \approx 1.94$ 是这个具体序列的实际平均成本，2 是聚合证明得到的一致上界，3 是该势函数产生的逐次收费上界。摊还收费不由真实序列唯一决定，只要能统一支付真实总成本即可。最后一次的大复制由前面各次存下的信用支付，因此单次成本的尖峰不会改变整串的结论。
+## 记账法：给每次追加预收收费
 
-这段代码说明了两件事，第二件比第一件重要：16 次追加的总真实成本约两倍于 16，$\Phi$ 在末尾还留着 $2 \cdot \text{size} - \text{capacity}$ 的正余额，因此 $T(m) + \Phi_m - \Phi_0$ 恰好等于摊还收费之和。恒等式成立说明「预收的信用」对应真实成本在时间上被推迟的部分。扩容策略决定结论成立与否：固定增量扩容的总成本是 $\Theta(n^2)$，几何扩容是 $\Theta(n)$，这个取舍的细节见 <CrossRef id="algorithms.arrays-and-lists" />。
+不逐次回调上面的计数，也可以反过来给每次操作预先规定一笔固定收费，把多收的部分记在账上，用来支付之后那次昂贵的复制。对这串追加取每次收费 3（第一次在空数组上不发生复制，收 2 即可）：容量未满的追加真实花费 1，把差额 2 记成余额；在规模 $c$ 上满载、下一次要复制 $c$ 个元素时，这次追加真实花费 $c + 1$，多出的 $c - 2$ 由余额支付。
 
-## 聚合分析看栈
+表里的 `charge` 列与 `balance` 列就是这套记账。余额从 0 起累加「收费减真实成本」，在满载复制发生前它恰好等于当时的规模 $c$，表中 $c = 4$ 与 $c = 8$ 的两次复制之前它分别是 4 与 8，支付 $c - 2$ 之后回到 2。余额在整串追加里从不下降为负，所以把每次收费取 3 得到的收费之和覆盖真实总成本：
 
-一个栈通常只支持 `push` 与 `pop`。给它加一个 `multipop(k)`：弹出 $\min(k, \text{size})$ 个元素。单次 `multipop` 的成本是 $\Theta(n)$，看起来让整串操作变贵了。
+$$
+T(\sigma) \;\le\; 3m .
+$$
 
-```python run id="alg.amortized.aggregate-multipop"
-def run_sequence(operations):
-    """Return (total element operations, worst single operation, remaining size)."""
-    stack = []
-    total = 0
-    worst = 0
-    for kind, count in operations:
-        if kind == "push":
-            for value in range(count):
-                stack.append(value)
-                total += 1
-            worst = max(worst, count)
-        else:
-            popped = min(count, len(stack))
-            for _ in range(popped):
-                stack.pop()
-                total += 1
-            worst = max(worst, popped)
-    return total, worst, len(stack)
+这里要分清三个数。$31 / 16 = 1.94$ 是这个具体序列的**实际平均成本**；聚合计数给出的是一致上界 2，比它更紧；记账法构造出的逐次收费是 3，比 2 更松，却同样有效。收费由论证构造、不由真实序列唯一决定——只要收费之和在任何合法序列上都不低于真实总成本，它就是一组合法的摊还收费。最后一次大复制由前面各次存下的信用支付，单次成本的尖峰不改变整串的结论。
 
+## 势能法：把余额写成状态函数
 
-sequences = {
-    "push only": [("push", 1)] * 32,
-    "push then multipop": [("push", 1)] * 32 + [("multipop", 32)],
-    "interleaved": [item for _ in range(16) for item in (("push", 1), ("push", 1), ("multipop", 1))],
-    "repeated whole-stack drains": [item for _ in range(8) for item in ([("push", 1)] * 8 + [("multipop", 8)])],
-}
+记账法里那本账的余额只取决于当前状态：元素个数与已分配的容量。把它写成一个状态函数，每次操作的收费就有了公式。取
 
-for name, operations in sequences.items():
-    total, worst, remaining = run_sequence(operations)
-    print(f"{name:28s} operations={len(operations):3d} work={total:4d} work/op={total / len(operations):.2f} worst single={worst:3d} remaining={remaining}")
-```
+$$
+\Phi = 2 \cdot \text{size} - \text{capacity},
+$$
 
-四个序列的单次最差成本分别是 `1`、`32`、`1`、`8`，而每次操作的实际平均工作量都不超过 2。原因与这个结构有关：每一次 `push` 创建的栈内元素实例至多被弹出一次，因此整串操作的总工作量不超过 $2m$，与 `multipop` 的参数无关。
+规定第 $i$ 次追加的摊还收费为 $\hat a_i = c_i + \Phi_i - \Phi_{i-1}$。$\text{size}$ 与 $\text{capacity}$ 都取完整操作结束时的值，势能在操作的**边界**上读，绝不在一次追加的中途读。数组满载时 $\text{size} = \text{capacity} = c$，于是 $\Phi_{\text{before}} = 2c - c = c$；这次追加复制 $c$ 个元素、写入一个新元素，$c_i = c + 1$；操作结束后 $\text{size} = c + 1$、$\text{capacity} = 2c$，$\Phi_{\text{after}} = 2(c + 1) - 2c = 2$。代入得
 
-**给每个元素实例的生命周期计费**是聚合分析常见的一种证明模式。当昂贵操作在重复处理已有元素时，第一问就是：这段序列里每个元素实例最多被处理几次。二进制计数器和后面的并查集用的不是这种计数方式。
+$$
+\hat a_i = (c + 1) + (2 - c) = 3 .
+$$
 
-## 势能法看二进制计数器
+对任意前缀 $k$ 求和，得到恒等式
 
-一个 $k$ 位计数器每次加一，翻转从最低位开始的连续 1。单次加一的最坏情况是翻转全部 $k$ 位，即 $\Theta(k)$；只有当 $k = \Theta(\log(m + 1))$（计数器刚好够表示前 $m$ 次递增）时，才能把它写成 $\Theta(\log m)$。
+$$
+\sum_{i=1}^{k} \hat a_i = \sum_{i=1}^{k} c_i + \Phi_k - \Phi_0 .
+$$
 
-```python run id="alg.amortized.binary-counter"
-def increment(bits):
-    """Add one, return the number of bit flips."""
-    flips = 0
-    for index in range(len(bits)):
-        flips += 1
-        if bits[index] == 0:
-            bits[index] = 1
-            return flips
-        bits[index] = 0
-    return flips  # wrapped back to zero
+只要对每个可达状态都有 $\Phi_k \ge \Phi_0$（最常见的规定是 $\Phi_0 = 0$ 且 $\Phi$ 非负），第 $k$ 步停下时收费之和就不低于真实成本：$T(\sigma_{1:k}) \le \sum_{i \le k} \hat a_i$。任何前缀都不会透支，靠的正是这条条件。这里的 $\Phi = 2 \cdot \text{size} - \text{capacity}$ 在每次追加后都取非负值——容量总小于两倍的元素个数——所以条件成立；表里 `balance` 列与 `potential()` 的数值在每一步都相等，末值是 $16 = 2 \cdot 16 - 16$。恒等式成立还说明「预收的信用」对应真实成本在时间上被推迟的那一部分。
 
+势能法给出的逐次收费与记账法逐字相同，因为势就是那本账里尚未花掉的信用余额：把信用写成状态函数之后，不必再跟踪一批具体的「信用」实体，数学上的势函数也可以比这个例子抽象得多。这套势属于**声明的扩容策略**：$\Phi = 2 \cdot \text{size} - \text{capacity}$ 是为「只追加、满载时容量精确翻倍」这个实现选的，换成一倍半扩容、固定增量扩容或允许删除的缩容策略，势函数都要重新设计，非负性与摊还常数也都要重算。
 
-width = 32
-for count in (8, 16, 64, 256):
-    bits = [0] * width
-    flips_per_increment = [increment(bits) for _ in range(count)]
-    print(
-        f"increments={count:4d} total flips={sum(flips_per_increment):4d} "
-        f"flips/increment={sum(flips_per_increment) / count:.2f} worst single={max(flips_per_increment):2d}"
-    )
-```
+`dPhi` 列显示变化的方向：发生复制的追加把之前攒下的信用花掉，`dPhi` 取负；普通追加把信用存起来，`dPhi` 取正。两列相加回到固定的 `charge`，其中第一次追加收费 2、其余每次收费 3。扩容策略还决定结论本身：固定增量扩容的整串总成本是 $\Theta(n^2)$，几何扩容是 $\Theta(n)$，这个取舍的细节见 <CrossRef id="algorithms.arrays-and-lists" />。
 
-第 $i$ 位每 $2^i$ 次加一翻转一次，因此 $m$ 次加一的总翻转次数是 $\sum_i \text{floor}(m / 2^i) < 2m$：摊还常数成本，而单次最坏是 $\Theta(\log m)$。势函数 $\Phi$ 取计数器中 1 的个数，一次加一翻转 $t + 1$ 位（其中 $t$ 位由 1 变 0）时，$\hat a = (t + 1) + (1 - t) = 2$。
+## 摊还界的确切含义
 
-## 摊还不是延迟保证
+把上面三种写法收紧成一条定义。摊还界是一条对**所有**合法操作序列成立的界：若存在收费 $\hat a_i$，使任意长度 $m$ 的合法序列 $\sigma$ 都满足
 
-把三个结构的数字放在一起，区别就清楚了：摊还成本衡量整串操作，单次成本衡量一次调用。
+$$
+T(\sigma) = \sum_{i=1}^{m} c_i \;\le\; \sum_{i=1}^{m} \hat a_i ,
+$$
+
+这组收费就是该序列的摊还收费；收费一致有上界时（$\hat a_i \le C$）得到常数摊还成本 $T(\sigma) \le C \cdot m$。序列可以任意长，也可以在任意位置结束，而前缀本身也是一个合法序列，所以界必须覆盖每一个前缀。三种写法都用来证明这一条，构造出的收费方式与常数却不必相同：上面这串追加合法地同时有聚合界 2 与势能收费 3。
+
+**摊还上界主张什么、不主张什么**：主张对任意合法操作序列、包括任意合法前缀，真实总成本不超过所证明的摊还收费之和，序列在任意位置停下都成立。不主张某一次操作的**真实**成本不超过它自己那次收费——单次最坏成本仍然可以远高于摊还收费，表里那次复制花 9，摊到每次上的收费却是 3。不主张概率：本课的确定性摊还证明不对序列施加分布，而摊还与期望是两个可以组合的维度。也不主张没花掉的信用会被兑现——$T(\sigma)$ 可以严格小于收费之和，这不影响上界成立。
+
+## 摊还界与单次延迟
+
+摊还成本衡量整串操作，单次成本衡量一次调用，两者回答的是不同问题。
 
 ```python run id="alg.amortized.latency-gap"
 class GrowingArray:
@@ -192,7 +143,31 @@ class GrowingArray:
         return real_cost
 
 
+count = 64
+array = GrowingArray()
+append_costs = [array.append() for _ in range(count)]
+
+total = sum(append_costs)
+print(
+    f"appends={count} actual average T/m={total / count:.2f} "
+    f"worst single={max(append_costs)} ratio={max(append_costs) / (total / count):.1f}x"
+)
+print("same sequence, two questions: throughput and tail latency")
+```
+
+这 64 次追加的实际平均成本是 1.98，单次最大的一次是 33，是平均值的 16.6 倍。**决定用哪个结论的是系统的问题**：批量导入、按批处理的流水线关心总吞吐，摊还结论足够；在线路径关心尾延迟，必须看单次最坏成本。把摊还结论当作延迟保证写进接口文档，是把一个正确的数学结论用在了它不覆盖的场合；接口描述里省略「摊还」二字，同样会让调用方对单次成本作出错误推断。序列很短时，渐进记号隐藏的常数与初始化成本可能主导实际时间，仅凭一个 $O(1)$ 的摊还记号不足以判断性能。
+
+## 延伸：栈与二进制计数器
+
+同一套记账工具可以搬到别的结构上：先把真实成本逐次记下来，再决定给每次操作预收多少，最后核对余额从不透支。
+
+给栈加一个 `multipop(k)`，它弹出 $\min(k, \text{size})$ 个元素。单次 `multipop` 的成本是 $\Theta(n)$，看起来让整串操作变贵了。换一个计费对象就清楚了：不再逐次给操作定价，而是给每个**元素实例**的生命周期计费——每一次 `push` 创建的实例至多被弹出一次，于是整串 $m$ 次操作的总工作量不超过 $2m$，与 `multipop` 的参数无关；两倍来自 push 与 pop 各记一次，参数只改变某一次操作的峰值，不改变整串的总量。
+
+一个 $k$ 位二进制计数器每次加一，翻转从最低位开始的连续 1。单次加一的最坏情况是翻转全部 $k$ 位，即 $\Theta(k)$；只有当 $k = \Theta(\log(m + 1))$（计数器刚好够表示前 $m$ 次递增）时，才能把它写成 $\Theta(\log m)$。下面这段代码对若干次加一统计总翻转次数与单次峰值。
+
+```python run id="alg.amortized.binary-counter"
 def increment(bits):
+    """Add one, return the number of bit flips."""
     flips = 0
     for index in range(len(bits)):
         flips += 1
@@ -203,28 +178,23 @@ def increment(bits):
     return flips
 
 
-count = 4096
-array = GrowingArray()
-append_costs = [array.append() for _ in range(count)]
-
-bits = [0] * 64
-flip_costs = [increment(bits) for _ in range(count)]
-
-for name, costs in (("dynamic array append", append_costs), ("binary counter", flip_costs)):
-    total = sum(costs)
+width = 32
+for count in (8, 16, 32, 64):
+    bits = [0] * width
+    flips = [increment(bits) for _ in range(count)]
     print(
-        f"{name:22s} actual average T/m={total / count:6.2f} "
-        f"worst single={max(costs):5d} ratio={max(costs) / (total / count):8.1f}x"
+        f"increments={count:3d} total flips={sum(flips):3d} "
+        f"flips/increment={sum(flips) / count:.2f} worst single={max(flips):2d}"
     )
-print("the same operations, two different questions: throughput and tail latency")
 ```
 
-同一个序列里，聚合证明给出的一致上界是常数 2，而单次真实成本可以远超它（最紧的摊还上界是 2，单元格列的是这个具体序列的实际平均成本 $T(m)/m$）。**决定用哪个结论的是系统的问题**：批量任务关心总吞吐，摊还结论足够；在线路径关心尾延迟，必须看单次最坏成本。把摊还结论当作延迟保证写进接口文档，是把一个正确的数学结论用在了它不覆盖的场合；接口描述里省略「摊还」二字同样会让调用方对单次成本作出错误推断。
+第 $i$ 位每 $2^i$ 次加一翻转一次，因此 $m$ 次加一的总翻转次数是 $\sum_i \lfloor m / 2^i \rfloor < 2m$：摊还常数成本，而单次最坏是 $\Theta(\log m)$。对应的势函数取计数器中 1 的个数，一次加一翻转 $t + 1$ 位（其中 $t$ 位由 1 变 0）时，$\hat a = (t + 1) + (1 - t) = 2$。
+
+**练习**：给栈加 `multipop` 后的整串界写出一组记账收费，并构造一个使某一次 `multipop` 付出 $\Theta(n)$ 成本、而整串平均仍不超过 2 的操作序列；再用势函数「计数器中 1 的个数」重做二进制计数器的加一，核对一次加一翻转 $t + 1$ 位时的 $\hat a = 2$。
 
 ## 小结
 
-- 摊还分析给出对所有合法操作序列（含任意前缀）成立的总成本界；$T(\sigma)/m$ 只是某个具体序列的实际平均成本，摊还收费由论证构造、不唯一。
-- 聚合分析直接对整串操作计数；记账法预先规定摊还收费并维持信用余额非负；势能法把信用写成状态函数，$\hat a = c + \Delta \Phi$，条件是对所有可达状态有 $\Phi_k \ge \Phi_0$。
-- 动态数组追加的势函数是 $\Phi = 2 \cdot \text{size} - \text{capacity}$，每次追加的摊还收费是常数 3；二进制计数器的势是 1 的个数，每次加一的摊还收费是 2。
-- 栈加 `multipop` 后单次成本可以是 $\Theta(n)$，但每个元素实例至多被弹出一次，整串总成本仍是 $\Theta(m)$。
-- 摊还结论回答吞吐问题，单次最坏界回答硬延迟上界问题；两者不能互相替换。
+- 摊还分析的对象是合法操作序列 $\sigma$，结论对每一个序列、每一个前缀成立；$T(\sigma) / m$ 是该序列的实际平均成本，收费由论证构造、不唯一，同一串追加合法地同时有界 2 与收费 3。
+- 聚合计数直接数整串，记账法预先规定收费并维持余额非负，势能法把余额写成状态函数，$\hat a_i = c_i + \Phi_i - \Phi_{i-1}$，条件是对所有可达状态有 $\Phi_k \ge \Phi_0$。
+- 动态数组追加的势函数 $\Phi = 2 \cdot \text{size} - \text{capacity}$ 属于「只追加、满载时翻倍」这个实现，每次追加的摊还收费是常数；换一种扩容或缩容策略，势函数与结论都要重算。
+- 摊还结论回答吞吐问题，单次最坏界回答硬延迟问题，两者不能互相替换；期望摊还成本要把期望那一维单独写出分布。

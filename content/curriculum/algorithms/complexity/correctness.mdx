@@ -5,22 +5,21 @@ order: 40
 title: 正确性、循环不变量与终止
 status: published
 objectives:
-  - 把一段代码的规约写成前置条件与后置条件，说清什么样的初始状态允许执行、结束后必须成立什么性质
-  - 区分部分正确与终止，并说明为什么两者必须分开论证
-  - 为一个循环写出不变量，并按初始化、保持、退出三步论证后置条件
-  - 用每轮严格下降的良基度量论证终止
-  - 用一个反例推翻过强的主张，并说明搜索没找到反例为什么不是证明
+  - 把一段代码的规约写成前置条件与后置条件，写清输入域与必须成立的性质
+  - 区分部分正确与终止，并说明两者为什么要用不同的论证工具
+  - 为循环写出不变量，按初始化、保持、退出三步推出后置条件
+  - 用良基下降度量论证终止，并用一个反例推翻不成立的实现
 ---
 
-这一课处理的问题是：这段代码算出的答案对不对。正确性主张必须写成足够明确、可以判定真假的命题。「这个函数返回最大值」还不是一条足够完整的正确性主张——它没有写清输入域与「最大值」的契约；「对任意非空、且元素属于同一个全序域的有限列表，返回值是列表中不小于任何元素的元素」才写清了适用范围与必须满足的性质。检验它的方式有两种：证明，和反例。
+从一个整数列表里挑出最大的元素，小到可以一口气写完，却足以把正确性论证要处理的情形全部摆出来。判断这样一段代码对不对，先把「对不对」写成一条明确到可以判定真假的命题：只说「返回最大值」还不够，它既没有写清输入域，也没有写清「最大值」指什么；「对任意非空、且元素属于同一个全序域的有限列表，返回值是列表中的元素，且列表中不存在比它更大的元素」才把适用范围与必须成立的性质都写清。一条这样的命题，靠证明确立，靠反例推翻。
 
 ## 规约：前置条件与后置条件
 
 一段代码的**规约**由前置条件与后置条件组成。前置条件描述允许执行开始时具有什么状态；后置条件描述执行结束后必须成立的性质，它可以关联初始状态、最终状态与返回结果。对纯函数，后置条件通常退化成输入与返回值的关系；对会修改数据结构的操作（例如 `push`、`insert`、`delete`），后置条件还必须说明状态怎样改变，而且可能没有有意义的返回值。如果契约允许把异常当作一种结果，就要写明「抛出什么」属于哪种情况——空栈 `pop` 这类操作就属于这一种。
 
-以从列表里取最大值的一族实现为例。后置条件是：返回值属于输入列表，且输入中不存在比它更大的元素。前置条件还要覆盖实现真正用到的操作：这一族实现在比较元素，所以契约必须要求元素属于同一个全序域（两两可比，且比较满足全序的公理）——只说「非空」不够，`[1, "x"]` 满足非空却无法比较。边界情况按同样的原则处理：要么要求列表非空，要么让契约规定空输入时的行为（例如返回 `None`）。两种选择都可以，但必须选一个写下来。
+取最大值的后置条件有两条：返回值属于输入列表，且输入中不存在比它更大的元素。两条缺一不可——只写「不小于输入中的每个元素」，会放过一个根本不在列表里的返回值，后面的反例正是这么失败的。前置条件还要覆盖实现真正用到的操作：这一族实现在比较元素，所以契约必须要求元素属于同一个全序域（两两可比，且比较满足全序的公理）；只说「非空」不够，`[1, "x"]` 满足非空却无法比较。可执行的例子把定义域收窄到整数，正文的论证适用于任何全序域。边界情况按同样的原则处理：要么要求列表非空，要么让契约规定空输入时的行为（例如返回 `None`）。两种选择都可以，但必须选一个写下来。
 
-后置条件描述输出与输入的关系，实现方式不属于规约：「返回输入中的最大值」是后置条件，「先排序再取最后一个元素」不是——那是实现，换一种写法不改变契约。边界情况必须由规约覆盖：要么一般条件已经涵盖它（「全部相等」「重复元素」通常已被后置条件涵盖），要么由前置条件排除，要么为它规定专门的结果或异常行为。漏掉的那条会在别人调用时变成争论。
+后置条件描述输出与输入的关系，实现方式不属于规约：「返回输入中的最大值」是后置条件；「先排序再取最后一个元素」属于实现，换一种写法不改变契约。边界情况必须由规约覆盖：要么一般条件已经涵盖它（「全部相等」「重复元素」通常已被后置条件涵盖），要么由前置条件排除，要么为它规定专门的结果或异常行为。漏掉的那条会在别人调用时变成争论。
 
 ## 部分正确与终止是两件事
 
@@ -42,119 +41,152 @@ objectives:
 
 第三步不证明循环会结束，它只是把循环结束时的状态与后置条件接上；循环是否结束是终止论证的义务。两条义务都完成，才算证明了这个循环。
 
-## 例子：前缀和与它的不变量
+## 找最大值的循环不变量
+
+要论证第一个扫描对每个满足前置条件的输入都给出正确答案，先写下循环头处必须成立的性质。把 $i$ 记为本轮开始时已经比较过的元素个数，候选不变量是：
+
+- `1 <= i <= len(values)`
+- `best == max(values[:i])`
+
+第一条把 $i$ 限制在合法范围里，第二条把 `best` 钉死在已比较前缀的最大值上。它比「返回值是最大值」更强：后者只描述终态，在循环中途无从检查，也无法被循环体逐轮重建。下面的代码在每一次求值循环条件之前检查这两条，并报告第一个不成立的位置。
 
 ```python run id="alg.correctness.loop-invariant"
-def running_totals(values):
-    """Precondition: values is a finite sequence of integers.
+def largest(values):
+    """Precondition: values is a non-empty finite sequence of integers.
 
-    Postcondition: result[k] == sum(values[:k+1]) for every k, and the
-    result has the same length as the input.
+    Postcondition: the result is an element of values, and no element of
+    values exceeds it.
     """
-    totals = []
-    total = 0
-    for value in values:
-        total += value
-        totals.append(total)
-    return totals
+    best = values[0]
+    i = 1
+    while i < len(values):
+        if values[i] > best:
+            best = values[i]
+        i += 1
+    return best
 
 
-def per_element_totals(values):
-    """Same signature; the running total restarts at every element."""
-    totals = []
-    for value in values:
-        totals.append(value)
-    return totals
+def largest_from_zero(values):
+    """Same declared contract; the running best starts at 0."""
+    best = 0
+    i = 1
+    while i < len(values):
+        if values[i] > best:
+            best = values[i]
+        i += 1
+    return best
 
 
-def first_violation(values, totals):
-    """Check the postcondition position by position on a finished run.
+def invariant_failures(values, start_best):
+    """Report every loop head where the candidate invariant fails.
 
-    It reports the first index where the output departs from the spec
-    totals[j] == sum(values[:j+1]), or a length mismatch.
+    Candidate invariant I: 1 <= i <= len(values) and best == max(values[:i]).
+    A loop head is checked before each evaluation of the loop condition, so
+    the last head, where the condition is false, is checked too.
     """
-    for index in range(min(len(totals), len(values))):
-        expected = sum(values[:index + 1])
-        if totals[index] != expected:
-            where = f"index {index}: totals[{index}]={totals[index]}, expected {expected}"
-            return where
-    if len(totals) != len(values):
-        return f"produced {len(totals)} values for {len(values)} inputs"
-    return None
+    n = len(values)
+    best = start_best(values)
+    i = 1
+    failures = []
+    while True:
+        if best != max(values[:i]):
+            failures.append(i)
+        if i >= n:
+            break
+        if values[i] > best:
+            best = values[i]
+        i += 1
+    return failures, best
 
 
-sample = [3, 1, 4, 1, 5]
-for name, implementation in (("accumulating", running_totals), ("restarting  ", per_element_totals)):
-    totals = implementation(sample)
-    print(f"{name} output={totals}  first violation={first_violation(sample, totals)}")
+cases = ((-3,), (-3, -1, -2), (3, 1, 4))
+for name, start_best in (("largest", lambda v: v[0]), ("largest_from_zero", lambda v: 0)):
+    for values in cases:
+        failures, result = invariant_failures(values, start_best)
+        where = "all loop heads hold" if not failures else f"broken at i={failures[0]} of {failures}"
+        print(f"{name:17s} {str(values):13s} -> {result:>3}  {where}")
 ```
 
-第二个实现在 index 1 就被检查器抓住——它的输出只有第一个位置与正确输出相同。检查器给出的是**第一个违反后置条件的输出位置**，而不是循环内部第一次破坏不变量的位置：它说明最终结果从哪里开始违约，不说明内部状态在哪一步首次偏离。这里检查的是完整运行之后的后置条件；要在循环头逐步检查候选不变量，必须在循环体里插入断言，见 <CrossRef id="algorithms.abstractions-and-invariants" /> 里的不变量检查器（那里展示的是同一种运行时断言技术，检查的谓词与作用域不同）。即使在循环体里加了断言，它也只能检查实际执行过的那些轨迹；跑再多次没有触发断言，仍然替代不了初始化与保持性的证明。
+第一个扫描的三条输入上每一次循环头都满足不变量，输出分别是 `-3`、`-1`、`4`。第二个扫描的每一个循环头在 `i = 1` 上已经失败：不变量要求 `best == values[0]`，而它的 `best` 仍是 `0`。在 `(3, 1, 4)` 上它破坏的是 `i = 1` 与 `i = 2` 两处，却仍然返回 `4`——正确答案。内部状态已经偏离，输出看不出来；沿轨迹逐轮检查不变量，偏差才被定位到具体的循环头。
 
-这段代码的候选不变量必须比「`totals[k]` 等于前缀和」更强，否则保持步用不了。把 `for value in values` 的进度记作 $i$（本轮开始时已处理 $i$ 个元素），不变量是：
+轨迹检查只在它执行过的那几条输入上成立，不构成一般性的证明。一般的证明要交代三件事。
 
-- `len(totals) == i`
-- `total == sum(values[:i])`
-- 对每个 $0 \le k < i$：`totals[k] == sum(values[:k+1])`
+**初始化**：循环开始前 `best = values[0]`、$i = 1$，需要 `best == max(values[:1])`。单元素前缀的最大值就是那个元素本身。这一步用到的假设是前置条件里的「列表非空」：`values[0]` 才有定义。
 
-单元格里的 `first_violation` 仍然只检查完整运行之后的后置条件；上面这三条是证明中使用的候选循环不变量——它看不到内部的 `total`，也没有逐轮的 $i$。要把它们做成运行时检查，必须在循环头逐轮检查当时的 $i$、`total` 与 `totals`。三步于是闭合：$i = 0$ 时三条都成立，是初始化；读入 `values[i]` 后 `total` 前进一个元素的和、`totals` 追加一项，得到 $i + 1$ 的版本，是保持；退出时 $i = \text{len}(values)$，输出长度与逐项前缀和都符合后置条件。
+**保持**：假设本次循环头满足 $I$ 且循环条件为真（$i < n$）。循环体只做两件事：当 `values[i]` 大于 `best` 时把 `best` 换成 `values[i]`，然后把 $i$ 加一。回到下一个循环头时 $i$ 变成 $i+1$。新的 `best` 是上一轮 `best` 与 `values[i]` 中较大的一个；由 `best == max(values[:i])`，它等于 `max(values[:i+1])`。这一步用到的假设是全序：两个元素总可以比较，`values[i] > best` 这个条件才总能选出较大者。
+
+**退出**：循环条件为假时 $i \ge n$，与 $I$ 中的 $i \le n$ 合起来得到 $i = n$，于是 `best == max(values[:n]) == max(values)`。返回值属于输入列表由赋值来源推出：`best` 要么是 `values[0]`，要么在循环体里被赋成某个 `values[k]`，一定是输入中的一个元素。后置条件的两条都满足。
+
+初始化与退出各只需一句话；真正需要论证的是保持这一步，它必须用循环体的代码说话，并且整段证明只用到全序这一条假设。三种证据的角色不同：一次执行结果的检查看终态是否满足后置条件，沿轨迹的断言检查看内部状态在第几轮首次偏离候选不变量，初始化加保持的证明才让它对所有允许的输入成立。本课最后的反例单元格给出一次执行结果的检查，第二个扫描则把这两种运行时检查的差别摆在一起。同样的运行时断言技术见 <CrossRef id="algorithms.abstractions-and-invariants" /> 里的不变量检查器，那里检查的谓词与作用域不同。
 
 ## 终止需要良基度量
 
 终止的一种标准证明方式，是给出一个**取值于良基集合、并在每轮严格下降的度量**（分治用的是同一个概念，见 <CrossRef id="algorithms.divide-and-conquer" />）：它在每次迭代后严格减小，并且取值落在没有无穷下降链的集合上（非负整数、有限集合的大小都属于这类）。「严格递减 + 有下界」不够：$1, 1/2, 1/4, \dots$ 严格递减且有下界，却可以无限进行；真正起作用的是取值集合本身没有无穷下降链。另外，在每次循环体执行本身终止的前提下，良基度量每轮严格下降才排除了无限多轮——循环体里若还含有可能不终止的子过程，这一步说明不了问题。
 
-按序列长度迭代的循环，这个度量就是「尚未处理的元素个数」。`while n > 0: n //= 2` 的下降度量是 `n`：对非负整数 $n$ 每轮至少减半，因此 $n \ge 1$ 时迭代次数不超过 $\lfloor \log_2 n \rfloor + 1$ 次。保证终止的是 $n$ 取值于非负整数（不存在无穷下降链），而不是「有下界 0」这个事实本身。
+按序列长度迭代的循环，这个度量就是「尚未处理的元素个数」。找最大值的循环把 $i$ 从 $1$ 推到 $n$，度量 $n - i$ 从 $n-1$ 开始每轮减一，取值于非负整数。`while n > 0: n //= 2` 的下降度量是 `n`：对非负整数 $n$ 每轮至少减半，因此 $n \ge 1$ 时迭代次数不超过 $\lfloor \log_2 n \rfloor + 1$ 次。保证终止的是 $n$ 取值于非负整数这一性质——这个集合没有无穷下降链；「有下界 0」本身不足以推出终止。
 
-反过来，忘记推进的循环没有可用的下降度量：循环体若从不改变 `index`，`while index < len(values)` 就永远为真，终止主张不成立。这不是「跑一会儿看看会不会停」能回答的问题——终止是一条对所有输入成立的主张，观测只能覆盖跑过的那些输入。终止和成本一样，结论只能来自机制论证，观测无法替代它。
+反过来，忘记推进的循环没有可用的下降度量：循环体若从不改变 `index`，`while index < len(values)` 就永远为真，终止主张不成立。终止是一条对所有输入成立的主张，观测只能覆盖跑过的那些输入，靠「跑一会儿看看会不会停」回答不了它。终止和成本一样，结论只能来自机制论证，观测无法替代它。
 
 ## 反例推翻主张
 
-一个反例就足以推翻一条全称主张，而且最小的反例往往很短。反例还必须满足前置条件：不满足前置条件的输入不在主张的作用范围内，用它「反驳」是无效的。
+一个反例就足以推翻一条全称主张，而且最小的反例往往很短。反例还必须满足前置条件：不满足前置条件的输入不在主张的作用范围内，用它对主张的「反驳」无效——空的 `()` 违反「列表非空」这条前置条件，实现在它上面做什么都不算数。
+
+第二个扫描把所有元素都小于 0 的输入算错。下面在一次完整运行结束时检查后置条件，候选输入按从小到大排列：
 
 ```python run id="alg.correctness.counterexample"
-from itertools import product
-
-
 def largest(values):
     """Precondition: values is a non-empty finite sequence of integers.
 
-    Postcondition: return an element of values that no element exceeds.
+    Postcondition: the result is an element of values, and no element of
+    values exceeds it.
     """
     best = values[0]
-    for value in values[1:]:
-        if value > best:
-            best = value
+    i = 1
+    while i < len(values):
+        if values[i] > best:
+            best = values[i]
+        i += 1
     return best
 
 
 def largest_from_zero(values):
-    """Same preconditions and postcondition claimed; the running best starts at 0."""
+    """Same declared contract; the running best starts at 0."""
     best = 0
-    for value in values:
-        if value > best:
-            best = value
+    i = 1
+    while i < len(values):
+        if values[i] > best:
+            best = values[i]
+        i += 1
     return best
 
 
-def first_counterexample(implementation, bounds, max_length):
-    """Smallest enumerated input where the implementation breaks the contract."""
-    for length in range(1, max_length + 1):
-        for candidate in product(bounds, repeat=length):
-            if implementation(candidate) != max(candidate):
-                return candidate, implementation(candidate), max(candidate)
+def violates_contract(values, result):
+    """Postcondition check on one finished run.
+
+    Returns a reason the result breaks the contract, or None when it holds.
+    """
+    if result not in values:
+        return f"returned {result}, not an element of the input"
+    larger = [value for value in values if value > result]
+    if larger:
+        return f"returned {result}, but {larger[0]} exceeds it"
     return None
 
 
-bounds = range(-3, 4)
-for name, implementation in (("largest           ", largest), ("largest_from_zero ", largest_from_zero)):
-    found = first_counterexample(implementation, bounds, 3)
-    if found is None:
-        print(f"{name} no counterexample up to length 3 with values in -3..3")
-    else:
-        candidate, actual, expected = found
-        print(f"{name} counterexample {candidate}: returned {actual}, contract says {expected}")
+candidates = ((-3,), (-1,), (0,), (3, 1, 4), (-3, -1, -2))
+first_bad = None
+for values in candidates:
+    right = largest(values)
+    wrong = largest_from_zero(values)
+    reason = violates_contract(values, wrong)
+    if reason is not None and first_bad is None:
+        first_bad = values
+    print(f"{str(values):13s} largest={right:>3}  largest_from_zero={wrong:>3}  {reason or 'ok'}")
+print(f"smallest counterexample in this list: {first_bad}")
 ```
 
-第二个实现把所有元素都小于 0 的输入算错，长度为 1 的输入 `(-3,)` 就足以暴露它。注意它违反的是后置条件的第一条：返回的 `0` 并不属于输入列表，所以「最大值」不能只写成一个大小比较条件。第一个实现的输出是「这个范围里没找到反例」，这不构成证明：范围之外可能还有反例，而这个实现之所以正确，靠的是循环不变量——`best` 始终是已扫描部分的最大值，退出时已扫描部分是整个列表，于是满足后置条件。
+`(-3,)`、`(-1,)` 与 `(-3, -1, -2)` 上它都返回 `0`，而 `0` 不在输入列表里。它违反的是后置条件的第一条：返回值必须属于输入列表。只把「最大值」写成一条大小比较条件，就漏掉了这一条。`(0,)` 与 `(3, 1, 4)` 上它返回正确答案。候选表里第一个失败的是 `(-3,)`——长度为 1 的输入就足以暴露它。
 
-两种证据的分工值得记住：反例用于推翻，搜索用于定位；证明用于确立。一段代码通过再多测试，也只说明在这些输入上没发现问题。
+第一个扫描在这五个输入上都满足契约，但这不是证明：这五条之外可能还有让它失败的输入，而它的正确性由循环不变量的论证给出——在每一个循环头 `best` 都是已比较前缀的最大值，退出时已比较前缀是整个列表，于是满足后置条件。第二个扫描失败的正是初始化那一步：它的 `best` 从 `0` 起，没有取 `values[0]`，所以第一个循环头就不满足不变量。
+
+两种证据的分工：反例用于推翻，搜索用于定位，证明用于确立。一段代码通过再多测试，也只说明在这些输入上没发现问题。

@@ -11,7 +11,7 @@ objectives:
   - 说明期望界为什么不提供确定性的单次运行保证，以及样本均值为什么只是对期望的估计
 ---
 
-另一种「平均」把成本当成随机变量：随机性要么来自输入，要么来自算法内部。摊还分析处理一串操作的总成本时不需要任何随机性假设。本课只建立这套分析语言。随机算法的契约、Las Vegas 与 Monte Carlo 的分类、单侧与双侧错误、概率放大属于 <CrossRef id="algorithms.randomized-algorithms" />；随机 pivot 快速排序的具体算法与期望成本在 <CrossRef id="algorithms.comparison-sorting" /> 处理；哈希表的概率模型在 <CrossRef id="algorithms.hash-tables" /> 处理。
+在一张长度 $n$ 的表里顺序查找一个目标，成本是比较次数。给这个实现一条确定的输入，成本就是一个确定的值：目标在第 $k$ 个位置要比较 $k$ 次，目标不在表里要比较 $n$ 次。追问「它平均比较多少次」时，得先说明变化的究竟是什么——表的选取服从某个输入分布，或者算法在运行时自己掷硬币。两种来源都把成本变成随机变量，它们对「平均」的承诺形状却不同：一个对整族输入负责，一个对每一条固定输入负责。
 
 ## 两种随机性来源
 
@@ -25,9 +25,19 @@ $$
 
 **随机化算法**把随机性放进算法内部：输入固定，算法自己掷硬币。用 $R$ 表示算法这一次的随机选择，对固定输入 $x$ 有 $E_R[C(x, R)]$；量词位置不同——前者是「对这个分布平均」，后者是「对这个输入、对算法的随机选择平均」。
 
-「随机化算法有对每个输入都成立的期望界」是一条需要另行证明的论断；写成量词就是存在常数 $c > 0$ 与规模门槛 $n_0$，使每个满足 $\lvert x \rvert \ge n_0$ 的输入都满足 $E_R[C(x, R)] \le c \cdot f(\lvert x \rvert)$——隐藏常数不许依赖 $x$，「统一」就是指这一点。它不是「算法自己掷硬币」这个事实的直接后果。确定性算法的对手可以在运行之前构造出让最坏情形发生的输入；随机位在输入之后才产生时，对手无法预知这一次会走哪条路径。这个保证也有条件：被挡住的是「在随机位之前固定输入」的对手，能在运行过程中观察并继续构造输入的适应性对手另当别论。
+「随机化算法有对每个输入都成立的期望界」是一条要另行证明的论断。要证明的东西写成量词是这样的形状：
 
-说「哈希表查找是 $O(1)$」或「快速排序是 $n \log n$」时省略的正是这两句假设：前者是哈希假设下的期望，后者是随机基准点下、对每个输入成立的期望。
+$$
+\exists\, c > 0,\ n_0,\quad \forall x:\ \lvert x \rvert \ge n_0 \ \Rightarrow\ E_R[C(x, R)] \le c \cdot f(\lvert x \rvert)
+$$
+
+常数 $c$ 与规模门槛 $n_0$ 不许依赖 $x$，「统一」指的就是这一点。把每个 $x$ 各自的常数收进 $O$ 记号里，这条界就退化成逐点的记号，统一常数这一内容随之消失。
+
+这一步成立依赖一条假设：随机位在对手选定输入之后才产生。确定性算法的对手能在运行之前挑出让最坏情形发生的输入；输入固定之后算法才掷硬币，对手就无从预知这次会走哪条路径。被挡住的是「在随机位之前固定输入」的对手；能在运行过程中观察并继续构造输入的适应性对手另当别论。
+
+说「哈希表查找是 $O(1)$」时省略的是哈希函数把键分散开的假设，那是随机哈希下的期望（<CrossRef id="algorithms.hash-tables" />）；说「随机 pivot 快速排序是 $n \log n$」时省略的是随机基准点下、对每个输入成立的期望（<CrossRef id="algorithms.comparison-sorting" />）。
+
+运行成本的期望只是随机算法契约的一栏：错误保证另有一栏，Las Vegas 与 Monte Carlo 的分类、单侧与双侧错误、概率放大在 <CrossRef id="algorithms.randomized-algorithms" /> 展开；本课只用「对固定输入、对随机位取期望」这一条量词规则。
 
 ## 随机变量与期望
 
@@ -47,45 +57,38 @@ $$
 下面的例子故意取两个相关的指示器：第二个事件包含第一个事件，所以它们不独立。
 
 ```python run id="alg.avg.linearity"
-import random
-
-size = 100
-threshold = 40
-trials = 20000
-generator = random.Random(4)
+size = 4
+threshold = 2
 
 
-def draw():
-    """Return two dependent indicators from one draw of two values."""
-    first = generator.randrange(size)
-    second = generator.randrange(size)
+def indicators(first, second):
+    """Two dependent indicators, read off one draw of two values."""
     below_first = 1 if first < threshold else 0
     below_either = 1 if (first < threshold or second < threshold) else 0
     return below_first, below_either
 
 
-pairs = [draw() for _ in range(trials)]
-mean_first = sum(x for x, _ in pairs) / trials
-mean_either = sum(y for _, y in pairs) / trials
-mean_sum = sum(x + y for x, y in pairs) / trials
+outcomes = [indicators(a, b) for a in range(size) for b in range(size)]
+weight = 1 / len(outcomes)
 
 p = threshold / size
-print(f"E[X] estimate={mean_first:.4f} closed form={p:.4f}")
-print(f"E[Y] estimate={mean_either:.4f} closed form={1 - (1 - p) ** 2:.4f}")
-print(f"E[X + Y] estimate={mean_sum:.4f} sum of closed forms={p + 1 - (1 - p) ** 2:.4f}")
-print("joint outcomes observed:", sorted({(x, y) for x, y in pairs}))
+mean_first = sum(x for x, _ in outcomes) * weight
+mean_either = sum(y for _, y in outcomes) * weight
+mean_sum = sum(x + y for x, y in outcomes) * weight
+
+print(f"E[X] exact={mean_first:.4f} closed form={p:.4f}")
+print(f"E[Y] exact={mean_either:.4f} closed form={1 - (1 - p) ** 2:.4f}")
+print(f"E[X + Y] exact={mean_sum:.4f} sum of closed forms={p + 1 - (1 - p) ** 2:.4f}")
+print("joint outcomes:", sorted(set(outcomes)))
 ```
 
-三行的样本均值都与闭式相符——恒等式本身来自期望的线性性，实验只用于核对实现与模型。而联合取值只有三种：$X = 1$ 时 $Y$ 必然是 1，所以 $P(Y = 0 \mid X = 1) = 0$，而 $P(Y = 0) > 0$——两者明显不独立。线性性不需要独立性，这正是它能作为主线工具的原因。估计与闭式之间的差距来自样本量，不是模型误差。
+三行的精确值与闭式相符——恒等式本身来自期望的线性性，这一格只用来核对实现与模型。联合取值只有三种：$X = 1$ 时 $Y$ 必然是 1，所以 $P(Y = 0 \mid X = 1) = 0$，而 $P(Y = 0) > 0$——两者明显不独立。线性性不需要独立性，这正是它能作为主线工具的原因。
 
 ## 平均情形要先写分布
 
 线性查找的成本取决于目标在序列中的位置。同一个实现，两种分布，两个结论。
 
 ```python run id="alg.avg.linear-search"
-import random
-
-
 def search(items, target):
     """Return the number of comparisons the lookup costs."""
     for index, item in enumerate(items):
@@ -96,25 +99,65 @@ def search(items, target):
 
 size = 100
 items = list(range(size))
-generator = random.Random(0)
+present = [items[0], items[24], items[74], items[99]]
+absent = size + 1
 
-uniform_positions = [generator.randrange(size) for _ in range(2000)]
-absent_keys = [size + offset for offset in range(2000)]
+for target in present:
+    print(f"target at index {target:>3}: comparisons={search(items, target)}")
+print(f"target absent          : comparisons={search(items, absent)}")
 
-uniform_cost = [search(items, items[position]) for position in uniform_positions]
-absent_cost = [search(items, key) for key in absent_keys]
-
-print(f"uniform positions: mean comparisons={sum(uniform_cost) / len(uniform_cost):.1f} worst={max(uniform_cost)}")
-print(f"keys that are absent: mean comparisons={sum(absent_cost) / len(absent_cost):.1f} worst={max(absent_cost)}")
-print("closed forms: (n + 1) / 2 =", (size + 1) / 2, "| n =", size)
+uniform_mean = sum(search(items, items[k]) for k in range(size)) / size
+print(f"uniform over all positions: exact mean comparisons={uniform_mean}")
+print(f"every target absent       : exact mean comparisons={size}")
+print("closed form (n + 1) / 2 =", (size + 1) / 2)
 ```
 
-这两种分布给出不同的**精确**期望，渐进量级却都仍是 $\Theta(n)$：目标位置均匀时期望恰为 $(n + 1)/2$（这是精确值，实验均值只是它在有限样本上的估计），目标必然不存在时恰为 $n$。**同一段代码，同一个规模，两个不同的结论**。用指示器写出来就是：等可能命中时第 $i$ 次比较发生的概率是 $(n - i)/n$，求和得 $(n + 1)/2$；目标不存在时每个位置都发生，求和得 $n$。换别的分布还可能改变量级——目标总在第一个位置是 $\Theta(1)$，目标总不存在是 $\Theta(n)$。常见的 $(n + 1)/2$ 推导采用「目标等可能地位于任意位置」的分布；只给出这个期望而不声明所采用的分布，论断是不完整的。
+两种分布给出不同的**精确**期望，渐进量级却都仍是 $\Theta(n)$。上面那几条输入已经把成本的结构摆出来：目标排在第 $k$ 个位置（从 1 数起）就要比较 $k$ 次，目标不存在要比较 $n$ 次。
+
+要得到均匀分布下的 $(n + 1)/2$，只需要证明一件事：第 $i$ 次比较发生的概率。把第 $i$ 次比较写成指示器，等可能命中时它取 $1$ 当且仅当目标落在第 $i$ 个位置或更靠后——共 $n - i$ 个位置，于是概率是 $(n - i)/n$。对这些指示器取期望再求和，$\sum_{i=0}^{n-1}(n - i)/n$ 恰好化成 $(n + 1)/2$。这一步用到的假设只有期望的线性性，各指示器之间的相关性不进入计算。目标必然不存在时，每个位置的比较都发生，求和得 $n$。
+
+**同一段代码，同一个规模，两个不同的结论**。换别的分布还可能改变量级——目标总在第一个位置是 $\Theta(1)$。这条 $(n + 1)/2$ 的推导采用的是「目标等可能地位于任意位置」的分布；只给出这个期望而不声明所采用的分布，论断是不完整的。
 
 ## 运行时间是随机变量
 
-期望界不提供确定性的单次运行保证：$E[T] = O(n \log n)$ 并不排除某次运行成本更大，甚至达到算法的最坏情形。接口要求「每次运行都有硬上界」时用最坏情形分析；要求「超过某个阈值的概率很小」时，还要另行证明尾概率界——只有期望值并不等价于高概率保证（对非负随机变量，期望经由 Markov 不等式给出的尾界通常很弱）。这与摊还界不等于硬延迟界是平行的两件事。
+把一个随机化算法用在一个固定输入上，期望与单次运行的距离就现出来。目标固定在表尾、扫描方向固定从左到右时，每次运行的比较次数都是 $n$；改成先用一次确定性洗牌打乱扫描顺序，同一个输入上的比较次数就随种子变化：
+
+```python run id="alg.avg.randomized-search"
+import random
+
+
+def scan(order, target):
+    """Comparisons a scan of `order` spends before it reaches `target`."""
+    for index, item in enumerate(order):
+        if item == target:
+            return index + 1
+    return len(order)
+
+
+size = 64
+items = list(range(size))
+target = size - 1          # fixed input: the target sits in the last slot
+
+plain = scan(items, target)
+generator = random.Random(20260604)
+runs = []
+for _ in range(6):
+    order = items[:]
+    generator.shuffle(order)
+    runs.append(scan(order, target))
+
+print(f"deterministic scan on this fixed input: {plain} comparisons")
+print(f"randomized scan, six fixed-seed shuffles: {runs}")
+print(f"sample mean of the six: {sum(runs) / len(runs):.2f}")
+print(f"exact expectation on this input, (n + 1) / 2 = {(size + 1) / 2:.1f}")
+```
+
+确定性扫描在这个输入上每次都返回 $64$；换成随机化扫描后，六次运行分别返回 $7, 40, 40, 53, 43, 20$，取值随随机位变化。这个输入的精确期望是 $32.5$，六次运行只给出样本均值 $33.83$ 这样一个估计。期望界说的是 $E_R[C(x, R)] = 32.5$，它不阻止某一次运行跑到最坏情形的 $64$ 次比较。
+
+期望界与高概率界是两条不同的保证。$E[T] = O(n \log n)$ 不排除某次运行成本更大，甚至达到算法的最坏情形；接口要求「每次运行都有硬上界」时用最坏情形分析，要求「超过某个阈值的概率很小」时还要另行证明尾概率界。只有期望值并不等价于高概率保证：对非负随机变量，期望经由 Markov 不等式只给出 $P[T \ge c\,E[T]] \le 1/c$ 这样的弱尾界。这与摊还界不等于硬延迟界是平行的两件事。
 
 实验测出的样本均值只是对期望的估计，它用来核对实现是否符合模型；结论本身来自计数论证（见 <CrossRef id="algorithms.cost-model" />）。在独立同分布、单次成本方差为 $\sigma^2$ 时，$m$ 次运行的样本均值方差是 $\sigma^2 / m$，随 $1 / m$ 下降，但它始终是估计，不是期望本身。
 
 期望与摊还是两个可以叠加、但必须分开陈述的维度：一个操作的期望成本与一串操作的摊还成本是两条独立论断（见 <CrossRef id="algorithms.amortized" />）。
+
+实现边界：`random.Random(seed).shuffle` 产出的是伪随机置换，给定种子后完全可复现，序列本身由解释器的伪随机数生成器决定（CPython 的 [random 模块](https://docs.python.org/3/library/random.html)）；这是本页为了可复现而做的选择，不改变上面任何一条期望结论。

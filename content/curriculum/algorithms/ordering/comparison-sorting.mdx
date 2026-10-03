@@ -6,102 +6,79 @@ title: 比较排序：分区、快速排序与堆排序
 status: published
 objectives:
   - 写出分区的循环不变量，并由它推出分区的后置条件
-  - 由两个子问题的规模推导快速排序的平衡情形与最坏情形
-  - 说明随机 pivot 的期望分析依赖什么随机性假设
+  - 由子问题规模推导快速排序的平衡情形与最坏情形，并说明随机 pivot 的期望分析依赖什么假设
   - 复用堆的两条不变量推出堆排序，并给出它的最坏阶与辅助空间
-  - 从结构层面比较归并、快速与堆三条路线，不比较常数因子
+  - 从最坏成本、期望成本、辅助空间与稳定性比较归并、快速与堆三条路线
 ---
 
-<CrossRef id="algorithms.sorting" /> 给了排序契约，并用归并排序展示了第一份 $\Theta(n \log n)$ 的实现。这一节问的是另一件事：同样满足契约的不同构造，为什么会有不同的最坏成本、期望成本、辅助空间与稳定性。归并排序只作为已经掌握的基线引用，不再重复实现。
+一个排好序的数组不记录它是被哪条路线排出来的。能给出这个结果的做法不止一条：把整段递归地切成两半、分别排好再合并；按一个 pivot 把当前段分成两小段，其余交给递归；不切分，把数组整体看成一个优先结构，反复取出当前最大值。三条路线满足同一份排序契约，成本与性质却分成不同的取值：最坏成本、期望成本、辅助空间、稳定性各自独立决定。为什么同一份契约下会分出这些差别，就是这一节要回答的问题。
 
 ## 分区：一条循环不变量
 
-快速排序的核心是一个原地划分过程：把区间里的元素按「小于 pivot」与「不小于 pivot」分成两段，并让 pivot 落在两段之间的最终位置上。用区间 `items[low .. high]` 与末元素作 pivot，循环不变量是：
+快速排序的核心是一个原地划分过程：把区间里的元素按「小于 pivot」与「不小于 pivot」分成两段，并让 pivot 落在两段之间的最终位置上。用区间 `items[low .. high]` 与末元素作 pivot，扫描过程把已经处理好的那一段分成相邻的两块，$j$ 是下一个待检查的位置，$boundary$ 是两块的分界：
 
 1. `items[low .. boundary)` 里的元素都 `< pivot`
 2. `items[boundary .. j)` 里的元素都 `>= pivot`
 3. `items[high]` 仍是 pivot 本身，尚未移动
 
-初始时 $j = low$、$boundary = low$，第一段为空，不变量成立。每轮检查 `items[j]`：若它小于 pivot，就把它与 `items[boundary]` 交换，再让 $boundary$ 前进一格。当 $boundary < j$ 时，交换前的 `items[boundary]` 属于第二段、因此不小于 pivot，交换后它被放到位置 $j$，而小于 pivot 的当前元素进入第一段；当 $boundary = j$ 时这次交换只是自交换。两种情况在处理完位置 $j$ 之后都重新得到 `items[low .. boundary) < pivot` 与 `items[boundary .. j+1) >= pivot`。循环结束时 $j = high$，两段覆盖了整个 $[low, high)$，最后把 pivot 与 `boundary` 处的元素交换，pivot 就落在一个不需要再参与递归的合法位置上：左侧都严格小于它，右侧都不小于它。存在等键元素时，这个位置未必是等键记录之间唯一可能的最终位置。
+**初始化**：$j = low$、$boundary = low$，两块都为空，三条同时成立，现在只需要证明每一轮之后它们仍然成立。
 
-终止条件同样是局部的：$j$ 每轮加 1，上界是 $high$，所以循环必然结束。后置条件是「`items[boundary]` 等于 pivot，且左侧全小于、右侧全不小于它」——这正是递归能继续的前提：pivot 不再参与后续排序。
+**维护步**：每轮检查 `items[j]`，它不小于 pivot 时留在原地，第二块右端扩展一格；它小于 pivot 时是整段扫描里唯一需要动作的地方——把 `items[j]` 与 `items[boundary]` 交换，再让 $boundary$ 前进一格。交换前 `items[boundary]` 属于第二块、因此不小于 pivot，交换后它落到位置 $j$ 补进第二块，而小于 pivot 的当前元素进入第一块；当 $boundary = j$ 时这次交换只是自交换。两种情况在处理完位置 $j$ 之后都重新得到 `items[low .. boundary) < pivot` 与 `items[boundary .. j+1) >= pivot`。这一步用到的前提是分界只在 $boundary$ 处移动，两块因此始终相邻、不重叠。
+
+**终止与后置条件**：$j$ 每轮加 1，上界是 $high$，循环必然结束；结束时 $j = high$，两块覆盖了整个 $[low, high)$。把 pivot 与 `items[boundary]` 处的元素交换，后置条件就是「`items[boundary]` 等于 pivot，且左侧全小于、右侧全不小于它」——这正是递归能继续的前提：pivot 已落在最终位置，不再参与后续排序。存在等键元素时，这个位置未必是等键记录之间唯一可能的最终位置。
 
 ## 快速排序：从子问题规模推导
 
-设当前区间含 $n$ 个元素，pivot 最终落在下标 $p$，并令 $k = p - low$ 表示左侧子问题的元素个数，则右侧有 $n - k - 1$ 个元素，递归式为
+分区把 pivot 放到一个最终位置上，这个位置把区间切成两半，而 pivot 自己不再参与递归——每递归一层，待排区间至少少掉一个元素，递归因此一定会停。设当前区间含 $n$ 个元素，pivot 最终落在下标 $p$，并令 $k = p - low$ 表示左侧子问题的元素个数，则右侧有 $n - k - 1$ 个元素，递归式为
 
 $$T(n) = T(k) + T(n - k - 1) + \Theta(n).$$
 
-这里的 $k$ 是子问题规模，而不是数组中的绝对下标。对长度为 $n$ 的区间，这份分区实现把另外 $n-1$ 个元素各与 pivot 比较一次，因此分区成本是 $n-1 = \Theta(n)$。递归式本身不给答案，答案取决于 $k$ 随输入怎么变：
+这里的 $k$ 量的是左侧子问题含有多少个元素，$p$ 才是数组中的绝对下标。对长度为 $n$ 的区间，这份分区实现把另外 $n-1$ 个元素各与 pivot 比较一次，因此分区成本是 $n-1 = \Theta(n)$。递归式本身不给答案，答案取决于 $k$ 随输入怎么变：
 
 - **平衡情形**：如果每次分区都落在中间附近，比如两侧规模都不超过 $c n$（$c < 1$），递归树每一层合计仍是 $\Theta(n)$，层数是 $\Theta(\log n)$，于是 $\Theta(n \log n)$。
 - **极端不平衡**：如果每次 $k = 0$ 或 $k = n-1$，就是 $T(n) = T(n-1) + \Theta(n) = \Theta(n^2)$。取末元素作 pivot 时，已排序或逆序的输入正好每次都把 pivot 留在端点，这正是最坏情形，而且完全由输入顺序安排出来。
 
 这两条说的都是「给定 pivot 选择的后果」。对固定取末元素作 pivot 的实现，如果进一步假设输入是**键两两不同**的均匀随机排列，也可以得到期望 $\Theta(n \log n)$；但这是关于输入分布的假设，任意给定输入并不享有这项保证。
 
-随机 pivot 换了概率来源：对任意固定的、键两两不同的输入，每次递归都从当前区间中独立、均匀地选择一个位置作 pivot。于是 pivot 的秩在当前子问题的所有秩中均匀分布，不再依赖输入原本怎样排列。在这个模型下，期望比较次数是 $2(n+1)H_n - 4n$（$H_n$ 是第 $n$ 个调和数），主项为 $1.386\, n \log_2 n$ 量级；这个精确公式假设所有排序键两两不同。
+随机 pivot 换了概率来源：算法自己掷随机数，每次递归都从当前区间中独立、均匀地选择一个位置作 pivot，于是 pivot 的秩在当前子问题里均匀分布，与输入原本怎样排列无关——这一条对任意固定的输入都成立。**期望分析用到的假设只有两条**：各次 pivot 的选择相互独立且均匀，且排序键两两不同。有了独立均匀的 pivot，每个子问题的规模在期望意义上按常数比例缩小，期望比较次数因此是 $\Theta(n \log n)$，主项写成常数是 $1.386\, n \log_2 n$。更精确的闭式是 $2(n+1)H_n - 4n$（$H_n$ 是第 $n$ 个调和数），比主项低出的部分来自 $H_n$ 展开式里的线性项，属于同一阶内的细节。
 
 本节使用的二路 `<` / `>=` 分区在大量重复键上可能退化：所有键都相等时，每次分区仍只缩小一个元素，随机 pivot 也避免不了 $\Theta(n^2)$。重复键的专门分区策略不在本节展开。
 
 ```python run id="alg.ordering.partition-and-quicksort"
-from random import Random
+def partition(items, low, high, rows):
+    """Postcondition: returns the pivot's final index, with items[low..index) < pivot <= items[index..high]."""
+    pivot = items[high]
+    boundary = low
+    for j in range(low, high):
+        if items[j] < pivot:
+            items[boundary], items[j] = items[j], items[boundary]
+            boundary += 1
+        rows.append((j, boundary, list(items)))
+    items[boundary], items[high] = items[high], items[boundary]
+    return boundary
 
 
-def check_invariant(items, low, boundary, end, pivot):
-    """Postcondition: True iff items[low..boundary) < pivot and items[boundary..end) >= pivot."""
+def invariant_holds(items, low, boundary, end, pivot):
+    """The two-part loop invariant: items[low..boundary) < pivot <= items[boundary..end)."""
     left = all(item < pivot for item in items[low:boundary])
     right = all(not item < pivot for item in items[boundary:end])
     return left and right
 
 
-def partition(items, low, high, counters, checks):
-    """Postcondition: the pivot lands at a legal final index; returns that index."""
-    pivot = items[high]
-    boundary = low
-    for j in range(low, high):
-        counters["comparisons"] += 1
-        if items[j] < pivot:
-            items[boundary], items[j] = items[j], items[boundary]
-            counters["swaps"] += 1
-            boundary += 1
-        checks.append(check_invariant(items, low, boundary, j + 1, pivot))
-    items[boundary], items[high] = items[high], items[boundary]
-    counters["swaps"] += 1
-    return boundary
-
-
-def quicksort(items, low, high, counters, checks):
-    """Postcondition: items[low..high] is non-decreasing."""
-    if low >= high:
-        return
-    position = partition(items, low, high, counters, checks)
-    k = position - low
-    quicksort(items, low, position - 1, counters, checks)
-    quicksort(items, position + 1, high, counters, checks)
-
-
-size = 64
-original = list(range(size))
-Random(20261013).shuffle(original)
-items = list(original)
-counters = {"comparisons": 0, "swaps": 0}
-checks = []
-quicksort(items, 0, len(items) - 1, counters, checks)
-
-print("invariant held after every round:", all(checks), "| rounds checked:", len(checks))
-print("sorted:", all(items[i] <= items[i + 1] for i in range(len(items) - 1)))
-print("permutation:", sorted(items) == sorted(original))
-
 sample = [3, 8, 2, 5, 6, 4]
-counters = {"comparisons": 0, "swaps": 0}
-position = partition(sample, 0, len(sample) - 1, counters, [])
-print("partition on", sample, "| pivot index:", position, "| pivot:", sample[position])
-print("  comparisons:", counters["comparisons"], "= n - 1")
-print("  left < pivot:", all(item < sample[position] for item in sample[:position]))
-print("  right >= pivot:", all(not item < sample[position] for item in sample[position + 1:]))
+pivot = sample[-1]
+rows = []
+position = partition(sample, 0, len(sample) - 1, rows)
+for j, boundary, snapshot in rows:
+    print("round", j, "| boundary", boundary, "| invariant holds:",
+          invariant_holds(snapshot, 0, boundary, j + 1, pivot), "|", snapshot)
+print("comparisons:", len(rows), "| equals n - 1:", len(rows) == len(sample) - 1)
+print("pivot index:", position, "| pivot value:", sample[position])
+print("left < pivot:", all(item < sample[position] for item in sample[:position]),
+      "| right >= pivot:", all(not item < sample[position] for item in sample[position + 1:]))
 ```
 
-这段代码在每一轮处理完 $j$ 之后都检查不变量，而不只在发生交换时检查。这份固定输入一共执行 349 次分区元素比较，因此也做了 349 次不变量检查，全部通过；排序结果正确，输出是输入的排列。示例数组 `[3, 8, 2, 5, 6, 4]` 上分区返回下标 2，`items[2] = 4` 左侧都小于 4、右侧都不小于 4，符合上面写的后置条件。
+五行输出对应分区对 $[3, 8, 2, 5, 6, 4]$ 的逐轮检查。$j$ 从 0 走到 4，$boundary$ 在 $j = 0$ 与 $j = 2$ 两处前进——只有这两轮的 `items[j]` 小于 pivot；每次前进之后不变量都仍然成立。循环结束后 pivot 落到下标 2，值 4 的左侧都小于 4、右侧都不小于 4，正是上面写的后置条件。
 
 ```python run id="alg.ordering.quicksort-cases"
 import math
@@ -143,47 +120,40 @@ def quicksort_random_pivot(items, low, high, comparisons, rng):
 
 
 size = 64
-cases = {"already sorted": list(range(size)), "reversed": list(range(size, 0, -1))}
 shuffled = list(range(size))
 Random(20261013).shuffle(shuffled)
-cases["fixed shuffle"] = shuffled
+cases = (("already sorted", list(range(size))),
+         ("reversed", list(range(size, 0, -1))),
+         ("fixed shuffle", shuffled))
 
-print(f"{'input':>16} {'comparisons':>12} {'n(n-1)/2':>10} {'sorted':>7}")
-for name, case in cases.items():
-    original = list(case)
-    comparisons = [0]
-    quicksort_last_pivot(case, 0, size - 1, comparisons)
-    ordered = all(case[i] <= case[i + 1] for i in range(size - 1)) and sorted(case) == sorted(original)
-    print(f"{name:>16} {comparisons[0]:>12} {size * (size - 1) // 2:>10} {str(ordered):>7}")
-
-width = 512
-trials = 40
+print(f"{'input':>16} {'last pivot':>11} {'random pivot':>13} {'n(n-1)/2':>9} {'correct':>8}")
 rng = Random(20261013)
-totals = []
-ordered_runs = 0
-for trial in range(trials):
-    case = list(range(width))
-    Random(20261013 + trial).shuffle(case)
-    comparisons = [0]
-    quicksort_random_pivot(case, 0, width - 1, comparisons, rng)
-    totals.append(comparisons[0])
-    ordered_runs += all(case[i] <= case[i + 1] for i in range(width - 1))
-    assert sorted(case) == list(range(width))
+for name, case in cases:
+    last = list(case)
+    last_comparisons = [0]
+    quicksort_last_pivot(last, 0, size - 1, last_comparisons)
+    random_case = list(case)
+    random_comparisons = [0]
+    quicksort_random_pivot(random_case, 0, size - 1, random_comparisons, rng)
+    correct = all(random_case[i] <= random_case[i + 1] for i in range(size - 1))
+    correct = correct and sorted(random_case) == sorted(case)
+    print(f"{name:>16} {last_comparisons[0]:>11} {random_comparisons[0]:>13} "
+          f"{size * (size - 1) // 2:>9} {str(correct):>8}")
 
-harmonics = sum(1 / k for k in range(1, width + 1))
-expected = 2 * (width + 1) * harmonics - 4 * width
-print("random pivot, n =", width, "| trials:", trials, "| sorted runs:", ordered_runs)
-print("  mean:", round(sum(totals) / len(totals), 1), "| min:", min(totals), "| max:", max(totals))
-print("  2(n+1)H_n - 4n =", round(expected, 1), "| 2n ln n =", round(2 * width * math.log(width), 1))
+expected = 2 * (size + 1) * sum(1 / k for k in range(1, size + 1)) - 4 * size
+print("expected comparisons, 2(n+1)H_n - 4n:", round(expected, 1),
+      "| leading term, 2n ln n:", round(2 * size * math.log(size), 1))
 ```
 
-三行实测对应前面的三类情形：已排序与逆序输入在末元素 pivot 下都做 2016 次比较，正好是 $n(n-1)/2$，也就是 $\Theta(n^2)$ 那一支；固定洗牌输入只做 349 次。下面把 pivot 换成随机选择，在 $n = 512$ 上跑 40 次：平均 4938.9 次比较，最少 4395、最多 5889，与精确期望 $2(n+1)H_n - 4n = 4\,945.7$ 相差约 0.14%，40 次运行的结果都通过了排序与排列检查。两点值得注意：均值与期望式的接近来自多次运行的**平均**，单次仍有明显波动；而 $2n \ln n = 6\,388$ 只保留最高阶主项——把 $H_n = \ln n + \gamma + O(1/n)$ 代入精确式后还存在约 $(2\gamma - 4)n$ 的负线性修正，因此它在这个规模上明显偏高，这与二者具有相同的渐进主项并不矛盾。
+三行实测对应三类输入。已排序与逆序在末元素 pivot 下都做 2016 次比较，等于 $n(n-1)/2$，正是 $\Theta(n^2)$ 那一支；固定洗牌输入只做 349 次。把同一个输入上的 pivot 换成随机选择，两种退化输入的比较次数降到 368 与 454，与洗牌输入的 365 落在同一量级，输入顺序不再决定成本。三行的排序与排列检查都通过。
+
+随机 pivot 的期望比较次数在 $n = 64$ 上，精确式 $2(n+1)H_n - 4n$ 给出 360.7，只保留最高阶的 $2n \ln n$ 给出 532.3；两者的差来自 $H_n = \ln n + \gamma + O(1/n)$ 带入后留下的线性负修正。三次实测值围绕 360.7 上下摆动（368、454、365），单次运行仍有可观波动。
 
 确定性的 $\Theta(n \log n)$ 最坏界需要别的机制，例如限制递归深度并在退化时切换策略，或用一个线性时间的选取过程来挑 pivot。后者建立在「选择」这一操作上，属于 <CrossRef id="algorithms.selection-and-top-k" />。
 
 ## 堆排序：复用已经冻结的堆
 
-<CrossRef id="algorithms.heaps" /> 已经建立了堆的两类不变量：完全二叉树的形状不变量，以及父子之间的顺序不变量。那一节默认的小顶堆方向是「父不大于子」；堆排序使用它的对称变体——**最大堆**，只把顺序方向反转为「父不小于子」，形状不变量与线性建堆的论证完全不变。堆排序不引入新结构，只换一个用法：把数组看成最大堆的**前缀**加一段已经排好的**后缀**。
+<CrossRef id="algorithms.heaps" /> 的两条不变量——完全二叉树的形状不变量，以及父子之间的顺序不变量——可以直接换个用法。堆默认的方向是小顶堆「父不大于子」；堆排序使用它的对称变体——**最大堆**，只把顺序方向反转为「父不小于子」，形状不变量与线性建堆的论证完全不变。堆排序不引入新结构，只换一个用法：把数组看成最大堆的**前缀**加一段已经排好的**后缀**。
 
 1. `items[0 .. end)` 仍然是一个满足最大堆顺序的完全二叉树
 2. `items[end .. n)` 已经按非降序排列，且每个元素都不小于前缀中的任何元素
@@ -276,7 +246,7 @@ print("first equal-key inversion:", inversion)
 
 ## 三条路线的结构比较
 
-三条路线满足同一份契约，差别来自它们如何决定子问题规模、以及额外空间花在哪里：
+三条路线满足 <CrossRef id="algorithms.sorting" /> 给出的同一份排序契约，差别来自它们如何决定子问题规模、以及额外空间花在哪里：
 
 | 算法 | 切分与代价 | 成本 |
 | --- | --- | --- |
@@ -286,8 +256,8 @@ print("first equal-key inversion:", inversion)
 
 - **最坏界**：归并与堆排序对任何输入都保持 $\Theta(n \log n)$；快速排序的这一界依赖分区平衡，最坏会退化到 $\Theta(n^2)$。随机 pivot 的分析依赖「每轮独立均匀取 pivot」；一旦随机源被固定或被输入安排，退化情形重新可用。随机化改变的是「最坏情形是否容易被输入触发」，不改变单次运行的成本上界。
 - **辅助空间**：这份递归快速排序在平衡分区时递归深度为 $O(\log n)$，但连续极端分区时深度会达到 $O(n)$，因此它的最坏辅助栈空间是 $O(n)$；随机 pivot 在「键两两不同」的模型下有期望 $O(\log n)$ 的递归深度，单次运行的最坏情形仍是 $O(n)$。常规归并实现使用 $\Theta(n)$ 工作缓冲；堆排序使用 $O(1)$ 辅助空间。
-- **稳定性**：归并排序稳定；本节给出的原地分区快速排序与原地堆排序实现都不稳定，因为两者都把远距离交换当成恢复结构的手段——分区交换会越过等键元素，堆的堆顶交换同样如此。这里说的是这两份实现不保证稳定性，而不是说任何一种快速排序或堆排序变体都不可能稳定。
+- **稳定性**：归并排序稳定；本节给出的原地分区快速排序与原地堆排序实现都不稳定，因为两者都把远距离交换当成恢复结构的手段——分区交换会越过等键元素，堆的堆顶交换同样如此。这里说的是这两份具体实现不保证稳定性；稳定的快速排序与堆排序变体存在，本节不涉及。
 
 这三条轴的取值互相独立，所以「哪种排序更好」必须先说清在哪个轴上。常数因子由实现与输入共同决定，本节不比较常数。
 
-Python 的 `list.sort()` 与 `sorted()` 使用稳定的 Timsort；`list.sort()` 会原地修改列表，`sorted()` 构造新列表。这里的「原地修改 API 对象」不要与算法分析中的 $O(1)$ 辅助空间混为一谈：Timsort 可以使用随输入规模增长的临时存储。在 Python 里手写这一节的快速排序，目的是显式观察分区不变量与子问题规模，而不是作为替代内置排序的性能建议。`heapq.nsmallest()` 与 `heapq.nlargest()` 提供部分排序接口：文档把它们描述为单遍扫描、只保留所需数量元素的方案，当前实现通常维护一个大小受 $k$ 限制的堆，并在 $k$ 不小于输入长度时直接退回完整排序。至于完整比较排序为什么存在 $\Omega(n \log n)$ 的比较下界，需要先建立比较模型与决策树，见 <CrossRef id="algorithms.lower-bounds" />。
+Python 的 `list.sort()` 与 `sorted()` 使用稳定的 Timsort；`list.sort()` 会原地修改列表，`sorted()` 构造新列表。这里的「原地修改 API 对象」不要与算法分析中的 $O(1)$ 辅助空间混为一谈：Timsort 可以使用随输入规模增长的临时存储。在 Python 里手写这一节的快速排序，目的是显式观察分区不变量与子问题规模；它不构成替代内置排序的性能建议。`heapq.nsmallest()` 与 `heapq.nlargest()` 提供部分排序接口：文档把它们描述为单遍扫描、只保留所需数量元素的方案，当前实现通常维护一个大小受 $k$ 限制的堆，并在 $k$ 不小于输入长度时直接退回完整排序。至于完整比较排序为什么存在 $\Omega(n \log n)$ 的比较下界，需要先建立比较模型与决策树，见 <CrossRef id="algorithms.lower-bounds" />。
