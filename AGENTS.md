@@ -23,14 +23,20 @@ The product is **not an LMS**. There are no accounts, progress records, grades, 
 
 One normative fact has exactly one home. Link to it instead of restating it.
 
-| Question | Document |
+| Question | Home |
 | --- | --- |
 | What is invariant about this repository, and how is a change verified? | this file |
-| How are the product and its runtime built? | `doc/DESIGN.md` |
+| How are the product and its runtime built, and why? | `doc/DESIGN.md` |
 | How is a lesson written? | `doc/CONTENT_GUIDE.md` |
-| What does the course contain, in what order, and what is finished? | `doc/CURRICULUM.md` |
+| What is taught, in what order, and why? | `doc/CURRICULUM.md` |
+| Which lessons exist, in what order, and what is published? | `_section.yaml` and lesson frontmatter |
+| What metadata, cell options and references are legal? | `src/content-model/schema.ts`, the markdown pipeline, the content validator |
+| What behaviour is verified, and how? | `tests/`, `scripts/check-oracles.ts`, the build |
+| What changed, and when? | Git history |
 
-Baseline technology choices are in `DESIGN.md` section 3. Do not replace them merely because another library is fashionable; a replacement must reduce complexity or satisfy a concrete unmet requirement.
+Documents hold decisions and intent; code, schema, frontmatter and tests hold the precise current facts; Git holds history. Adding a lesson, moving or splitting a section, changing a cell option or advancing publication state must not require editing any of these documents. Where a document and the repository disagree about a current fact, the repository is right and the document is a defect — with one exception: `doc/CURRICULUM.md` states design intent and may describe a module's direction before its lessons reach that shape.
+
+Baseline technology choices are in `doc/DESIGN.md` (技术基线). Do not replace them merely because another library is fashionable; a replacement must reduce complexity or satisfy a concrete unmet requirement.
 
 ## Engineering rules
 
@@ -43,9 +49,9 @@ Baseline technology choices are in `DESIGN.md` section 3. Do not replace them me
 
 ## Change discipline
 
-- A change to the content schema, runtime protocol, routing or glossary semantics updates `doc/DESIGN.md`. A new authoring convention updates `doc/CONTENT_GUIDE.md`. A change to what is taught updates `doc/CURRICULUM.md`.
+- A change to the architecture — the content model, the browser execution model, routing or the term system's semantics — updates `doc/DESIGN.md`. Implementing an existing design decision does not. A new authoring convention updates `doc/CONTENT_GUIDE.md`. A change to what is taught, or to a module's boundaries, updates `doc/CURRICULUM.md`. Reference another document by name, never by section number.
 - Never silently migrate content semantics. Provide a migration script when a schema change touches more than a few files.
-- The curriculum tables describe the repository as it is. If a table disagrees with `content/`, fix the table.
+- Never restate a current fact in a document. An ID, an order, a status, a field list or a message shape has one home, and it is the file or the code that the build already reads.
 
 ## Verification
 
@@ -62,4 +68,4 @@ A change is done only when:
 2. keyboard and narrow-screen behavior are acceptable;
 3. affected cells can Run, Stop and Reset correctly in a browser;
 4. browser and worker consoles are clean in normal use;
-5. the documents listed above are updated.
+5. no document was edited merely to mirror a change in content, metadata or code (see Document ownership).
