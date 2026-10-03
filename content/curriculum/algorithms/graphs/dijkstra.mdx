@@ -1,0 +1,170 @@
+---
+id: algorithms.dijkstra
+slug: /algorithms/dijkstra
+order: 50
+title: 非负权与 Dijkstra
+status: published
+objectives:
+  - 写出 Dijkstra 的非负权前置条件与算法步骤
+  - 证明 settle 不变量依赖边权非负
+  - 说明优先队列在算法中的角色以及 heapq 缺少 decrease-key 时的取舍
+  - 用负边实例说明 settle 保证在何处失效
+---
+
+从源点出发，我们希望按距离从小到大的顺序把每个顶点的最短距离逐个确定下来：先确定最近的，再确定次近的，确定过的就不再回头改写。这条路线成立的前提是「当前最小的 tentative 距离已经是最终的」，本节要问它凭什么成立，以及这个「确定即最终」在什么权重条件下失效。
+
+推进算法要用到 <CrossRef id="algorithms.shortest-paths" /> 的松弛操作与安全性不变量——任何时刻每个有限的标签都是某条真实行走的权重。有向加权图记作 $G = (V, E, w)$，边权由 $w: E \to R$ 给出。算法契约还要包含一条对权重的约束：
+
+$$w(e) \ge 0 \quad \forall e \in E.$$
+
+零权边允许；一旦出现负边，保证失效。这个「失效」可以用一个具体实例演示（见下面的单元格）：$s \to a = 2$、$s \to b = 5$、$b \to a = -10$，算法先把 $a$ 以 2 确定，而真实的最轻行走 $s \to b \to a$ 权重是 $-5$。
+
+## 算法的推进
+
+算法按「settle」（确定）的方式推进：
+
+1. $distance[s] = 0$，其余为 $+\infty$。
+2. 反复取「尚未 settle、且 tentative 距离有限」的顶点中距离最小者 $u$，把 $u$ 标记为 settled，然后松弛 $u$ 的每条出边 $(u, v, weight)$。
+3. 当不存在这样的顶点时停止。
+
+从 $s$ 可达的顶点恰好 settle 一次；不可达顶点的 label 一直是 $+\infty$，它们既不需要 settle，也不在「取最小者」的范围内。实现用稀疏字典保存 label，**缺少键就表示 tentative 为 $+\infty$**。
+
+正确性依赖一条 settlement 不变量，它的证明恰好显示非负条件用在哪里。
+
+## settle 不变量的证明
+
+**基例**：第一次被 settle 的顶点是 $s$，$distance[s] = 0 = \delta(s, s)$——空行走的权重是 0，而所有边非负，不存在更轻的 $s \to s$ 行走。所以第一次 settle 就是对的。
+
+**定理**：归纳地假设 $s \in S$，且 $S$ 中每个顶点的 distance 都已是真实最短距离。此时 tentative 距离最小的未 settle 顶点 $u$，其 tentative 距离已经是 $\delta(s, u)$。
+
+反设 $\delta(s, u) < distance[u]$。取一条从 $s$ 到 $u$ 的最短路径 $P$，记 $w(P) = \delta(s, u)$。沿 $P$ 从 $s$ 出发找第一个不在 $S$ 中的顶点 $y$（$s$ 在 $S$ 中，所以 $y$ 一定存在），记它沿 $P$ 的前驱为 $x$，并把 $P$ 上从 $y$ 到 $u$ 的剩余部分记为后缀 $Q$。此时
+
+$$
+\begin{aligned}
+distance[y] &\le distance[x] + w(x, y) \quad \text{x settle 时松弛过边 } (x, y) \\
+             &= \delta(s, x) + w(x, y) \quad \text{x 在 } S \text{ 中，其距离已正确} \\
+             &\le w(P \text{ 上 } s \rightsquigarrow x \text{ 这一段}) + w(x, y) \\
+             &\le w(P \text{ 上 } s \rightsquigarrow y \text{ 这一段}) \quad \text{这一前缀是一条候选 } s \rightsquigarrow y \text{ 路径} \\
+             &\le w(P) = \delta(s, u) \quad w(Q) \ge 0 \\
+             &< distance[u] \quad \text{反设}
+\end{aligned}
+$$
+
+倒数第二步用的正是非负条件：$Q$ 是从 $y$ 走到 $u$ 的一段路径，权重是若干非负边之和，删掉它不会让权重变大。这与 $u$ 是 tentative 最小者（$distance[u] \le distance[y]$）矛盾。
+
+反向的不等式由安全性不变量给出：tentative 距离总是某条真实行走的权重，所以 $distance[u] \ge \delta(s, u)$。两侧夹紧即得等号。
+
+## 优先队列的实现
+
+Python 的 `heapq` 没有 decrease-key。有两个都合法的选择：
+
+| 实现 | 说明 |
+| --- | --- |
+| 抽象优先队列（教材版） | 支持 decrease-key，配二叉堆时成本 $O((\lvert V \rvert + \lvert E \rvert) \log \lvert V \rvert)$ |
+| `heapq` | 距离更新时把新的条目压进堆，pop 时丢弃过期条目；一个顶点只 settle 一次，但堆里可能有它的多个旧条目 |
+
+heapq 的条目写成 `(distance, serial, vertex)`：顶点之间不需要可比较，一个递增计数器负责打破平局，堆也就永远不会去比较两个顶点。单元格里的实现走这条路，并且直接报告「堆压入次数」与「丢弃的过期条目数」，把实际发生的操作数写出来；教材版的操作次数不适用于这个实现。
+
+在从 $s$ 可达的顶点集 $V_R$ 与边集 $E_R$ 上：每次成功松弛至多压入一个条目，所以压入次数不超过 $|E_R| + 1$，弹出次数与之同阶，堆大小同样不超过 $|E_R| + 1$；每次堆操作 $O(\log(|E_R| + 1))$。总计 $O\big(|V_R| + |E_R| + (|E_R| + 1)\log(|E_R| + 1)\big)$。教材版的 $O((|V| + |E|)\log|V|)$ 是「抽象 decrease-key + 二叉堆」那一行的成本，不是这个实现的。
+
+```python run id="alg.graphs.shortest-paths-dijkstra"
+import heapq
+from itertools import count
+
+INF = float("inf")
+
+
+def build_weighted(vertices, arcs):
+    adjacency = {vertex: [] for vertex in vertices}
+    for u, v, weight in arcs:
+        adjacency[u].append((v, weight))
+    return adjacency
+
+
+def lightest_path_by_enumeration(adjacency, source):
+    """Oracle for small graphs: every simple path, least total weight."""
+    best = {source: 0}
+
+    def walk(vertex, weight_so_far, seen):
+        for neighbour, weight in adjacency[vertex]:
+            if neighbour in seen:
+                continue
+            candidate = weight_so_far + weight
+            if neighbour not in best or candidate < best[neighbour]:
+                best[neighbour] = candidate
+            walk(neighbour, candidate, seen | {neighbour})
+
+    walk(source, 0, {source})
+    return best
+
+
+def dijkstra(adjacency, source, settled_is_final=False):
+    """Lazy heapq. A missing key in distance means tentative +inf.
+
+    Entries are (distance, serial, vertex): vertices need not be comparable, so the
+    serial number breaks ties and heapq never compares two vertices.
+    settled_is_final=True makes the implementation honour the settle contract by
+    refusing to relax out of a settled vertex into another settled vertex; the
+    reported distances are then exactly the values recorded at settle time.
+    """
+    serial = count()
+    distance = {source: 0}
+    settled = set()
+    settled_at = []
+    heap = [(0, next(serial), source)]
+    pushes = 1
+    stale_pops = 0
+    while heap:
+        candidate, _, vertex = heapq.heappop(heap)
+        if vertex in settled or candidate > distance.get(vertex, INF):
+            stale_pops += 1
+            continue
+        settled.add(vertex)
+        settled_at.append((vertex, candidate))
+        for neighbour, weight in adjacency[vertex]:
+            if settled_is_final and neighbour in settled:
+                continue
+            relaxed = candidate + weight
+            if relaxed < distance.get(neighbour, INF):
+                distance[neighbour] = relaxed
+                heapq.heappush(heap, (relaxed, next(serial), neighbour))
+                pushes += 1
+    return distance, settled_at, pushes, stale_pops
+
+
+non_negative_vertices = ["s", "a", "b", "c", "d", "e"]
+non_negative_arcs = [("s", "a", 4), ("s", "b", 1), ("b", "a", 1), ("a", "c", 3),
+                     ("b", "c", 6), ("b", "d", 7)]
+graph = build_weighted(non_negative_vertices, non_negative_arcs)
+oracle = lightest_path_by_enumeration(graph, "s")
+distance, settled_at, pushes, stale_pops = dijkstra(graph, "s")
+reachable = [v for v in non_negative_vertices if v in oracle]
+
+print("non-negative graph, Dijkstra distances:", {v: distance[v] for v in sorted(distance)})
+print("  oracle:", {v: oracle[v] for v in sorted(oracle)})
+print("  every distance matches the oracle:", all(distance[v] == oracle[v] for v in oracle))
+print("  at the moment each vertex was settled its tentative distance was already final:",
+      all(candidate == oracle[vertex] for vertex, candidate in settled_at))
+print("  every reachable vertex settled exactly once:", len(settled_at) == len(reachable),
+      "| e never settled (unreachable, stays +inf):", "e" not in settled_at)
+print("  heap pushes:", pushes, "| stale entries discarded on pop:", stale_pops)
+
+negative_vertices = ["s", "a", "b"]
+negative_arcs = [("s", "a", 2), ("s", "b", 5), ("b", "a", -10)]
+negative_graph = build_weighted(negative_vertices, negative_arcs)
+true_distance = lightest_path_by_enumeration(negative_graph, "s")
+leaky = dijkstra(negative_graph, "s")
+strict = dijkstra(negative_graph, "s", settled_is_final=True)
+print()
+print("negative edge b -> a = -10:")
+print("  true lightest weights:", {v: true_distance[v] for v in sorted(true_distance)})
+print("  settle-time distances:", dict(leaky[1]))
+print("  the settle contract already fails at a: it was settled at 2, the true value is -5:",
+      dict(leaky[1])["a"] == 2 and true_distance["a"] == -5)
+print("  an implementation that treats a settled vertex as final returns a =",
+      strict[0]["a"], "instead of", true_distance["a"])
+print("  one that keeps relaxing into settled vertices happens to end at a =",
+      leaky[0]["a"], "-- what failed is the guarantee, not this particular run")
+```
+
+非负图上每次 settle 时记录的 tentative 距离都与独立 oracle 一致；负边那个例子里，settle 时刻的值（2）已经不是最终答案（$-5$），把 settled 顶点当最终答案的实现就会返回错值。也正因为保证失效，**不能**因为有「碰巧算对」的负权实例就说算法适用。撤掉非负假设之后，settle 结构不再成立，需要一种不依赖「确定即最终」的推进方式。

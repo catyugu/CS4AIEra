@@ -94,7 +94,7 @@
 
 定位：建立成本模型与表示选择的语言。目标不是算法清单，而是让读者能自己推导复杂度、构造反例、判断常数与局部性、在真实约束下选择结构。
 
-范围与重点：主线是「契约与表示 → 成本与正确性 → 线性结构 → 关联结构 → 树与优先结构 → 查找 / 排序 / 选择 → 图 → 算法设计范式 → 综合选择」。`algorithms.complexity` 先建立分析语言（抽象数据类型与表示不变量、输入规模与成本模型、渐进记号、正确性、递归、摊还、期望），其余子章节的每一节课都复用这套语言，不再重复解释。全模块的分析框架是：抽象契约 → 表示 → 表示不变量 → 操作 → 不变量保持的论证 → 成本。
+范围与重点：主线是「契约与表示 → 成本与正确性 → 线性结构 → 关联结构 → 树与优先结构 → 查找 / 排序 / 选择 → 图 → 算法设计范式 → 综合选择」。`algorithms.complexity` 先建立分析语言（抽象数据类型与表示不变量、输入规模与成本模型、渐进记号、正确性、递归、摊还、期望），其余子章节的每一节课都复用这套语言，不再重复解释。全模块的分析框架是：抽象契约 → 表示 → 表示不变量 → 操作 → 不变量保持的论证 → 成本。这套框架是作者的检查表，不是课时的章节顺序：每节课的正文由一个具体问题连续推进，契约、不变量、成本与反例在解决它的过程中出现并当场命名。
 
 排除并指定去处：冷门命名算法的实现、非教学必要的手写平衡树、排序算法展览（`heap sort` 之外再罗列 shell sort、cocktail sort 等）、排序常数因子对比表属于 A 级（查文档即可），不进正文；复杂性理论与不可近似不属于本模块，`algorithms.lower-bounds` 只做比较模型与决策树下界，NP 完全性与近似困难性如需讲授另设模块；profiling 与基准测试方法论归 `software-engineering`；缓存局部性背后的硬件与虚拟内存机制归 `operating-systems`；B 树、外部内存结构与查询计划在存储引擎中的形态归 `databases`；并发下的数据结构归 `operating-systems`。Python 只是实验语言，本模块不是 Python 容器教程，也不是面试题集。
 
@@ -126,9 +126,11 @@
 | `algorithms.graphs` | 10 | `algorithms.graph-representation` | 图的表示与不变量 | ✓ |
 | | 20 | `algorithms.graph-traversal` | 遍历、连通分量与访问不变量 | ✓ |
 | | 30 | `algorithms.dags-and-topological-order` | DAG、拓扑序与环检测 | ✓ |
-| | 40 | `algorithms.shortest-paths` | 最短路径：单位权、非负权与负边 | ✓ |
-| | 50 | `algorithms.union-find` | 并查集与增量连通性 | ✓ |
-| | 60 | `algorithms.connectivity-and-spanning-trees` | 最小生成树 | ✓ |
+| | 40 | `algorithms.shortest-paths` | 最短路径与松弛 | ✓ |
+| | 50 | `algorithms.dijkstra` | 非负权与 Dijkstra | ✓ |
+| | 60 | `algorithms.bellman-ford` | 负边、Bellman–Ford 与负环 | ✓ |
+| | 70 | `algorithms.union-find` | 并查集与增量连通性 | ✓ |
+| | 80 | `algorithms.connectivity-and-spanning-trees` | 最小生成树 | ✓ |
 | `algorithms.techniques` | 10 | `algorithms.divide-and-conquer` | 分治 | ✓ |
 | | 20 | `algorithms.greedy` | 贪心与交换论证 | ✓ |
 | | 30 | `algorithms.dynamic-programming` | 动态规划 | ✓ |

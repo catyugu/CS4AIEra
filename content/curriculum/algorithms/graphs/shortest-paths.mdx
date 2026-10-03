@@ -2,19 +2,18 @@
 id: algorithms.shortest-paths
 slug: /algorithms/shortest-paths
 order: 40
-title: 最短路径：单位权、非负权与负边
+title: 最短路径与松弛
 status: published
 objectives:
-  - 用一个统一的距离函数描述单源最短路问题，并区分不可达、负环与有限三种情形
+  - 用一个统一的距离函数描述单源最短路问题，并区分有限、不可达与负环三种取值
   - 把距离与具体路径见证分开，说明松弛操作的安全性不变量
-  - 证明单位权下 BFS 的层号恰等于最少边数，并说明它不能推广到非负权
-  - 证明 Dijkstra 的 settle 不变量，并指出边权非负条件用在哪一步
-  - 写出 Bellman–Ford 的原地与同步版本，用轮次不变量说明负环检测为什么只报源点可达负环
+  - 证明单位权下 BFS 的层号恰等于最少边数
+  - 构造一个让 BFS 层号与真实权重距离不一致的反例
 ---
 
-<CrossRef id="algorithms.graph-representation" /> 把权重定义在边上，并给出「全部边构成一个连续可迭代序列」的边列表接口；<CrossRef id="algorithms.graph-traversal" /> 用队列不变量给出 BFS 的层次结构。这一节把三种权重条件下的单源最短路算法放在一起，重点是看清每个算法的正确性究竟依赖哪一条前置条件。
+一条边带一个代价，从源点 $s$ 出发到每个顶点最少要花多少代价，这是单源最短路问题。同一张图上答案可能有限，也可能没有下界：有的顶点根本走不到，有的顶点可以绕一个「越绕越便宜」的环把代价压到任意低。本节把这三类回答收进同一个量——距离函数——再给出逼近它的共同原语。
 
-本节处理有向加权图 $G = (V, E, w)$ 与源点 $s \in V$；$V$ 与 $E$ 是有限简单有向图，$|E|$ 用「边序列长度」计数，允许有向边成对出现构成环。权重由一个函数 $w: E \to R$ 给出，其中 $R$ 表示实数集；**表示层不限制权重的正负**，哪一类算法允许多大范围的权重，是算法契约自己的事。下面的证明都假定加法与比较是精确的；单元格里的权重全部取整数，以免把浮点舍入混进正确性讨论。
+本节处理有向加权图 $G = (V, E, w)$ 与源点 $s \in V$；$V$ 与 $E$ 是有限简单有向图，$|E|$ 用「边序列长度」计数，允许有向边成对出现构成环。<CrossRef id="algorithms.graph-representation" /> 把权重定义在边上，并给出「全部边构成一个连续可迭代序列」的边列表接口。权重由一个函数 $w: E \to R$ 给出，其中 $R$ 表示实数集；**表示层不限制权重的正负**，哪一类算法允许多大范围的权重，是算法契约自己的事。下面的证明都假定加法与比较是精确的；单元格里的权重全部取整数，以免把浮点舍入混进正确性讨论。
 
 ## 一个统一的问题
 
@@ -40,11 +39,11 @@ $$\delta(s, v) = \inf \lbrace \, w(W) \; : \; W \in W(s, v) \, \rbrace$$
 
 **否则**，任意一条 $s \rightsquigarrow v$ 行走中出现的环权重都不可能是负数。若行走重复了顶点，在所有「同一顶点的两次出现」里选间隔最短的一对：它们之间没有别的重复顶点，所以这一段的内部顶点两两不同，按环的定义（$v_k = v_0$，$v_0 \dots v_{k-1}$ 两两不同）它就是一个环。这个环不可能为负，删掉它之后权重不会增加。对剩下的行走重复这一步，最终得到一条权重不会更大的简单路径。有限图只有有限条简单路径，因此这些简单路径的权重集合有最小值；它同时就是所有行走权重的下确界，并且被真正取到。
 
-第三类里最优值总可以取到一条**简单路径**，而简单路径至多含 $|V| - 1$ 条边——这条观察在 Bellman–Ford 里会直接变成轮数上界。
+第三类里最优值总可以取到一条**简单路径**，而简单路径至多含 $|V| - 1$ 条边；这个界会给基于轮次的最短路径算法提供轮数上界。
 
 ## 松弛与见证
 
-三种算法共用同一个原语：
+把距离算出来需要一个共同原语：
 
 **松弛边** $(u, v, weight)$：若 $distance[u] + weight < distance[v]$，则用这个值更新 $distance[v]$。
 
@@ -52,7 +51,7 @@ $$\delta(s, v) = \inf \lbrace \, w(W) \; : \; W \in W(s, v) \, \rbrace$$
 
 这条不变量是「上界性质」：算法给出的数永远不会低于真实最优值，只会逐渐逼近它。
 
-**它是存在性陈述，不是「当前 predecessor 链可以还原它」**。`predecessor[v] = u` 只记录「最后一次改善 v 时用的是边 $(u, v)$」，并不保存历史版本。看一个反例，边按 $s \to u: 10$、$u \to v: 0$、$s \to x: 1$、$x \to u: 1$ 的顺序扫描，现场扫描一轮后：
+**它是存在性陈述**：它断言某个真实行走取到该权重；`predecessor[v] = u` 只记录「最后一次改善 $v$ 时用的是边 $(u, v)$」，并不保存历史版本。看一个反例，边按 $s \to u: 10$、$u \to v: 0$、$s \to x: 1$、$x \to u: 1$ 的顺序扫描，现场扫描一轮后：
 
 $$
 \begin{aligned}
@@ -64,15 +63,15 @@ $$
 
 当前 predecessor 链 $s \to x \to u \to v$ 的权重是 2，而 $distance[v]$ 是 10：$v$ 是在 $u$ 还是 10 的时候被改善的，那条历史没有留下来。
 
-所以三件事要分开：安全性不变量说的是「有限标签是某条真实行走的权重」（存在性）；`predecessor[v]` 只记录最后一条改善边；只有在具体算法的**最终条件**下（例如没有相关负环），才能另外证明最终的 predecessor 指针可以还原出一条最短路径。单元格里从 predecessor 重建行走的检查只用于算法的最终状态，不当作通用不变量。
+所以三件事要分开：安全性不变量说的是「有限标签是某条真实行走的权重」（存在性）；`predecessor[v]` 只记录最后一条改善边；只有在具体算法的**最终条件**下（例如没有相关负环），才能另外证明最终的 predecessor 指针可以还原出一条最短路径。
 
 存在多条等长最短路时 predecessor 并不唯一（哪一条取决于边的处理顺序），因此不能把 predecessor 形成的树写成算法的输出契约。
 
-## 单位权：BFS
+## 单位权下的 BFS
 
-当 $w(e) = 1$ 对所有边成立时，「最轻的行走」恰是「边数最少的行走」，BFS 直接给出答案。
+当 $w(e) = 1$ 对所有边成立时，「最轻的行走」恰是「边数最少的行走」，BFS 直接给出答案；<CrossRef id="algorithms.graph-traversal" /> 用队列不变量给出 BFS 的层次结构。
 
-「所有边权重相同」不能笼统地化成「不妨取 1」：公共权重 $c > 0$ 时最小权重等价于最少边数，而且 $\delta = c \cdot level$；$c = 0$ 时所有可达顶点的距离都是 0，与层号无关；$c < 0$ 时更长的行走反而更轻（有相关环时甚至得到 $-\infty$）。所以本节的前提写成单位权，而不是「同权」。
+「所有边权重相同」不能笼统地化成「不妨取 1」：公共权重 $c > 0$ 时最小权重等价于最少边数，而且 $\delta = c \cdot level$；$c = 0$ 时所有可达顶点的距离都是 0，与层号无关；$c < 0$ 时更长的行走反而更轻（有相关环时甚至得到 $-\infty$）。所以本节的前提写成单位权。
 
 **定理**：BFS 的层号等于最少边数，即 $level[v] = $「$(s, v)$ 的最少边数」。
 
@@ -164,378 +163,4 @@ print("  level equals the distance in edge count, not in weight:", non_unit_leve
 
 第二个图是反例：$s \to a$ 的权重是 5，但 $s \to b \to a$ 只要 2。BFS 说 $a$ 是 1 条边之外，这个结论在「边数」问题里正确，在「权重」问题里错误。
 
-## 非负权：Dijkstra
-
-前置条件必须成为算法契约的一部分：
-
-$$w(e) \ge 0 \quad \forall e \in E.$$
-
-零权边允许；一旦出现负边，保证失效。这个「失效」是可以用一个具体实例演示的（见下面的单元格）：$s \to a = 2$、$s \to b = 5$、$b \to a = -10$，算法先把 $a$ 以 2 settle，而真实的最轻行走 $s \to b \to a$ 权重是 $-5$。
-
-算法按「settle」（确定）的方式推进：
-
-1. $distance[s] = 0$，其余为 $+\infty$。
-2. 反复取「尚未 settle、且 tentative 距离有限」的顶点中距离最小者 $u$，把 $u$ 标记为 settled，然后松弛 $u$ 的每条出边 $(u, v, weight)$。
-3. 当不存在这样的顶点时停止。
-
-从 $s$ 可达的顶点恰好 settle 一次；不可达顶点的 label 一直是 $+\infty$，它们既不需要 settle，也不在「取最小者」的范围内（「settle 全部顶点」不是这个算法的行为）。实现用稀疏字典保存 label，**缺少键就表示 tentative 为 $+\infty$**。
-
-正确性依赖一条 settlement 不变量，它的证明恰好显示非负条件用在哪里。
-
-**基例**：第一次被 settle 的顶点是 $s$，$distance[s] = 0 = \delta(s, s)$——空行走的权重是 0，而所有边非负，不存在更轻的 $s \to s$ 行走。所以第一次 settle 就是对的。
-
-**定理**：归纳地假设 $s \in S$，且 $S$ 中每个顶点的 distance 都已是真实最短距离。此时 tentative 距离最小的未 settle 顶点 $u$，其 tentative 距离已经是 $\delta(s, u)$。
-
-反设 $\delta(s, u) < distance[u]$。取一条从 $s$ 到 $u$ 的最短路径 $P$，记 $w(P) = \delta(s, u)$。沿 $P$ 从 $s$ 出发找第一个不在 $S$ 中的顶点 $y$（$s$ 在 $S$ 中，所以 $y$ 一定存在），记它沿 $P$ 的前驱为 $x$，并把 $P$ 上从 $y$ 到 $u$ 的剩余部分记为后缀 $Q$。此时
-
-$$
-\begin{aligned}
-distance[y] &\le distance[x] + w(x, y) \quad \text{x settle 时松弛过边 } (x, y) \\
-             &= \delta(s, x) + w(x, y) \quad \text{x 在 } S \text{ 中，其距离已正确} \\
-             &\le w(P \text{ 上 } s \rightsquigarrow x \text{ 这一段}) + w(x, y) \\
-             &\le w(P \text{ 上 } s \rightsquigarrow y \text{ 这一段}) \quad \text{这一前缀是一条候选 } s \rightsquigarrow y \text{ 路径} \\
-             &\le w(P) = \delta(s, u) \quad w(Q) \ge 0 \\
-             &< distance[u] \quad \text{反设}
-\end{aligned}
-$$
-
-倒数第二步用的正是非负条件：$Q$ 是从 $y$ 走到 $u$ 的一段路径，权重是若干非负边之和，删掉它不会让权重变大。这与 $u$ 是 tentative 最小者（$distance[u] \le distance[y]$）矛盾。
-
-反向的不等式由安全性不变量给出：tentative 距离总是某条真实行走的权重，所以 $distance[u] \ge \delta(s, u)$。两侧夹紧即得等号。
-
-**实现细节**：Python 的 `heapq` 没有 decrease-key。有两个都合法的选择：
-
-| 实现 | 说明 |
-| --- | --- |
-| 抽象优先队列（教材版） | 支持 decrease-key，配二叉堆时成本 $O((\lvert V \rvert + \lvert E \rvert) \log \lvert V \rvert)$ |
-| `heapq` | 距离更新时把新的条目压进堆，pop 时丢弃过期条目；一个顶点只 settle 一次，但堆里可能有它的多个旧条目 |
-
-heapq 的条目写成 `(distance, serial, vertex)`：顶点之间不需要可比较，一个递增计数器负责打破平局，堆也就永远不会去比较两个顶点。单元格里的实现走这条路，并且直接报告「堆压入次数」与「丢弃的过期条目数」，把实际发生的操作数写出来，而不把教材版的操作次数套到 `heapq` 上。
-
-在可达子图 $V_R$、$E_R$ 上：每次成功松弛至多压入一个条目，所以压入次数不超过 $|E_R| + 1$，弹出次数与之同阶，堆大小同样不超过 $|E_R| + 1$；每次堆操作 $O(\log(|E_R| + 1))$。总计 $O\big(|V_R| + |E_R| + (|E_R| + 1)\log(|E_R| + 1)\big)$。教材版的 $O((|V| + |E|)\log|V|)$ 是「抽象 decrease-key + 二叉堆」那一行的成本，不是这个实现的。
-
-```python run id="alg.graphs.shortest-paths-dijkstra"
-import heapq
-from itertools import count
-
-INF = float("inf")
-
-
-def build_weighted(vertices, arcs):
-    adjacency = {vertex: [] for vertex in vertices}
-    for u, v, weight in arcs:
-        adjacency[u].append((v, weight))
-    return adjacency
-
-
-def lightest_path_by_enumeration(adjacency, source):
-    """Oracle for small graphs: every simple path, least total weight."""
-    best = {source: 0}
-
-    def walk(vertex, weight_so_far, seen):
-        for neighbour, weight in adjacency[vertex]:
-            if neighbour in seen:
-                continue
-            candidate = weight_so_far + weight
-            if neighbour not in best or candidate < best[neighbour]:
-                best[neighbour] = candidate
-            walk(neighbour, candidate, seen | {neighbour})
-
-    walk(source, 0, {source})
-    return best
-
-
-def dijkstra(adjacency, source, settled_is_final=False):
-    """Lazy heapq. A missing key in distance means tentative +inf.
-
-    Entries are (distance, serial, vertex): vertices need not be comparable, so the
-    serial number breaks ties and heapq never compares two vertices.
-    settled_is_final=True makes the implementation honour the settle contract by
-    refusing to relax out of a settled vertex into another settled vertex; the
-    reported distances are then exactly the values recorded at settle time.
-    """
-    serial = count()
-    distance = {source: 0}
-    settled = set()
-    settled_at = []
-    heap = [(0, next(serial), source)]
-    pushes = 1
-    stale_pops = 0
-    while heap:
-        candidate, _, vertex = heapq.heappop(heap)
-        if vertex in settled or candidate > distance.get(vertex, INF):
-            stale_pops += 1
-            continue
-        settled.add(vertex)
-        settled_at.append((vertex, candidate))
-        for neighbour, weight in adjacency[vertex]:
-            if settled_is_final and neighbour in settled:
-                continue
-            relaxed = candidate + weight
-            if relaxed < distance.get(neighbour, INF):
-                distance[neighbour] = relaxed
-                heapq.heappush(heap, (relaxed, next(serial), neighbour))
-                pushes += 1
-    return distance, settled_at, pushes, stale_pops
-
-
-non_negative_vertices = ["s", "a", "b", "c", "d", "e"]
-non_negative_arcs = [("s", "a", 4), ("s", "b", 1), ("b", "a", 1), ("a", "c", 3),
-                     ("b", "c", 6), ("b", "d", 7)]
-graph = build_weighted(non_negative_vertices, non_negative_arcs)
-oracle = lightest_path_by_enumeration(graph, "s")
-distance, settled_at, pushes, stale_pops = dijkstra(graph, "s")
-reachable = [v for v in non_negative_vertices if v in oracle]
-
-print("non-negative graph, Dijkstra distances:", {v: distance[v] for v in sorted(distance)})
-print("  oracle:", {v: oracle[v] for v in sorted(oracle)})
-print("  every distance matches the oracle:", all(distance[v] == oracle[v] for v in oracle))
-print("  at the moment each vertex was settled its tentative distance was already final:",
-      all(candidate == oracle[vertex] for vertex, candidate in settled_at))
-print("  every reachable vertex settled exactly once:", len(settled_at) == len(reachable),
-      "| e never settled (unreachable, stays +inf):", "e" not in settled_at)
-print("  heap pushes:", pushes, "| stale entries discarded on pop:", stale_pops)
-
-negative_vertices = ["s", "a", "b"]
-negative_arcs = [("s", "a", 2), ("s", "b", 5), ("b", "a", -10)]
-negative_graph = build_weighted(negative_vertices, negative_arcs)
-true_distance = lightest_path_by_enumeration(negative_graph, "s")
-leaky = dijkstra(negative_graph, "s")
-strict = dijkstra(negative_graph, "s", settled_is_final=True)
-print()
-print("negative edge b -> a = -10:")
-print("  true lightest weights:", {v: true_distance[v] for v in sorted(true_distance)})
-print("  settle-time distances:", dict(leaky[1]))
-print("  the settle contract already fails at a: it was settled at 2, the true value is -5:",
-      dict(leaky[1])["a"] == 2 and true_distance["a"] == -5)
-print("  an implementation that treats a settled vertex as final returns a =",
-      strict[0]["a"], "instead of", true_distance["a"])
-print("  one that keeps relaxing into settled vertices happens to end at a =",
-      leaky[0]["a"], "-- what failed is the guarantee, not this particular run")
-```
-
-非负图上每次 settle 时记录的 tentative 距离都与独立 oracle 一致；负边那个例子里，settle 时刻的值（2）已经不是最终答案（$-5$），把 settled 顶点当最终答案的实现就会返回错值。也正因为保证失效，**不能**因为有「碰巧算对」的负权实例就说算法适用。
-
-## 负边：Bellman–Ford
-
-要允许负边，就不能依赖「settle 即最终」这种贪心结构。Bellman–Ford 改成反复扫描**全部边**——这正是边列表接口的用武之地：
-
-1. $distance[s] = 0$，其余为 $+\infty$。
-2. 重复 $|V| - 1$ 轮：每一轮按边序列顺序尝试松弛每一条边。
-3. 再做一轮扫描：若能松弛某条边且其尾点距离有限，则回报「存在源点可达的负环」。
-
-轮次不变量必须写得准确。对**原地**扫描（每一轮直接使用本轮已更新的值）：
-
-1. 每个有限的 $distance[v]$ 始终是某条真实 $s \rightsquigarrow v$ 行走的权重（安全性）。
-2. 完成第 $i$ 轮之后，每一条至多含 $i$ 条边的 $s \rightsquigarrow v$ 路径，其权重都已经有机会传播到 $distance[v]$，即 $distance[v] \le$ 该路径的权重。
-
-注意这里写「有机会传播」而不是「恰等于」：原地扫描在同一轮里可以连续传播多条边，所以 $distance[v]$ 可能已经好于「至多 $i$ 条边」的界。
-
-若换成用**上一轮距离的副本**做同步松弛，才能写成「第 $i$ 轮后 distance[v] 恰等于至多 $i$ 条边的最优值」——那是一个不同的算法（DP），不能拿原地版的代码去证明同步版的陈述。这个同步教学版每轮都要复制整张距离表（$\Theta(|V|)$）再逐边松弛，所以它自己的成本是 $\Theta(|V|^2 + |V| \cdot |E|)$，在 $|E| = 0$ 这样的小边上也不会退化成 $\Theta(|V|)$。下面正文给出的 $\Theta(|V| + |V| \cdot |E|)$ 指的是原地版本以及负环检测与闭包。单元格把两者并排跑：同一个四段链上，原地版第一轮就把值推到最远处，同步版第一轮只走了一条边。
-
-**终止性**：没有源点可达负环时，最短行走可以取成简单路径，至多 $|V| - 1$ 条边；由不变量 2，$|V| - 1$ 轮之后每个有限距离都达到了真实最短距离。
-
-**负环检测只报源点可达的负环**：
-
-第 $|V| - 1$ 轮之后再扫一遍边；若存在边 $(u, v, weight)$ 满足 $distance[u]$ 有限且 $distance[u] + weight < distance[v]$，则存在一条从 $s$ 可达的负环。
-
-条件里的「distance[u] 有限」不能省。图里可能存在一个从 $s$ 根本走不到的分量，里面装着负环，此时所有从 $s$ 可达的距离都已经是最优值，算法**不应该**报警。否则读者会把 Bellman–Ford 误解成「检测整张图里有没有负环」。
-
-这条判据的两个方向都要给：
-
-**（可达负环 $\Rightarrow$ 有可松弛边）** 设 $C$ 是源点可达的负环，$w(C) < 0$。$C$ 上每个顶点在 $|V| - 1$ 轮之后都有有限的 label（它们都从 $s$ 可达）。反设环上没有任何边还能松弛，则每条环边都满足 $distance[v_{i+1}] \le distance[v_i] + w_i$。沿整个环相加，$distance$ 项两两消掉，得到 $0 \le w(C)$，与 $w(C) < 0$ 矛盾。
-
-**（有可松弛边 $\Rightarrow$ 可达负环）** 反设不存在源点可达的负环。那么每个从 $s$ 可达的顶点 $v$ 都有最短路径，并可取成至多 $|V| - 1$ 条边的简单路径。由轮次不变量，$|V| - 1$ 轮之后 $distance[v] \le \delta(s, v)$；安全性不变量给出 $distance[v] \ge \delta(s, v)$，两边夹紧即 $distance[v] = \delta(s, v)$。取任意一条尾点 $u$ 可达的边 $(u, v, w)$，最短距离的三角不等式给出 $distance[v] = \delta(s, v) \le \delta(s, u) + w = distance[u] + w$，所以这条边不能松弛；每一条尾点有限的边都如此，与「有可松弛边」矛盾。
-
-**它给出的是「存在性」，不是每个顶点的 $\delta$**。只报告一个布尔值，$\delta$ 就仍是三值的：算法只对「可达且不受负环影响」的顶点给出正确值。要拿到每个顶点的三值答案，再补一步：
-
-1. $|V| - 1$ 轮结束时，把所有「尾点距离有限、却仍能松弛」的边的头点收集起来。
-2. 从这些头点出发沿出边做一次可达性遍历；被覆盖到的顶点全部标为 $-\infty$。
-3. 不可达顶点仍是 $+\infty$，其余顶点保留 rounds 结束时的有限距离。
-
-这一步就是邻接表遍历：构造邻接表一次，再从全部头点出发做一次多源 BFS，合计 $O(|V| + |E|)$，与前面用过的成本口径一致。
-
-负环可以从可达顶点「扩散」出去，所以标记必须取闭包，不能只标环上的顶点。闭包为什么恰好是 $-\infty$ 的顶点集合，也分三条说清：
-
-**头点**：某条边 $(u, v, w)$ 在 $|V| - 1$ 轮之后仍可松弛，且 $u$ 可达。若 $v$ 不受任何可达负环影响，它的有限最短距离早已收敛，不可能再被改善——矛盾。
-
-**扩散**：从头点沿出边能走到的顶点，都落在同一个可达负环的影响范围内。
-
-**反过来**：每个受可达负环影响的顶点都从某个负环可达；负环上按前一段至少有一条仍可松弛的边，因此它一定从某个头点被遍历到。
-
-单元格把这一版和原地/同步两版并排跑：一边是最终收敛到的最优值，一边是 $\delta = -\infty$ 的顶点集合。
-
-成本是 $|V| - 1$ 轮各扫一遍全部边，再加一次检测扫描，即 $\Theta(|V| + |V| \cdot |E|)$；只有在 $|E| \ge 1$ 时才能简化成 $\Theta(|V| \cdot |E|)$（$|E| = 0$ 时它是 $\Theta(|V|)$）。
-
-```python run id="alg.graphs.shortest-paths-bellman-ford"
-from collections import deque
-
-INF = float("inf")
-
-
-def build_weighted(vertices, arcs):
-    adjacency = {vertex: [] for vertex in vertices}
-    for u, v, weight in arcs:
-        adjacency[u].append((v, weight))
-    return adjacency
-
-
-def bellman_ford(vertices, arcs, source, synchronous=False):
-    """|V| - 1 rounds over the edge list; synchronous uses a copy per round."""
-    distance = {vertex: INF for vertex in vertices}
-    predecessor = {vertex: None for vertex in vertices}
-    rounds = 0
-    distance[source] = 0
-    history = [dict(distance)]
-    for _ in range(len(vertices) - 1):
-        rounds += 1
-        if synchronous:
-            previous = dict(distance)
-            for u, v, weight in arcs:
-                if previous[u] != INF and previous[u] + weight < distance[v]:
-                    distance[v] = previous[u] + weight
-                    predecessor[v] = u
-        else:
-            for u, v, weight in arcs:
-                if distance[u] != INF and distance[u] + weight < distance[v]:
-                    distance[v] = distance[u] + weight
-                    predecessor[v] = u
-        history.append(dict(distance))
-    return distance, predecessor, history, rounds
-
-
-def relaxing_edges(distance, arcs):
-    return [(u, v, w) for u, v, w in arcs if distance[u] != INF and distance[u] + w < distance[v]]
-
-
-def reachable_from_arcs(arcs, starts):
-    """Multi-source BFS over an adjacency built once: O(V + E), no full rescans."""
-    adjacency = {}
-    for u, v, _ in arcs:
-        adjacency.setdefault(u, []).append(v)
-    reached = set(starts)
-    queue = deque(starts)
-    while queue:
-        u = queue.popleft()
-        for v in adjacency.get(u, []):
-            if v not in reached:
-                reached.add(v)
-                queue.append(v)
-    return reached
-
-
-def per_vertex_delta(vertices, arcs, source):
-    """Extend Bellman-Ford to the full three-valued delta of every vertex."""
-    distance, predecessor, history, rounds = bellman_ford(vertices, arcs, source)
-    heads = {v for _, v, _ in relaxing_edges(distance, arcs)}
-    affected = reachable_from_arcs(arcs, heads) if heads else set()
-    delta = {}
-    for vertex in vertices:
-        if vertex in affected:
-            delta[vertex] = -INF
-        else:
-            delta[vertex] = distance[vertex]
-    return delta, distance, predecessor, affected, rounds
-
-
-def walk_weight(predecessor, source, vertex, arcs):
-    """Final-state check only: rebuild the walk for one vertex of one instance."""
-    chain = [vertex]
-    while chain[-1] != source:
-        chain.append(predecessor[chain[-1]])
-    chain.reverse()
-    weight = 0
-    for u, v in zip(chain, chain[1:]):
-        weight += next(w for a, b, w in arcs if (a, b) == (u, v))
-    return chain, weight
-
-
-def lightest_path_by_enumeration(adjacency, source):
-    best = {source: 0}
-
-    def walk(vertex, weight_so_far, seen):
-        for neighbour, weight in adjacency[vertex]:
-            if neighbour in seen:
-                continue
-            candidate = weight_so_far + weight
-            if neighbour not in best or candidate < best[neighbour]:
-                best[neighbour] = candidate
-            walk(neighbour, candidate, seen | {neighbour})
-
-    walk(source, 0, {source})
-    return best
-
-
-chain_vertices = ["s", "a", "b", "c", "d"]
-chain_arcs = [("s", "a", 1), ("a", "b", 1), ("b", "c", 1), ("c", "d", 1)]
-in_place = bellman_ford(chain_vertices, chain_arcs, "s")
-sync = bellman_ford(chain_vertices, chain_arcs, "s", synchronous=True)
-print("four-arc chain, one round each")
-print("  in-place    after round 1:", {v: in_place[2][1][v] for v in chain_vertices})
-print("  synchronous after round 1:", {v: sync[2][1][v] for v in chain_vertices})
-print("  in-place propagates several edges inside one round, so it is never worse:",
-      all(in_place[2][i][v] <= sync[2][i][v] for i in range(len(chain_vertices)) for v in chain_vertices))
-oracle_chain = lightest_path_by_enumeration(build_weighted(chain_vertices, chain_arcs), "s")
-agrees = all(in_place[0][v] == oracle_chain[v] for v in oracle_chain) and all(
-    in_place[0][v] == INF for v in chain_vertices if v not in oracle_chain)
-print("  after |V| - 1 =", in_place[3], "rounds both agree with the oracle:", in_place[0] == sync[0] and agrees)
-
-weighted_vertices = ["s", "a", "b", "c", "x", "y"]
-weighted_arcs = [("s", "a", 3), ("s", "b", 5), ("a", "b", -1), ("b", "c", 2),
-                 ("x", "y", -5), ("y", "x", 1)]
-distance, predecessor, _, rounds = bellman_ford(weighted_vertices, weighted_arcs, "s")
-print()
-print("no negative cycle reachable from s: rounds =", rounds, "= |V| - 1")
-print("  reachable part:", {v: distance[v] for v in ("s", "a", "b", "c")})
-print("  unreachable part stays +inf:", {v: distance[v] for v in ("x", "y")})
-print("  no edge can be relaxed after the last round:", relaxing_edges(distance, weighted_arcs) == [])
-print("  final-state witness check (this instance only):")
-for vertex in ("a", "b", "c"):
-    chain, weight = walk_weight(predecessor, "s", vertex, weighted_arcs)
-    print(f"    {vertex}: walk {' -> '.join(chain)} has weight {weight} == distance {distance[vertex]}:",
-          weight == distance[vertex])
-print("  the negative cycle x -> y -> x sits in an unreachable component, so it is not reported")
-
-reachable_cycle_vertices = ["s", "a", "b"]
-reachable_cycle_arcs = [("s", "a", 1), ("a", "b", -2), ("b", "a", 1)]
-delta, raw, _, affected, _ = per_vertex_delta(reachable_cycle_vertices, reachable_cycle_arcs, "s")
-print()
-print("negative cycle a -> b -> a (weight -1) reachable from s")
-print("  still relaxable after |V| - 1 rounds:", relaxing_edges(raw, reachable_cycle_arcs))
-print("  per-vertex delta:", {v: delta[v] for v in sorted(delta)})
-print("  the cycle makes a and b -inf, not the source:", affected == {"a", "b"})
-
-tail_vertices = ["s", "a", "b", "z", "w"]
-tail_arcs = [("s", "a", 1), ("a", "b", -2), ("b", "a", 1), ("b", "z", 1), ("s", "w", 4)]
-delta_tail, raw_tail, _, affected_tail, _ = per_vertex_delta(tail_vertices, tail_arcs, "s")
-print()
-print("with z reachable from the cycle, z is -inf as well:", {v: delta_tail[v] for v in sorted(delta_tail)})
-print("  but w, reachable from s without touching the cycle, keeps its finite value:",
-      delta_tail["w"] == 4 and delta_tail["w"] == raw_tail["w"])
-```
-
-单元格里最后两段就是这个「取闭包」的实测：可达负环把 $a$ 与 $b$ 变成 $-\infty$，从环上可达的 $z$ 也是 $-\infty$，而从 $s$ 出发不经过环的 $w$ 保持有限值 4；不可达分量里的负环则完全没有出现在结果里。
-
-## 算法选择表
-
-| 输入条件 | 算法 | 要证明的核心性质 | 成本 |
-| --- | --- | --- | --- |
-| 单位权（$w(e) = 1$） | BFS | 层号恰为最少边数 | $\Theta(\lvert V_R \rvert + \lvert E_R \rvert)$，邻接表 |
-| 加权且 $w(e) \ge 0$ | Dijkstra | settle 即最终距离（settle 不变量） | 取决于优先队列实现：教科书 decrease-key 为 $O((\lvert V \rvert + \lvert E \rvert) \log \lvert V \rvert)$；`heapq` 版按实际压入条目计 |
-| 允许负边 | Bellman–Ford | 轮次不变量、源点可达负环检测、按闭包标记 $-\infty$ | 最坏 $\Theta(\lvert V \rvert + \lvert V \rvert \cdot \lvert E \rvert)$ |
-
-表中三行的「输入条件」是硬前置，不是优化建议：Dijkstra 在负边上没有正确性保证，BFS 在非单位权上算的是另一件事。
-
-还有一条必须说清：「Bellman–Ford 支持负权」不等于「存在源点可达负环时它仍能给出有限的普通最短距离」。负环恰恰是让某些 $\delta(s, v)$ 不再是有限值的情形，此时算法应该报告 $-\infty$ 类的结果，而不是给出一个数字。要给出「每个顶点各自是哪一类」的答案，检测之后还要沿出边把 $-\infty$ 取一次闭包。
-
-## 小结
-
-- 单源最短路的问题是 $\delta(s, v)$ 这一个量：不可达为 $+\infty$，存在从 $s$ 可达且之后能到 $v$ 的负环为 $-\infty$，其它情况是某个行走权重的最小值。
-- 没有相关负环时，最优行走可以取成简单路径（重复顶点之间的环权重非负即可删去），因此至多 $|V| - 1$ 条边——这是 Bellman–Ford 轮数上界的来源。
-- 距离是主要契约；`predecessor[v]` 只记录最后一次改善 $v$ 的边，安全性不变量（「每个有限距离都是某条真实行走的权重」）本身是存在性陈述，不能读成「当前指针链可以还原它」。等长最短路并存时 predecessor 也不唯一。
-- 单位权下 $level[v]$ 等于最少边数（两个方向分别由 parent 链与沿路径归纳给出）。BFS 不能推广到非负权。
-- Dijkstra 的前置是 $w(e) \ge 0$；settle 不变量的证明在 $P$ 从 $y$ 到 $u$ 的后缀权重非负（从而 $w(P$ 上 $s \rightsquigarrow y) \le w(P)$）这一步用到它。负边反例表明 settle 时刻的断言会失效。
-- `heapq` 没有 decrease-key：实现要么写抽象 decrease-key 版本，要么压入新条目并在 pop 时丢弃过期条目，成本按实际发生的操作计。
-- Bellman–Ford 的轮次不变量用「有机会传播」表述；只有用上一轮副本的同步版本才能说「恰等于至多 $i$ 条边的最优值」。成本是 $|V| - 1$ 轮扫边加一次检测，即 $\Theta(|V| + |V| \cdot |E|)$。
-- 负环检测只报从源点可达的负环，判据里的「尾点距离有限」不能省；不可达分量的负环不构成警告。判据本身是「存在性」的结论，要拿到每个顶点的三值答案，还得从仍可松弛的边的头点沿出边做一次可达性遍历，把 $-\infty$ 取成闭包。
-- 本节的边界：不涉及所有点对最短路（Floyd–Warshall）、稀疏图上的重标号（Johnson）、启发式搜索（A*）、0-1 权重的双端队列优化，也不利用 <CrossRef id="algorithms.dags-and-topological-order" /> 的拓扑序做 DAG 专用最短路；这些都不在本批次范围。
+权重统一的假设一旦撤掉，层号与最轻权重就分道扬镳：$level$ 计量边数，$distance$ 计量权重。把权重真正计入距离的推进方式要对权重加一条约束，才能重新获得可以证明的确定结构——这条约束就是非负性 $w(e) \ge 0$。

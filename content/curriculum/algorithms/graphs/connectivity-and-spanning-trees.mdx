@@ -1,7 +1,7 @@
 ---
 id: algorithms.connectivity-and-spanning-trees
 slug: /algorithms/connectivity-and-spanning-trees
-order: 60
+order: 80
 title: 最小生成树
 status: published
 objectives:
@@ -266,7 +266,7 @@ $$key[v] = \min \lbrace w(u, v) : u \text{ 在树中} \rbrace, \qquad \text{对�
 - **第一层（每个顶点各自）**：$key[v] = \min \lbrace w(u, v) : u \text{ 在 } S \text{ 中} \rbrace$，即「从 $S$ 到 $v$ 这个特定顶点」的最轻边，不是从根到 $v$ 的路径总权重。
 - **第二层（被选中的那个）**：算法再取 $key$ 最小的顶点 $v^*$，它的 parent edge 才是「跨越整个 cut $(S, V \setminus S)$」的最轻边，这一步正是 safe edge 引理所要求的前提。
 
-第一层与路径总权重的区分不是措辞问题：Dijkstra（见 <CrossRef id="algorithms.shortest-paths" />）维护 `distance[v]`（从源点到 $v$ 的最轻路径），Prim 维护 `key[v]`（一条边的权重），两者的松弛更新长得很像，含义完全不同。单元格 C 用三角形打出两个数：$key[b] = 1$ 而 $\delta(s, b) = 2$，并核对第二层的等式。
+第一层与路径总权重的区分不是措辞问题：Dijkstra（见 <CrossRef id="algorithms.dijkstra" />）维护 `distance[v]`（从源点到 $v$ 的最轻路径），Prim 维护 `key[v]`（一条边的权重），两者的松弛更新长得很像，含义完全不同。单元格 C 用三角形打出两个数：$key[b] = 1$ 而 $\delta(s, b) = 2$，并核对第二层的等式。
 
 正确性用同一个引理，不需要新证明：设当前树顶点集合为 $S$，按第二层，被选中的 $v^*$ 的 parent edge 是跨 cut $(S, V \setminus S)$ 的最轻边（并列时取任意一条），$S$ 内部的边不跨这个 cut，于是引理直接给出「加入这条边后仍存在某个最小生成森林包含新的树」。**负边同样允许**，引理里没有任何非负假设。
 
