@@ -8,7 +8,7 @@ objectives:
   - 写出排序的基本后置条件：输出非降序，且是输入的一个排列
   - 把稳定性当作一条独立的后置条件，并用键相等的记录解释它的含义
   - 区分比较次数、元素写入次数与辅助空间三种互相独立的成本
-  - 用循环不变量论证插入排序，用递归式论证归并排序的对数线性成本
+  - 用循环不变量论证插入排序的有序与排列后置条件
   - 判断一个实现是否稳定、是否原地，并说明两者互不蕴含
 ---
 
@@ -35,9 +35,9 @@ objectives:
 - **元素写入次数**：把元素写进数组槽位的次数。一次普通数组赋值计一次写入；一次交换按两个数组槽位被写入，计两次写入。局部变量赋值不计入这个量。
 - **辅助空间**：除输出之外额外占用的槽位。
 
-三者是彼此不能互相推出的成本维度。这份插入排序在已排序输入上做 $n-1$ 次比较和 $n-1$ 次数组写入；这份选择排序每轮都执行交换，因此固定执行 $n-1$ 次交换，即按本节口径计 $2(n-1)$ 次数组写入；归并排序的比较次数是 $\Theta(n \log n)$ 量级，常见的数组实现可以复用一块 $\Theta(n)$ 的工作缓冲。这里的 $\Theta(n)$ 缓冲是这种常规实现的空间选择；原地合并的变体只额外占用 $O(\log n)$ 的递归栈，$\Theta(n)$ 的辅助空间属于这种数组写法，不是归并排序必须付的下界。
+三者是彼此不能互相推出的成本维度。这份插入排序在已排序输入上做 $n-1$ 次比较和 $n-1$ 次数组写入；这份选择排序每轮都执行交换，因此固定执行 $n-1$ 次交换，即按本节口径计 $2(n-1)$ 次数组写入；归并排序把问题对半分、每层合并合计线性，比较次数是 $\Theta(n \log n)$，常见的数组实现还复用一块 $\Theta(n)$ 的工作缓冲，这条成本递推式的解见 <CrossRef id="algorithms.recurrences-and-call-trees" />。$\Theta(n)$ 的辅助空间属于这种数组写法，不是归并排序必须付的下界：原地合并的变体只额外占用 $O(\log n)$ 的递归栈。
 
-成本类别上，插入排序最好 $\Theta(n)$（已排序输入），最坏 $\Theta(n^2)$（键两两不等且严格递减）；这份归并排序的最好情形和最坏情形在渐进阶上都是 $\Theta(n \log n)$。输入顺序会改变具体的比较次数，但不会把它从这一渐进阶降到 $\Theta(n)$ 或推高到 $\Theta(n^2)$。两者的差别落在最坏情形的增长阶：插入排序会退化到 $\Theta(n^2)$，归并排序保持 $\Theta(n \log n)$。
+成本类别上，插入排序最好 $\Theta(n)$（已排序输入），最坏 $\Theta(n^2)$（键两两不等且严格递减）；归并排序的最好情形和最坏情形在渐进阶上都是 $\Theta(n \log n)$。输入顺序会改变具体的比较次数，但不会把它从这一渐进阶降到 $\Theta(n)$ 或推高到 $\Theta(n^2)$。两者的差别落在最坏情形的增长阶：插入排序会退化到 $\Theta(n^2)$，归并排序保持 $\Theta(n \log n)$。
 
 需要前 $k$ 个或第 $k$ 个元素时，不必为全部元素排出顺序；这类需求见 <CrossRef id="algorithms.selection-and-top-k" />；「任何基于比较的排序都需要 $\Omega(n \log n)$ 次比较」这一结论需要比较模型的形式化，见 <CrossRef id="algorithms.lower-bounds" />。
 
@@ -81,57 +81,6 @@ for name, case in cases.items():
 ```
 
 三行给出同一个排序问题在三种输入上的代价。已排序输入每一轮只与左侧相邻的那条记录比较一次就停下，做 $n-1 = 7$ 次比较和 7 次数组写入。键全部相等时同样是 7 次比较：内层循环在第一个等键记录处停下，不越过它。键两两不等且严格递减时，每一对元素都形成一次严格逆序，比较次数达到 $n(n-1)/2 = 28$，数组写入是 28 次右移再加每轮写回一次 `current` 的 7 次，共 35 次。严格递减这一行是插入排序的最坏情形，比较次数按 $n(n-1)/2$ 二次增长。三行的输出都是非降序，也都含输入的每一条记录，这两层后置条件同时成立；比较次数与写入次数是两个独立的量，在已排序输入上都是 7，在严格递减输入上一个是 28、另一个是 35。
-
-## 归并排序：用递归式论证
-
-归并排序把问题对半分，递归排好两半，再合并两个有序序列。合并用两个游标向前走：每次比较两侧当前元素，取较小者写入缓冲；某一侧用完之后把另一侧余下的部分直接接上。合并一次恰好把 $n$ 个元素写进缓冲一次，所以是 $\Theta(n)$。
-
-当 $n$ 是 2 的幂时可以直接写成 $T(n) = 2T(n/2) + \Theta(n)$；对一般的 $n$，更精确地写是 $T(n) = T(\lfloor n/2 \rfloor) + T(\lceil n/2 \rceil) + \Theta(n)$。两者都解为 $\Theta(n \log n)$（见 <CrossRef id="algorithms.cost-model" />）：递归树有 $\Theta(\log n)$ 层，每层所有合并合计处理 $\Theta(n)$ 个元素。
-
-稳定的实现只有一个细节：合并时两侧键相等就取左侧，这样相等键不会因为合并而换位。
-
-```python run id="alg.ordering.merge-sort"
-from random import Random
-
-
-def merge_sort(records, key, counters):
-    """Postcondition: non-decreasing by key, stable, and a permutation of the input."""
-    if len(records) <= 1:
-        return list(records)
-    middle = len(records) // 2
-    left = merge_sort(records[:middle], key, counters)
-    right = merge_sort(records[middle:], key, counters)
-    merged = []
-    i = 0
-    j = 0
-    while i < len(left) and j < len(right):
-        counters["comparisons"] += 1
-        if key(left[i]) <= key(right[j]):
-            merged.append(left[i])
-            i += 1
-        else:
-            merged.append(right[j])
-            j += 1
-    merged.extend(left[i:])
-    merged.extend(right[j:])
-    return merged
-
-
-print(f"{'n':>6} {'comparisons':>12} {'n log2 n':>9} {'ratio':>6}")
-for size in (8, 64):
-    records = [(index % 4, index) for index in range(size)]
-    Random(20261003).shuffle(records)
-    counters = {"comparisons": 0}
-    merge_sort(records, key=lambda record: record[0], counters=counters)
-    reference = size * (size.bit_length() - 1)
-    print(f"{size:>6} {counters['comparisons']:>12} {reference:>9} "
-          f"{counters['comparisons'] / reference:>6.2f}")
-
-tiny = [(1, "a"), (0, "x"), (1, "b")]
-print("equal keys keep their order:", merge_sort(tiny, key=lambda record: record[0], counters={"comparisons": 0}))
-```
-
-两行的比较次数与 $n \log_2 n$ 的比值分别是 0.67 和 0.74，稳定在同一量级：规模扩大 8 倍时比较次数从 16 涨到 285，多出来的正是那个对数因子。`equal keys keep their order` 一行给出稳定性的证据：输入里 `a` 在 `b` 前面，两条记录键都为 1，输出仍是 `a` 在前——合并分支在两侧键相等时取左侧。合并每次都要一块能放下当层的缓冲，顶层 `merged` 的长度达到 $n$；常见的数组归并排序显式复用一个长度 $n$ 的工作缓冲再加 $O(\log n)$ 的递归栈，辅助空间是 $\Theta(n)$，这是它比插入排序多付的那一项。
 
 ## 稳定与原地是两条独立的轴
 

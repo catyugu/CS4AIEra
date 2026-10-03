@@ -1,17 +1,17 @@
 ---
 id: algorithms.choosing-structures
 slug: /algorithms/choosing-structures
-order: 10
+order: 20
 title: 从操作工作负载选择数据结构
 status: published
 objectives:
   - 用功能需求排除丢掉了所需信息的结构，并说明这类不匹配与规模无关
-  - 写出一个工作负载的操作频率，并代入候选结构的单次成本函数求和
-  - 改变工作负载的频率比，指出两个候选结构总成本翻转的位置
-  - 说明常数、内存与局部性在成本模型的哪一步需要进入
+  - 写出以符号系数表示的单次操作成本函数，并按工作负载频率对两个候选求和
+  - 把四个符号系数都暂设为 1 求出一个示例临界点，并说明系数改变时临界点怎样移动
+  - 说明渐进阶、摊还界、期望成本、常数、局部性与内存在成本模型的哪一步进入
 ---
 
-给一组整数键，要求支持插入、按键查找、以及在键的区间 $[low, high)$ 内取出一段。有序数组和哈希表都能存下这组键，两者的单次操作成本来自不同的机制，在给定的操作频率下谁更便宜没有统一答案。把「选哪种表示」拆成两步按顺序做：先按功能需求排除丢掉所需信息的结构，再用<Term id="workload">工作负载</Term>比较剩下候选的成本。不满足功能需求的结构在任何频率下都不合格，筛选在前，比较在后。
+给一组整数键，要求支持插入、按键查找、以及在键的区间 $[low, high)$ 内取出一段。有序数组和哈希表都能存下这组键，两者的单次操作成本来自不同的机制，在给定的操作频率下谁更便宜没有统一答案。选择分两步：先按功能需求排除丢掉所需信息的结构，再为剩下的候选写出以单位操作成本为系数的总成本表达式，代入<Term id="workload">工作负载</Term>的频率求解。不满足功能需求的结构在任何频率下都不合格，筛选在前，比较在后。
 
 ## 第一步：用功能需求筛选
 
@@ -26,7 +26,7 @@ objectives:
 | 范围 | 要不要按键的区间取一段 |
 | 极值 | 要不要反复取出最小或最大的元素 |
 
-这一步只问一件事：**这个表示有没有丢掉问题定义需要的信息**。重复元素被去重、旧下标在搬移后指向别的元素、节点引用在结构重建后失效——这些信息或绑定被丢掉之后无法再从表示里恢复，属于不满足功能需求，与规模无关。分界是：**能从表示已经保存的信息里算出来的适配属于成本问题；问题定义要求的信息已经被表示丢掉的属于功能需求问题。** 给结构额外维护一份元数据是选择了一个新的复合表示，不算把丢掉的信息找回来。
+这一步只问一件事：**这个表示有没有丢掉问题定义需要的信息**。表示允许丢掉什么、必须维持哪些不变量，属于表示层的判据（见 <CrossRef id="algorithms.abstractions-and-invariants" />）。重复元素被去重、旧下标在搬移后指向别的元素、节点引用在结构重建后失效——这些信息或绑定被丢掉之后无法再从表示里恢复，属于不满足功能需求，与规模无关。分界是：**能从表示已经保存的信息里算出来的适配属于成本问题；问题定义要求的信息已经被表示丢掉的属于功能需求问题。** 给结构额外维护一份元数据是选择了一个新的复合表示，不算把丢掉的信息找回来。
 
 「顺序」在这里分成两种。**按键排序**：键值本身还在集合里，`sorted(s)` 就能排出来，属于成本问题。**原始顺序**（插入顺序、历史顺序）：`set` 没有保存它，再花时间也恢复不了，要保留只能从一开始额外维护一份序列，那时选的是「`set` + 序列」这个复合表示。范围查询与取极值都只是扫描——扫一遍筛出区间、扫一遍取极值，信息都在，属于成本问题；`dict` 可以利用它保存的插入顺序先把键列出来再索引。反复取最小或最大的对数界落在 <CrossRef id="algorithms.heaps" />。只有把候选限死在「结构自带的迭代器与访问原语、不许任何适配步骤」时，这些操作才直接淘汰结构；本课不设这条限制，下面工作负载单元格里 `dict` 的范围查询正是「扫描 + 输出」这种适配。
 
@@ -43,43 +43,86 @@ objectives:
 
 剩下的候选在同一条基准上比：把每个操作的单次成本乘以它在工作负载里的次数，求和。写清工作负载在先，填成本在后。一个工作负载要交代四件事：操作集合与各自的频率、输入规模与增长方式、访问模式（顺序读或随机读、有无局部性、是否成批）、以及对最坏情形的容忍度（摊还界够不够，还是单次延迟要有界）。加权里的权重来自实际发生的操作；把「将来可能要用」的操作计进去，比较的就是另一种工作负载。
 
-统一规定计数单位：一次键比较、一次元素搬移、一次散列探测、一次结果元素的产出各记一个抽象步。这四类基本操作能相加，正因为它们被显式赋予同一个单位。两个候选必须在同一份操作清单上计分，对其中一个计入它擅长的操作、对另一个省略同类操作，比较的就不是同一件事。
+四类基本操作各用符号系数标价：一次键比较 $c_\text{cmp}$、一次元素搬移 $c_\text{move}$、一次散列探测 $c_\text{probe}$、一次结果元素的产出 $c_\text{emit}$。系数是**每种基本操作的真实单位成本**，工作负载频率是**每类操作各发生多少次**，两者是模型的独立输入。同一个频率表配上不同的系数，可能给出不同的选择；两个候选必须在同一份操作清单和同一组系数上计分，对其中一个计入它擅长的操作、对另一个省略同类操作，比较的就不是同一件事。成本模型决定数什么、单价怎么定（见 <CrossRef id="algorithms.cost-model" />）。
 
 设结构里持有 $n$ 个键，两个候选持有同一组键，记二分查找定位需要的比较次数 $p = \lceil \log_2 n \rceil$。逐项写出单次操作的成本：
 
 | 操作 | 有序数组 | 哈希表 |
 | --- | --- | --- |
-| 插入 | 二分定位 $p$ 次比较，再加平均 $n/2$ 次搬移 | 一次散列探测 |
-| 按键查找 | $p$ 次比较 | 一次散列探测 |
-| 区间查询 | 两次二分定位 $2p$ 次比较，再加输出 $k$ 个元素 | 扫描全部 $n$ 个键各做一次区间测试，再加输出 $k$ 个元素 |
+| 插入 | $p\,c_\text{cmp} + \frac{n}{2}\,c_\text{move}$ | $c_\text{probe}$ |
+| 按键查找 | $p\,c_\text{cmp}$ | $c_\text{probe}$ |
+| 区间查询 | $2p\,c_\text{cmp} + k\,c_\text{emit}$ | $n\,c_\text{cmp} + k\,c_\text{emit}$ |
 
-动态数组在末尾追加的插入是摊还常数成本，在中间插入每次都要搬移 $\Theta(n)$ 个元素；上表的插入记的是中间插入这一次的代价，对延迟敏感的场景按单次最坏成本比较（见 <CrossRef id="algorithms.amortized" />）。
+设工作负载里插入、查找、区间查询各发生 $f_\text{ins}$、$f_\text{lk}$、$f_\text{rg}$ 次，两个候选的总成本就是上表各项按频率加权求和：
+
+$$C_\text{array} = f_\text{ins}\left(p\,c_\text{cmp} + \tfrac{n}{2}\,c_\text{move}\right) + f_\text{lk}\,p\,c_\text{cmp} + f_\text{rg}\left(2p\,c_\text{cmp} + k\,c_\text{emit}\right)$$
+
+$$C_\text{hash} = \left(f_\text{ins} + f_\text{lk}\right)c_\text{probe} + f_\text{rg}\left(n\,c_\text{cmp} + k\,c_\text{emit}\right)$$
+
+让 $C_\text{array} = C_\text{hash}$，解出的区间查询次数就是翻转点：频率向量与系数向量共同决定它，把其中任一个当变量都能解出一族临界值。上表的插入记的是中间插入——末尾追加是摊还常数、中间插入要搬移 $\Theta(n)$ 个元素，对单次延迟有上限的场景按单次最坏成本重新比较（见 <CrossRef id="algorithms.amortized" />）。
 
 ```python run id="alg.choose.workload"
 n = 200                       # keys held; both candidates store the same set
 k = 20                        # elements a range query returns
 p = (n - 1).bit_length()      # comparisons to binary-search n keys
-
-# the workload: these three operation counts are the model's only inputs
 workload = {"insert": 200, "lookup": 800, "range": 40}
 
-# steps per operation: one comparison, one move or one emitted element
-per_op = {
-    "sorted array": (p + n // 2, p, 2 * p + k),
-    "hash table": (1, 1, n + k),
-}
-totals = {}
-for name, (insert, lookup, range_) in per_op.items():
-    totals[name] = (workload["insert"] * insert + workload["lookup"] * lookup
-                    + workload["range"] * range_)
-    print(f"{name:<13}{totals[name]:>8}")
-print("cheaper:", min(totals, key=totals.get))
 
-(ai, al, ar), (bi, bl, br) = per_op.values()
-switch = (workload["insert"] * (ai - bi) + workload["lookup"] * (al - bl)) / (br - ar)
-print(f"range queries tying the totals: {switch:.0f}")
+def per_operation(c):
+    """Per-operation costs for (sorted array, hash table) as coefficient
+    combinations of comparisons, moves, probes and emitted elements."""
+    array = (p * c["cmp"] + (n // 2) * c["move"],
+             p * c["cmp"],
+             2 * p * c["cmp"] + k * c["emit"])
+    hash_ = (c["probe"],
+             c["probe"],
+             n * c["cmp"] + k * c["emit"])
+    return array, hash_
+
+
+def total(costs):
+    insert, lookup, range_ = costs
+    return (workload["insert"] * insert + workload["lookup"] * lookup
+            + workload["range"] * range_)
+
+
+def break_even(c):
+    """Range-query count that ties the two totals, solved from the
+    coefficient vector; None when no frequency can flip the winner."""
+    array, hash_ = per_operation(c)
+    d_insert, d_lookup, d_range = (array[i] - hash_[i] for i in range(3))
+    if d_range == 0:
+        return None
+    return -(workload["insert"] * d_insert + workload["lookup"] * d_lookup) / d_range
+
+
+unit = {"cmp": 1, "move": 1, "probe": 1, "emit": 1}
+array, hash_ = per_operation(unit)
+print("per-operation costs (coefficients temporarily all 1):")
+print(f"  insert  sorted array {array[0]:>4}   hash table {hash_[0]:>4}")
+print(f"  lookup  sorted array {array[1]:>4}   hash table {hash_[1]:>4}")
+print(f"  range   sorted array {array[2]:>4}   hash table {hash_[2]:>4}")
+totals = {"sorted array": total(array), "hash table": total(hash_)}
+for name, value in totals.items():
+    print(f"  total {name:<13}{value:>8}")
+print("cheaper:", min(totals, key=totals.get))
+print(f"range queries tying the totals: {break_even(unit):.0f}")
+
+print()
+print("C_array - C_hash = f_ins*(p*c_cmp + (n/2)*c_move - c_probe)"
+      " + f_lk*(p*c_cmp - c_probe) + f_rg*((2p - n)*c_cmp)")
+print("break-even as the coefficient vector changes:")
+for label, c in (("all coefficients 1", unit),
+                 ("all coefficients 2", {"cmp": 2, "move": 2, "probe": 2, "emit": 2}),
+                 ("comparison 8x a move", {"cmp": 8, "move": 1, "probe": 1, "emit": 1}),
+                 ("move 8x a comparison", {"cmp": 1, "move": 8, "probe": 1, "emit": 1})):
+    be = break_even(c)
+    shown = "never" if be is None else f"{be:.0f}"
+    print(f"  {label:<22}{shown:>7}")
 ```
 
-固定 $n = 200$、$k = 20$，此时 $p = 8$。代入一组操作次数，哈希表的总成本约为有序数组的三分之一。随着区间查询次数增加，哈希表每次都要扫描全表，累计成本增长更快；超过临界值后更省的一方变成有序数组。单元格最后一行给出这个临界次数，在当前插入与查找次数下，区间查询达到该值附近时两边总成本相等，继续提高由有序数组胜出。临界位置把工作负载当成变量解出来——离开频率谈「哪个结构更好」没有答案。
+固定 $n = 200$、$k = 20$，此时 $p = 8$。把四个系数都暂设为 1，总成本表达式退化成可以直接相加的整数计数：哈希表约 9800，有序数组约 29440，后者约为前者的三倍，哈希表更便宜；这一步只用来取得一个示例临界点，它不声称四类基本操作的真实单位成本相等。区间查询次数增加时哈希表每次都要扫描全表，累计成本增长更快，单元格解出的翻转点是约 147 次——区间查询少于 147 次哈希表更便宜，超过之后有序数组更便宜。
 
-渐进阶只描述成本随 $n$ 增长的那一层，上面的表达式里没有常数、内存与局部性。这三项只在改变当前比较的结论时才需要进入模型：$O(1)$ 与 $O(\log n)$ 的差别可能被单次操作的常数因子抵消，$O(n)$ 的线性扫描在 $n$ 很小的实际规模上常常最快；访问模式决定一次顺序扫描与同样次数的随机探测哪一个先受到内存带宽限制（见 <CrossRef id="algorithms.complexity-in-practice" />）。按功能需求筛选不涉及这三项，因为一项功能需求是否被满足与规模、常数无关。
+系数向量改变时这个临界值移动。把一次比较记成一次搬移的 8 倍，翻转点降到约 56 次；把一次搬移记成一次比较的 8 倍，翻转点升到约 908 次；把四个系数同时乘同一个正数，总成本整体缩放，翻转点仍停在 147 次。只有系数的相对大小影响比较结果，共同缩放只改变两条成本曲线的刻度。所以「哪个结构更便宜」由频率向量与系数向量一起决定：频率说明各类操作各发生多少次，系数说明每个单位各花多少，临界点从两者解出。
+
+表示与功能需求属于同一层：结构有没有丢掉问题定义需要的信息，由表示的不变量决定，与规模无关（见 <CrossRef id="algorithms.abstractions-and-invariants" />）。剩下的候选先按渐进阶分层（见 <CrossRef id="algorithms.asymptotic-analysis" />），再在同一渐进阶内部比较——那里决定临界点的是常数因子、内存布局与访问模式（见 <CrossRef id="algorithms.complexity-in-practice" />），顺序扫描与随机探测比拼的是内存层次与局部性（见 <CrossRef id="algorithms.arrays-and-lists" />）。同一层内还要分清成本属于哪一种界：摊还界控制一段操作序列的总成本，给不出单次操作的最坏上界，尾延迟敏感的场景要按单次最坏成本重新比较（见 <CrossRef id="algorithms.amortized" />）；哈希表的常数探测成本是期望值，前提是散列把键分散开、负载因子受控，换一个散列函数或一次对抗性输入就退化成线性（见 <CrossRef id="algorithms.average-and-randomized" /> 与 <CrossRef id="algorithms.hash-tables" />）。渐进记号只描述随 $n$ 增长的那一层，上面总成本表达式里的系数、以及内存占用带来的规模上限，都在它之外。

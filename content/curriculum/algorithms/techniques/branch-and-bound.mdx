@@ -7,7 +7,7 @@ status: published
 objectives:
   - 说明最优性剪枝要证明的整棵子树命题，以及 incumbent 与界在这个判断里的分工
   - 用分数松弛构造 0/1 背包的上界，并说明它为什么覆盖每个整数子集
-  - 说明界为什么必须用精确算术算出，并给出浮点界剪掉最优解的实例
+  - 说明用于剪枝的上界为什么不能因数值误差被低估，并给出一种保证上界性的实现
   - 区分更松的合法界与不合法界，并解释整数值的界怎样静默丢掉最优解
   - 把界的计算成本算进每个节点的处理成本
 ---
@@ -33,7 +33,7 @@ objectives:
 
 界的取法决定剪枝的力度。取**分数松弛**：把剩下的物品按价值密度降序摆放，能整件放下就整件放，放不下的那件按比例切开塞满剩余容量。得到的值一定不小于任何整数子集的总价值，因此覆盖整棵子树。密度规则在 0/1 背包上不能直接给出答案，却正好给出上界——让一个松弛但快的方法给界，精确枚举只去走还有希望的分支。
 
-「一定不小于」这句话对代码有要求：界必须用**精确算术**算出来。密度排序和最后那件按比例切开的贡献一旦经过浮点数，就可能被向下舍入到真实上界以下，于是剪枝条件 $value + bound \le best$ 会错误成立，把装有最优解的分支剪掉。下面的实现把密度与界都用 `fractions.Fraction` 保持精确。
+「一定不小于」这句话对代码有要求：用于剪枝的那个数必须是一个**受保证的上界**——数值误差不能把它压到真实最优值以下。密度排序和最后那件按比例切开的贡献一旦被向下舍入，界就落到真实上界以下，剪枝条件 $value + bound \le best$ 会错误成立，把装有最优解的分支剪掉。精确有理数是保证上界性的一种实现：下面的代码把密度与界都用 `fractions.Fraction` 保持精确。带方向的保守舍入（directed rounding）、显式向上取整（explicit upward rounding）、区间算术（interval arithmetic）也能满足同一条要求，各自只多一点实现成本。
 
 ```python run id="alg.search.knapsack"
 from fractions import Fraction
@@ -42,9 +42,9 @@ from fractions import Fraction
 def branch_and_bound(items, capacity, use_bound=True):
     """Postcondition: (best value, nodes visited, a set attaining it).
 
-    The bound is the fractional relaxation of the remaining items, computed
-    exactly, so the number the code compares against the incumbent really is an
-    upper bound on every completion in the subtree.
+    The bound is the fractional relaxation of the remaining items, computed so
+    that no arithmetic step rounds it down; the number the code compares against
+    the incumbent is therefore an upper bound on every completion in the subtree.
     """
     ordered = sorted(items, key=lambda item: Fraction(item[1], item[0]), reverse=True)
     best = {"value": 0, "taken": ()}

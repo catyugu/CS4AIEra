@@ -2,16 +2,68 @@
 id: algorithms.comparison-sorting
 slug: /algorithms/comparison-sorting
 order: 30
-title: 比较排序：分区、快速排序与堆排序
+title: 比较排序：归并排序、快速排序与堆排序
 status: published
 objectives:
   - 写出分区的循环不变量，并由它推出分区的后置条件
   - 由子问题规模推导快速排序的平衡情形与最坏情形，并说明随机 pivot 的期望分析依赖什么假设
+  - 用递推式论证归并排序的对数线性成本，并说明合并怎样保持稳定性
   - 从堆的结论直接得到堆排序的最坏阶与辅助空间
   - 从最坏成本、期望成本、辅助空间与稳定性比较归并、快速与堆三条路线
 ---
 
 排序问题把任何序列变成非降序的排列，这个结果不记录它是被哪条路线排出来的。三条路线满足同样的正确性条件：归并把整段递归地切成两半、排好再合并；快速排序按一个 pivot 把当前段分成两小段，其余交给递归；堆排序不切分，把整个数组看成一个优先结构，反复取出当前最大值。三者的最坏成本、期望成本、辅助空间与稳定性各自独立决定，差别集中在切分点：pivot 最终停在哪个位置，决定一段递归是摊成 $\Theta(\log n)$ 层、还是塌成一条 $\Theta(n)$ 的链，最坏成本与期望成本因此是两个不同的阶，同一个算法在两种输入上就能分别取到它们。
+
+## 归并排序：对半切分与线性合并
+
+归并排序把问题对半分，递归排好两半，再合并两个有序序列。合并用两个游标向前走：每次比较两侧当前元素，取较小者写入缓冲；某一侧用完之后把另一侧余下的部分直接接上。合并一次恰好把 $n$ 个元素写进缓冲一次，所以是 $\Theta(n)$。切分与合并的规模都由长度决定，不依赖键的分布，所以最好与最坏落在同一阶。
+
+当 $n$ 是 2 的幂时可以直接写成 $T(n) = 2T(n/2) + \Theta(n)$；对一般的 $n$，更精确地写是 $T(n) = T(\lfloor n/2 \rfloor) + T(\lceil n/2 \rceil) + \Theta(n)$。两者都解为 $\Theta(n \log n)$（见 <CrossRef id="algorithms.recurrences-and-call-trees" />）：递归树有 $\Theta(\log n)$ 层，每层所有合并合计处理 $\Theta(n)$ 个元素。
+
+稳定的实现只有一个细节：合并时两侧键相等就取左侧，这样相等键不会因为合并而换位。
+
+```python run id="alg.ordering.merge-sort"
+from random import Random
+
+
+def merge_sort(records, key, counters):
+    """Postcondition: non-decreasing by key, stable, and a permutation of the input."""
+    if len(records) <= 1:
+        return list(records)
+    middle = len(records) // 2
+    left = merge_sort(records[:middle], key, counters)
+    right = merge_sort(records[middle:], key, counters)
+    merged = []
+    i = 0
+    j = 0
+    while i < len(left) and j < len(right):
+        counters["comparisons"] += 1
+        if key(left[i]) <= key(right[j]):
+            merged.append(left[i])
+            i += 1
+        else:
+            merged.append(right[j])
+            j += 1
+    merged.extend(left[i:])
+    merged.extend(right[j:])
+    return merged
+
+
+print(f"{'n':>6} {'comparisons':>12} {'n log2 n':>9} {'ratio':>6}")
+for size in (8, 64):
+    records = [(index % 4, index) for index in range(size)]
+    Random(20261003).shuffle(records)
+    counters = {"comparisons": 0}
+    merge_sort(records, key=lambda record: record[0], counters=counters)
+    reference = size * (size.bit_length() - 1)
+    print(f"{size:>6} {counters['comparisons']:>12} {reference:>9} "
+          f"{counters['comparisons'] / reference:>6.2f}")
+
+tiny = [(1, "a"), (0, "x"), (1, "b")]
+print("equal keys keep their order:", merge_sort(tiny, key=lambda record: record[0], counters={"comparisons": 0}))
+```
+
+`equal keys keep their order` 一行给出稳定性的证据：输入里 `a` 在 `b` 前面，两条记录键都为 1，输出仍是 `a` 在前——合并分支在两侧键相等时取左侧。合并每次都要一块能放下当层的缓冲，顶层 `merged` 的长度达到 $n$；常见的数组归并排序显式复用一个长度 $n$ 的工作缓冲再加 $O(\log n)$ 的递归栈，辅助空间是 $\Theta(n)$。
 
 ## 分区：一条循环不变量
 
@@ -40,7 +92,7 @@ $$T(n) = T(k) + T(n - k - 1) + \Theta(n).$$
 
 这两条说的都是「给定 pivot 选择的后果」。对固定取末元素作 pivot 的实现，如果进一步假设输入是**键两两不同**的均匀随机排列，也可以得到期望 $\Theta(n \log n)$；但这是关于输入分布的假设，任意给定输入并不享有这项保证。
 
-随机 pivot 换了概率来源：算法自己掷随机数，每次递归都从当前区间中独立、均匀地选择一个位置作 pivot，于是 pivot 的秩在当前子问题里均匀分布，与输入原本怎样排列无关——这一条对任意固定的输入都成立。**期望分析用到的假设只有两条**：各次 pivot 的选择相互独立且均匀，且排序键两两不同。有了独立均匀的 pivot，每个子问题的规模在期望意义上按常数比例缩小，期望比较次数因此是 $\Theta(n \log n)$，主项写成常数是 $1.386\, n \log_2 n$。更精确的闭式是 $2(n+1)H_n - 4n$（$H_n$ 是第 $n$ 个调和数），比主项低出的部分来自 $H_n$ 展开式里的线性项，属于同一阶内的细节。
+随机 pivot 换了概率来源：算法自己掷随机数，每次递归都从当前区间中独立、均匀地选择一个位置作 pivot，于是 pivot 的秩在当前子问题里均匀分布，与输入原本怎样排列无关——这一条对任意固定的输入都成立。**期望分析用到的假设只有两条**：各次 pivot 的选择相互独立且均匀，且排序键两两不同。有了独立均匀的 pivot，每个子问题的规模在期望意义上按常数比例缩小，期望比较次数因此是 $\Theta(n \log n)$。
 
 本节使用的二路 `<` / `>=` 分区在大量重复键上可能退化：所有键都相等时，每次分区仍只缩小一个元素，随机 pivot 也避免不了 $\Theta(n^2)$。重复键的专门分区策略不在本节展开。
 
@@ -69,7 +121,6 @@ print("pivot index:", position, "| pivot value:", sample[position])
 六行输出对应分区对 $[3, 8, 2, 5, 6, 4]$ 的逐轮检查。$j$ 从 0 走到 4，$boundary$ 只在 $j = 0$ 与 $j = 2$ 两处前进，正是 `items[j]` 小于 pivot 的两轮；其余三轮把元素留在第二块，分界不动。循环结束后 pivot 落到下标 2，值 4 的左侧都小于 4、右侧都不小于 4，正是上面写的后置条件。
 
 ```python run id="alg.ordering.quicksort-cases"
-import math
 from random import Random
 
 
@@ -102,14 +153,10 @@ for name, case in (("sorted", list(range(size))), ("reversed", list(range(size, 
         quicksort(data, 0, size - 1, pivot_of, comparisons)
         print(f"{name:>8} | pivot {label:>12} | comparisons {comparisons[0]:>5} | sorted: {data == truth}")
 worst = size * (size - 1) // 2
-expected = 2 * (size + 1) * sum(1 / k for k in range(1, size + 1)) - 4 * size
-print(f"worst n(n-1)/2 = {worst} | E[comparisons] = {round(expected, 1)} "
-      f"| 2 n ln n = {round(2 * size * math.log(size), 1)}")
+print(f"worst n(n-1)/2 = {worst}")
 ```
 
 末元素 pivot 下，已排序与逆序两种输入都做 2016 次比较，正好等于 $n(n-1)/2$，落进 $\Theta(n^2)$ 那一支。把同一个输入上的 pivot 换成随机选择，比较次数降到 368 与 454，与期望值落在同一量级，输入顺序不再决定成本；四个用例排出的结果都与输入的多重集一致。
-
-随机 pivot 的期望比较次数在 $n = 64$ 上由精确式 $2(n+1)H_n - 4n$ 给出 360.7，只保留最高阶的 $2n \ln n$ 给出 532.3，两者的差来自 $H_n = \ln n + \gamma + O(1/n)$ 代入后留下的线性负修正。两次实测值 368 与 454 围绕这个期望摆动，单次运行仍有可观波动。
 
 确定性的 $\Theta(n \log n)$ 最坏界需要别的机制，例如限制递归深度并在退化时切换策略，或用一个线性时间的选取过程来挑 pivot。后者建立在「选择」这一操作上，属于 <CrossRef id="algorithms.selection-and-top-k" />。
 

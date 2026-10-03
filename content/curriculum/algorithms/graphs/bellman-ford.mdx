@@ -8,7 +8,7 @@ objectives:
   - 写出反复扫描全部边的原地松弛步骤
   - 用轮次不变量说明第 k 轮后哪些顶点的距离已经是最终值
   - 证明负环检测只报告源点可达的负环
-  - 从一条仍可松弛的边出发沿前驱指针报告负环的顶点
+  - 从额外一轮里最后被改善的顶点沿前驱指针报告负环的顶点
 ---
 
 把松弛原语留到边上，每一轮按同一个边序列把全部边扫一遍，重复若干轮，每个顶点的距离就在这些扫描之间往前传播。这条路线不给顶点排处理顺序，也就不依赖「某个顶点一旦确定就永不改写」这种结构，负边可以留在图里而不破坏它。剩下的两个问题是：这样的反复扫描需要多少轮，才能让每个有限距离收敛到真正的最优值；当某类顶点根本不存在有限最优值时，算法又怎样把它识别出来。
@@ -43,13 +43,13 @@ objectives:
 
 **（有可松弛边 $\Rightarrow$ 可达负环）** 反设不存在源点可达的负环。那么每个从 $s$ 可达的顶点 $v$ 都有最短路径，并可取成至多 $|V| - 1$ 条边的简单路径。由轮次不变量，$|V| - 1$ 轮之后 $distance[v] \le \delta(s, v)$；安全性不变量给出 $distance[v] \ge \delta(s, v)$，两边夹紧即 $distance[v] = \delta(s, v)$。取任意一条尾点 $u$ 可达的边 $(u, v, w)$，最短距离的三角不等式给出 $distance[v] = \delta(s, v) \le \delta(s, u) + w = distance[u] + w$，所以这条边不能松弛；每一条尾点有限的边都如此，与「有可松弛边」矛盾。
 
-**检测给出的是存在性结论**：它只报告一个布尔值——存在一条源点可达的负环，而不报告环上有哪些顶点，也不区分哪些顶点受环影响。环本身可以取出来：$|V| - 1$ 轮结束后取一条仍可松弛的边，从它的头点沿 predecessor 走 $|V|$ 步，落点一定在环上，再沿 predecessor 走回它自己就得到环的顶点序列。受可达负环影响的顶点 $v$ 满足 $\delta(s, v) = -\infty$——沿环多绕几圈就有任意轻的游走；这个三值取值分类见 <CrossRef id="algorithms.shortest-paths" />。
+**检测给出的是存在性结论**：它只报告一个布尔值——存在一条源点可达的负环，而不报告环上有哪些顶点，也不区分哪些顶点受环影响。环本身可以取出来：第 $|V|$ 轮的扫描不再只是复查，它真的执行松弛，每改善一条边就同步更新 $distance$ 与 $parent$ 并记下被改善的顶点；这一轮结束时若没有任何顶点被改善，就不存在源点可达的负环，否则取最后被改善的那个顶点，从它沿 predecessor 走 $|V|$ 步一定落进环里，再从落点沿 predecessor 走回它自己就得到环的顶点序列。受可达负环影响的顶点 $v$ 满足 $\delta(s, v) = -\infty$——沿环多绕几圈就有任意轻的游走；这个三值取值分类见 <CrossRef id="algorithms.shortest-paths" />。
 
 成本是 $|V| - 1$ 轮各扫一遍全部边，再加一次检测扫描，即 $\Theta(|V| + |V| \cdot |E|)$；只有在 $|E| \ge 1$ 时才能简化成 $\Theta(|V| \cdot |E|)$（$|E| = 0$ 时它是 $\Theta(|V|)$）。
 
 ```python run id="alg.graphs.shortest-paths-bellman-ford"
 def bellman_ford(nodes, edges, source):
-    """|V| - 1 rounds over the edge list; returns the cycle if one is reachable."""
+    """|V| - 1 rounds, then one relaxing pass that locates a reachable negative cycle."""
     distance = {v: float("inf") for v in nodes}
     parent = {v: None for v in nodes}
     distance[source] = 0
@@ -58,13 +58,18 @@ def bellman_ford(nodes, edges, source):
             if distance[u] + w < distance[v]:
                 distance[v] = distance[u] + w
                 parent[v] = u
-    head = next((v for u, v, w in edges if distance[u] + w < distance[v]), None)
-    if head is None:
+    improved = None
+    for u, v, w in edges:
+        if distance[u] + w < distance[v]:
+            distance[v] = distance[u] + w
+            parent[v] = u
+            improved = v
+    if improved is None:
         return distance, None
     for _ in range(len(nodes)):
-        head = parent[head]
-    cycle, node = [head], parent[head]
-    while node != head:
+        improved = parent[improved]
+    cycle, node = [improved], parent[improved]
+    while node != improved:
         cycle.append(node)
         node = parent[node]
     return distance, cycle[::-1]
@@ -78,9 +83,13 @@ loop_nodes = ["s", "a", "b"]
 loop_edges = [("s", "a", 1), ("a", "b", -2), ("b", "a", 1)]
 _, cycle = bellman_ford(loop_nodes, loop_edges, "s")
 print("negative cycle reachable from s: vertices", cycle)
+trap_nodes = [0, 1, 2]
+trap_edges = [(2, 0, 1), (2, 1, -2), (1, 2, -2), (0, 2, -1)]
+_, cycle = bellman_ford(trap_nodes, trap_edges, 0)
+print("first improvable edge's head has no predecessor: vertices", cycle)
 ```
 
-单元格两段都把结果打印出来。没有源点可达负环的图上，$|V| - 1$ 轮之后每条边都松不动了，距离收敛到 $s = 0$、$a = 3$、$b = 2$、$c = 4$。换成 $s \to a = 1$、$a \to b = -2$、$b \to a = 1$ 的图，$|V| - 1$ 轮之后仍有一条边可松弛，算法据此沿 predecessor 走回环里，报告的环顶点是 $a \to b \to a$，环上两条边合计 $-2 + 1 = -1$。
+单元格三段都把结果打印出来。没有源点可达负环的图上，$|V| - 1$ 轮之后每条边都松不动了，距离收敛到 $s = 0$、$a = 3$、$b = 2$、$c = 4$。换成 $s \to a = 1$、$a \to b = -2$、$b \to a = 1$ 的图，第 $|V|$ 轮仍能改善边，算法记下这一轮最后被改善的顶点，从它沿 predecessor 走 $|V|$ 步落回环里，报告的环顶点是 $a \to b \to a$，环上两条边合计 $-2 + 1 = -1$。第三个图 $2 \to 0 = 1$、$2 \to 1 = -2$、$1 \to 2 = -2$、$0 \to 2 = -1$、源点 $0$，边按此顺序扫描：第一条仍可松弛的边是 $2 \to 0$，它的头点 $0$ 在前 $|V| - 1$ 轮里从未被改善，没有 predecessor；第 $|V|$ 轮真正执行的那次松弛把最后一个改善落在顶点 $2$ 上，从它走 $|V|$ 步落回环 $2 \leftrightarrow 1$，报告的环顶点是 $2 \to 1 \to 2$，两条边合计 $-2 + (-2) = -4$。
 
 **实现边界**：$+\infty$ 在单元格里用 `float("inf")` 表示，权重全部取整数，加法与比较按精确算术进行；这些是表示层的选择，不改变上面的轮数与判据结论。
 

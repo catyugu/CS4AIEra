@@ -6,7 +6,7 @@ title: 哈希表与关联映射
 status: published
 objectives:
   - 说明哈希函数把键集收缩成候选区域、再由相等契约确认目标的机制，以及冲突为什么在键数超过槽位数时必然出现
-  - 在同一组键与同一哈希方式下，用实测说出一次查找扫过的槽位数怎样随负载因子变化
+  - 说明负载因子作为链长与探测长度的自变量，怎样决定一次查找的成本量级
   - 区分冲突退化的两种来源：哈希分配不均匀与对抗性输入
   - 说明几何扩容为什么让每次插入分摊到的搬移量是常数，以及这条结论依赖什么
   - 从一次对 Python 字典的观测里区分语言保证与实现选择
@@ -18,7 +18,7 @@ objectives:
 
 $$\text{hash}(key) \rightarrow \text{整数}, \qquad \text{bucket} = \text{hash}(key) \bmod \text{capacity}.$$
 
-桶数组有 `capacity` 个槽位。落到同一槽位的键由冲突策略容纳：<Term id="separate-chaining">分离链接</Term>在每个槽位挂一个容器，把落进来的条目都放进去；<Term id="open-addressing">开放寻址</Term>把条目直接放进槽位，冲突时按 <Term id="probing">探测</Term> 序列依次检查后续槽位。
+桶数组有 `capacity` 个槽位。落到同一槽位的键由冲突策略容纳：<Term id="separate-chaining">链地址法</Term>在每个槽位挂一个容器，把落进来的条目都放进去；<Term id="open-addressing">开放寻址法</Term>把条目直接放进槽位，冲突时按 <Term id="probing">探测</Term> 序列依次检查后续槽位。
 
 这份表示维持两条不变量：
 
@@ -51,47 +51,17 @@ for index in sorted(buckets):
 print("keys:", len(keys), "| capacity:", capacity, "| buckets used:", len(buckets))
 ```
 
-这十个键放进 8 个槽位，冲突必然出现：槽位下标只有 8 种取值，键有 10 个。五个槽位被用到，其中四个各挂了不止一条键，桶 `0` 上挂了三条。落点由 `keys` 的一项与 `capacity` 共同决定；无论怎么取，用到的槽位数都不超过 `capacity`。
+这十个键放进 8 个槽位，冲突必然出现：槽位下标只有 `capacity` 种取值，键数超过它时必有两个键共享一个槽位。落点由键与 `capacity` 共同决定，用到的槽位数不超过 `capacity`；具体哪些槽位落了几条键由哈希函数决定。
 
 ## 负载因子与探测长度
 
-槽位越满，键越容易挤到一起，探测要走得更远。<Term id="load-factor">负载因子</Term> $\alpha$ 是已存条目数与槽位数之比，也是探测长度的自变量：$\alpha$ 越大，落到同一候选区域的键越多，一次查找扫过的槽位越多。链式表示里这一步对应链长，开放寻址里对应探测序列的长度。
+槽位越满，键越容易挤到一起，探测要走得更远。已存条目数与槽位数之比是 <Term id="load-factor">负载因子</Term> $\alpha = n/m$，它衡量表有多满，也是链长与探测长度的自变量：$\alpha$ 越大，落到同一候选区域的键越多，一次查找在链上或探测序列里扫过的槽位越多。链式表示里这一步对应链长，开放寻址法里对应探测序列的长度。
 
-把 $\alpha$ 压在常数以内，一次查找扫过的槽位数就停在由 $\alpha$ 决定的量级上，查询成本随之有界。这个量级的具体取值取决于哈希把键分散开的程度，本节只给出一个具体实例的观测：固定同一组键与同一个哈希函数，只改容量。为了让观测反映负载因子，下面的散列函数先做一次乘法混合，把键的落点打散。
-
-```python run id="alg.hash.probe-cost"
-def bucket_of(key, capacity):
-    """A multiplicative bit-mixer; better mixing spreads keys over the slots."""
-    total = 0
-    for character in key:
-        total = (total * 131 + ord(character)) & 0xFFFFFFFF
-    total = ((total ^ (total >> 16)) * 2654435761) & 0xFFFFFFFF
-    return (total ^ (total >> 13)) % capacity
-
-
-def worst_probe(keys, capacity):
-    """Insert by linear probing; return the most slots one key had to scan."""
-    slots, longest = [None] * capacity, 0
-    for key in keys:
-        index, scanned = bucket_of(key, capacity), 1
-        while slots[index] is not None:
-            index, scanned = (index + 1) % capacity, scanned + 1
-        slots[index] = key
-        longest = max(longest, scanned)
-    return longest
-
-
-keys = [f"key-{index:05d}" for index in range(1000)]
-for capacity in (2000, 1400, 1050):
-    print(f"capacity={capacity:5d}  load factor={len(keys) / capacity:.2f}"
-          f"  worst probe={worst_probe(keys, capacity):4d}")
-```
-
-同一批 1000 个键，容量从 2000 降到 1050，负载因子从 0.50 升到 0.95，一次插入最坏扫过的槽位数从 14 涨到 443。链式表示的成本对应链长，线性探测的成本对应这段连续占用区：$\alpha$ 越接近 1，连续占用区越长，一次查找要走的槽位越多。容量是这里唯一的自变量，它越小、负载因子越高，印出的最坏探测长度越大。
+把 $\alpha$ 压在常数以内，一次查找扫过的槽位数就停在由 $\alpha$ 决定的量级上，查询成本随之有界。$\alpha$ 到期望探测长度的精确关系依赖对哈希随机性的建模，均匀探测模型下的推导由 <CrossRef id="algorithms.average-and-randomized" /> 给出。量级的具体取值还取决于哈希把键分散开的程度。
 
 ## 扩容与摊还
 
-把 $\alpha$ 维持在阈值以内，条目增长到阈值后就要扩容。扩容分配更大的槽位数组，并让每个条目按新容量重新落位，因为槽位下标依赖容量。分离链接在 $\alpha > 1$ 时仍然正确，扩容是为控制链长或探测长度而选的表示策略。
+把 $\alpha$ 维持在阈值以内，条目增长到阈值后就要扩容。扩容分配更大的槽位数组，并让每个条目按新容量重新落位，因为槽位下标依赖容量。链地址法在 $\alpha > 1$ 时仍然正确，扩容是为控制链长或探测长度而选的表示策略。
 
 若容量按几何因子增长，前 $n$ 次插入引起的搬移总量是 $\Theta(n)$，分摊到每次插入是常数；这条论证的是一串操作的总成本（<Term id="amortized-analysis">摊还成本</Term>，见 <CrossRef id="algorithms.amortized" />）。某一次触发扩容时，单是搬移仍然需要 $\Theta(n)$ 工作。下面的实验让容量从 8 起按两倍增长。
 
@@ -126,7 +96,7 @@ for count in (1000, 2000, 4000):
     print(f"n={count:5d}  entries moved={moved:6d}  moved/n={moved / count:.2f}")
 ```
 
-$n$ 从 1000 翻到 4000，搬移总数随之增长，`moved/n` 基本停在 1.02 附近：搬移的摊还附加成本是常数。这条结论只覆盖扩容引起的搬移，它与哈希把键分散得多好无关。
+$n$ 从 1000 翻到 4000，搬移总数随之增长，`moved/n` 基本不变：搬移的摊还附加成本是常数。这条结论只覆盖扩容引起的搬移，与哈希把键分散得多好无关。
 
 ## 冲突退化的两种来源
 
@@ -164,6 +134,6 @@ print("first keys in insertion order:", list(mapping)[:3])
 
 **迭代顺序属于语言保证**：字典保插入序，从 3.7 起是语言规范保证的行为（[stdtypes](https://docs.python.org/3/library/stdtypes.html#dict)），集合不保证迭代顺序；插入序与成本性质无关，需要按键序迭代要用有序映射（见 <CrossRef id="algorithms.maps-and-sets" />）。
 
-**实现边界**：CPython 的 `dict` 使用开放寻址与带扰动的探测序列（[dictobject.c](https://github.com/python/cpython/blob/main/Objects/dictobject.c)），本节说明机制时用的是分离链接，两者属于不同的表示；`hash(-1)` 与 `hash(-2)` 都打印为 `-2`，因为 C 层把 `-1` 留作哈希失败的指示值（[PyObject_Hash](https://docs.python.org/3/c-api/object.html#c.PyObject_Hash)）。这些解释的是这份实现的输出，正文的推理只用「哈希缩小候选、相等确认目标」这一条性质。
+**实现边界**：CPython 的 `dict` 使用开放寻址法与带扰动的探测序列（[dictobject.c](https://github.com/python/cpython/blob/main/Objects/dictobject.c)），本节说明机制时用的是链地址法，两者属于不同的表示；`hash(-1)` 与 `hash(-2)` 都打印为 `-2`，因为 C 层把 `-1` 留作哈希失败的指示值（[PyObject_Hash](https://docs.python.org/3/c-api/object.html#c.PyObject_Hash)）。这些解释的是这份实现的输出，正文的推理只用「哈希缩小候选、相等确认目标」这一条性质。
 
 本课反复用到「查询是常数成本」这句话：它成立，是因为探测长度被压在了常数以内。这句话里还藏着一个词——「平均」。一次查找的成本取决于哪些键真的落进了同一候选区域，所以它随输入变化；要对成本说一个与具体键集无关的常数，就得先说明这个平均值对什么取：是对输入的分布取平均，还是对固定输入上算法自己掷出的随机位取平均？这个问题与哈希函数、探测策略无关，它问的是「平均」这个词到底对谁取平均。

@@ -61,7 +61,7 @@ for size in (100, 200):
     values = list(range(size))
     front = insert_with_moves(values, 0, -1)
     values = list(range(size))
-    tail = insert_with_moves(values, len(values) - 1, -1)
+    tail = insert_with_moves(values, len(values), -1)
     print(f"n={size:4d}  front insert moves {front:4d}  tail insert moves {tail}")
 
 removals = 500
@@ -73,7 +73,7 @@ for _ in range(removals):
 print(f"deleting the front {removals} times moves about {moved} elements (n = 1000)")
 ```
 
-头部插入移动全部元素，尾部附近插入几乎不移动：规模从 100 翻到 200，头插的移动数也跟着翻倍。连续删除头部元素的总移动量随删除次数与输入规模同时增长：初始长度为 $n$、删除 $m$ 次（$1 \le m \le n$）时总移动量是 $\sum_{j=0}^{m-1}(n - j - 1) = m(n - 1) - m(m - 1)/2$，即 $\Theta(n m)$；$n = 1000$、删除 500 次时实测移动 374750 个元素。这种用法代价高昂：这正是「用 `list` 当队列」代价高昂的原因，队列需要另一种表示（见 <CrossRef id="algorithms.stacks-and-queues" />）。
+头部插入移动全部元素，尾部插入不移动任何元素：规模从 100 翻到 200，头插的移动数也跟着翻倍。连续删除头部元素的总移动量随删除次数与输入规模同时增长：初始长度为 $n$、删除 $m$ 次（$1 \le m \le n$）时总移动量是 $\sum_{j=0}^{m-1}(n - j - 1) = m(n - 1) - m(m - 1)/2$，即 $\Theta(n m)$；$n = 1000$、删除 500 次时实测移动 374750 个元素。这种用法代价高昂：这正是「用 `list` 当队列」代价高昂的原因，队列需要另一种表示（见 <CrossRef id="algorithms.stacks-and-queues" />）。
 
 ## 连续数组与动态数组
 
@@ -108,7 +108,7 @@ print("growth steps (appends, container bytes):", events[:5])
 print("growth events over 64 appends:", len(events))
 ```
 
-列表对象在追加过程中反复改变体积，而且每次都跳过若干槽位：64 次追加里容器体积只变了 8 次（第 1、5、9、17、25、33、41、53 次），一次追加后容器直接得到容纳后续若干元素的空间。按比例的 over-allocation 是 CPython（本课程使用的 Pyodide 运行时同源）的实现事实，具体字节数与增长比例随解释器版本与指针宽度变化；以上观测所能确认的是容量按批跳动这一行为。
+列表对象在追加过程中反复改变体积，一次改变得到容纳后续若干元素的空间，随后的若干次追加不再触发分配，容量因此按批跳动。按比例的 over-allocation 是 CPython 的 `list` 采用的实现策略（本课程使用的 Pyodide 运行时是 CPython 的同源移植）；跳变发生的具体位置、字节数与增长比例随解释器版本与指针宽度变化，由上面单元格的当前输出给出（[listobject.c](https://github.com/python/cpython/blob/main/Objects/listobject.c)）。
 
 把容量翻倍的那一次追加要把已有元素全部搬走，其余追加只写一个槽位。用一个自己设定的翻倍策略把每次追加的工作量记下来：
 
@@ -160,7 +160,7 @@ print("payload sizes differ:", sys.getsizeof(small[0]), "vs", sys.getsizeof(huge
 
 ## 序列的抽象接口
 
-连续数组与动态数组在物理布局上做了不同的取舍，对外提供的是同一组接口：按下标读取、按下标写入、在某个位置插入、删除某个位置、按顺序遍历、查找某个值。把这组接口与具体表示分开写下来，得到的就是抽象 sequence——一个 <Term id="abstract-data-type">抽象数据类型</Term>：操作与行为由下表给出，内部怎么存不属于它。抽象状态是有限序列 $S = (s_0, \dots, s_{n-1})$，元素来自一个定义了相等关系的域。
+连续数组与动态数组在物理布局上做了不同的取舍，对外提供的是同一组接口：按下标读取、按下标写入、在某个位置插入、删除某个位置、按顺序遍历、查找某个值。把这组接口与具体表示分开写下来，得到的就是抽象序列——一个 <Term id="abstract-data-type">抽象数据类型</Term>：操作与行为由下表给出，内部怎么存不属于它。抽象状态是有限序列 $S = (s_0, \dots, s_{n-1})$，元素来自一个定义了相等关系的域。
 
 | 操作 | 行为 |
 | --- | --- |
@@ -171,6 +171,6 @@ print("payload sizes differ:", sys.getsizeof(small[0]), "vs", sys.getsizeof(huge
 | `iterate` | 按位置顺序访问每个元素一次 |
 | `search(value)` | 返回最小的满足 $s_i = \texttt{value}$ 的 $i$，不存在时返回约定的未找到结果 |
 
-表格中的 `get`、`set`、`delete` 以 $0 \le i \lt n$ 为 <Term id="precondition">前置条件</Term>，`insert` 以 $0 \le i \le n$ 为前置条件；不满足前置条件的调用不在本抽象 sequence 契约的范围内，本契约不规定其结果：具体类型可以另行规定这些输入的语义，例如 Python `list` 支持负索引，`insert` 对超出范围的位置也有自己的截断规则。相等关系属于契约层（它决定什么叫命中），而「一次相等判定的成本」属于成本模型：在 Python 里 `==` 可能执行用户代码，因此准确的结论是「最多 $n$ 次相等比较」，对一般对象的真实时间不下结论。
+表格中的 `get`、`set`、`delete` 以 $0 \le i \lt n$ 为 <Term id="precondition">前置条件</Term>，`insert` 以 $0 \le i \le n$ 为前置条件；不满足前置条件的调用不在本抽象序列契约的范围内，本契约不规定其结果：具体类型可以另行规定这些输入的语义，例如 Python `list` 支持负索引，`insert` 对超出范围的位置也有自己的截断规则。相等关系属于契约层（它决定什么叫命中），而「一次相等判定的成本」属于成本模型：在 Python 里 `==` 可能执行用户代码，因此准确的结论是「最多 $n$ 次相等比较」，对一般对象的真实时间不下结论。
 
 同一个抽象接口可以有多种表示：连续数组、动态数组、链式结构、维护子树大小等秩信息的平衡树。它们的操作成本不同，因此「序列的查找是 $O(n)$」这种句子没有意义。接口的功能本身并不决定复杂度：`get` 是常数还是线性，取决于四件事——哪种表示、什么成本模型、按什么规模度量、成本怎样量化（见 <CrossRef id="algorithms.cost-model" />）；同一个物理表示也不唯一决定算法或成本模型。
