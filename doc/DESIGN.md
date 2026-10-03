@@ -451,9 +451,6 @@ term: 不变量
 english: invariant
 aliases:
   - invariant property
-domains:
-  - algorithms
-  - software-engineering
 short: 在所讨论的操作或状态转移前后都保持成立的性质。
 related:
   - precondition
@@ -493,7 +490,7 @@ related:
 
 ## 16. 搜索与交叉引用图
 
-构建期生成索引，覆盖：课时标题与别名；章节名；各级标题；术语与别名；正文；课时 ID；存在时的标签与领域。
+构建期生成索引，覆盖：课时标题与别名；章节名；各级标题；术语与别名；正文；课时 ID；存在时的标签。
 
 同时生成反向引用：使用某实验或数据集的课时；彼此相关的术语。
 

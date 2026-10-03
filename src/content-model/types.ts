@@ -90,7 +90,6 @@ export interface GlossaryEntry {
   term: string;
   english?: string;
   aliases: string[];
-  domains: string[];
   /** One-or-two-sentence definition shown in the quick-definition popover. */
   short: string;
   related: string[];

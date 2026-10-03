@@ -240,7 +240,6 @@ async function loadGlossary(dir: string, glossary: GlossaryEntry[], issues: Issu
       term: parsed.data.term,
       english: parsed.data.english,
       aliases: parsed.data.aliases,
-      domains: parsed.data.domains,
       short: parsed.data.short,
       related: parsed.data.related,
       file: relativeFile,

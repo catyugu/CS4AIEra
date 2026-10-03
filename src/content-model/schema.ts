@@ -41,7 +41,6 @@ export const glossaryFrontmatterSchema = z.strictObject({
   term: z.string().min(1),
   english: z.string().min(1).optional(),
   aliases: z.array(z.string().min(1)).default([]),
-  domains: z.array(idSchema).default([]),
   short: z.string().min(1),
   related: z.array(idSchema).default([]),
 });
