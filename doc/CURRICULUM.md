@@ -6,17 +6,7 @@
 
 ## 1. 结构约定
 
-| 约定 | 内容 |
-| --- | --- |
-| 模块 | 目录名与模块 `id` 一致，如 `python`、`algorithms`；模块 `order` 取 10 的倍数 |
-| 子章节 | 模块下的目录；其 `_section.yaml` 只提供子章节的 `id`、`label`、`order`、`summary`，不提供页面（见 `doc/DESIGN.md` 第 5 节） |
-| 课时 id | `<模块>.<主题>`，全小写点分隔，需要区分同名的不同子章节时才加入子章节段（如 `db.sql.joins`）；唯一性与稳定性规则见 `doc/DESIGN.md` 第 5.3 节 |
-| slug | 扁平形式 `/python/mutability-and-copy`，不体现子章节层级 |
-| order | 同级唯一，取 10 的倍数 |
-| 状态 | 本文件的课时表给出每个课时的落盘与发布状态；作者流程与可见性规则见 `doc/CONTENT_GUIDE.md` 第 3.3 节 |
-| 落盘 | 章节与它的课时同一批次落盘，避免空章节 |
-
-课时的内容要求（可执行单元格、术语与引用标记）由 `doc/CONTENT_GUIDE.md` 规定，本文件不重复。
+模块、子章节、课时 `id`、`slug`、`order` 与可见性由 `doc/DESIGN.md` 第 5 节规定，本文件按该约定列出课时树。一个子章节的课时同一批次落盘，避免空章节。课时的内容要求（可执行单元格、术语与引用标记）由 `doc/CONTENT_GUIDE.md` 规定，本文件不重复。
 
 ## 2. 模块顺序
 
@@ -47,11 +37,11 @@
 
 范围与重点：语言的基本使用（程序、值、控制流、函数、类、内置容器）；程序语义模型（求值、绑定、对象与共享状态、调用、作用域、迭代协议、异常与资源生命周期、属性查找）；数据表示与语言保证的边界；协作式异步的调度模型、异步迭代与异步上下文协议、取消与清理、超时与结构化任务生命周期。重点是把「能写出程序」推进到「能精确预测程序的行为」：对象、调用、迭代三条语义线占据模块主体，语法与标准库清单不进正文。验收标准是：给定一段陌生的 Python，读者能预测其状态变化、控制流与失败行为；不能预测时，知道该构造什么实验来验证。
 
-排除并指定去处：线程、GIL 与共享内存归 `operating-systems`（线程是操作系统的执行模型，本模块只讲语言的协作式异步语义）；剖析与数据驱动的性能调查归 `software-engineering`，它需要成本模型与 I/O 知识在前；`venv`、依赖声明与锁文件归 `software-engineering`，本模块只说明依赖属于环境而不属于源码；异常层次与失败契约设计归 `software-engineering`，语言机制在本模块讲完；结构化并发在本模块讲创建关系、等待边与任务组作用域，以及取消、收尾和异常组的选择性处理，真实并发与 I/O 下的任务生命周期由 `operating-systems` 与 `networks` 重新连接。结构模式匹配（`match`）不进入本模块的入门路径：后续课程不使用它，需要时由首次使用它的模块引入。
+排除并指定去处：线程、GIL 与共享内存归 `operating-systems`（线程是操作系统的执行模型，本模块只讲语言的协作式异步语义）；剖析与数据驱动的性能调查归 `software-engineering`；`venv`、依赖声明与锁文件归 `software-engineering`，本模块只说明依赖属于环境而不属于源码；异常层次与失败契约设计归 `software-engineering`，语言机制在本模块讲完；结构化并发在本模块讲创建关系、等待边与任务组作用域，以及取消、收尾和异常组的选择性处理，真实并发与 I/O 下的任务生命周期由 `operating-systems` 与 `networks` 重新连接。结构模式匹配（`match`）不进入本模块的入门路径：后续课程不使用它，需要时由首次使用它的模块引入。
 
 深度：`python.basics` 以识别与正确使用为主（B）；`python.objects`、`functions`、`iteration` 覆盖语义、不变量与失败行为（C/D）；`python.data-model`、`representation`、`program`、`async` 以 C 级为主，个别主题到 D。
 
-入门层：`python.basics` 是有意设置的 onboarding 层，面向完全没有 Python 经验的读者，必须自洽地提供足以阅读、修改和编写后续课程示例的工作语言。它的知识深度以 B 级为主，但覆盖广度与示例密度可以高于普通 B 级主题。收录判据是该操作是否频繁出现在后续课程的示例中，而不是它能否查文档：`strip`/`split`/`join`、`append`/`sort`/`get`/`items`、推导式、`enumerate`/`zip` 这一级的内容即使属于 Working Knowledge 也在本层教一次。不得因为相关机制会在后续专题课中深入解释，就删掉第一次使用时所需的基本规则；后续专题课（`python.call-semantics`、`python.mutability-and-copy`、`python.equality-and-hashing` 等）拥有完整语义模型，与本层的关系是先建立可工作的第一层规则，再由专题课建立完整模型。删除判据是删掉之后零经验的读者还能否顺畅读后续代码，新增判据是不学它会不会妨碍后续普通代码。
+入门层：`python.basics` 是有意设置的 onboarding 层，面向完全没有 Python 经验的读者，必须自洽地提供足以阅读、修改和编写后续课程示例的工作语言。它的深度以 B 级为主，覆盖广度与示例密度高于普通 B 级主题。
 
 验收标准（本层）：此前没有 Python 经验的读者完成 `python.basics` 后，应能独立阅读课程后续的普通 Python 示例，能编写几十行规模、使用函数、容器、类、模块、文件与异常处理的小程序；遇到更细的语义问题时，知道进入哪一节专题课。
 
@@ -94,11 +84,11 @@
 
 定位：建立成本模型与表示选择的语言。目标不是算法清单，而是让读者能自己推导复杂度、构造反例、判断常数与局部性、在真实约束下选择结构。
 
-范围与重点：主线是「契约与表示 → 成本与正确性 → 线性结构 → 关联结构 → 树与优先结构 → 查找 / 排序 / 选择 → 图 → 算法设计范式 → 综合选择」。`algorithms.complexity` 先建立分析语言（抽象数据类型与表示不变量、输入规模与成本模型、渐进记号、正确性、递归、摊还、期望），其余子章节的每一节课都复用这套语言，不再重复解释。全模块的分析框架是：抽象契约 → 表示 → 表示不变量 → 操作 → 不变量保持的论证 → 成本。这套框架是作者的检查表，不是课时的章节顺序：每节课的正文由一个具体问题连续推进，契约、不变量、成本与反例在解决它的过程中出现并当场命名。
+范围与重点：主线是「契约与表示 → 成本与正确性 → 线性结构 → 关联结构 → 树与优先结构 → 查找 / 排序 / 选择 → 图 → 算法设计范式 → 综合选择」。`algorithms.complexity` 先建立后续各子章节复用的分析语言（抽象数据类型与表示不变量、输入规模与成本模型、渐进记号、正确性、递归、摊还、期望）。必答项，以及每节课由一个具体问题连续推进、框架只在新机制出现时重述的要求，见 `doc/CONTENT_GUIDE.md` 第 3.5 节。
 
 排除并指定去处：冷门命名算法的实现、非教学必要的手写平衡树、排序算法展览（`heap sort` 之外再罗列 shell sort、cocktail sort 等）、排序常数因子对比表属于 A 级（查文档即可），不进正文；复杂性理论与不可近似不属于本模块，`algorithms.lower-bounds` 只做比较模型与决策树下界，NP 完全性与近似困难性如需讲授另设模块；profiling 与基准测试方法论归 `software-engineering`；缓存局部性背后的硬件与虚拟内存机制归 `operating-systems`；B 树、外部内存结构与查询计划在存储引擎中的形态归 `databases`；并发下的数据结构归 `operating-systems`。Python 只是实验语言，本模块不是 Python 容器教程，也不是面试题集。
 
-深度：以 C/D 为主，推导与反例是主要材料。`algorithms.complexity` 建立分析语言；`sequences`、`maps`、`trees` 覆盖表示不变量、成本分类与失败情形；`ordering`、`graphs` 覆盖正确性论证与模型；`techniques` 把已见过的算法抽象成设计范式；`selection` 是跨模块的连接点。
+深度：以 C/D 为主，推导与反例是主要材料。`sequences`、`maps`、`trees` 覆盖表示不变量、成本分类与失败情形；`ordering`、`graphs` 覆盖正确性论证与模型；`techniques` 把已见过的算法抽象成设计范式；`selection` 是跨模块的连接点。
 
 | 子章节 | order | 课时 id | 标题 | 落盘 |
 | --- | --- | --- | --- | --- |
@@ -209,7 +199,7 @@
 
 夹具计划：`sql.orders.basic` 覆盖关系语义、`NULL`、聚合、连接与约束；索引与查询计划需要更大的夹具（更多行与多个索引），在写 `db.storage` 批次时新增；事务与隔离需要能并发访问的夹具，按同一模式扩展。
 
-现有六个课时的正文质量尚未达标，计划整体重写；结构位置（关系模型 → SQL 语义 → 模式 → 存储与索引 → 事务 → 运维）与 `id` 保留。
+现有六个课时的正文质量尚未达标，计划整体重写；结构位置与 `id` 保留。
 
 | 子章节 | order | 课时 id | 标题 | 落盘 |
 | --- | --- | --- | --- | --- |
@@ -322,33 +312,35 @@
 
 ## 4. 写作批次
 
-批次按模块顺序推进；模块内一般按子章节顺序推进，一个子章节为一个批次。落盘后运行 `npm run check`，再在开发服务器下实机运行该批次的可执行单元格。模块结构本身可以作为单独批次先行：只改本文件、`doc/CONTENT_GUIDE.md` 与 `_section.yaml`，不动正文。
+批次按模块顺序推进，模块内按子章节顺序推进，一个子章节为一个批次。模块结构本身可以作为单独批次先行：只改本文件、`doc/CONTENT_GUIDE.md` 与 `_section.yaml`，不动正文。批次落盘后的验证口径见 `AGENTS.md` 与 `doc/CONTENT_GUIDE.md` 第 3.3 节。
 
 | 批次 | 范围 | 状态 |
 | --- | --- | --- |
-| 1 | `python`：整模块完成并冻结（basics onboarding 层，objects / functions / iteration，data-model / representation / program / async） | 完成 |
-| 2 | `algorithms`：整模块完成并冻结（complexity / sequences / maps / trees / ordering / graphs / techniques / selection） | 完成（已发布） |
-| 3 | `os.processes`、`os.memory` | 计划 |
-| 4 | `os.concurrency`、`os.io`、`os.resources` | 计划 |
-| 5 | `net.foundations`、`net.transport` | 计划 |
-| 6 | `net.application`、`net.operations` | 计划 |
-| 7 | `db.relational`、`db.schema` | 计划（先重写现有六节） |
-| 8 | `db.storage`（含新夹具） | 计划 |
-| 9 | `db.transactions`、`db.operations` | 计划 |
-| 10 | `swe.git`、`swe.design` | 计划 |
-| 11 | `swe.testing`、`swe.delivery`、`swe.debugging` | 计划 |
-| 12 | `dist.foundations`、`dist.communication` | 计划 |
-| 13 | `dist.data`、`dist.architecture`、`dist.operations` | 计划 |
-| 14 | `sec.foundations`、`sec.crypto`、`sec.web`、`sec.systems` | 计划 |
+| 1 | `python`：整模块（basics onboarding 层，objects / functions / iteration，data-model / representation / program / async） | 已发布 |
+| 2 | `algorithms`：整模块（complexity / sequences / maps / trees / ordering / graphs / techniques / selection） | 已发布 |
+| 3 | `os.processes`、`os.memory` | |
+| 4 | `os.concurrency`、`os.io`、`os.resources` | |
+| 5 | `net.foundations`、`net.transport` | |
+| 6 | `net.application`、`net.operations` | |
+| 7 | `db.relational`、`db.schema`（先重写现有六节） | |
+| 8 | `db.storage`（含新夹具） | |
+| 9 | `db.transactions`、`db.operations` | |
+| 10 | `swe.git`、`swe.design` | |
+| 11 | `swe.testing`、`swe.delivery`、`swe.debugging` | |
+| 12 | `dist.foundations`、`dist.communication` | |
+| 13 | `dist.data`、`dist.architecture`、`dist.operations` | |
+| 14 | `sec.foundations`、`sec.crypto`、`sec.web`、`sec.systems` | |
 
-「冻结」与「发布」是两件正交的事，仓库里各有各的载体：
+状态列只登记已经冻结或已经发布的批次；未标注的批次尚未落盘，其课时在各模块的落盘列中为 `—`。
 
-```text
-冻结   内容治理状态：本课已过逐段评审，除事实错误、前置缺口与跨章节接口问题外不再主动扩写。记录在本文件的「落盘」列。
-发布   部署状态：生产静态站是否为该课生成路由。记录在课时 frontmatter 的 status 字段（draft/review 只在 dev 的 includeUnpublished 下可见，生产路由只接受 published）。
-```
+「冻结」与「发布」是两件正交的事，各有各的载体：
 
-因此课时一律以 `status: draft` 落盘并参与 dev 验证；逐节评审通过后在本文件标记「已冻结」，但仍保持未发布。等整个模块全部冻结并通过模块级发布检查后，用一个独立的发布提交一次性完成：批量把该模块课时的 `status` 改为 `published`；更新本文件的模块/批次发布状态（完成（已冻结，待发布）→ 完成（已发布））；跑生产校验与构建，确认课程路由数量按预期增加；核对已发布课时的 `CrossRef` 不指向生产环境不可见的 draft 课时。子章节 `_section.yaml` 的 `status: active` 保持不变，它与课时的 `LessonStatus` 是两套枚举。
+| 状态 | 含义 | 载体 |
+| --- | --- | --- |
+| 冻结 | 内容治理状态：已过逐段评审，除事实错误、前置缺口与跨章节接口问题外不再主动扩写 | 本文件的「落盘」列 |
+| 发布 | 部署状态：生产静态站是否为该课生成路由 | 课时 frontmatter 的 `status`（`draft` 与 `review` 只在 dev 的 `includeUnpublished` 下可见，生产路由只接受 `published`） |
+
+发布以模块为单位，用一个独立的发布提交一次性完成：批量把该模块课时的 `status` 改为 `published`，同时把本文件的批次行改为已发布，确认课程路由数量按预期增加，并核对已发布课时的 `CrossRef` 不指向生产环境不可见的课时。子章节 `_section.yaml` 的 `status: active` 与课时的 `LessonStatus` 是两套枚举。
 
 跨批次的 `CrossRef` 只要求目标 `id` 已登记且稳定，不要求目标课时已经冻结，因此冻结顺序可以晚于引用它的课时。
 
@@ -358,5 +350,5 @@
 - 拆分课时：新课时取新 `id`，旧 `id` 保留给拆分后覆盖原有范围的那一节。
 - 删除课时：先清引用（`<CrossRef>`、术语与示例的使用），再删文件与可能空掉的章节。
 - 调整模块或子章节顺序：改本文件与对应 `_section.yaml` 的 `order`，两者必须一致。
-- 已冻结的模块：`python` 与 `algorithms` 已完成并冻结（见批次表）。冻结的模块只在后续课程暴露 prerequisite 缺口或发现事实错误时回来修改，不主动增加主题；改动仍走本文件的登记流程，并同时改 `doc/CONTENT_GUIDE.md` 中与之相关的写作规则。
+- 已冻结的模块（见批次表）：只在后续课程暴露前置缺口或发现事实错误时回来修改，不主动增加主题；改动仍走上面的登记流程，并同时改 `doc/CONTENT_GUIDE.md` 中与之相关的写作规则。
 - 尚未落盘的子章节只登记在本文件；它的 `_section.yaml`、`summary` 与第一节内容一起落盘，不预先建目录，否则验证器会报 `empty-section`。因此本文件的树会暂时领先于磁盘，这是有意为之，不是不一致。
