@@ -1,32 +1,31 @@
-/* Course index page. */
+/* Course index page: orientation, not a sitemap. */
 
-/* --- course index ------------------------------------------------------ */
-
-.course-section {
-  margin: 1.6rem 0;
+.course-index>.start {
+  margin-top: 1.2rem;
 }
 
-.course-section h2 {
-  margin-bottom: 0.25rem;
+.module-list {
+  margin: 2.4rem 0 0;
+  padding: 0;
+  list-style: none;
 }
 
-.course-section.depth-1,
-.course-section.depth-2 {
-  padding-left: 1rem;
-  border-left: 2px solid var(--line);
+.module {
+  margin: 0 0 1.8rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--line);
 }
 
-.course-section.depth-2 {
-  border-left-color: var(--panel);
+.module h2 {
+  margin: 0 0 0.3rem;
+  font-size: 1.25rem;
 }
 
-.course-section ul {
-  margin: 0.4rem 0 0;
-  padding-left: 1.3rem;
+.module p {
+  margin: 0.3rem 0 0;
 }
 
-.english {
+.module-meta {
   color: var(--muted);
-  font-size: 0.8em;
-  font-weight: 400;
+  font-size: 0.85rem;
 }

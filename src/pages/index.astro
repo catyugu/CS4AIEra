@@ -5,13 +5,20 @@ import CourseLayout from "../layouts/CourseLayout.astro";
 
 const model = await getCourseModel();
 const tree = buildCourseTree(model, { includeUnpublished: import.meta.env.DEV });
+
+/**
+ * The top of the tree is one umbrella section naming the whole course, which
+ * the heading below already does. What this page lists is its children; a tree
+ * without that umbrella lists itself.
+ */
+const modules = tree.length === 1 && tree[0].lessons.length === 0 ? tree[0].children : tree;
+
 const first = readingOrder(tree)[0];
 
-function flatten(nodes: CourseTreeNode[]): CourseTreeNode[] {
-  return nodes.flatMap((node) => [node, ...flatten(node.children)]);
+/** Lessons in a section and in everything it contains. */
+function lessonCount(node: CourseTreeNode): number {
+  return node.lessons.length + node.children.reduce((total, child) => total + lessonCount(child), 0);
 }
-
-const sections = flatten(tree);
 ---
 
 <CourseLayout
@@ -24,24 +31,22 @@ const sections = flatten(tree);
       一门面向专业自学者的计算机科学课程。课程假定读者具备一定的技术素养和推理能力，但不假定有正式 CS
       背景或者前置知识。
     </p>
-    {first && <p><a href={`${first.slug}/`}>开始阅读：{first.title}</a></p>}
+    {first && <p class="start"><a href={`${first.slug}/`}>开始阅读：{first.title}</a></p>}
 
-    {
-      sections.map((node) => (
-        <section class:list={["course-section", `depth-${node.depth}`]}>
-          <h2>{node.section.label}</h2>
-          {node.section.summary && <p>{node.section.summary}</p>}
-          {node.lessons.length > 0 && (
-            <ul>
-              {node.lessons.map((lesson) => (
-                <li>
-                  <a href={`${lesson.slug}/`}>{lesson.title}</a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      ))
-    }
+    <ul class="module-list">
+      {
+        modules.map((node) => {
+          const entry = readingOrder([node])[0];
+          const count = lessonCount(node);
+          return (
+            <li class="module">
+              <h2>{entry ? <a href={`${entry.slug}/`}>{node.section.label}</a> : node.section.label}</h2>
+              {node.section.summary && <p>{node.section.summary}</p>}
+              {count > 0 && <p class="module-meta">{count} 课时</p>}
+            </li>
+          );
+        })
+      }
+    </ul>
   </article>
 </CourseLayout>
