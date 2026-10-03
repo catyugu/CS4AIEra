@@ -4,6 +4,8 @@
 
 .prose {
   max-width: var(--measure);
+  /* Long identifiers, URLs and inline code must not push the page sideways. */
+  overflow-wrap: break-word;
 }
 
 .prose> :first-child {
@@ -46,6 +48,11 @@
   vertical-align: top;
 }
 
+/* Numbers in a column line up; the figures are compared down the column. */
+.prose td {
+  font-variant-numeric: tabular-nums;
+}
+
 .prose thead th {
   background: var(--panel);
 }
@@ -81,8 +88,14 @@
   .prose pre.astro-code,
   .prose pre.astro-code span {
     color: var(--shiki-dark) !important;
-    background-color: var(--shiki-dark-bg) !important;
   }
+}
+
+/* One code surface: a static block, an executable cell and its output share a
+   background, so "code" means the same thing everywhere. Shiki writes the
+   theme's background inline, which only `!important` can outrank. */
+.prose pre.astro-code {
+  background-color: var(--code-bg) !important;
 }
 
 .prose pre code {
