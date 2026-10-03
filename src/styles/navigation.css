@@ -1,7 +1,5 @@
 /* Course tree navigation. */
 
-/* --- course tree ------------------------------------------------------- */
-
 .tree,
 .tree-lessons {
   margin: 0;
@@ -9,19 +7,48 @@
   list-style: none;
 }
 
+/* A hairline per level: the nesting is readable without spending colour on it. */
 .tree ul {
   margin: 0;
-  padding-left: 0.9rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--line);
 }
 
 .tree summary {
-  cursor: pointer;
-  font-weight: 600;
+  display: block;
   padding: 0.15rem 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* One chevron in every browser; the user-agent marker is not the same shape
+   from one engine to the next. */
+.tree summary::before {
+  content: "";
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  margin-right: 0.45em;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(-45deg);
+  vertical-align: 0.06em;
+}
+
+.tree details[open]>summary::before {
+  transform: rotate(45deg);
+}
+
+.tree summary::-webkit-details-marker {
+  display: none;
+}
+
+.tree summary {
+  list-style: none;
 }
 
 .tree-lessons {
-  padding-left: 1rem;
+  padding-left: 0.75rem;
 }
 
 .tree-lesson {
@@ -36,8 +63,9 @@
   text-decoration: underline;
 }
 
+/* Where the reader is: accent and weight, and the only accent in the tree. */
 .tree-lesson[aria-current="page"] {
-  color: var(--fg);
+  color: var(--accent);
   font-weight: 600;
 }
 
