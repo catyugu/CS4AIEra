@@ -67,6 +67,45 @@
   font-size: 0.92rem;
 }
 
+/* --- in-page contents, inline ----------------------------------------- */
+
+/*
+  Where there is no room for the contents column (`shell.css`), the same list
+  opens under the lesson title. It starts collapsed: on a narrow screen the
+  reader must land on the title, not on a table of contents.
+*/
+.page-toc-inline {
+  margin: 1.5rem 0 0;
+  font-size: 0.9rem;
+}
+
+.page-toc-inline summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+}
+
+.page-toc-inline .toc-list {
+  margin-top: 0.4rem;
+}
+
+/*
+  The inline list can land inside rendered prose (a glossary entry), whose list
+  and paragraph rules would otherwise reach it: it is a control, not body text.
+*/
+.page-toc-inline .toc-list,
+.page-toc-inline .toc-list li {
+  margin: 0;
+  padding: 0;
+}
+
+@media (min-width: 78rem) {
+  .page-toc-inline {
+    display: none;
+  }
+}
+
 /* --- term references --------------------------------------------------- */
 
 /* The popover is anchored to the term, so it opens beside the word the reader

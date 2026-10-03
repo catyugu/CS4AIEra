@@ -1,6 +1,5 @@
-/* Page frame: header, footer, the reading grid, its sticky columns
-   and the breakpoints. */
-
+/* Page frame: header, footer, the reading grid, its sticky columns and the
+   breakpoints. */
 
 .site-header,
 .site-footer {
@@ -17,6 +16,12 @@
   border-bottom: 1px solid var(--line);
 }
 
+.site-header nav {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+}
+
 .site-title {
   font-weight: 700;
   color: var(--fg);
@@ -31,6 +36,26 @@
 
 .site-footer p {
   margin: 0;
+}
+
+/*
+  The course tree is a `popover`, so narrow screens get a drawer from the
+  platform — Esc, light dismiss, focus return — with no script of our own.
+  Everywhere else the tree sits in its grid column, so the user agent's
+  defaults for a popover (hidden, centred, bordered, content-sized, painted on
+  Canvas) are undone here. The narrow query at the end of this file puts them
+  back; anything not undone below would leak into the wide layout.
+*/
+.sidebar {
+  display: block;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  width: auto;
+  height: auto;
+  background: none;
+  color: inherit;
 }
 
 .shell {
@@ -53,37 +78,56 @@
   line-height: 1.55;
 }
 
+/* The drawer control exists only where the tree is a drawer. */
+.tree-toggle {
+  display: none;
+}
+
+/* --- in-page contents ------------------------------------------------ */
+
 .page-toc h2 {
   margin: 0 0 0.5rem;
   font-size: 0.8rem;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--muted);
 }
 
-.page-toc ol {
+.toc-list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.page-toc .depth-3 {
+.toc-list .depth-3 {
   padding-left: 0.9rem;
 }
 
-.page-toc a {
+.toc-list a {
   display: block;
   padding: 0.15rem 0;
   color: var(--muted);
   text-decoration: none;
 }
 
-.page-toc a:hover {
+.toc-list a:hover {
   color: var(--accent);
   text-decoration: underline;
 }
 
-@media (max-width: 64rem) {
+/* Where the reader is: the one accented entry in the list. */
+.toc-list a[aria-current="location"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* --- breakpoints ------------------------------------------------------ */
+
+/*
+  Three columns need room for the prose measure beside both rails. Below that
+  the in-page contents column is dropped and the lesson body carries the same
+  list inline instead (see `lesson.css`).
+*/
+@media (max-width: 78rem) {
   .shell {
     grid-template-columns: 17rem minmax(0, 1fr);
   }
@@ -93,17 +137,43 @@
   }
 }
 
-@media (max-width: 48rem) {
+/*
+  Two columns of chrome also cost the prose its measure, so below this width
+  the tree becomes a drawer and the article gets the whole column. The tree is
+  still one keystroke away in the header; the reading is never squeezed.
+*/
+@media (max-width: 60rem) {
   .shell {
     grid-template-columns: minmax(0, 1fr);
     gap: 1.5rem;
     padding-top: 1.25rem;
   }
 
+  .tree-toggle {
+    display: inline;
+  }
+
+  /* In flow — a browser without popover support — the tree stays at the top. */
+  .sidebar:not(:popover-open) {
+    display: none;
+  }
+
   .sidebar {
-    position: static;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100dvh;
+    width: min(20rem, 85vw);
+    margin: 0;
+    padding: 1rem 1.25rem;
+    border-right: 1px solid var(--line);
+    background: var(--bg);
     max-height: none;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--line);
+    overflow-y: auto;
+    box-shadow: 0 0 24px rgb(0 0 0 / 18%);
+  }
+
+  .sidebar::backdrop {
+    background: rgb(0 0 0 / 30%);
   }
 }

@@ -1,5 +1,6 @@
 ---
 import CourseTree from "../components/CourseTree.astro";
+import PageToc from "../components/PageToc.astro";
 import { getCourseModel } from "../content-model/instance";
 import {
   buildCourseTree,
@@ -13,9 +14,16 @@ import "../styles/global.css";
 /**
  * Reading shell: course tree, lesson body, page contents.
  *
- * Everything here is static HTML. The only client script on a lesson page will
- * be the code-cell runtime, which loads lazily and only when a lesson declares
- * executable cells (DESIGN.md sections 15 and 19).
+ * Everything here is static HTML. The only client script a reading page loads
+ * is the one that accompanies a feature the page actually has: the code-cell
+ * runtime on lessons with executable cells, term-tip placement on pages with a
+ * term reference, and in-page contents tracking on pages with headings
+ * (DESIGN.md sections 2 and 15).
+ *
+ * Below 60rem the course tree is a `popover` drawer opened from the header;
+ * below 78rem the in-page contents column is replaced by the list the lesson
+ * body renders under its title. Both are in the markup on every page, and the
+ * stylesheet decides which of them a reader gets.
  */
 interface Props {
   title: string;
@@ -60,11 +68,12 @@ const siteTitle = "AI 时代的计算机科学";
     <header class="site-header">
       <a class="site-title" href="/">{siteTitle}</a>
       <nav aria-label="站点">
+        <button class="tree-toggle" type="button" popovertarget="course-tree">目录</button>
         <a href="/glossary/">术语表</a>
       </nav>
     </header>
     <div class="shell">
-      <nav class="sidebar" aria-label="课程树">
+      <nav class="sidebar" id="course-tree" popover="auto" aria-label="课程树">
         <CourseTree nodes={tree} openSectionIds={openSectionIds} activeLessonId={activeLessonId} />
       </nav>
       <main id="main">
@@ -72,15 +81,9 @@ const siteTitle = "AI 时代的计算机科学";
       </main>
       {
         toc.length > 0 && (
-          <nav class="page-toc" aria-label="本页目录">
+          <nav class="page-toc" data-toc aria-label="本页目录">
             <h2>本页目录</h2>
-            <ol>
-              {toc.map((entry) => (
-                <li class:list={[`depth-${entry.depth}`]}>
-                  <a href={`#${entry.slug}`}>{entry.text}</a>
-                </li>
-              ))}
-            </ol>
+            <PageToc entries={toc} />
           </nav>
         )
       }

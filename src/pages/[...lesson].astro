@@ -5,9 +5,11 @@ import CrossRef from "../components/mdx/CrossRef.astro";
 import CodeLab from "../components/mdx/CodeLab.astro";
 import LabRef from "../components/mdx/LabRef.astro";
 import Term from "../components/mdx/Term.astro";
+import PageToc from "../components/PageToc.astro";
 import { getCourseModel } from "../content-model/instance";
 import {
   buildCourseTree,
+  buildToc,
   isVisibleLesson,
   lessonNeighbors,
   readingOrder,
@@ -47,6 +49,17 @@ if (!lesson) throw new Error(`lesson '${entry.id}' is in the content collection 
 const order = readingOrder(buildCourseTree(model, { includeUnpublished: import.meta.env.DEV }));
 const { previous, next } = lessonNeighbors(order, lesson.id);
 const trail = sectionTrail(model, lesson.sectionId).slice(1);
+
+const toc = buildToc(headings);
+
+/**
+ * Only what a reader can act on: how many experiments the lesson carries. The
+ * body's token count is authoring telemetry, so it stays in the dev build.
+ */
+const meta = [
+  import.meta.env.DEV ? `${lesson.tokens} tokens` : undefined,
+  lesson.cells.length > 0 ? `${lesson.cells.length} 个可运行单元格` : undefined,
+].filter((part) => part !== undefined);
 ---
 
 <CourseLayout
@@ -65,7 +78,7 @@ const trail = sectionTrail(model, lesson.sectionId).slice(1);
         </ol>
       </nav>
       <h1>{lesson.title}</h1>
-      <p class="lesson-meta">{lesson.tokens} tokens · {lesson.cells.length} 个可运行单元格</p>
+      {meta.length > 0 && <p class="lesson-meta">{meta.join(" · ")}</p>}
       {
         lesson.objectives.length > 0 && (
           <section class="objectives" aria-labelledby="objectives-heading">
@@ -78,6 +91,13 @@ const trail = sectionTrail(model, lesson.sectionId).slice(1);
           </section>
         )
       }
+      {/* Narrow and mid widths have no room for the contents column. */}
+      {toc.length > 0 && (
+        <details class="page-toc-inline" data-toc>
+          <summary>本页目录</summary>
+          <PageToc entries={toc} />
+        </details>
+      )}
     </header>
 
     <div class="prose">

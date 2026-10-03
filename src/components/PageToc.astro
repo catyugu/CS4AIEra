@@ -1,0 +1,36 @@
+---
+import type { TocEntry } from "../content-model/navigation";
+
+/**
+ * In-page contents list.
+ *
+ * The anchors come from the headings Astro reports after rendering, so they are
+ * the ones the build emitted. The list is used twice: as the desktop column in
+ * `CourseLayout`, and inside a `details` under the lesson title, which is where
+ * it goes when there is no room for a column.
+ *
+ * `src/runtime/page-toc.ts` marks the section being read, as `aria-current`,
+ * which is also the entry the stylesheet accents.
+ */
+interface Props {
+  entries: TocEntry[];
+}
+
+const { entries } = Astro.props;
+---
+
+{
+  entries.length > 0 && (
+    <ol class="toc-list">
+      {entries.map((entry) => (
+        <li class:list={[`depth-${entry.depth}`]}>
+          <a href={`#${entry.slug}`}>{entry.text}</a>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+<script>
+  import "../runtime/page-toc";
+</script>
