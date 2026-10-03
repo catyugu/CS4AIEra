@@ -6,14 +6,14 @@ title: 数组、动态数组与局部性
 status: published
 objectives:
   - 从连续布局推出下标访问、插入与删除的成本，并区分头部、尾部与最坏情形
-  - 推导几何扩容为何让追加的摊还成本是常数，而单次扩容的最坏成本仍是线性的
+  - 从容量跳变的观测中指出单次追加的成本尖峰，说明常态成本与这一次尖峰之间需要一条什么样的论证
   - 说明本课程运行时里的 list 采用哪一种具体表示，以及这决定了哪些结论成立
   - 说明连续数组与动态数组同属一个序列契约，契约本身不决定操作成本
 ---
 
 一个数组有一百万个元素，读取 `items[900000]` 要先走过前面那 899999 个吗？连续布局把这个问题的答案放进了地址算术：槽位宽度固定时，元素 $i$ 的地址就是基址加上 $i$ 个槽位宽度，这个算术与序列里有多少元素无关，取值因此只做一次地址计算，不产生任何遍历。同一块内存为维持连续付出另一种代价：在中间插入或删除，必须把空出的或要合上的位置之后的元素依次挪动，位置越靠前，需要挪动的槽位越多。
 
-把位置换算成地址得到取值的常数成本，把插入或删除位置之后仍然占着槽位的元素个数数出来得到搬动成本。这两种成本放到具体的分配方式上会进一步分化：同样是连续槽位，固定大小的块和会自己长大的块，为插入、删除和追加付出的代价各不相同。这一课先读出这两种成本，再说明本课程运行时里的 `list` 属于哪一种表示。
+把位置换算成地址得到取值的常数成本，把插入或删除位置之后仍然占着槽位的元素个数数出来得到搬动成本。这两种成本放到具体的分配方式上会进一步分化：同样是连续槽位，固定大小的块和会自己长大的块，为插入、删除和追加付出的代价各不相同。本课程运行时里的 `list` 是会自己长大的那一类：追加一个元素平时只写一个槽位，块满了却要把整块搬进更大的存储。
 
 ## 随机访问与顺序查找
 
@@ -57,15 +57,15 @@ def insert_with_moves(values, index, value):
     return moves
 
 
-for size in (100, 200, 400):
+for size in (100, 200):
     values = list(range(size))
-    front_moves = insert_with_moves(values, 0, -1)
+    front = insert_with_moves(values, 0, -1)
     values = list(range(size))
-    tail_moves = insert_with_moves(values, len(values) - 1, -1)
-    print(f"n={size:4d}  insert at front moves {front_moves:4d}  insert near the end moves {tail_moves:2d}")
+    tail = insert_with_moves(values, len(values) - 1, -1)
+    print(f"n={size:4d}  front insert moves {front:4d}  tail insert moves {tail}")
 
+removals = 500
 values = list(range(1000))
-removals = len(values) // 2
 moved = 0
 for _ in range(removals):
     values.pop(0)
@@ -73,81 +73,67 @@ for _ in range(removals):
 print(f"deleting the front {removals} times moves about {moved} elements (n = 1000)")
 ```
 
-头部插入移动全部元素，尾部附近插入几乎不移动。连续删除头部元素的总移动量随删除次数与输入规模同时增长：初始长度为 $n$、删除 $m$ 次（$1 \le m \le n$）时总移动量是 $\sum_{j=0}^{m-1}(n - j - 1) = m(n - 1) - m(m - 1)/2$，即 $\Theta(n m)$。这种用法代价高昂：这正是「用 `list` 当队列」代价高昂的原因，队列需要另一种表示（见 <CrossRef id="algorithms.stacks-and-queues" />）。
+头部插入移动全部元素，尾部附近插入几乎不移动：规模从 100 翻到 200，头插的移动数也跟着翻倍。连续删除头部元素的总移动量随删除次数与输入规模同时增长：初始长度为 $n$、删除 $m$ 次（$1 \le m \le n$）时总移动量是 $\sum_{j=0}^{m-1}(n - j - 1) = m(n - 1) - m(m - 1)/2$，即 $\Theta(n m)$；$n = 1000$、删除 500 次时实测移动 374750 个元素。这种用法代价高昂：这正是「用 `list` 当队列」代价高昂的原因，队列需要另一种表示（见 <CrossRef id="algorithms.stacks-and-queues" />）。
 
 ## 连续数组与动态数组
 
 **连续数组**：元素存放在一块连续内存里，元素 $i$ 的位置由基址与元素大小算出。在固定宽度槽位、单位成本地址访问的模型下，下标访问是一次地址计算，与 $n$ 无关。代价是插入与删除必须移动元素以维持连续性：在单位成本槽位移动的模型下，`insert(i)` 移动 $n - i$ 个已有元素，总成本是 $\Theta(n - i + 1)$；`delete(i)` 移动 $n - i - 1$ 个后继元素，合法删除总有 $n - i \ge 1$，因此总成本是 $\Theta(n - i)$。头部是 $\Theta(n)$，靠近尾部可以是 $\Theta(1)$，对位置取最坏情形才是 $\Theta(n)$；CPython 的复杂度表把 `insert` 简写成 $O(n - k)$，本课不沿用它在端点上的这种简写。
 
-**动态数组**：在连续数组之上维护两个量——`capacity`（已分配槽位）与 `size`（实际元素数）；把两者混用会得出错误的复制量。它的表示不变量是 $0 \le \texttt{size} \le \texttt{capacity}$，前 `size` 个槽位表示抽象序列 $S$，其余槽位不属于抽象序列、其内容不参与抽象状态；`insert`、`delete` 与扩容都必须保持这条不变量。`size == capacity` 时扩容：分配更大的块，把已有元素复制过去。按固定增量扩容会让 $n$ 次追加的总复制量达到 $\Theta(n^2)$；按固定常数增长因子 $g \gt 1$ 的几何扩容，$n$ 次追加的总复制量是 $\Theta(n)$，因此摊还到每次追加是 $O(1)$。
+**动态数组**：在连续数组之上维护两个量——`capacity`（已分配槽位）与 `size`（实际元素数）；把两者混用会得出错误的复制量。它的表示不变量是 $0 \le \texttt{size} \le \texttt{capacity}$，前 `size` 个槽位表示抽象序列 $S$，其余槽位不属于抽象序列、其内容不参与抽象状态；`insert`、`delete` 与扩容都必须保持这条不变量。`size == capacity` 时扩容：分配更大的块，把已有元素复制过去。
 
-## 容量、扩容与摊还成本
+## 容量跳变与单次成本尖峰
 
-追加一个元素平时只写一个槽位，那么昂贵的复制发生在什么时候？如果容量每次只加一个槽位，$n$ 次追加一共要复制多少次？先看容器体积在追加过程中的变化，再把它与一个显式的增长策略对照。
+追加一个元素平时只写一个槽位，那么昂贵的复制发生在什么时候？如果容量每次只加一个槽位，追加就要频繁地整块搬家。一个具体的观测对象是容器体积随追加的变化：容量是在每次追加后重新分配，还是成批地跳变。
 
 ```python run id="alg.arrays.capacity-growth"
 import sys
 
 
-def sizes_during_appends(count):
+def capacity_events(count):
+    """Record (appends so far, container bytes) whenever the list's stored size changes."""
     values = []
-    observations = []
+    events = []
     previous = sys.getsizeof(values)
     for index in range(count):
         values.append(index)
         current = sys.getsizeof(values)
         if current != previous:
-            observations.append((index + 1, current))
+            events.append((index + 1, current))
             previous = current
-    return observations
+    return events
 
 
-observations = sizes_during_appends(4000)
-print("first growth steps (appends, container bytes):", observations[:6])
-print("capacity growth events for 4000 appends:", len(observations))
-print("reported-size ratios between consecutive growth events:", [round(observations[i + 1][1] / observations[i][1], 3) for i in range(min(4, len(observations) - 1))])
-
-exact = [0] * 1000            # allocated to fit the final length exactly
-grown = []
-for value in range(1000):
-    grown.append(value)       # grew by appending
-print("same length, different growth history:", len(exact), len(grown))
-print("container bytes for the two:", sys.getsizeof(exact), sys.getsizeof(grown))
+events = capacity_events(64)
+print("growth steps (appends, container bytes):", events[:5])
+print("growth events over 64 appends:", len(events))
 ```
 
-列表对象在追加过程中反复改变体积，而且每次都跳过若干槽位，不是每追加一个元素就重新分配。观测到的是容量按批增长这一现象，至于它由按比例的 over-allocation 造成，是 CPython（本课程用的 Pyodide 同源）的实现事实。具体字节数与增长比例随解释器版本与指针宽度变化。对增长因子为固定常数 $g \gt 1$ 的几何扩容模型（下面那个单元格）可以说：扩容次数是 $O(\log n)$，总复制量是 $\Theta(n)$；固定增量扩容没有这两条性质。这几行观测支持的只是「容量不是每追加一个元素就增长一次」，而采用按比例的 over-allocation 是 CPython（以及本课程使用的 Pyodide 运行时）的实现事实，不是由这几个观测点证明出来的渐进定理。
+列表对象在追加过程中反复改变体积，而且每次都跳过若干槽位：64 次追加里容器体积只变了 8 次（第 1、5、9、17、25、33、41、53 次），一次追加后容器直接得到容纳后续若干元素的空间。按比例的 over-allocation 是 CPython（本课程使用的 Pyodide 运行时同源）的实现事实，具体字节数与增长比例随解释器版本与指针宽度变化；以上观测所能确认的是容量按批跳动这一行为。
 
-把这两点算清楚。下面这个单元格用的是我们自己设定的增长策略（因子可调），它的角色是成本模型，不是对 `list` 实际扩容行为的测量：
+把容量翻倍的那一次追加要把已有元素全部搬走，其余追加只写一个槽位。用一个自己设定的翻倍策略把每次追加的工作量记下来：
 
 ```python run id="alg.arrays.amortized-cost"
-import math
-
-
-def append_cost_sequence(count, growth_factor=2):
-    """Count element copies for `count` appends under a geometric growth policy."""
+def append_costs(count, growth_factor=2):
+    """Work for each append under a grow-by-a-factor policy: write one slot, or write and copy."""
     capacity = 1
     size = 0
-    copies = 0
-    expansions = 0
+    costs = []
     for _ in range(count):
         if size == capacity:
-            copies += size
-            capacity = max(size + 1, math.ceil(capacity * growth_factor))
-            expansions += 1
+            capacity *= growth_factor
+            costs.append(1 + size)
+        else:
+            costs.append(1)
         size += 1
-    return copies, expansions
+    return costs
 
 
-for count in (1000, 2000, 4000):
-    copies, expansions = append_cost_sequence(count)
-    print(f"n={count:5d}  total copies={copies:5d}  copies/n={copies / count:.2f}  expansions={expansions}")
-
-for factor in (1.1, 1.5, 2.0, 3.0):
-    copies, expansions = append_cost_sequence(100_000, factor)
-    print(f"growth factor {factor}: expansions={expansions:3d}  total copies={copies:7d}  copies/n={copies / 100_000:.2f}")
+costs = append_costs(64)
+print("work for the first 16 appends:", costs[:16])
+print("typical append work:", min(costs), "| largest single append:", max(costs), "at append", costs.index(max(costs)) + 1)
 ```
 
-无论增长因子是 1.5 还是 2，总复制量都与 $n$ 成正比，因此 <Term id="amortized-analysis">摊还成本</Term> 是常数。因子本身是一次取舍：因子越大，总复制量的常数上界越小（翻倍模型的总复制量小于 $2n$，$n$ 恰好接近容量边界时可以接近 $n$），但一次扩容刚完成后空闲槽位比例的峰值渐近接近 $(g - 1)/g$，之后随着继续追加而下降；因子越接近 1，复制总量越大而空闲越少，同时每次扩容额外申请的内存尖峰越小。这组取舍是动态数组实现的固有选择，不由语言决定。摊还成本不限制单次延迟：扩容时的那一次追加是 $\Theta(n)$；提供 `reserve` 这类接口的动态数组实现可以预留容量来避开它，Python `list` 本身没有通用的显式 reserve 接口。扩容后的块可能保留接近一半的空槽（例如 $g = 2$ 时），内存敏感的场景要按峰值容量估算，元素个数会低估占用。
+这段代码用的是自己设定的翻倍策略，给出的是成本模型，与上面 `list` 的实际字节变化分开。追加平时只写一个槽位，偶尔一次要把整块搬走：64 次追加里，单次最大的一次写在第 33 次追加上，那一次要搬走 32 个已有元素；其余追加大多只写一个槽位，常态工作量是 1。为什么这样仍然可以称为便宜？这需要一条对整串操作一起计费的论证：<Term id="amortized-analysis">摊还分析</Term> 给出的就是这条论证（见 <CrossRef id="algorithms.amortized" />）。
 
 ## CPython 的 `list` 是具体的动态数组
 

@@ -10,12 +10,11 @@ objectives:
   - 说明前缀函数记录的是模式的哪一种自重叠结构，并画出它的定义与计算
   - 用循环不变量说清线性时间匹配器每一步保留了哪一条性质
   - 用「每次回退对应一次更早的推进」论证回退总次数不超过文本长度
-  - 区分最坏情形保证与哈希指纹匹配所依赖的假设
 ---
 
 匹配问题的输入是文本与模式，输出是模式在文本中出现的每一个位置。它和顺序查找共享同一个契约形态，成本结构却不同：朴素的重复扫描在特定输入上退化到两个长度的乘积，预处理模式之后可以达到两个长度之和，且这个保证不依赖任何输入分布。
 
-两种结论的差别落在**失配之后还能不能保留已经读过的信息**上。文本已经被读过一遍，模式自己有没有重叠结构可以决定下一次对齐落在哪里；把这份结构预先算出来，扫描阶段就不必回头重读文本。这一课先量出朴素扫描的坏情形，再从模式的边界出发把线性时间的匹配器推出来。
+两种结论的差别落在**失配之后还能不能保留已经读过的信息**上。文本已经被读过一遍，模式自己有没有重叠结构可以决定下一次对齐落在哪里；把这份结构预先算出来，扫描阶段就不必回头重读文本。
 
 ## 匹配契约与朴素扫描
 
@@ -24,47 +23,28 @@ objectives:
 朴素扫描在每个可能的起点上逐字符比较，失配就整体右移一位从头再来。它的后置条件容易满足，代价却由失配的位置决定。
 
 ```python run id="alg.strings.naive"
-def occurrences(text, pattern):
-    """Postcondition: every start index where text[i:i+m] == pattern, ascending.
-
-    Precondition: 1 <= m <= len(text). Overlapping occurrences are all reported.
-    """
-    n, m = len(text), len(pattern)
-    if m == 0 or m > n:
-        return []
-    return [start for start in range(n - m + 1) if text[start:start + m] == pattern]
-
-
-def comparisons(text, pattern):
-    """Character comparisons spent by the naive scan on this input."""
-    n, m = len(text), len(pattern)
-    if m == 0 or m > n:
-        return 0
-    total = 0
-    for start in range(n - m + 1):
+def naive_matches(text, pattern):
+    """The match list, and the character comparisons the scan spent."""
+    m = len(pattern)
+    matches, comparisons = [], 0
+    for start in range(len(text) - m + 1):
         offset = 0
         while offset < m:
-            total += 1
+            comparisons += 1
             if text[start + offset] != pattern[offset]:
                 break
             offset += 1
-    return total
+        else:
+            matches.append(start)
+    return matches, comparisons
 
 
-cases = (
-    ("scattered", "abcdefghij" * 40, "ghijklmn"),
-    ("one repeated character", "a" * 400, "a" * 39 + "b"),
-    ("overlapping matches", "a" * 400, "a" * 2),
-)
-print(f"{'input':>22} {'n':>4} {'m':>3} {'matches':>8} {'comparisons':>12} {'n*m':>7} {'n+m':>5}")
-for label, text, pattern in cases:
-    n, m = len(text), len(pattern)
-    found = len(occurrences(text, pattern))
-    spent = comparisons(text, pattern)
-    print(f"{label:>22} {n:>4} {m:>3} {found:>8} {spent:>12} {n * m:>7} {n + m:>5}")
+for text, pattern in (("abcdefghij" * 40, "ghij"), ("a" * 400, "a" * 39 + "b")):
+    matches, spent = naive_matches(text, pattern)
+    print("n", len(text), "m", len(pattern), "matches", len(matches), "comparisons", spent)
 ```
 
-同样是 $n = 400$ 的输入，比较次数从 798 到 14440。第三行的模式出现在每一个位置，第二行的模式在**每一个**起点上都要比到最后一位才失配：文本全是同一个字符，模式的前 $m-1$ 位都与文本相同，只有最后一位不同。这个输入族在每个候选起点都做满 $m$ 次比较，因此比较次数恰为 $m(n-m+1)$，最坏情形是 $\Theta(m(n-m+1))$。例如当 $m \le n/2$ 时，$n-m+1 = \Theta(n)$，于是这个界也可写成 $\Theta(n \cdot m)$。
+两条输入的长度都是 $n = 400$，比较次数却相差近 28 倍：第一条上模式很少对齐，只花了 517 次；第二条的文本全是同一个字符，模式的前 $m - 1$ 位都与文本相同，只有最后一位不同，于是**每一个**候选起点都要比到最后一位才失配，比较次数是 14440。这个输入族在每个候选起点都做满 $m$ 次比较，因此比较次数恰为 $m(n-m+1) = 40 \times 361$，最坏情形是 $\Theta(m(n-m+1))$。例如当 $m \le n/2$ 时，$n-m+1 = \Theta(n)$，于是这个界也可写成 $\Theta(n \cdot m)$。
 
 朴素扫描的问题不在常数因子：每一次失配之后它都从模式的第一个字符重新开始比较，尽管刚才那段比较已经证明文本里有一长串字符与模式的前缀相同。这部分信息被丢掉了，而它恰好能决定下一次对齐的位置。
 
@@ -84,9 +64,8 @@ $\pi[i]$ 度量的是模式自己和自己重叠的能力：$\pi[i] = \ell$ 意�
 
 ```python run id="alg.strings.prefix-function"
 def prefix_function(pattern):
-    """Postcondition: pi[i] is the longest border of pattern[:i+1]."""
-    pi = [0] * len(pattern)
-    length = 0
+    """pi[i] is the longest border of pattern[:i+1]."""
+    pi, length = [0] * len(pattern), 0
     for i in range(1, len(pattern)):
         while length > 0 and pattern[i] != pattern[length]:
             length = pi[length - 1]
@@ -96,22 +75,11 @@ def prefix_function(pattern):
     return pi
 
 
-def longest_border(pattern, end):
-    """Independent check, straight from the definition: scan every candidate length."""
-    prefix = pattern[:end + 1]
-    for length in range(end, 0, -1):
-        if pattern[:length] == prefix[-length:]:
-            return length
-    return 0
-
-
-for pattern in ("ababaca", "aaaa", "abcabcd", "aabaaab"):
-    pi = prefix_function(pattern)
-    checked = [longest_border(pattern, i) for i in range(len(pattern))]
-    print(f"{pattern:9s} pi={pi}  agrees with the definition: {pi == checked}")
+for pattern in ("ababaca", "aabaaab"):
+    print(pattern, prefix_function(pattern))
 ```
 
-检查器按定义逐个候选长度试；按 Python 字符串切片的长度计费，它的最坏时间是 $\Theta(m^3)$，这里只用来核对这张表。`"aabaaab"` 这一类模式同时可能含有多级边界：先取最长边界可以保留最多已经匹配的字符，也就是选择仍可能成立的最近一次对齐；若接下来仍失配，更短的边界由 $\pi$ 链依次覆盖。
+`"aabaaab"` 这类模式含有多级边界：先取最长边界可以保留最多已经匹配的字符，也就是选择仍可能成立的最近一次对齐；若接下来仍失配，更短的边界由 $\pi$ 链依次覆盖。
 
 ## 线性时间的匹配
 
@@ -119,8 +87,8 @@ for pattern in ("ababaca", "aaaa", "abcabcd", "aabaaab"):
 
 ```python run id="alg.strings.kmp"
 def prefix_function(pattern):
-    pi = [0] * len(pattern)
-    length = 0
+    """pi[i] is the longest border of pattern[:i+1]."""
+    pi, length = [0] * len(pattern), 0
     for i in range(1, len(pattern)):
         while length > 0 and pattern[i] != pattern[length]:
             length = pi[length - 1]
@@ -131,14 +99,9 @@ def prefix_function(pattern):
 
 
 def linear_matches(text, pattern):
-    """Postcondition: the naive match list, with the character comparisons it cost."""
-    n, m = len(text), len(pattern)
-    if m == 0 or m > n:
-        return [], 0
-    pi = prefix_function(pattern)
-    matches = []
-    comparisons = 0
-    length = 0
+    """The match list, and the character comparisons the matcher spent."""
+    m = len(pattern)
+    pi, matches, comparisons, length = prefix_function(pattern), [], 0, 0
     for i, char in enumerate(text):
         while True:
             comparisons += 1
@@ -154,44 +117,26 @@ def linear_matches(text, pattern):
     return matches, comparisons
 
 
-def naive_matches(text, pattern):
-    """Postcondition: the same match list, with the naive scan's comparisons."""
-    n, m = len(text), len(pattern)
-    if m == 0 or m > n:
-        return [], 0
-    matches = []
-    comparisons = 0
-    for start in range(n - m + 1):
+def naive_comparisons(text, pattern):
+    m = len(pattern)
+    spent = 0
+    for start in range(len(text) - m + 1):
         offset = 0
-        while offset < m:
-            comparisons += 1
-            if text[start + offset] != pattern[offset]:
-                break
+        while offset < m and text[start + offset] == pattern[offset]:
             offset += 1
-        else:
-            matches.append(start)
-    return matches, comparisons
+        spent += offset + (offset < m)
+    return spent
 
 
-cases = (
-    ("abcdefghij" * 40, "ghijklmn"),
-    ("a" * 400, "a" * 39 + "b"),
-    ("a" * 400, "a" * 2),
-    ("aabaaab" * 50, "aabaaab"),
-    ("abababa", "ababa"),
-)
-print(f"{'n':>4} {'m':>3} {'matches':>8} {'linear':>7} {'naive':>8} {'n*m':>7} {'same result':>12}")
-for text, pattern in cases:
-    n, m = len(text), len(pattern)
-    linear, spent = linear_matches(text, pattern)
-    reference, naive_spent = naive_matches(text, pattern)
-    print(f"{n:>4} {m:>3} {len(linear):>8} {spent:>7} {naive_spent:>8} {n * m:>7} {str(linear == reference):>12}")
+text, pattern = "a" * 400, "a" * 39 + "b"
+matches, spent = linear_matches(text, pattern)
+print("matches", len(matches), "linear", spent, "naive", naive_comparisons(text, pattern))
 ```
 
-线性匹配器的比较次数随两个长度之和增长：第二行 $n + m = 440$，匹配器花 761 次比较，朴素扫描在同一条输入上花 14440 次。
+在同一条输入上，$n + m = 440$：线性匹配器花 761 次比较，朴素扫描花 14440 次。
 
 最坏情形保证，不依赖分布。计入 `length` 的增减：每读入一个文本字符，`length` 至多加 1，因此整个扫描里它最多增加 $n$ 次；每次回退都严格减小 `length` 并把它设为某个 $\pi$ 值，而 $\pi$ 值严格小于回退前的长度。回退是唯一会重复比较的路径，它的总次数不超过增加的总次数 $n$，于是扫描阶段的字符比较不超过 $2n$。预处理模式花 $\Theta(m)$ 时间与 $\Theta(m)$ 空间。合起来是 $\Theta(n + m)$，**对每一条输入都成立**。
 
-这是摊还论证的形态（见 <CrossRef id="algorithms.amortized" />）：同一个文本字符上因回退产生的额外比较，被此前使 `length` 增加的推进支付，不靠输入随机，也不靠平均情形。滚动哈希或指纹匹配也能让相邻窗口的指纹以常数增量更新，但哈希相等是否直接视为匹配、发生冲突后是否逐字符核验，会分别影响正确性保证与最坏成本；这些概率模型见 <CrossRef id="algorithms.randomized-algorithms" />。这里得到的是确定性的 $\Theta(n+m)$ 最坏界，不依赖输入分布或哈希随机性，代价是额外保存长度为 $m$ 的 $\pi$ 表。
+这是摊还论证的形态（见 <CrossRef id="algorithms.amortized" />）：同一个文本字符上因回退产生的额外比较，被此前使 `length` 增加的推进支付，不靠输入随机，也不靠平均情形。这里得到的是确定性的 $\Theta(n+m)$ 最坏界，不依赖输入分布，代价是额外保存长度为 $m$ 的 $\pi$ 表。
 
 比较计数的单位是字符。上面所有数字都按「一次字符比较记 1」计数。把「比较两个模式串」定价为一次常数操作需要额外假设，因为模式长度没有先验上界（见 <CrossRef id="algorithms.cost-model" />）。字符集大小不影响结论：匹配器不对字符做算术，只做相等比较。

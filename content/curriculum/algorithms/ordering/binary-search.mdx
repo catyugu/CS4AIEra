@@ -56,17 +56,15 @@ objectives:
 空数组 $n = 0$ 不做任何比较。每轮恰好做一次 `items[mid] < key` 的顺序比较，所以这就是 lower_bound 的最坏顺序比较次数，并且由某些输入达到：$n = 64$ 时最坏取 $\lceil \log_2 (64+1) \rceil = 7$ 次，比 $\lfloor \log_2 64 \rfloor = 6$ 多一次。这些最坏情形界不需要期望或摊还假设，除序列有序之外没有别的前提。
 
 ```python run id="alg.ordering.lower-bound"
-import bisect
 import math
 
 
-def lower_bound(items, key, counters=None):
+def lower_bound(items, key, comparisons):
     """Postcondition: the first index i with items[i] >= key, or len(items)."""
-    counters = counters if counters is not None else []
     lo, hi = 0, len(items)
     while lo < hi:
         mid = lo + (hi - lo) // 2
-        counters.append(mid)
+        comparisons.append(mid)
         if items[mid] < key:
             lo = mid + 1
         else:
@@ -74,34 +72,18 @@ def lower_bound(items, key, counters=None):
     return lo
 
 
-def invariant_holds(items, key, lo, hi):
-    """Postcondition: True iff both halves of the [lo, hi) invariant hold."""
-    left = all(item < key for item in items[:lo])
-    right = all(item >= key for item in items[hi:])
-    return left and right
-
-
 size = 64
 items = [2 * index for index in range(size)]
-probes = [-1, 0, 62, 63, 200]
-
-print(f"{'key':>4} {'returned':>8} {'bisect_left':>11} {'comparisons':>11} {'invariant':>9}")
 worst = 0
-invariant_ok = True
-for key in probes:
-    counters = []
-    position = lower_bound(items, key, counters)
-    expected = bisect.bisect_left(items, key)
-    worst = max(worst, len(counters))
-    holds = invariant_holds(items, key, position, position) and position == expected
-    invariant_ok = invariant_ok and holds
-    print(f"{key:>4} {position:>8} {expected:>11} {len(counters):>11} {str(holds):>9}")
-
+for key in (-1, 0, 62, 63, 200):
+    comparisons = []
+    position = lower_bound(items, key, comparisons)
+    worst = max(worst, len(comparisons))
+    print(f"key {key:>4}: lower_bound {position:>3} | comparisons {len(comparisons)}")
 print("worst comparisons:", worst, "| ceil(log2(n+1)) =", math.ceil(math.log2(size + 1)))
-print("invariant holds and position matches bisect_left for every probe:", invariant_ok)
 ```
 
-五个探针键覆盖了小于全部元素、命中已有元素、落在相邻元素之间、大于全部元素四类边界情形；每个返回的位置都与 `bisect_left` 一致，退出时两条不变量成立，比较次数最多为 7，与 $\lceil \log_2 (64+1) \rceil$ 一致。
+五个探针键覆盖了小于全部元素、命中已有元素、落在相邻元素之间、大于全部元素四类边界情形，返回的下标依次是 0、0、31、32、64；最坏比较次数是 7，与 \lceil \log_2 (64+1) \rceil 一致。
 
 空间上没有对应的优势：迭代写法只用常数个额外变量，写成递归则把区间长度的一半作为下一次的规模，占用 $\Theta(\log n)$ 栈空间。
 
@@ -110,15 +92,10 @@ print("invariant holds and position matches bisect_left for every probe:", invar
 序列允许重复，lower_bound 与 upper_bound 一起给出**等值区间**：所有等于 `key` 的元素恰好占据下标 $[lb, ub)$，出现次数是 $ub - lb$。
 
 ```python run id="alg.ordering.equal-range"
-import bisect
-
-
-def lower_bound(items, key, counters=None):
-    counters = counters if counters is not None else []
+def lower_bound(items, key):
     lo, hi = 0, len(items)
     while lo < hi:
         mid = lo + (hi - lo) // 2
-        counters.append(mid)
         if items[mid] < key:
             lo = mid + 1
         else:
@@ -126,13 +103,10 @@ def lower_bound(items, key, counters=None):
     return lo
 
 
-def upper_bound(items, key, counters=None):
-    """Postcondition: the first index i with items[i] > key, or len(items)."""
-    counters = counters if counters is not None else []
+def upper_bound(items, key):
     lo, hi = 0, len(items)
     while lo < hi:
         mid = lo + (hi - lo) // 2
-        counters.append(mid)
         if items[mid] <= key:
             lo = mid + 1
         else:
@@ -140,31 +114,13 @@ def upper_bound(items, key, counters=None):
     return lo
 
 
-def count_by_scan(items, key):
-    """Postcondition: the number of elements equal to key, counted one by one."""
-    return sum(1 for item in items if item == key)
-
-
-size = 40
-items = sorted(index % 5 for index in range(size))
-probes = [-1, 0, 3, 4, 5]
-
-print(f"{'key':>4} {'lower':>6} {'upper':>6} {'upper-lower':>12} {'scan':>6} {'found':>6}")
-counts_agree = True
-for key in probes:
-    lower = lower_bound(items, key, [])
-    upper = upper_bound(items, key, [])
-    present = lower < len(items) and items[lower] == key
-    scanned = count_by_scan(items, key)
-    counts_agree = counts_agree and upper - lower == scanned
-    print(f"{key:>4} {lower:>6} {upper:>6} {upper - lower:>12} {scanned:>6} {str(present):>6}")
-
-print("equal range matches the scan count:", counts_agree)
-print("upper_bound agrees with bisect_right for every probe:",
-      all(upper_bound(items, key, []) == bisect.bisect_right(items, key) for key in probes))
+items = sorted(index % 5 for index in range(40))
+for key in (-1, 0, 3, 4, 5):
+    lo, hi = lower_bound(items, key), upper_bound(items, key)
+    print(f"key {key:>2}: [{lo}, {hi})  count {hi - lo}")
 ```
 
-上表里 $key = 3$ 出现 8 次，等值区间是 $[24, 32)$；不存在的键（如 $-1$、$5$）得到空区间，`upper - lower` 为 0，精确查找据此报告缺失。这一份契约只依赖「非降序」，不需要元素互不相同；等值区间要一次 lower_bound 加一次 upper_bound，比较次数至多翻倍，量级仍是 $O(\log n)$。
+$key = 3$ 出现 8 次，等值区间是 $[24, 32)$；不存在的键 $-1$ 与 $5$ 得到空区间，`hi - lo` 为 0，精确查找据此报告缺失。序列两端之外的键把两条边界收到同一端点：$-1$ 得到 $[0, 0)$，$5$ 得到 $[40, 40)$。这份契约只依赖「非降序」，不需要元素互不相同；等值区间由一次 lower_bound 加一次 upper_bound 得到，两次边界定位各是对数个比较，合起来仍是 $O(\log n)$。
 
 ## 单调谓词的边界定位
 
@@ -177,16 +133,10 @@ print("upper_bound agrees with bisect_right for every probe:",
 同一份不变量写成不同的开闭形式都能得到正确的代码，把两种形式混用则会产生错误结果。常见的一处是把「$mid$ 已满足谓词」当成「越过答案」，写成 $hi = mid - 1$：这会跳过第一个满足位置本身。
 
 ```python run id="alg.ordering.interval-hazards"
-import bisect
-import math
-
-
-def lower_bound(items, key, counters=None):
-    counters = counters if counters is not None else []
+def lower_bound(items, key):
     lo, hi = 0, len(items)
     while lo < hi:
         mid = lo + (hi - lo) // 2
-        counters.append(mid)
         if items[mid] < key:
             lo = mid + 1
         else:
@@ -194,15 +144,11 @@ def lower_bound(items, key, counters=None):
     return lo
 
 
-def overshooting(items, key, steps=None):
-    """The tempting variant: a satisfied predicate at mid is treated as an overshoot."""
-    steps = steps if steps is not None else []
+def overshooting(items, key):
+    """Treats a satisfied predicate at mid as an overshoot."""
     lo, hi = 0, len(items)
     while lo < hi:
         mid = (lo + hi) // 2
-        steps.append(mid)
-        if len(steps) > 5 * len(items) + 10:
-            return None
         if items[mid] >= key:
             hi = mid - 1
         else:
@@ -210,40 +156,15 @@ def overshooting(items, key, steps=None):
     return lo
 
 
-print(f"{'n':>6} {'sampled max comparisons':>24} {'ceil(log2(n+1))':>16}")
-for width in (8, 64, 512):
-    payload = [2 * index for index in range(width)]
-    sampled = [-1, 0, width - 1, 2 * width]
-    most = 0
-    for key in sampled:
-        counters = []
-        lower_bound(payload, key, counters)
-        most = max(most, len(counters))
-    print(f"{width:>6} {most:>24} {math.ceil(math.log2(width + 1)):>16}")
-
-size = 64
-items = [2 * index for index in range(size)]
-shallow = [4 * index for index in range(size)]
-probes = [-1, 1, 3, 63, 200]
-
-print(f"{'key':>4} {'dense':>6} {'expected':>9} {'sparse':>7} {'expected':>9}")
-dense_bad = 0
-sparse_bad = 0
-for key in probes:
-    dense = overshooting(items, key, [])
-    sparse = overshooting(shallow, key, [])
-    correct_dense = bisect.bisect_left(items, key)
-    correct_sparse = bisect.bisect_left(shallow, key)
-    dense_bad += dense != correct_dense
-    sparse_bad += sparse != correct_sparse
-    print(f"{key:>4} {dense:>6} {correct_dense:>9} {sparse:>7} {correct_sparse:>9}")
-
-first = next(key for key in probes if overshooting(items, key, []) != bisect.bisect_left(items, key))
-print("hi = mid - 1 variant: wrong on", dense_bad, "of", len(probes), "dense probes and",
-      sparse_bad, "of", len(probes), "sparse probes; first failing key =", first)
+items = [2 * index for index in range(32)]
+for key in (0, 1, 5, 8):
+    correct = lower_bound(items, key)
+    variant = overshooting(items, key)
+    note = "" if variant == correct else "  <-- misses the boundary"
+    print(f"key {key:>2}: lower_bound {correct}, hi = mid - 1 {variant}{note}")
 ```
 
-这份抽样里，$n$ 取 8、64、512 时最大比较次数分别是 4、7、10，与 $\lceil \log_2 (n+1) \rceil$ 逐个相等：$n$ 翻 8 倍带来 3 次额外比较。同一组探针里，$hi = mid - 1$ 的变体在两处给出错误结果，键距更稀疏的序列上在三处出错；两次都从 $key = 1$ 开始失配：正确答案是 1，变体返回 0。原因是谓词在 $mid$ 成立时，答案可能就是 $mid$ 本身，越过它就把正确答案丢掉了。
+在 $items = [0, 2, 4, \ldots, 62]$ 上，$key = 0$ 与 $8$ 时两种写法返回同一位置；$key = 1$ 时正确的边界是 1，$hi = mid - 1$ 的变体返回 0；$key = 5$ 时正确边界是 3，变体返回 2。偏差的来源固定：谓词在 $mid$ 成立时，答案可能就是 $mid$ 本身，把 $hi$ 置为 $mid - 1$ 越过它，返回的位置就不再是「第一个使 $items[i] \ge key$ 成立」的下标。
 
 ## 与 bisect 对照
 

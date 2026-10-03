@@ -12,7 +12,7 @@ objectives:
   - 用独立重复放大成功概率，并说明独立性为什么是前提
 ---
 
-这一节把随机性搬进算法内部：算法自己掷硬币，输入不动。在算法分析里，「随机」几乎只作为分析工具出现：平均情形分析里它是输入上的分布，期望分析里它是运行时间的取值。这一换位改掉的是契约的形状。确定性算法承诺「对每个输入都给出正确答案」，而随机化算法还要对「运行时间」和「会不会出错」这两个量作出承诺——它们随算法自己的随机位 $R$ 变化，因此必须写成在 $R$ 上的期望或概率。正确性这一栏没有变软：Las Vegas 对每个输入输出错误答案的概率是 $0$，等价地说，它实际返回的每个结果都正确；而它的运行时间是随机变量，有限期望时间还推出它以概率 $1$ 最终返回（见后文「期望保证与高概率保证」）。
+算法自己掷硬币，输入不动。确定性算法只需承诺「对每个输入都给出正确答案」和「最坏情形的运行时间」；算法内部一旦有随机位，同一份输入上每次运行的路径就可能不同，契约还要对「运行时间」和「会不会出错」这两个量作出承诺——它们随随机位 $R$ 变化，必须写成在 $R$ 上的期望或概率。在算法分析里，「随机」原本几乎只作为分析工具出现：平均情形分析里它是输入上的分布，期望分析里它是运行时间的取值；在这里它是算法可以直接读的量，契约的形状随之改变。正确性这一栏没有变软：Las Vegas 对每个输入输出错误答案的概率是 $0$，等价地说，它实际返回的每个结果都正确；而它的运行时间是随机变量，有限期望时间还推出它以概率 $1$ 最终返回（见「期望保证与高概率保证」）。
 
 ## 随机化改变的是什么
 
@@ -24,7 +24,7 @@ objectives:
 
 ## 随机性的量词位置
 
-量词约定（见 <CrossRef id="algorithms.average-and-randomized" />）：先固定输入 $x$，再对算法随机位 $R$ 取期望或概率；输入分布 $D_n$ 上的平均情形定义不在这里重复。下面只把这条规则用到随机化算法的契约上：$\forall x,\ E_R[C(x, R)] \le c \cdot f(|x|)$，统一常数 $c$ 不依赖 $x$。
+随机化算法的契约沿用 <CrossRef id="algorithms.average-and-randomized" /> 建立的量词规则：输入 $x$ 固定，量词落在算法随机位 $R$ 上。
 
 ## 两种契约：Las Vegas 与 Monte Carlo
 
@@ -40,31 +40,13 @@ objectives:
 生成一个 $k$ 位随机素数是一份干净的 Las Vegas 契约：用确定性素性检验认证候选值，通过则返回，不通过就换一个候选继续掷。返回的值总是素数，随机的是试验次数。
 
 ```python run id="alg.rand.las-vegas"
+import math
 import random
 
 
-def is_prime(n, bases=(2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37)):
-    """Exact for every n < 2**64: the first twelve prime bases suffice there."""
-    if n < 2:
-        return False
-    for small in bases:
-        if n % small == 0:
-            return n == small
-    d, s = n - 1, 0
-    while d % 2 == 0:
-        d //= 2
-        s += 1
-    for base in bases:
-        x = pow(base, d, n)
-        if x == 1 or x == n - 1:
-            continue
-        for _ in range(s - 1):
-            x = x * x % n
-            if x == n - 1:
-                break
-        else:
-            return False
-    return True
+def is_prime(n):
+    """Exact trial division; cheap over the small range used below."""
+    return n > 1 and all(n % d for d in range(2, math.isqrt(n) + 1))
 
 
 def random_prime(k, rng):
@@ -79,27 +61,17 @@ def random_prime(k, rng):
 
 
 rng = random.Random(20260601)
-k, runs = 32, 400
-counts, returned = [], []
-for _ in range(runs):
-    prime, trials = random_prime(k, rng)
-    counts.append(trials)
-    returned.append(prime)
-
+k, runs = 20, 25
+counts = [random_prime(k, rng)[1] for _ in range(runs)]
 mean = sum(counts) / runs
-heuristic = k * 0.6931471805599453 / 2
+heuristic = k * math.log(2) / 2
 print(f"k = {k} bits | {runs} runs")
 print(f"  mean trials per prime: {mean:.2f}")
 print(f"  prime density heuristic k*ln(2)/2 = {heuristic:.2f} (expected trials)")
 print(f"  longest run: {max(counts)} trials | one-trial runs: {counts.count(1)}")
-print("  every returned value passes the exact test:",
-      all(is_prime(value) for value in returned))
-hit = 1 / heuristic
-for m in (int(heuristic * 5), int(heuristic * 10)):
-    print(f"  heuristic tail estimate: P[trials > {m}] ~ {(1 - hit) ** m:.3e}")
 ```
 
-期望试验次数由素数密度给出：素数定理说 $[2^{k-1}, 2^k)$ 内的素数密度约为 $1/(k \ln 2)$，只看奇数则约为 $2/(k \ln 2)$，因此期望试验次数约为 $k \ln 2 / 2$。抽取过程是独立、有放回、均匀的，因此只要单次命中概率是 $p$，就严格有 $P[\text{试验次数} > m] = (1 - p)^m$；但代进去的 $p \approx 2/(k \ln 2)$ 来自素数分布的**启发式估计**（把素数定理给出的密度当成独立抽样下的概率），所以单元格里那一行只是按该密度算出的估计值，**不是**严格上界。要有严格的高概率承诺，得换成可证的单次成功概率下界，再套同一个公式。两个承诺要分开写：期望承诺说平均多少，高概率承诺说超限的概率。
+期望试验次数由素数密度给出：素数定理说 $[2^{k-1}, 2^k)$ 内的素数密度约为 $1/(k \ln 2)$，只看奇数则约为 $2/(k \ln 2)$，因此期望试验次数约为 $k \ln 2 / 2$。抽取过程是独立、有放回、均匀的，因此只要单次命中概率是 $p$，就严格有 $P[\text{试验次数} > m] = (1 - p)^m$；但代进去的 $p \approx 2/(k \ln 2)$ 来自素数分布的**启发式估计**（把素数定理给出的密度当成独立抽样下的概率），所以单元格里那一行只是按该密度算出的期望，**不是**严格上界。要有严格的高概率承诺，得换成可证的单次成功概率下界，再套同一个公式。两个承诺要分开写：期望承诺说平均多少，高概率承诺说超限的概率；单元格里 $25$ 次抽样的均值 $9.60$ 与 $6.93$ 同量级，而样本均值本身只是对期望的一次估计（单次最长用了 $33$ 次试验），会围绕真值上下波动。
 
 ## 单侧错误与双侧错误
 
@@ -135,43 +107,27 @@ def contract(edges, n, rng):
     return len(edges)
 
 
-def min_cut(edges, n):
-    """Exact. Masks with bit 0 set cover every cut once; the mask that keeps
-    every vertex is excluded, since its complement is empty."""
-    best = len(edges)
-    for mask in range(1, (1 << n) - 1, 2):
-        crossing = sum(1 for x, y in edges if ((mask >> x) & 1) != ((mask >> y) & 1))
-        best = min(best, crossing)
-    return best
-
-
-# Two K4 cliques joined by exactly two edges: the minimum cut is uniquely those
-# two edges, so a single contraction run rarely lands on it.
+# Two K4 cliques joined by exactly two edges: the bridge is the unique minimum
+# cut, of size 2.
 n = 8
 dumbbell = [(base + i, base + j)
             for base in (0, 4) for i in range(4) for j in range(i)]
 dumbbell += [(0, 4), (1, 5)]
 rng = random.Random(20260602)
-trials = 3000
+trials = 200
 values = [contract(dumbbell, n, rng) for _ in range(trials)]
-optimum = min_cut(dumbbell, n)
-success = values.count(optimum)
+hits = values.count(2)
 bound = 2 / (n * (n - 1))
-print(f"two K4 cliques joined by two edges | exact minimum cut: {optimum}")
-print(f"  {trials} runs: returned the minimum cut {success} times "
-      f"({success / trials:.4f})")
-print(f"  the proven lower bound 2/(n(n-1)) = {bound:.4f}")
-print(f"  smallest value ever returned: {min(values)} "
-      f"(never below the optimum: {min(values) >= optimum})")
-print("  distribution of returned values:",
-      {value: values.count(value) for value in sorted(set(values))})
-print()
-for reps in (50, 100):
+print("two K4 cliques joined by two edges | unique minimum cut: 2")
+print(f"  {trials} runs: returned the minimum cut {hits} times ({hits / trials:.4f})")
+print(f"  proven lower bound 2/(n(n-1)) = {bound:.4f}")
+print(f"  smallest value returned: {min(values)}")
+for reps in (10, 30):
     print(f"  repeating {reps} times, success probability at least: "
-          f"{1 - (1 - bound) ** reps:.6f}")
+          f"{1 - (1 - bound) ** reps:.4f}")
 ```
 
-Karger 的这个下界对任何无向连通多重图都成立（保留平行边、去掉自环），因此重复 $m$ 次就把失败概率压到 $(1 - 2/(n(n-1)))^m$ 以下。注意通用下界与实例的真实成功率是两回事：$n = 8$ 时下界只有 $2/(8 \cdot 7) = 3.6\%$，而上面这个哑铃图实测到 $20.47\%$——分析只保证「至少 $3.6\%$」，不是「只有 $3.6\%$」。这是随机化算法的典型用法：单次只给弱保证，靠独立重复把它放大。
+Karger 的这个下界对任何无向连通多重图都成立（保留平行边、去掉自环），因此重复 $m$ 次就把失败概率压到 $(1 - 2/(n(n-1)))^m$ 以下。注意通用下界与实例的真实成功率是两回事：$n = 8$ 时下界只有 $2/(8 \cdot 7) = 3.6\%$，而上面这个哑铃图 $200$ 次里成功 $34$ 次，实测到 $17.0\%$——分析只保证「至少 $3.6\%$」，不是「只有 $3.6\%$」。重复 $10$ 次把成功率抬到约 $30\%$，$30$ 次到约 $66\%$。这是随机化算法的典型用法：单次只给弱保证，靠独立重复把它放大。
 
 ## 期望保证与高概率保证
 
@@ -220,19 +176,17 @@ product = [[sum(a[i][t] * b[t][j] for t in range(n)) for j in range(n)] for i in
 wrong = [row[:] for row in product]
 wrong[n // 2][n // 2] += 1
 
-trials = 2000
-false_rejections = sum(1 for _ in range(trials) if not verify_repeated(a, b, product, rng, 5))
-print(f"correct product, 5 rounds, {trials} trials: false rejections = {false_rejections}")
-print()
-print(f"{'rounds':>6} {'false accepts (wrong C)':>24} {'theoretical bound 2^-k':>24}")
-for rounds in (1, 3, 5, 10):
+trials = 200
+print("correct product accepted:", verify_repeated(a, b, product, rng, 5))
+for rounds in (1, 3, 5):
     accepted = sum(1 for _ in range(trials) if verify_repeated(a, b, wrong, rng, rounds))
-    print(f"{rounds:>6} {accepted / trials:>24.4f} {2 ** -rounds:>24.5f}")
+    print(f"  rounds = {rounds:>2}: false accept rate {accepted / trials:.4f} "
+          f"(bound 2^-k = {2 ** -rounds:.5f})")
 ```
 
-注意正确乘积那一行：$2000$ 次试验里一次都没有被拒绝。这是单侧错误的方向性：错误只出现在「接受了一个错的答案」这一侧，因此「全部轮次都接受」这个规则把错误概率降到 $2^{-k}$，而不会引入新的错误方向。
+正确乘积那一行是 `True`：单侧错误只出现在「接受了一个错的答案」这一侧，因此「全部轮次都接受」这个规则把错误概率降到 $2^{-k}$，不会引入新的错误方向。$C = AB$ 时 $(AB - C)x$ 对每个 $x$ 都为零，正确结果在任何一轮都不会被拒绝。
 
-另外，表里的实测频率有几行**高于** $2^{-k}$ 那一列（$k = 3$ 是 $0.1300$ 对 $0.125$，$k = 10$ 是 $0.0020$ 对 $0.00098$）。这不是定理被推翻：$2^{-k}$ 约束的是理想独立随机位下**真实**的错误概率，有限次抽样得到的频率只是它的估计，围绕真值波动。$k = 10$ 时 $2000$ 次试验按理论上界算，期望假接受次数不超过约 $1.95$ 次，观测到 $4$ 次完全在抽样噪声之内。这里的例子还恰好取到等号：`wrong` 只把 $C$ 的一个元素加了 $1$，于是 $(AB - C)x$ 是否为 $0$ 完全由对应的那一个随机比特决定，单轮假接受概率恰好是 $1/2$，$k$ 轮恰好是 $2^{-k}$，所以这一列既是上界也是真值。列标题写的仍是理论界，不是样本应有的上限。
+另外，单元格里三行的实测频率与 $2^{-k}$ 并不逐行吻合（$k = 1$ 是 $0.5350$ 对 $0.5$，$k = 5$ 是 $0.0400$ 对 $0.03125$）。$2^{-k}$ 约束的是理想独立随机位下**真实**的错误概率，$200$ 次抽样得到的频率只是它的一个估计，围绕真值上下波动。这个例子里真值恰好等于 $2^{-k}$：`wrong` 只把 $C$ 的一个元素加了 $1$，于是 $(AB - C)x$ 是否为 $0$ 完全由对应的那一个随机比特决定，单轮假接受概率恰好是 $1/2$，$k$ 轮恰好是 $2^{-k}$，所以 $2^{-k}$ 既是最坏情形上界也是真值；$k = 1$ 实测的 $0.5350$ 就是 $200$ 次抽样里最常见的那类偏差。
 
 ## 契约怎么写
 

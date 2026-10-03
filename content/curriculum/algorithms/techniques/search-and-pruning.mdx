@@ -2,23 +2,23 @@
 id: algorithms.search-and-pruning
 slug: /algorithms/search-and-pruning
 order: 40
-title: 状态空间搜索与剪枝
+title: 回溯与可行性剪枝
 status: published
 objectives:
   - 把一个问题写成状态空间上的搜索树，并说明分支为什么会穷尽所有解
-  - 区分可行性剪枝与最优性剪枝，并分别给出它们成立的条件
+  - 说明可行性剪枝要证明的整棵子树命题，并指出「违反后无法修复」为什么是充分条件
   - 用回溯模板写出一份枚举，并说明原地修改共享状态时为什么必须恢复
-  - 判断一个界是否合法，并解释为什么非法界可能静默丢掉最优解
   - 说明经证明安全的剪枝只改变需要访问的节点，不改变目标答案
+  - 说明深度有界的搜索为什么终止，并估算最坏情况的节点数与深度优先的活动栈空间
 ---
 
-有些问题要求状态记住整段历史：已经用过哪些物品、走过哪些点、填过哪些格，压完之后的状态空间仍然是指数级。把状态显式写出来，同一个状态就可以只求一次。这一步能省下多少，取决于状态空间有多大：最长公共子序列的状态数由两个长度决定，是 $\Theta(nm)$；背包的状态数由容量决定，是 $\Theta(nW)$——它对数值 $W$ 是多项式，对二进制编码后的输入长度只是伪多项式。这一节换一种做法：**沿隐式搜索树选择性枚举部分解，再用剪枝砍掉不可能包含答案的子树**。分治是把问题拆开、贪心是提前承诺、动态规划是把重复状态合并；纯粹的搜索骨架本身不依赖前三种机制，只要求走的过程能证明自己没漏掉答案；实际算法可以把它们组合起来用。
+有些问题要求状态记住整段历史：已经用过哪些物品、走过哪些点、填过哪些格。把状态显式写出来、同一个状态只求一次，能省下多少取决于状态空间有多大：状态由两个端点决定时（区间型状态）是 $\Theta(n^2)$；按容量建表的背包状态数是 $\Theta(nW)$——它对容量 $W$ 是多项式，对二进制编码后的输入长度只是伪多项式。状态空间大到填不完时，改沿隐式搜索树**选择性枚举部分解，再用剪枝砍掉不可能包含答案的子树**。分治是把问题拆开、贪心是提前承诺、动态规划是把重复状态合并；搜索骨架不依赖前三种机制，只要求走的过程能证明自己没漏掉答案，实际算法可以把它们组合起来用。
 
 ## 什么时候状态无法合并
 
 回忆 <CrossRef id="algorithms.dynamic-programming" /> 判断状态是否足够的办法：给定状态，剩余子问题的答案唯一吗？带时间窗的路径成本不满足这一条，因为「已经晚了多久」不属于当前顶点；把这段历史塞进状态，状态数就爆炸。搜索承认这一点：状态保持完整，代价是状态数不再可控。
 
-动手搜索之前，先试一次压缩状态：如果两个部分解在压缩后落到同一个状态、并且该状态决定的后继答案相同，那份历史就不必保留，重复的部分可以合并。不过合并之后的状态空间仍可能是指数级或伪多项式级别、大到无法直接填满，这时搜索依然合适——它和重复状态消除、记忆化、支配消去并不互斥，可以叠在同一套枚举骨架上。所以搜索不是「状态压不掉时的兜底」，而是状态空间大得填不完时的一种选择。
+动手搜索之前，先试一次压缩状态：如果两个部分解在压缩后落到同一个状态、并且该状态决定的后继答案相同，那份历史就不必保留，重复的部分可以合并。合并之后的状态空间仍可能是指数级或伪多项式级别、大到无法直接填满，这时搜索依然合适。搜索与重复状态消除、记忆化、支配消去并不互斥，可以叠在同一套枚举骨架上。
 
 ## 搜索树与完全性
 
@@ -31,21 +31,21 @@ objectives:
 | 分支 | 从部分解出发的一次可扩展选择 |
 | 叶子 | 无法再扩展的部分解：要么是一个解，要么被约束挡住 |
 
-**完全性**是搜索的第一条义务：每个解都必须对应树中某个节点，否则枚举漏解。这条性质由分支的定义保证，而不是由剪枝保证——分支必须穷尽「当前节点所有可能的下一个选择」，包括「这个位置什么都不放」这样的选择。
+**完全性**是搜索的第一条义务：每个解都必须对应树中某个节点，否则枚举漏解。保证这条性质的是分支的定义——分支必须穷尽「当前节点所有可能的下一个选择」，包括「这个位置什么都不放」这样的选择；剪枝只在已经生成节点的前提下删除节点，改变不了枚举的集合。
 
-搜索树和状态图是同一个问题的两种表示。搜索树可以看作把状态图按到达路径展开：同一个状态若由多条路径到达，在状态图里仍是一个顶点，在搜索树里却会出现为多个节点——这正是搜索重复展开的来源。能安全合并这些节点时，可以把记忆化叠上去，或者干脆换成按拓扑序填表的动态规划。
+搜索树和状态图是同一个问题的两种表示。搜索树可以看作把状态图按到达路径展开：同一个状态若由多条路径到达，在状态图里仍是一个顶点，在搜索树里却会出现为多个节点——这正是搜索重复展开的来源。能安全合并这些节点时，可以把记忆化叠上去，或者换成按拓扑序填表的动态规划。
 
-## 剪枝的两条义务
+## 可行性剪枝的义务
 
-剪枝是判定「这个节点的整棵子树里不含任何可行解，或者不含优于当前最优解的解」，然后整棵跳过。它有两条相互独立的义务，都要写成关于整棵子树的命题：
+剪枝是判定「这个节点的整棵子树里不含任何可行解」，然后整棵跳过。这条义务要写成关于**整棵子树**的命题：要证明这一节点子树里不存在任何可行的完成。
 
-**可行性剪枝**：要证明这一节点**子树里不存在任何可行的完成**。常见的充分条件是约束「违反之后无法修复」——n 皇后里「两个皇后同列或同对角线」一旦出现就无法撤销，满足这一条；而「前缀和不超过 100」这类可以靠后续选择拉回来的约束不满足它，按它剪枝会漏解。条条约束都不可修复只是常用情形，不是可行性剪枝的定义。一次尚可修复的违约不足以剪掉子树：若当前约束可以修复，要么换一条真正不可修复的约束来剪，要么把可修复的量并进状态。
+常见的充分条件是约束「违反之后无法修复」——n 皇后里「两个皇后同列或同对角线」一旦出现就无法撤销，满足这一条；而「前缀和不超过 100」这类可以靠后续选择拉回来的约束不满足它，按它剪枝会漏解。条条约束都不可修复只是常用情形，不是可行性剪枝的定义。一次尚可修复的违约不足以剪掉子树：若当前约束可以修复，要么换一条真正不可修复的约束来剪，要么把可修复的量并进状态。
 
-**最优性剪枝**（以求最大值为例）：设 $U(p)$ 是节点 $p$ 处给出的界，必须满足一条**覆盖整棵子树**的性质——对子树里每一个可行完成 $x$ 都有 $f(x) \le U(p)$；只有在这条成立、且 $U(p) \le best$（当前最优值）时，才可以剪掉 $p$。界算小了，就可能把含有最优解的分支一起剪掉，算法照常返回一个答案，只是不再是最优的。
+检查约束本身要花时间：只有当这次判断的成本比它省下的搜索成本值得时，可行性剪枝才带来收益。
 
-两条义务的共同点是「局部判断要覆盖整棵子树」：可行性剪枝要说明子树中没有可行完成，最优性剪枝要说明子树中没有更好的完成。界沿父子节点的单调下降**不是**正确性的必要条件——需要的是上面那条覆盖性。另外，证明剪枝条件本身要花时间：只有当这次判断的成本比它省下的搜索成本值得时，剪枝才带来收益。
+另一类剪枝判定的是子树不可能优于当前最优解，它需要另一套论证——一个覆盖整棵子树的界 <CrossRef id="algorithms.branch-and-bound" />。
 
-## 回溯：只做可行性剪枝
+## 回溯模板与撤销
 
 本课约定用深度优先的枚举加上可行性剪枝来演示回溯，模板只有三步，顺序固定：
 
@@ -53,287 +53,49 @@ objectives:
 2. **递归**：进入子节点，继续枚举。
 3. **撤销**：退出子节点前把部分解恢复成进入前的样子。
 
-撤销这一步在**原地修改共享状态**的写法里是模板的一部分，不是优化：`choose` 若就地改了供兄弟分支共享的结构，返回前必须恢复，否则后续分支带着上一个分支的选择继续走，枚举的集合会变，结果静默出错。把状态复制一份传给子调用、或让状态不可变，就不存在显式撤销——本课的背包实现写成 `taken + (item,)`，正是这种没有 undo 的写法。
+撤销这一步在**原地修改共享状态**的写法里是模板的一部分，不是优化：`choose` 若就地改了供兄弟分支共享的结构，返回前必须恢复，否则后续分支带着上一个分支的选择继续走，枚举的集合会变，结果静默出错。把状态复制一份传给子调用、或让状态不可变，就不存在显式撤销；n 皇后的实现原地修改 `columns`，因此每一步都要 `pop` 回来。
+
+下面这份枚举把约束检查放在一个开关 `prune` 上：打开时每放置一个皇后就立刻检查列与对角线，关闭时一路放到第 $n$ 行、只在叶子处验证整个排列。两种情况给出同一个解数，访问的节点数却相差几个数量级。
 
 ```python run id="alg.search.queens"
-def queens_backtracking(n):
-    """Rows are filled top to bottom; the feasibility check runs at each node.
-    Postcondition: (solution count, nodes visited)."""
-    columns, stats = [], {"nodes": 0, "solutions": 0}
+def queens(n, prune=True):
+    """Fill rows top to bottom; prune=False defers the constraint to the leaves."""
+    columns, nodes, solutions = [], 0, 0
+
+    def safe():
+        return all(columns[i] != columns[j] and abs(columns[i] - columns[j]) != i - j
+                   for i in range(len(columns)) for j in range(i))
 
     def place(row):
-        stats["nodes"] += 1
+        nonlocal nodes, solutions
+        nodes += 1
         if row == n:
-            stats["solutions"] += 1
+            if safe():
+                solutions += 1
             return
         for column in range(n):
-            if all(column != c and abs(column - c) != row - r
-                   for r, c in enumerate(columns)):
-                columns.append(column)
+            columns.append(column)
+            if not prune or safe():
                 place(row + 1)
-                columns.pop()
-
-    place(0)
-    return stats["solutions"], stats["nodes"]
-
-
-def queens_without_pruning(n):
-    """The same enumeration with the constraint checked only at the leaves: no
-    partial assignment is ever rejected."""
-    columns, stats = [], {"nodes": 0, "solutions": 0}
-
-    def place(row):
-        stats["nodes"] += 1
-        if row == n:
-            if all(columns[i] != columns[j] and abs(columns[i] - columns[j]) != i - j
-                   for i in range(n) for j in range(i)):
-                stats["solutions"] += 1
-            return
-        for column in range(n):
-            columns.append(column)
-            place(row + 1)
             columns.pop()
 
     place(0)
-    return stats["solutions"], stats["nodes"]
+    return solutions, nodes
 
 
-def queens_oracle(n):
-    """Independent enumeration: every permutation of columns, filtered."""
-    from itertools import permutations
-    return sum(1 for perm in permutations(range(n))
-               if all(abs(perm[i] - perm[j]) != i - j
-                      for i in range(n) for j in range(i)))
-
-
-print(f"{'n':>2} {'solutions':>9} {'oracle':>6} {'same':>5} {'nodes pruned':>12} {'nodes unpruned':>14}")
-for n in (4, 5, 6):
-    pruned, pruned_nodes = queens_backtracking(n)
-    unpruned, unpruned_nodes = queens_without_pruning(n)
-    print(f"{n:>2} {pruned:>9} {queens_oracle(n):>6} {str(pruned == unpruned):>5} "
-          f"{pruned_nodes:>12} {unpruned_nodes:>14}")
-
-solutions, nodes = queens_backtracking(8)
-# The unpruned tree for n = 8 has 19,173,961 nodes, so the row uses the closed form
-# sum(8**k for k in range(9)) for that column instead of enumerating it; the count
-# check goes against the independent oracle rather than a second full enumeration.
-unpruned_closed_form = sum(8 ** k for k in range(9))
-print(f"{8:>2} {solutions:>9} {queens_oracle(8):>6} {str(solutions == queens_oracle(8)):>5} "
-      f"{nodes:>12} {unpruned_closed_form:>14}")
-print()
-print("n = 4, the first solutions the search emits:")
-columns = []
-def collect(row, into):
-    if row == 4:
-        into.append(tuple(columns))
-        return
-    for column in range(4):
-        if all(column != c and abs(column - c) != row - r for r, c in enumerate(columns)):
-            columns.append(column)
-            collect(row + 1, into)
-            columns.pop()
-found = []
-collect(0, found)
-for board in found:
-    print("  " + " | ".join("." * c + "Q" + "." * (3 - c) for c in board))
+print(f"{'n':>2} {'solutions':>9} {'unpruned':>9} {'nodes pruned':>12} {'nodes unpruned':>15}")
+for n in (4, 5, 6, 7):
+    solutions, pruned = queens(n)
+    plain, unpruned = queens(n, prune=False)
+    print(f"{n:>2} {solutions:>9} {plain:>9} {pruned:>12} {unpruned:>15}")
 ```
 
-同样的枚举，只在叶子上检查约束，节点数就涨到整棵完全树的规模：$n = 6$ 时是 $153$ 对 $55987$，每加一行大约乘 $6$。剪枝省下的正是这些节点，而两个版本给出的解数完全一致——**经证明安全的剪枝只改变需要访问的节点，不改变目标答案**。$n = 8$ 时可行性剪枝访问 $2057$ 个节点；不剪枝的话，整棵搜索树要访问 $\sum_{k=0}^{8} 8^k = 19173961$ 个节点，其中 $8^8 = 16777216$ 个是完整摆放的叶子，所以那一行的未剪枝节点数用闭式公式给出，并配一次与独立 oracle 的计数核对，而不是真的枚举 1900 万个节点。
-
-## 分支定界：加上最优性剪枝
-
-分支定界的本质是两样东西：**当前最优解**（incumbent），以及一个针对子问题的**界**——凡是界不足以超过 incumbent 的子树都能整棵跳过。它并不要求深度优先，用最优优先之类的节点选择策略同样成立；本课只是把它叠在同一套深度优先的枚举骨架上。
-
-| 项 | 规格 |
-| --- | --- |
-| 输入 | 物品 $(w_i, v_i)$，$w_i$ 与 $v_i$ 是正整数，$W$ 是非负整数 |
-| 可行 | 总重量不超过 $W$ 的子集 |
-| 输出 | 最大总价值 |
-| 变量 | `best` 搜索到目前为止见过的最大总价值，初始为 0 |
-| 界 | `bound(index, room)` 是「只考虑 `index` 之后的物品、容量为 `room`」时任何可行子集总价值的上界 |
-| 剪枝 | 当 `value + bound(index, room) <= best` 时整棵子树不必进入 |
-
-界的取法是这一节的核心。取**分数松弛**：把剩下的物品按价值密度降序摆放，能整件放下就整件放，放不下的那件按比例切开塞满剩余容量。得到的值一定不小于任何整数子集的总价值，因此是一个合法的上界。
-
-「一定不小于」这句话对代码有要求：界必须用**精确算术**算出来。密度排序和最后那件按比例切开的贡献一旦经过浮点数，就可能被向下舍入到真实上界以下，于是剪枝条件 $value + bound \le best$ 会错误成立，把装有最优解的分支剪掉。合法的界是数学性质，代码得真的满足它——下面的代码里密度与界都用 `fractions.Fraction` 保持精确。
-
-密度规则在这里换了身份：它在 0/1 背包上不能直接给出答案，却正好给出上界。这也是分支定界常见的形状：让一个松弛但快的方法给界，精确枚举只去走还有希望的分支。
-
-```python run id="alg.search.knapsack"
-from fractions import Fraction
-
-
-def branch_and_bound(items, capacity, use_bound=True):
-    """Postcondition: (best value, nodes visited, a set attaining it).
-
-    The bound is the fractional relaxation of the remaining items: fill whole
-    items by decreasing density, then split the first item that does not fit.
-    Densities and the bound use exact rational arithmetic, so the number the
-    code compares against the incumbent really is an upper bound.
-    """
-    ordered = sorted(items, key=lambda item: Fraction(item[1], item[0]), reverse=True)
-    best = {"value": 0, "taken": ()}
-    stats = {"nodes": 0}
-
-    def bound(index, room):
-        total = Fraction(0)
-        for weight, value in ordered[index:]:
-            if weight <= room:
-                room -= weight
-                total += value
-            else:
-                total += Fraction(value * room, weight)
-                break
-        return total
-
-    def explore(index, room, value, taken):
-        stats["nodes"] += 1
-        if value > best["value"]:
-            best["value"] = value
-            best["taken"] = taken
-        if index == len(ordered):
-            return
-        weight, item_value = ordered[index]
-        if weight <= room:
-            explore(index + 1, room - weight, value + item_value, taken + (ordered[index],))
-        if not use_bound or value + bound(index + 1, room) > best["value"]:
-            explore(index + 1, room, value, taken)
-
-    explore(0, capacity, 0, ())
-    return best["value"], stats["nodes"], best["taken"]
-
-
-def dp_value(items, capacity):
-    table = [[0] * (capacity + 1) for _ in range(len(items) + 1)]
-    for i in range(1, len(items) + 1):
-        weight, value = items[i - 1]
-        for c in range(capacity + 1):
-            best = table[i - 1][c]
-            if weight <= c:
-                best = max(best, table[i - 1][c - weight] + value)
-            table[i][c] = best
-    return table[-1][-1]
-
-
-items, capacity = [(6, 8), (5, 5), (5, 5)], 10
-value, nodes, taken = branch_and_bound(items, capacity)
-print("the greedy lesson's counterexample under branch and bound")
-print("  value:", value, "| capacity DP:", dp_value(items, capacity),
-      "| nodes:", nodes, "| best set:", taken)
-print("  the bound at the root:", Fraction(8) + Fraction(5 * 4, 5),
-      "(8 for the whole item, then 4/5 of the next)")
-print()
-big = 2 ** 54
-hard = [(big - 1, big + 1), (big, big + 2)]
-hard_value, _, _ = branch_and_bound(hard, big)
-print("a case where a float bound would prune the true optimum")
-print("  items:", hard, "| capacity:", big)
-print("  exact optimum:", big + 2, "| branch and bound:", hard_value)
-print()
-print("the bound only cuts nodes; the value is unchanged")
-print(f"{'n':>3} {'W':>4} {'value':>6} {'DP':>5} {'nodes: bound':>13} {'nodes: feasibility only':>24}")
-import random
-rng = random.Random(20260603)
-for n, capacity in ((8, 15), (10, 25), (12, 40), (14, 60)):
-    items = [(rng.randint(1, 15), rng.randint(1, 15)) for _ in range(n)]
-    bounded, bounded_nodes, _ = branch_and_bound(items, capacity)
-    plain, plain_nodes, _ = branch_and_bound(items, capacity, use_bound=False)
-    print(f"{n:>3} {capacity:>4} {bounded:>6} {dp_value(items, capacity):>5} "
-          f"{bounded_nodes:>13} {plain_nodes:>24}")
-```
-
-注意两个版本给出的 value 与容量 DP 完全一致。这只是一次回归检查：两个实现恰好返回同一个值，不能代替对界合法性的证明——界虽然不直接贡献目标值，却参与搜索的控制流，它的合法性正是最终最优性的证明条件。
-
-## 界的合法性
-
-一个界不合法时，算法不会报错，可能静默返回一个偏小的值。把上面的界换成「剩余物品价值之和」——它不考虑剩余容量装不下——它仍是**合法的上界**，更松，但更难触发最优性剪枝，因此可能访问更多节点——松不等同于一个节点也剪不掉。真正的危险方向是缺少保证：整数贪心填出来的价值**不是合法上界**，它可能低估某棵子树能够达到的最优值（也有些节点上它恰好等于最优值），所以没有「始终不低于最优完成值」这条保证，含有最优解的分支就可能被剪掉——只有低估落在关键子树、且当前 incumbent 足以触发这次错误剪枝时，最优解才会真的丢掉。放松上界不破坏正确性，只降低剪枝能力，所以不能靠「答案看起来对」判断界的质量。
-
-```python run id="alg.search.bad-bound"
-def branch_and_bound_greedy_bound(items, capacity):
-    """The same search with an integer greedy fill as the bound. The greedy
-    value is not an upper bound on the completions, so this is not admissible."""
-    ordered = sorted(items, key=lambda item: item[1] / item[0], reverse=True)
-    best = {"value": 0}
-
-    def bound(index, room):
-        total = 0
-        for weight, value in ordered[index:]:
-            if weight <= room:
-                room -= weight
-                total += value
-        return total
-
-    def explore(index, room, value):
-        if value > best["value"]:
-            best["value"] = value
-        if index == len(ordered):
-            return
-        weight, item_value = ordered[index]
-        if weight <= room:
-            explore(index + 1, room - weight, value + item_value)
-        if value + bound(index + 1, room) > best["value"]:
-            explore(index + 1, room, value)
-
-    explore(0, capacity, 0)
-    return best["value"]
-
-
-def dp_value_local(items, capacity):
-    table = [[0] * (capacity + 1) for _ in range(len(items) + 1)]
-    for i in range(1, len(items) + 1):
-        weight, value = items[i - 1]
-        for c in range(capacity + 1):
-            best = table[i - 1][c]
-            if weight <= c:
-                best = max(best, table[i - 1][c - weight] + value)
-            table[i][c] = best
-    return table[-1][-1]
-
-
-import random
-rng = random.Random(20260603)
-losses = []
-for _ in range(300):
-    n = rng.randint(3, 8)
-    items = [(rng.randint(1, 10), rng.randint(1, 10)) for _ in range(n)]
-    capacity = rng.randint(5, 20)
-    exact = dp_value_local(items, capacity)
-    if branch_and_bound_greedy_bound(items, capacity) != exact:
-        losses.append((items, capacity, exact, branch_and_bound_greedy_bound(items, capacity)))
-
-print("instances tried: 300 | where the greedy bound loses the optimum:", len(losses))
-items, capacity, exact, wrong = losses[0]
-print("  one of them: items =", items, "capacity =", capacity)
-print("    capacity DP:", exact, "| search with the greedy bound:", wrong,
-      "| the gap of", exact - wrong, "lost to pruning")
-print()
-print("the fractional relaxation of the same instance is an upper bound:")
-ordered = sorted(items, key=lambda item: item[1] / item[0], reverse=True)
-room, total = capacity, 0.0
-for weight, value in ordered:
-    if weight <= room:
-        room -= weight
-        total += value
-    else:
-        total += value * room / weight
-        break
-def greedy_fill(items, capacity):
-    room, total = capacity, 0
-    for weight, value in sorted(items, key=lambda item: item[1] / item[0], reverse=True):
-        if weight <= room:
-            room -= weight
-            total += value
-    return total
-
-
-print("  integer greedy fill:", greedy_fill(items, capacity),
-      "| fractional relaxation:", round(total, 2), "| exact:", exact)
-```
+同样的枚举，只在叶子上检查约束，访问的节点数就涨到整棵完全树的规模：$n = 6$ 时是 $153$ 对 $55987$，$n = 7$ 时是 $552$ 对 $960800$——未剪枝的那一列正是 $\sum_{k=0}^{n} n^k$，剪枝省下的就是这些中间节点。两个版本给出的解数逐行相同（$n = 7$ 时两列都是 $40$）——**经证明安全的剪枝只改变需要访问的节点，不改变目标答案**。
 
 ## 终止、成本与空间
 
 **终止**需要两件事：搜索树的深度有界（每一步都消耗掉一个待定的选择，深度不超过选择的总数），以及每个节点的分支数有限。剪枝只会让树更小，不影响终止。
 
-**成本**严格说是各访问节点处理成本之和；若每个访问节点的处理成本都有统一上界 $C(n)$，才写成 $O(N \cdot C(n))$（$C$ 不随节点变化，但可以随规模增长）。结论属于最坏情形：可行性剪枝后的节点数没有通用公式，它取决于实例与分支顺序；若树深至多 $d$、每个节点至多 $b$ 个子节点，最坏情况访问 $O(b^d)$ 个节点，形成完整 $b$ 叉树（$b > 1$）时是 $\Theta(b^d)$——这正是搜索不能替代多项式算法的原因。界的计算成本也要算进每个节点的成本里，一个更紧但更贵的界有时反而更慢。
+**成本**严格说是各访问节点处理成本之和；若每个访问节点的处理成本都有统一上界 $C(n)$，才写成 $O(N \cdot C(n))$（$C$ 不随节点变化，但可以随规模增长）。结论属于最坏情形：可行性剪枝后的节点数没有通用公式，它取决于实例与分支顺序；若树深至多 $d$、每个节点至多 $b$ 个子节点，最坏情况访问 $O(b^d)$ 个节点，形成完整 $b$ 叉树（$b > 1$）时是 $\Theta(b^d)$——这正是搜索不能替代多项式算法的原因。
 
-**空间**：深度优先搜索同时保留的是当前路径上的 $O(d)$ 个活动栈帧，总辅助空间取决于这些栈帧各自保存多少状态。若每层的状态是 $O(1)$、或者原地修改加撤销，辅助空间就是 $\Theta(d)$；本课的背包实现沿递归栈同时保留长度不断增长的 `taken` 元组，若按其中保存的引用总数计算会到 $O(d^2)$。许多搜索实现因此可以避免保存整张状态表，但两者实际占用谁更小，仍取决于具体的状态表示。换成广度优先或最优优先则需要保存前沿，空间由最大前沿宽度决定，最坏情况下可以是指数级。
+**空间**：深度优先搜索同时保留的是当前路径上的 $O(d)$ 个活动栈帧，总辅助空间取决于这些栈帧各自保存多少状态。每层的状态是 $O(1)$、或者原地修改加撤销时，辅助空间就是 $\Theta(d)$；n 皇后原地维护 `columns`，每个栈帧只多保存一列。许多搜索实现因此可以避免保存整张状态表。换成广度优先或最优优先则需要保存前沿，空间由最大前沿宽度决定，最坏情况下可以是指数级。

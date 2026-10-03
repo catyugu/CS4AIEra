@@ -2,17 +2,16 @@
 id: algorithms.average-and-randomized
 slug: /algorithms/average-and-randomized
 order: 30
-title: 平均情形与随机化
+title: 平均情形、期望与哈希假设
 status: published
 objectives:
   - 区分对输入分布取期望与先固定输入再对算法随机位取期望，并写出两者的量词结构
   - 用指示器随机变量与期望的线性性把总成本拆成各部分期望之和，并说明线性性不依赖独立性
   - 从负载因子与均匀探测模型推导查找的期望探测长度，并用一次实测核对同一组取值
   - 说明平均情形的结论为什么必须先给出输入分布，换分布后结论如何改变
-  - 说明期望界为什么不提供确定性的单次运行保证，样本均值为什么只是对期望的估计
 ---
 
-哈希表查找记作期望常数成本：负载因子受控时，一次查找平均只探测少数几个位置。这个「平均」取在什么上？桶数与键集固定之后，一次查找探测几个位置就是一个确定的数；它成为随机变量，只可能来自两处：被查找的目标从某个输入分布里抽出，或者算法在运行时自己掷硬币，而目标固定。两种取平均写成的量词位置不同，承诺的形状也不同——一个对整族输入负责，一个对每一条固定输入负责。
+哈希表查找记作期望常数成本：负载因子受控时，一次查找平均只探测少数几个位置。这个「平均」取在什么上？桶数与键集固定之后，一次查找探测几个位置就是一个确定的数；它成为随机变量，只可能来自两处：被查找的目标从某个输入分布里抽出，或者哈希函数从某个函数族里选出、而目标固定。平均情形先给出输入分布，哈希表的期望成本先给出哈希函数的随机模型。
 
 ## 对什么取平均
 
@@ -122,7 +121,7 @@ $$
 
 $$E[T] \le \sum_{j \ge 0} \alpha^{j} = \frac{1}{1 - \alpha}.$$
 
-$\frac{1}{1 - \alpha}$ 是均匀探测下的**上界**，不是等式：$\alpha$ 小时它已经贴着真值，$\alpha$ 趋近 $1$ 时逐项放缩的累积差与截断一起把它抬高。下面把实测值、精确和式与这条上界并排算出来。
+$\frac{1}{1 - \alpha}$ 是均匀探测下的**上界**，不是等式：$\alpha$ 小时它已经贴着真值，$\alpha$ 趋近 $1$ 时逐项放缩的累积差与截断一起把它抬高。实测值、精确和式与这条上界并排放在一次运行里。
 
 ```python run id="alg.avg.probe-cost"
 import random
@@ -167,42 +166,4 @@ for filled in (256, 384, 448, 486):
 
 均匀探测本身是理想化模型，它要求探测序列是槽位的随机排列。线性探测做不到这一点，它把冲突的键排成连续的占用区间，相邻区间会合并，一次查找扫过的槽位比这条模型多；哈希表里测到的是多次插入中最长的一次探测，与这里的平均探测次数不是同一个量。真实实现里探测序列由哈希函数决定，键集由对手挑出时随机排列的前提不成立，随机化哈希正是为这条前提准备的。
 
-## 运行时间是随机变量
-
-把一个随机化算法用在固定输入上，期望与单次运行的距离就现出来。目标固定在表尾、扫描方向固定从左到右时，每次运行的比较次数都是 $n$；换成先用一次确定性洗牌打乱扫描顺序，同一个输入上的比较次数就随种子变化：
-
-```python run id="alg.avg.randomized-search"
-import random
-
-
-def scan(order, target):
-    """Comparisons a scan of `order` spends before reaching `target`."""
-    for index, item in enumerate(order):
-        if item == target:
-            return index + 1
-    return len(order)
-
-
-size = 64
-items = list(range(size))
-target = size - 1                      # fixed input: the target sits in the last slot
-generator = random.Random(20260604)
-runs = [scan(generator.sample(items, size), target) for _ in range(5)]
-
-print(f"deterministic scan, fixed input: {scan(items, target)} comparisons")
-print(f"randomized scan, five fixed-seed permutations: {runs}")
-print(f"sample mean: {sum(runs) / len(runs):.2f}"
-      f" | exact expectation (n + 1) / 2 = {(size + 1) / 2:.1f}")
-```
-
-确定性扫描在这个输入上每次都返回 $64$；随机化扫描的五次运行是 $58$、$47$、$17$、$25$、$5$，随随机位取不同的值。这个输入的精确期望是 $32.5$，五次运行只给出样本均值 $30.40$。期望界说的是 $E_R[C(x, R)] = 32.5$，它不阻止某一次运行跑到最坏情形的 $64$ 次比较。
-
-期望界与高概率界是两条不同的保证。$E[T] = O(n \log n)$ 不排除某次运行成本更大，甚至达到算法的最坏情形；接口要求「每次运行都有硬上界」时用最坏情形分析，要求「超过某个阈值的概率很小」时还要另行证明尾概率界。只有期望值并不给出高概率保证：对非负随机变量，期望经由马尔可夫不等式只给出 $P[T \ge c\,E[T]] \le 1/c$ 这样的弱尾界。
-
-样本均值只是对期望的估计，它用来核对实现是否符合模型；结论本身来自计数论证（见 <CrossRef id="algorithms.cost-model" />）。在独立同分布、单次成本方差为 $\sigma^2$ 时，$m$ 次运行的样本均值方差是 $\sigma^2 / m$，随 $1/m$ 下降，但它始终是估计。
-
-期望与摊还是两个可以叠加、但必须分开陈述的维度：一个操作的期望成本与一串操作的摊还成本是两条独立论断，期望界与硬延迟界同样是两条独立论断（见 <CrossRef id="algorithms.amortized" />）。
-
-把「先固定输入、再对随机位取期望」这条量词规则用到算法契约上，就要分开写两栏承诺：运行时间的期望或高概率界，以及出错的概率。Las Vegas 与 Monte Carlo 的分类、单侧与双侧错误、独立重复与概率放大由 <CrossRef id="algorithms.randomized-algorithms" /> 展开。
-
-实现边界：`random.Random(seed).sample` 产出的是伪随机置换，给定种子后完全可复现，序列由解释器的伪随机数生成器决定（CPython 的 [random 模块](https://docs.python.org/3/library/random.html)）；这是本页为了可复现而做的选择，不改变上面任何一条期望结论。
+Las Vegas 与 Monte Carlo 的分类、单侧与双侧错误、独立重复与概率放大由 <CrossRef id="algorithms.randomized-algorithms" /> 展开。

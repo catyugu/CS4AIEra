@@ -14,7 +14,7 @@ objectives:
 
 序列的组织方式是「前一个、后一个」；树把一对多的从属关系写进数据：每个节点有若干子节点，除根之外每个节点恰好有一个父节点。这一层关系是递归的——一棵树的每个子节点各自又是一棵树——所以遍历、高度、节点数这些量都自然写成递归定义；其中遍历的访问次数由节点数 $n$ 决定，而递归所需的辅助空间以及沿根到叶路径执行的操作还受到高度 $h$ 的控制。
 
-同一棵树可以有多种表示，它们交付同一份契约，成本形态却不同。这一节把契约、表示与形状三件事分开讲；二叉搜索树与堆各自建立在一种表示上。
+同一棵树可以有多种表示，它们交付同一份契约，成本形态却不同。一个节点既可以是持有子节点引用的对象，也可以只是数组里一个由下标算术定位的槽位。
 
 ## 树的契约与表示不变量
 
@@ -56,9 +56,6 @@ Python 没有内置的树类型，常见写法包括对象加引用、嵌套容�
 **覆盖与不重复不变量**：一次完整遍历应当使每个节点恰好被访问一次，因此总访问次数必然等于节点数 $n$。但反过来，总次数等于 $n$ 并不能证明遍历正确——完全可能漏掉一个节点，同时重复访问另一个节点。即使已经证明每个节点恰好一次，这也仍然只是遍历正确性的必要条件；前序、后序和层序还分别需要满足自己的次序约束。
 
 ```python run id="alg.trees.representations"
-import sys
-
-
 class Node:
     """Pointer representation: one object per node, children in a list."""
 
@@ -67,76 +64,28 @@ class Node:
         self.children = list(children)
 
 
-class SlottedNode:
-    """The same, with the per-instance dictionary replaced by a fixed slot layout."""
-
-    __slots__ = ("name", "children")
-
-    def __init__(self, name, children=()):
-        self.name = name
-        self.children = list(children)
-
-
-def preorder_pointer(node, visits=None):
-    """Postcondition: the node's name, then each child's preorder, in order."""
+def preorder(node, visits=None):
+    """Postcondition: this node's name, then each child's preorder, in order."""
     visits = visits if visits is not None else []
     visits.append(node.name)
     for child in node.children:
-        preorder_pointer(child, visits)
+        preorder(child, visits)
     return visits
 
 
-def preorder_nested(tree, visits=None):
-    """Nested tuples: (name, child, child, ...)."""
-    visits = visits if visits is not None else []
-    visits.append(tree[0])
-    for child in tree[1:]:
-        preorder_nested(child, visits)
-    return visits
-
-
-def preorder_array(slots, index=0, visits=None):
-    """Array layout: the children of i sit at 2i+1 and 2i+2."""
-    visits = visits if visits is not None else []
-    if index >= len(slots) or slots[index] is None:
-        return visits
-    visits.append(slots[index])
-    preorder_array(slots, 2 * index + 1, visits)
-    preorder_array(slots, 2 * index + 2, visits)
-    return visits
-
-
-pointer_root = Node("A", [Node("B", [Node("D"), Node("E")]), Node("C", [Node("F"), Node("G")])])
-nested = ("A", ("B", ("D",), ("E",)), ("C", ("F",), ("G",)))
-slots = ["A", "B", "C", "D", "E", "F", "G"]
-
-orders = {
-    "pointer nodes": preorder_pointer(pointer_root),
-    "nested tuples": preorder_nested(nested),
-    "array layout": preorder_array(slots),
-}
-for label, order in orders.items():
-    print(f"{label:>15}: {order}")
-print("all three agree:", len({tuple(order) for order in orders.values()}) == 1)
-
-node = pointer_root
-slotted = SlottedNode("A", [SlottedNode("B")])
-print("dict-backed node:", sys.getsizeof(node), "bytes, plus its instance dict:",
-      sys.getsizeof(node.__dict__), "bytes")
-print("slot-backed node:", sys.getsizeof(slotted), "bytes")
-print("one array slot:", (sys.getsizeof(slots) - sys.getsizeof([])) // len(slots), "bytes")
+root = Node("A", [Node("B", [Node("D"), Node("E")]), Node("C", [Node("F"), Node("G")])])
+visits = preorder(root)
+print("preorder:", visits)
+print("nodes visited:", len(visits))
 ```
 
-在这个具体的有序二叉树样例上，三种表示得到完全相同的前序序列，说明三个实现对这个实例给出了相同的抽象结构与遍历结果；一次样例本身当然不能证明三种表示在一般情况下等价。后面的字节数也是浅层存储测量：在本课当前的 32 位 WASM 运行时中，普通 `Node` 对象本体实测为 24 字节，其实例字典为 132 字节；`SlottedNode` 对象本体为 24 字节；这个 `list` 分配中每个元素槽位占 4 字节。这些数字不包含被引用的 children 列表、字符串、子节点对象等，因此不能把它们解释成一个完整节点的总内存占用。
+在这棵七个节点的树上，前序序列是 `['A', 'B', 'D', 'E', 'C', 'F', 'G']`，每个节点恰好访问一次，所以访问次数等于节点数 $n = 7$。序列完全由「先访问节点、再依次进入子树」这条规则决定；同一组节点与父子关系换一种表示来保存，只改变访问孩子与存储节点的成本，不改变这条序列。
 
 ## 形状决定成本
 
 树的高度定义为最长的根到叶路径长度（按边计，叶节点高度为 0）。高度同时决定两件事：递归遍历的调用深度，以及在有序结构上做按键查找时需要跟随的引用数。节点数相同、形状不同，高度可以差出数量级。
 
 ```python run id="alg.trees.height"
-import math
-
-
 class Node:
     def __init__(self, key, left=None, right=None):
         self.key = key
@@ -144,52 +93,40 @@ class Node:
         self.right = right
 
 
-def insert(root, key):
-    """Binary search tree insertion; postcondition: the key is present exactly once."""
-    if root is None:
-        return Node(key)
-    if key < root.key:
-        root.left = insert(root.left, key)
-    elif key > root.key:
-        root.right = insert(root.right, key)
-    return root
-
-
-def build_balanced(values):
-    """Precondition: values is sorted ascending. Preorder of values keeps the shape shallow."""
-    if not values:
+def build_balanced(keys):
+    """Precondition: keys is sorted ascending."""
+    if not keys:
         return None
-    middle = len(values) // 2
-    return Node(values[middle], build_balanced(values[:middle]), build_balanced(values[middle + 1:]))
+    middle = len(keys) // 2
+    return Node(keys[middle], build_balanced(keys[:middle]), build_balanced(keys[middle + 1:]))
 
 
-def build_ascending(values):
-    """Ascending keys make every new node the right child of the previous one."""
+def build_chain(keys):
+    """The right chain that inserting keys in ascending order produces."""
     root = None
-    for value in values:
-        root = insert(root, value)
+    for key in reversed(keys):
+        root = Node(key, None, root)
     return root
 
 
 def measure(node):
-    """Postcondition: (node count, height in edges, maximum non-empty node levels on a root-to-leaf path)."""
+    """Postcondition: (node count, height in edges); an empty tree has height -1."""
     if node is None:
-        return 0, -1, 0
-    left_nodes, left_height, left_depth = measure(node.left)
-    right_nodes, right_height, right_depth = measure(node.right)
-    return 1 + left_nodes + right_nodes, 1 + max(left_height, right_height), 1 + max(left_depth, right_depth)
+        return 0, -1
+    left_count, left_height = measure(node.left)
+    right_count, right_height = measure(node.right)
+    return 1 + left_count + right_count, 1 + max(left_height, right_height)
 
 
-values = list(range(500))
-for label, root in (("balanced", build_balanced(values)), ("ascending", build_ascending(values))):
-    nodes, height, depth = measure(root)
-    print(f"{label:>10}: nodes={nodes:4d}  height={height:3d}  non-empty recursion levels={depth:3d}")
-print("the minimum possible height of a 500-node binary tree is", math.floor(math.log2(500)), "- log2(500) =", round(math.log2(500), 2))
+keys = list(range(500))
+for label, root in (("balanced", build_balanced(keys)), ("ascending chain", build_chain(keys))):
+    nodes, height = measure(root)
+    print(label, "nodes =", nodes, "height =", height)
 ```
 
-同一批 500 个键，平衡形状的高度是 8，升序插入得到的链高度是 499。这里 `measure` 报出的非空节点递归层数分别是 9 与 500，也就是 $h+1$。由于这个具体函数还会对空孩子调用一次 `measure(None)`，真正最深的调用链还要多一个基例栈帧，共 501 帧；这个常数差异不改变递归辅助空间为 $\Theta(h)$ 的结论。随着 $h$ 继续增大，这类递归实现最终会受到 Python 递归深度限制（见 <CrossRef id="algorithms.recursion" />）。
+同一批 500 个键，平衡形状的高度是 8，升序插入得到的右链高度是 499，而 8 已经是 500 个节点下可能的最小高度。递归度量沿最深路径的调用深度与高度同阶，因此辅助栈空间是 $\Theta(h)$。随着 $h$ 继续增大，这类递归实现最终会受到 Python 递归深度限制（见 <CrossRef id="algorithms.recursion" />）。
 
-高度还控制沿根到叶路径执行的操作：例如二叉搜索树查找一个键时，比较次数至多与 $h+1$ 同阶。所以「树的操作多快」这个问题的答案先落在形状与平衡保证上——这两点是 `ordered-maps` 的主线，堆则讨论另一条形状不变量。
+高度还控制沿根到叶路径执行的操作：例如二叉搜索树查找一个键时，比较次数至多与 $h+1$ 同阶。所以「树的操作多快」的答案先落在形状与平衡保证上。
 
 ## 数组布局的不变量与代价
 
@@ -207,12 +144,6 @@ def children_of(index):
     return 2 * index + 1, 2 * index + 2
 
 
-def orphans(slots):
-    """Indices whose parent slot is empty: a violation of the layout invariant."""
-    return [index for index in range(1, len(slots))
-            if slots[index] is not None and slots[parent_of(index)] is None]
-
-
 def chain_of(depth):
     """A right-only chain of depth+1 nodes under implicit binary-tree indexing."""
     size = 2 ** (depth + 1) - 1
@@ -224,14 +155,13 @@ def chain_of(depth):
     return slots
 
 
-slots = ["A", "B", "C", "D", "E", "F", "G"]
-print("complete shape: slots =", len(slots), "| orphans =", orphans(slots))
-print("children of 1 sit at", children_of(1), "| parent of 4 is", parent_of(4))
+complete = ["A", "B", "C", "D", "E", "F", "G"]
+print("children of", complete[1], "sit at", children_of(1))
+print("parent of", complete[4], "is", complete[parent_of(4)])
+print("complete tree:", len(complete), "nodes in", len(complete), "slots")
 
-for depth in (3, 6, 9, 12):
-    slots = chain_of(depth)
-    used = sum(1 for slot in slots if slot is not None)
-    print(f"chain of {depth + 1:2d} nodes: slots={len(slots):5d} used={used:3d} empty={len(slots) - used:5d}")
+chain = chain_of(12)
+print(len(chain), "slots hold", sum(1 for slot in chain if slot is not None), "chain nodes")
 ```
 
 完全形状下数组可以没有空洞；稀疏形状仍然满足同一套下标规则，却可能产生指数级浪费。对连续取右孩子的高度 $h$ 链，最深节点下标为 $2^{h+1}-2$，因此截断到最后一个已用槽位的数组也需要 $2^{h+1}-1$ 个槽位：13 个节点就需要 8191 个槽位。连续取左孩子时需要的槽位数是 $2^{h}$，常数因子不同，但两者都是 $\Theta(2^{h})$。真正的结论是隐式数组对稀疏深树可能发生指数级空洞浪费：具体倍数取决于链的方向，8191 只对全右链成立。

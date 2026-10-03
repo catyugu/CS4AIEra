@@ -1,0 +1,154 @@
+---
+id: algorithms.branch-and-bound
+slug: /algorithms/branch-and-bound
+order: 45
+title: 分支定界与最优性剪枝
+status: published
+objectives:
+  - 说明最优性剪枝要证明的整棵子树命题，以及 incumbent 与界在这个判断里的分工
+  - 用分数松弛构造 0/1 背包的上界，并说明它为什么覆盖每个整数子集
+  - 说明界为什么必须用精确算术算出，并给出浮点界剪掉最优解的实例
+  - 区分更松的合法界与不合法界，并解释整数值的界怎样静默丢掉最优解
+  - 把界的计算成本算进每个节点的处理成本
+---
+
+**分支定界**把**当前最优解**（incumbent）和一个针对子问题的**界**放在一起：凡是界不足以超过 incumbent 的子树都整棵跳过。它和回溯共用同一份深度优先枚举骨架 <CrossRef id="algorithms.search-and-pruning" />，只额外维护这两样东西；节点选择策略不受限制，用最优优先之类的次序同样成立。
+
+## 最优性剪枝的义务
+
+以求最大值为例。设 $U(p)$ 是节点 $p$ 处给出的界，它必须满足一条**覆盖整棵子树**的性质——对子树里每一个可行完成 $x$ 都有 $f(x) \le U(p)$。只有在这条成立、且 $U(p) \le best$（当前最优值）时，才可以剪掉 $p$。界算小了，就可能把含有最优解的分支一起剪掉，算法照常返回一个答案，只是不再是最优的。界沿父子节点的单调下降不是正确性的必要条件——需要的是上面那条覆盖性。
+
+## 0/1 背包的规格
+
+| 项 | 规格 |
+| --- | --- |
+| 输入 | 物品 $(w_i, v_i)$，$w_i$ 与 $v_i$ 是正整数，$W$ 是非负整数 |
+| 可行 | 总重量不超过 $W$ 的子集 |
+| 输出 | 最大总价值 |
+| 变量 | `best` 搜索到目前为止见过的最大总价值，初始为 0 |
+| 界 | `bound(index, room)` 是「只考虑 `index` 之后的物品、容量为 `room`」时任何可行子集总价值的上界 |
+| 剪枝 | 当 `value + bound(index, room) <= best` 时整棵子树不必进入 |
+
+## 分数松弛
+
+界的取法决定剪枝的力度。取**分数松弛**：把剩下的物品按价值密度降序摆放，能整件放下就整件放，放不下的那件按比例切开塞满剩余容量。得到的值一定不小于任何整数子集的总价值，因此覆盖整棵子树。密度规则在 0/1 背包上不能直接给出答案，却正好给出上界——让一个松弛但快的方法给界，精确枚举只去走还有希望的分支。
+
+「一定不小于」这句话对代码有要求：界必须用**精确算术**算出来。密度排序和最后那件按比例切开的贡献一旦经过浮点数，就可能被向下舍入到真实上界以下，于是剪枝条件 $value + bound \le best$ 会错误成立，把装有最优解的分支剪掉。下面的实现把密度与界都用 `fractions.Fraction` 保持精确。
+
+```python run id="alg.search.knapsack"
+from fractions import Fraction
+
+
+def branch_and_bound(items, capacity, use_bound=True):
+    """Postcondition: (best value, nodes visited, a set attaining it).
+
+    The bound is the fractional relaxation of the remaining items, computed
+    exactly, so the number the code compares against the incumbent really is an
+    upper bound on every completion in the subtree.
+    """
+    ordered = sorted(items, key=lambda item: Fraction(item[1], item[0]), reverse=True)
+    best = {"value": 0, "taken": ()}
+    stats = {"nodes": 0}
+
+    def bound(index, room):
+        total = Fraction(0)
+        for weight, value in ordered[index:]:
+            if weight <= room:
+                room -= weight
+                total += value
+            else:
+                total += Fraction(value * room, weight)
+                break
+        return total
+
+    def explore(index, room, value, taken):
+        stats["nodes"] += 1
+        if value > best["value"]:
+            best["value"], best["taken"] = value, taken
+        if index == len(ordered):
+            return
+        weight, item_value = ordered[index]
+        if weight <= room:
+            explore(index + 1, room - weight, value + item_value, taken + (ordered[index],))
+        if not use_bound or value + bound(index + 1, room) > best["value"]:
+            explore(index + 1, room, value, taken)
+
+    explore(0, capacity, 0, ())
+    return best["value"], stats["nodes"], best["taken"]
+
+
+cases = [([(6, 8), (5, 5), (5, 5)], 10), ([(4, 6), (3, 5), (3, 5), (2, 3)], 7)]
+for items, capacity in cases:
+    value, bounded, taken = branch_and_bound(items, capacity)
+    _, plain, _ = branch_and_bound(items, capacity, use_bound=False)
+    print(f"items {items}, capacity {capacity}")
+    print(f"  value {value} from {taken} | nodes with the bound {bounded}, without it {plain}")
+```
+
+`use_bound=False` 关掉的正是最优性剪枝这一条：两次运行给出同一个最优值，访问的节点数不同。两次运行返回同一个值只是一次回归检查，不能代替对界合法性的证明——界虽然不直接贡献目标值，却参与搜索的控制流，它的合法性正是最终最优性的条件。
+
+## 界的合法性
+
+上面的界合法，是因为它对每个整数子集都成立。放松这条界不会破坏正确性，只降低剪枝能力：把界换成「剩余物品价值之和」，它不考虑剩余容量是否装得下，仍然覆盖整棵子树，但更难触发最优性剪枝，因此可能访问更多节点。
+
+危险在另一个方向：整数贪心填出来的价值**不是合法上界**。它按密度整件整件地放，放不下的跳过，得到的其实是某个可行子集的价值，因而可能低于子树里真正能达到的最优值。低估落在关键子树上、当前 incumbent 又足够触发这次剪枝时，含有最优解的分支就被整棵跳过，搜索照常返回一个偏小的答案。浮点界是同一种失效的另一条来源：界只要在某一层舍到真实上界以下，就会以同样的方式骗过剪枝条件。
+
+```python run id="alg.search.bad-bound"
+from fractions import Fraction
+
+
+def optimize(items, capacity, bound):
+    """One depth-first search; bound(index, room) is the only plug-in, so swapping
+    it swaps the pruning rule."""
+    best = 0
+    def explore(index, room, value):
+        nonlocal best
+        best = max(best, value)
+        if index == len(items):
+            return
+        weight, item_value = items[index]
+        if weight <= room:
+            explore(index + 1, room - weight, value + item_value)
+        if value + bound(index + 1, room) > best:
+            explore(index + 1, room, value)
+    explore(0, capacity, 0)
+    return best
+
+
+def relaxation(items, split=True, exact=True):
+    """Bound over items[index:], which the caller lists in decreasing density: whole
+    items while they fit, then the first item that does not. split=False skips that
+    last item; exact=False splits it in float instead of Fraction."""
+    def bound(index, room):
+        total = Fraction(0) if exact else 0.0
+        for weight, value in items[index:]:
+            if weight <= room:
+                room -= weight
+                total += value
+            elif split:
+                total += Fraction(value * room, weight) if exact else value * room / weight
+                return total
+        return total
+    return bound
+
+
+tiny, capacity = [(1, 1), (1, 1), (3, 3)], 3
+print("whole items only, root bound:", relaxation(tiny, split=False)(0, capacity),
+      "| best found:", optimize(tiny, capacity, relaxation(tiny, split=False)), "| optimum: 3")
+
+big = 2 ** 54
+hard, capacity = [(big - 1, big + 1), (big, big + 2)], big
+print("float split, root bound:", relaxation(hard, exact=False)(0, capacity),
+      "| best found:", optimize(hard, capacity, relaxation(hard, exact=False)),
+      "| optimum:", big + 2)
+print("exact split, best found:", optimize(hard, capacity, relaxation(hard)),
+      "| optimum:", big + 2)
+```
+
+容量 3 的那个实例只有三个物品：整数贪心填先放进两个各值 1 的物品，把值为 3 的那个物品挡在门外，根处的界因此是 2，而 $(3, 3)$ 单独就把总价值推到 3。这个「界」其实是一个可行子集的价值，从未承诺覆盖整棵子树，跳过的正是含最优解的那条分支。
+
+另一个实例把 $2^{54}$ 附近的整数交给浮点：$2^{54}+2$ 在 float64 里不可表示（这一段的可表示间隔是 4），密度与切分贡献一路舍下来，根处的界落在 $1.8014398509481984\times 10^{16}$，低于真实最优值 $2^{54}+2 = 18014398509481986$，于是搜索返回 $18014398509481985$。把 `exact` 换成 `True`，同一个搜索会走进去，给出 18014398509481986。
+
+## 界的计算成本
+
+界不直接贡献目标值，但每个节点都要算一次，它的成本要算进每个节点的处理成本里。更紧的界剪掉更多节点，更贵的界抬高每个节点的成本，净效果取决于实例——一个更紧但更贵的界有时反而更慢。

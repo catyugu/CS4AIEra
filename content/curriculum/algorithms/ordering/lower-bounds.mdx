@@ -9,7 +9,6 @@ objectives:
   - 用「找最小值至少 n - 1 次比较」热身
   - 用决策树把 n! 种相对次序与叶数联系起来，推出高度至少 ceil(log2(n!))
   - 用 n! >= (n/2)^(n/2) 得出 Omega(n log n)，不依赖 Stirling 公式
-  - 用 Kraft 不等式与算术几何平均把同一结论扩展到随机比较排序
   - 说清这条下界不约束写入次数、辅助空间与稳定性
 ---
 
@@ -17,23 +16,23 @@ objectives:
 
 ## 比较模型
 
-下界总是相对于某个模型而言的。本节把讨论限制在<Term id="comparison-model">比较模型</Term>里：
+下界总是相对于某个模型而言的。本节固定在<Term id="comparison-model">比较模型</Term>里讨论：
 
 - 输入是 $n$ 个键，两两不同
 - 算法唯一能做的事，是取两个键问「第一个是否小于第二个」
 - 每次比较得到一个布尔答案
 
-真实程序当然还能做别的事：读内存、比较下标、检查数组长度。但关于**键的相对次序**，在这个模型里算法只能从两两比较中得到信息。本节要证明的结论都要带上这个前提；脱离模型就没有这条下界。
+真实程序当然还能做别的事：读内存、比较下标、检查数组长度。但关于**键的相对次序**，在这个模型里算法只能从两两比较中得到信息；所有下界结论都带着这个前提，脱离模型就没有这条下界。
 
 模型里「键两两不同」这条限制是为了让计数论证保持干净。一旦允许重复键，输入不再对应 $n!$ 个彼此不同的严格全序；需要区分的相对次序取决于重复的模式。极端地，当所有键值都相同时，根本不存在 $n!$ 种不同的严格次序需要区分。重复键下的精确比较下界需要另外计数，本节不展开。
 
 ## 热身：找最小值需要 n - 1 次比较
 
-在排序之前先看一个更小的任务，因为它和下界的关系最直接。
+找最小值是一个比完整排序更小的任务，它和下界的关系最直接。
 
 不变量：每次比较之后，「仍可能是最小值」的候选集合至多减少一个元素。比较两个候选者时，较大者立刻可以被排除，因此 $n$ 个候选缩到 1 个，至少要排除 $n - 1$ 个，也就是至少要 $n - 1$ 次比较；而一次线性扫描恰好用 $n - 1$ 次比较就能找到最小值。
 
-这条论证里没有出现数组、循环或语言细节，只有「一次比较能排除几个候选者」。它是本节的第一个下界：**找最小值至少需要 $n - 1$ 次比较**，而扫描达到这个数，所以找最小值是 $\Theta(n)$。
+这条论证里没有出现数组、循环或语言细节，只有「一次比较能排除几个候选者」。结论是：**找最小值至少需要 $n - 1$ 次比较**，而扫描达到这个数，所以找最小值是 $\Theta(n)$。
 
 随机 quickselect（见 <CrossRef id="algorithms.selection-and-top-k" />）对任意固定秩的期望成本是 $O(n)$，而这里的最小值就是 $r = 0$ 的特例；$n - 1$ 次比较的下界说明这个特例在线性量级上已经最优。若要把 $\Omega(n)$ 下界推广到任意秩，还需要更细的选择下界论证，本节不展开。所以这里只用最小值当作下界证明的热身，不据此把所有秩的 $O(n)$ 上界改写成 $\Theta(n)$。
 
@@ -70,21 +69,9 @@ for step in range(n - 2):
     print(f"  comparison {step + 1}: eliminated {eliminated} | still possible minima: {len(candidates)}")
 print("after", n - 2, "comparisons at least", len(candidates), "candidates remain:",
       "you cannot name the minimum yet")
-
-n = 8
-candidates = list(range(n))
-while len(candidates) > 1:
-    first, second = candidates[0], candidates[1]
-    if first > second:
-        winner = second
-    else:
-        winner = first
-    candidates = [winner] + candidates[2:]
-print("it takes", n - 1, "comparisons to leave exactly one candidate:",
-      len(candidates) == 1)
 ```
 
-扫描的实测比较次数是 4095 = $n - 1$，与下界一致；下半段用一个小例子说明 $n - 2$ 次比较之后为什么仍然无法给出答案：每一步至多排除一个候选者，所以候选集合至少还剩 2 个。
+扫描的实测比较次数是 4095 = $n - 1$，与下界一致。$n = 8$ 的例子说明 $n - 2$ 次比较之后为什么仍然无法给出答案：每一步至多排除一个候选者，所以候选集合至少还剩 2 个。
 
 ## 排序的决策树
 
@@ -127,12 +114,9 @@ def smallest_height(n):
 
 
 print(f"{'n':>5} {'ceil(log2(n!))':>15} {'n log2 n':>10} {'ratio':>7}")
-for n in (2, 4, 8, 16, 32, 64, 4096):
+for n in (4, 8, 16, 64, 512, 4096):
     height = smallest_height(n)
     print(f"{n:>5} {height:>15} {n * log2(n):>10.1f} {height / (n * log2(n)):>7.3f}")
-
-for n in range(2, 200):
-    assert 2 ** (smallest_height(n) - 1) < factorial(n) <= 2 ** smallest_height(n), n
 
 print()
 print("n = 4 by hand: 4! = 24, and a decision tree of height 4 has at most 2**4 = 16 leaves.")
@@ -160,83 +144,6 @@ $$\log_2(n!) = n \log_2 n - \Theta(n),$$
 
 即主项之外还有一个线性的修正（约 $1.44\,n$ 的负项），这个更精确的表达式在解释实测比值为什么低于 1 时有用，但它不是本节证明的依赖。
 
-## 随机化不改变下界
-
-决策树的论证针对的是一个给定的确定性算法。随机化算法（例如 <CrossRef id="algorithms.comparison-sorting" /> 里的随机 pivot 快速排序）每次运行会掷不同的随机数，那它是不是绕过了下界？
-
-先要补上一个事实：叶数下界只说明「树高至少是 $\lceil \log_2(n!) \rceil$」，也就是某个输入很深；它并不能直接推出「在均匀随机的输入上平均也要这么多次比较」。平均深度的下界要用 Kraft 不等式单独证明。设 $N = n!$。对这 $N$ 种严格全序中的每一种，确定性比较算法都会沿唯一一条路径到达一个可达叶；两个不同的全序不能共享同一个正确叶子，所以这 $N$ 个输入对应 $N$ 个不同的可达叶。记它们的深度为 $d_1, \dots, d_N$。这些叶子只是二叉决策树叶集合的一个子集，因此同样满足 Kraft 不等式
-
-$$\sum_{i=1}^{N} 2^{-d_i} \le 1.$$
-
-对它用算术几何平均（AM-GM）：
-
-$$2^{-\frac{1}{N}\sum_i d_i} = \left(\prod_i 2^{-d_i}\right)^{1/N} \le \frac{1}{N} \sum_i 2^{-d_i} \le \frac{1}{N}.$$
-
-两边取 $-\log_2$，得到本节的第二个下界：
-
-$$\frac{1}{N} \sum_{i=1}^{N} d_i \ge \log_2 N = \log_2(n!).$$
-
-**任何正确决策树的平均叶深也至少是 $\log_2(n!)$。** 有了这一步，随机化算法就好处理了：把一个每次运行都正确并终止的随机比较排序固定住它的随机比特，就得到一棵正确的确定性决策树；上面刚证明每棵这样的树在均匀随机排列上的平均成本至少是 $\log_2(n!)$。再对所有随机比特取平均：
-
-$$\mathbb{E}_{\pi}\, \mathbb{E}_{R}\left[C(\pi, R)\right] \ge \log_2(n!).$$
-
-一个平均值不小于 $\log_2(n!)$，说明至少有一个输入达到或超过它：
-
-$$\text{存在输入 } \pi\text{，使 } \mathbb{E}_{R}\left[C(\pi, R)\right] \ge \log_2(n!).$$
-
-这就是随机化版本的量词：**对任何永远正确的随机比较排序，都存在某个输入，使它对内部随机性的期望比较次数为 $\Omega(n \log n)$。**
-
-这个下界本身只给出一个存在性结论：至少有一个输入 $\pi$ 满足 $\mathbb{E}_{R}[C(\pi, R)] = \Omega(n \log n)$。它并不排斥某个具体的随机算法对每一个固定输入都有 $O(n \log n)$ 的期望上界。事实上，<CrossRef id="algorithms.comparison-sorting" /> 里的随机 pivot 快速排序，在键两两不同、每轮独立均匀选择 pivot 的模型下，对任意固定输入都有期望 $\Theta(n \log n)$ 的比较次数。它没有的是「每一次随机运行都在 $O(n \log n)$ 内结束」的确定性保证：极少数随机选择序列仍可能造成 $\Theta(n^2)$ 的运行。
-
-这里只讨论「每次运行都正确」的情形。如果算法允许以正概率输出错误答案（Monte Carlo 一类），需要另一套论证，本节不涉及。
-
-```python run id="alg.ordering.decision-tree-witness"
-from itertools import permutations
-from math import factorial, log2
-
-
-def build_decision_tree(orders):
-    """Greedy comparison tree over a set of distinct full orders; leaves are single orders."""
-    if len(orders) == 1:
-        return ("leaf", orders[0], 1)
-    n = len(orders[0])
-    best = None
-    for i in range(n):
-        for j in range(i + 1, n):
-            left, right = [], []
-            for order in orders:
-                (left if order[i] < order[j] else right).append(order)
-            if not left or not right:
-                continue
-            balance = max(len(left), len(right))
-            if best is None or balance < best[0]:
-                best = (balance, i, j, left, right)
-    assert best is not None
-    _, i, j, left, right = best
-    left_tree = build_decision_tree(left)
-    right_tree = build_decision_tree(right)
-    return ("node", i, j, left_tree, right_tree)
-
-
-def leaves(tree, depth=0):
-    if tree[0] == "leaf":
-        return [depth]
-    return leaves(tree[3], depth + 1) + leaves(tree[4], depth + 1)
-
-
-for n in (3, 4):
-    orders = list(permutations(range(n)))
-    tree = build_decision_tree(orders)
-    depths = leaves(tree)
-    kraft = sum(2.0 ** -d for d in depths)
-    average = sum(depths) / len(depths)
-    bound = log2(factorial(n))
-    print(f"n = {n}: leaves {len(depths)} | heights seen {sorted(set(depths))} "
-          f"| height {max(depths)} | Kraft sum {kraft:.4f} (<= 1: {kraft <= 1 + 1e-12})")
-    print(f"  average leaf depth {average:.4f} | log2(n!) = {bound:.4f} "
-          f"| average >= log2(n!): {average >= bound - 1e-12}")
-```
-
 ## 下界只约束比较次数
 
 $\Omega(n \log n)$ 是关于**比较次数**的下界。决策树只数比较，一次比较之后跟着多少次元素移动、占多少额外空间、输出是否稳定，它都没有记录。所以这条下界不推出：
@@ -246,3 +153,23 @@ $\Omega(n \log n)$ 是关于**比较次数**的下界。决策树只数比较，
 - **稳定性**：稳定性是输出契约的一部分（见 <CrossRef id="algorithms.sorting" />），与比较次数之间没有推出关系。归并排序的实现稳定，<CrossRef id="algorithms.comparison-sorting" /> 里的原地堆排序实现不稳定；这一差异不是由 $\Omega(n \log n)$ 比较下界决定的。
 
 模型也有边界。如果键带有比较之外可利用的结构，例如键取自一个已知的有限整数域，算法可以检查数字的位或桶编号，而不只是问「谁更小」。计数排序与基数排序就属于这一类，它们不在本节这棵二元比较决策树里，因此不构成反例。它们的实际成本取决于值域大小、字长与基数，本节不把它们展开成一组算法对照。
+
+## 延伸：为什么随机化也绕不过这条比较下界
+
+决策树的论证针对一个给定的确定性算法。随机比较排序每次运行都掷不同的随机数，这会绕开下界吗？
+
+叶数下界说明某个输入很深，平均深度则要单独证明。设 $N = n!$。每个严格全序都沿唯一一条路径到达一个可达叶，不同的全序不共享正确叶子，所以这 $N$ 个输入对应 $N$ 个深度为 $d_1, \dots, d_N$ 的可达叶。它们只是叶集合的子集，同样满足 Kraft 不等式
+
+$$\sum_{i=1}^{N} 2^{-d_i} \le 1.$$
+
+对它用算术几何平均：
+
+$$2^{-\frac{1}{N}\sum_i d_i} = \left(\prod_i 2^{-d_i}\right)^{1/N} \le \frac{1}{N} \sum_i 2^{-d_i} \le \frac{1}{N}.$$
+
+两边取 $-\log_2$，任何正确决策树的平均叶深也至少是 $\log_2(n!)$：
+
+$$\frac{1}{N} \sum_{i=1}^{N} d_i \ge \log_2(n!).$$
+
+把一个每次运行都正确并终止的随机比较排序固定住随机比特，就得到一棵正确的确定性决策树，它在均匀随机排列上的平均成本至少是 $\log_2(n!)$；再对所有随机比特取平均，得 $\mathbb{E}_{\pi} \mathbb{E}_{R}[C(\pi, R)] \ge \log_2(n!)$。平均值不小于 $\log_2(n!)$，说明至少有一个输入达到或超过它：**对任何永远正确的随机比较排序，都存在某个输入，使它对内部随机性的期望比较次数为 $\Omega(n \log n)$。**
+
+这个下界只给出存在性结论，不排斥某个随机算法对每个固定输入都有 $O(n \log n)$ 的期望上界；<CrossRef id="algorithms.comparison-sorting" /> 的随机 pivot 快速排序正是后者，它少的是「每次随机运行都在 $O(n \log n)$ 内结束」的确定性保证。允许以正概率输出错误答案的算法需要另一套论证，本节不涉及。
