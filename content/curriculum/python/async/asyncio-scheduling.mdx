@@ -23,7 +23,7 @@ objectives:
 - 因此切换总是由被运行的代码自己发起，任何位置都不会被抢占。一个不释放控制权的函数会占住整个循环：在协程里直接调用一个长时间返回的同步函数，循环里的其他 task 全部停住。
 - 可以推理的是**就绪队列的先后**：同一轮里入队的顺序是确定的（先进先出），因此只依赖挂起顺序的实验有唯一输出。不可以推理的是**基于时间的相对顺序**：谁先醒来由循环的时钟与当时的负载决定。
 
-`await` 与协程对象的规定在[语言参考的协程一节](https://docs.python.org/3/reference/compound_stmts.html#coroutines)；task 与事件循环是标准库 [asyncio](https://docs.python.org/3/library/asyncio-task.html) 的契约，不是语言语法的一部分；让阻塞部分离开循环属于运行时结构问题，本课只建立语言层面的执行模型。
+`await` 与协程对象的规定在[语言参考的协程一节](https://docs.python.org/3/reference/compound_stmts.html#coroutines)；task 与事件循环是标准库 [asyncio](https://docs.python.org/3/library/asyncio-task.html) 的接口约定，不是语言语法的一部分；让阻塞部分离开循环属于运行时结构问题，本课只建立语言层面的执行模型。
 
 ## 调用 async def 不执行任何东西
 

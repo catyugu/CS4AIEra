@@ -67,7 +67,7 @@ append_bad()
 print("module-level list is untouched:", totals)
 ```
 
-`totals = []` 出现在函数体里，于是整个函数中的 `totals` 都是局部名；第一行的 `totals.append(4)` 读的是一个还没有绑定的局部名，抛 `UnboundLocalError`。加一行 `global totals` 才会读到模块对象，但这类写法通常说明设计需要重新划分状态归属。
+`totals = []` 出现在函数体里，于是整个函数中的 `totals` 都是局部名；第一行的 `totals.append(4)` 读的是一个还没有绑定的局部名，抛 `UnboundLocalError`。加一行 `global totals` 才会读到模块对象，但这类写法通常说明设计需要重新划定共享状态的修改边界。
 
 ## global 与 nonlocal
 
@@ -101,7 +101,7 @@ print("first:", first(), first(), first())
 print("second:", second())
 ```
 
-`global` 让赋值作用于模块命名空间，`nonlocal` 让它作用于最近的外层函数帧。两者都只声明归属，不创建名字，名字仍要由赋值产生；`nonlocal` 找不到外层帧里的同名绑定时抛 `SyntaxError`，而不是运行期错误。`make_counter` 的每次调用都产生新的 `count`，因此 `first` 与 `second` 各自累计，互不影响；这正是闭包捕获变量的直接后果。
+`global` 让赋值作用于模块命名空间，`nonlocal` 让它作用于最近的外层函数帧。两者都只声明这个名字属于哪一层作用域，不创建名字，名字仍要由赋值产生；`nonlocal` 找不到外层帧里的同名绑定时抛 `SyntaxError`，而不是运行期错误。`make_counter` 的每次调用都产生新的 `count`，因此 `first` 与 `second` 各自累计，互不影响；这正是闭包捕获变量的直接后果。
 
 ## 闭包捕获变量
 

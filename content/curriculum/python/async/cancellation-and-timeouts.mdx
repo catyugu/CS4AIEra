@@ -24,7 +24,7 @@ objectives:
 - 取消也是控制流：`try/finally` 会运行，这是执行清理的位置，清理里仍可以使用挂起点。取消不会回滚已经完成的部分，某个挂起点之前产生的状态变化保持不变，收尾逻辑要按这个前提写。资源释放的完整模型由 <CrossRef id="python.context-managers" /> 建立。
 - 吞掉 `CancelledError` 而不重新抛出，会让调用方收到「正常结束」：`task.done()` 为真、`task.cancelled()` 为假。调用方因此失去了对任务生命周期的控制。
 
-未被取回的异常与取消由事件循环报告，报告位置是 worker 控制台而不是调用处，具体形式随实现变化。取消通过 `CancelledError` 表现，这是语言参考里异常层次的规定；`cancel` 是标准库 `asyncio` 的契约，随标准库版本演进。
+未被取回的异常与取消由事件循环报告，报告位置是 worker 控制台而不是调用处，具体形式随实现变化。取消通过 `CancelledError` 表现，这是语言参考里异常层次的规定；`cancel` 是标准库 `asyncio` 的接口约定，随标准库版本演进。
 
 本课用到的 `async with` 是 `with` 的异步形式，展开与三条退出路径见 <CrossRef id="python.async-iteration-and-context" />；同步版本的完整模型见 <CrossRef id="python.context-managers" />。取消的两类应用——给一段等待设定期限、给一组任务划定共同生命周期——由 <CrossRef id="python.timeout-and-task-lifecycle" /> 处理。
 

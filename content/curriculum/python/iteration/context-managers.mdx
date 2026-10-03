@@ -209,7 +209,7 @@ except RuntimeError:
 print(events)
 ```
 
-`@contextmanager` 把生成器切成交付点两侧：`yield` 之前是进入逻辑，`yield` 的值绑定给 `as`，之后的代码是退出逻辑；异常从 `yield` 处抛回生成器，因此必须用 `try/finally` 包住 `yield` 才能保证退出逻辑运行。`leaky` 缺少这层结构，body 抛异常时 `close leaky` 从未出现——修复了 `opened` 的那个缺陷，就在 `leaky` 里复现了它。生成器写成的管理器只能使用一次：生成器是迭代器，同一实例第二次进入会抛 `RuntimeError`。
+`@contextmanager` 把生成器切成 yield 两侧的两个位置：`yield` 之前是进入逻辑，`yield` 的值绑定给 `as`，之后的代码是退出逻辑；异常从 `yield` 处抛回生成器，因此必须用 `try/finally` 包住 `yield` 才能保证退出逻辑运行。`leaky` 缺少这层结构，body 抛异常时 `close leaky` 从未出现——修复了 `opened` 的那个缺陷，就在 `leaky` 里复现了它。生成器写成的管理器只能使用一次：生成器是迭代器，同一实例第二次进入会抛 `RuntimeError`。
 
 ## 释放点与对象生命周期
 

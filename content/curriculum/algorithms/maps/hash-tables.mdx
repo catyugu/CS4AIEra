@@ -162,8 +162,8 @@ print("first keys in insertion order:", list(mapping)[:3])
 
 **`1` 与 `1.0` 是同一个键**：判等用的是键的相等契约，哈希负责把候选缩小到同一个位置。数值哈希用同一条素数取模规则（[sys.hash_info](https://docs.python.org/3/library/sys.html#sys.hash_info) 给出该模数）。
 
-**迭代顺序属于语言保证**：字典保插入序，从 3.7 起是语言承诺（[stdtypes](https://docs.python.org/3/library/stdtypes.html#dict)），集合不承诺迭代顺序；插入序与成本性质无关，需要按键序迭代要用有序映射（见 <CrossRef id="algorithms.maps-and-sets" />）。
+**迭代顺序属于语言保证**：字典保插入序，从 3.7 起是语言规范保证的行为（[stdtypes](https://docs.python.org/3/library/stdtypes.html#dict)），集合不保证迭代顺序；插入序与成本性质无关，需要按键序迭代要用有序映射（见 <CrossRef id="algorithms.maps-and-sets" />）。
 
-**实现边界**：CPython 的 `dict` 使用开放寻址与带扰动的探测序列（[dictobject.c](https://github.com/python/cpython/blob/main/Objects/dictobject.c)），本节说明机制时用的是分离链接，两者属于不同的表示；`hash(-1)` 与 `hash(-2)` 都打印为 `-2`，因为 C 层把 `-1` 留作哈希失败的指示值（[PyObject_Hash](https://docs.python.org/3/c-api/object.html#c.PyObject_Hash)）。这些解释的是这份实现的输出，正文的推理只用「哈希缩小候选、相等确认目标」这一条契约。
+**实现边界**：CPython 的 `dict` 使用开放寻址与带扰动的探测序列（[dictobject.c](https://github.com/python/cpython/blob/main/Objects/dictobject.c)），本节说明机制时用的是分离链接，两者属于不同的表示；`hash(-1)` 与 `hash(-2)` 都打印为 `-2`，因为 C 层把 `-1` 留作哈希失败的指示值（[PyObject_Hash](https://docs.python.org/3/c-api/object.html#c.PyObject_Hash)）。这些解释的是这份实现的输出，正文的推理只用「哈希缩小候选、相等确认目标」这一条性质。
 
 本课反复用到「查询是常数成本」这句话：它成立，是因为探测长度被压在了常数以内。这句话里还藏着一个词——「平均」。一次查找的成本取决于哪些键真的落进了同一候选区域，所以它随输入变化；要对成本说一个与具体键集无关的常数，就得先说明这个平均值对什么取：是对输入的分布取平均，还是对固定输入上算法自己掷出的随机位取平均？这个问题与哈希函数、探测策略无关，它问的是「平均」这个词到底对谁取平均。

@@ -83,7 +83,7 @@ print(a.members, b.members)
 print(a.__dict__, b.__dict__)
 ```
 
-在 `__init__` 里给 `self.members` 赋值之后，属性落在实例上，两个实例各有自己的列表，不再互为<Term id="alias">别名</Term>。`a.__dict__` 与 `b.__dict__` 显示属性确实存在实例上，这是判断状态所有权的直接证据。定义时求值一次、被多处共享的模式也出现在默认参数上，见 <CrossRef id="python.mutability-and-copy" />。
+在 `__init__` 里给 `self.members` 赋值之后，属性落在实例上，两个实例各有自己的列表，不再互为<Term id="alias">别名</Term>。`a.__dict__` 与 `b.__dict__` 显示属性确实存在实例上，这是判断属性到底存在哪个对象上的直接证据。定义时求值一次、被多处共享的模式也出现在默认参数上，见 <CrossRef id="python.mutability-and-copy" />。
 
 ## 属性赋值与重新绑定
 

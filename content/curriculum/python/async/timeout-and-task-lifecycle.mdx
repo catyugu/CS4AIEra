@@ -146,7 +146,7 @@ except ExceptionGroup as remaining:
     print("propagated:", [type(error).__name__ for error in remaining.exceptions])
 ```
 
-第二个例子直接构造固定异常组，使选择性处理的结果不依赖任务完成顺序。多个 `except*` 可以各自处理匹配部分；同一个 `try` 不能混写 `except` 与 `except*`。TaskGroup 的聚合规则不保证失败列表的次序，不能把顺序当作接口契约。
+第二个例子直接构造固定异常组，使选择性处理的结果不依赖任务完成顺序。多个 `except*` 可以各自处理匹配部分；同一个 `try` 不能混写 `except` 与 `except*`。TaskGroup 的聚合规则不保证失败列表的次序，不能把顺序当作接口约定。
 
 ## 创建关系与等待关系
 

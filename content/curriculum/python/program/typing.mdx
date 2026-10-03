@@ -114,7 +114,7 @@ except ValueError as failure:
     print(failure)
 ```
 
-输入 `Sequence[int]` 时返回 `int`，输入 `Sequence[str]` 时返回 `str`，检查器沿调用保留这条关系（见 [typing：Generics](https://docs.python.org/3.14/library/typing.html#generics)）。`T` 不承诺序列非空；空输入的失败契约仍由函数体建立。
+输入 `Sequence[int]` 时返回 `int`，输入 `Sequence[str]` 时返回 `str`，检查器沿调用保留这条关系（见 [typing：Generics](https://docs.python.org/3.14/library/typing.html#generics)）。`T` 不保证序列非空；空输入时的失败行为仍由函数体规定。
 
 ## 可变容器与 invariance
 
