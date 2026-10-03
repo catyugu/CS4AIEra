@@ -102,39 +102,39 @@
 
 | 子章节 | order | 课时 id | 标题 | 落盘 |
 | --- | --- | --- | --- | --- |
-| `algorithms.complexity` | 10 | `algorithms.abstractions-and-invariants` | 抽象数据类型、表示与不变量 | 已冻结 |
-| | 20 | `algorithms.cost-model` | 输入规模与成本模型 | 已冻结 |
-| | 30 | `algorithms.asymptotic-analysis` | 渐进记号与增长率 | 已冻结 |
-| | 40 | `algorithms.correctness` | 正确性、循环不变量与终止 | 已冻结 |
-| | 50 | `algorithms.recursion` | 递归、归纳与调用树 | 已冻结 |
-| | 60 | `algorithms.amortized` | 摊还分析 | 已冻结 |
-| | 70 | `algorithms.average-and-randomized` | 平均情形与随机化 | 已冻结 |
-| `algorithms.sequences` | 10 | `algorithms.arrays-and-lists` | 数组、动态数组与局部性 | 已冻结 |
-| | 20 | `algorithms.linked-structures` | 链表与指针结构 | 已冻结 |
-| | 30 | `algorithms.stacks-and-queues` | 栈、队列与 deque | 已冻结 |
-| | 40 | `algorithms.strings` | 字符串匹配与预处理 | 已冻结 |
-| `algorithms.maps` | 10 | `algorithms.maps-and-sets` | 集合、映射与关联查询 | 已冻结 |
-| | 20 | `algorithms.hash-tables` | 哈希表与关联映射 | 已冻结 |
-| `algorithms.trees` | 10 | `algorithms.tree-representation` | 树、递归结构与遍历 | 已冻结 |
-| | 20 | `algorithms.ordered-maps` | 二叉搜索树与有序映射 | 已冻结 |
-| | 30 | `algorithms.heaps` | 优先队列与堆 | 已冻结 |
-| `algorithms.ordering` | 10 | `algorithms.binary-search` | 二分查找与单调边界 | 已冻结 |
-| | 20 | `algorithms.sorting` | 排序契约、稳定性与成本 | 已冻结 |
-| | 30 | `algorithms.comparison-sorting` | 比较排序：分区、快速排序与堆排序 | 已冻结 |
-| | 40 | `algorithms.selection-and-top-k` | 选择、第 k 个元素与 Top-K | 已冻结 |
-| | 50 | `algorithms.lower-bounds` | 下界与比较模型 | 已冻结 |
-| `algorithms.graphs` | 10 | `algorithms.graph-representation` | 图的表示与不变量 | 已冻结 |
-| | 20 | `algorithms.graph-traversal` | 遍历、连通分量与访问不变量 | 已冻结 |
-| | 30 | `algorithms.dags-and-topological-order` | DAG、拓扑序与环检测 | 已冻结 |
-| | 40 | `algorithms.shortest-paths` | 最短路径：单位权、非负权与负边 | 已冻结 |
-| | 50 | `algorithms.connectivity-and-spanning-trees` | 连通性、并查集与最小生成树 | 已冻结 |
-| `algorithms.techniques` | 10 | `algorithms.divide-and-conquer` | 分治 | 已冻结 |
-| | 20 | `algorithms.greedy` | 贪心与交换论证 | 已冻结 |
-| | 30 | `algorithms.dynamic-programming` | 动态规划 | 已冻结 |
-| | 40 | `algorithms.search-and-pruning` | 状态空间搜索与剪枝 | 已冻结 |
-| | 50 | `algorithms.randomized-algorithms` | 随机化算法 | 已冻结 |
-| `algorithms.selection` | 10 | `algorithms.choosing-structures` | 从操作工作负载选择数据结构 | 已冻结 |
-| | 20 | `algorithms.complexity-in-practice` | 渐进之外：常数、局部性与内存 | 已冻结 |
+| `algorithms.complexity` | 10 | `algorithms.abstractions-and-invariants` | 抽象数据类型、表示与不变量 | ✓ |
+| | 20 | `algorithms.cost-model` | 输入规模与成本模型 | ✓ |
+| | 30 | `algorithms.asymptotic-analysis` | 渐进记号与增长率 | ✓ |
+| | 40 | `algorithms.correctness` | 正确性、循环不变量与终止 | ✓ |
+| | 50 | `algorithms.recursion` | 递归、归纳与调用树 | ✓ |
+| | 60 | `algorithms.amortized` | 摊还分析 | ✓ |
+| | 70 | `algorithms.average-and-randomized` | 平均情形与随机化 | ✓ |
+| `algorithms.sequences` | 10 | `algorithms.arrays-and-lists` | 数组、动态数组与局部性 | ✓ |
+| | 20 | `algorithms.linked-structures` | 链表与指针结构 | ✓ |
+| | 30 | `algorithms.stacks-and-queues` | 栈、队列与 deque | ✓ |
+| | 40 | `algorithms.strings` | 字符串匹配与预处理 | ✓ |
+| `algorithms.maps` | 10 | `algorithms.maps-and-sets` | 集合、映射与关联查询 | ✓ |
+| | 20 | `algorithms.hash-tables` | 哈希表与关联映射 | ✓ |
+| `algorithms.trees` | 10 | `algorithms.tree-representation` | 树、递归结构与遍历 | ✓ |
+| | 20 | `algorithms.ordered-maps` | 二叉搜索树与有序映射 | ✓ |
+| | 30 | `algorithms.heaps` | 优先队列与堆 | ✓ |
+| `algorithms.ordering` | 10 | `algorithms.binary-search` | 二分查找与单调边界 | ✓ |
+| | 20 | `algorithms.sorting` | 排序契约、稳定性与成本 | ✓ |
+| | 30 | `algorithms.comparison-sorting` | 比较排序：分区、快速排序与堆排序 | ✓ |
+| | 40 | `algorithms.selection-and-top-k` | 选择、第 k 个元素与 Top-K | ✓ |
+| | 50 | `algorithms.lower-bounds` | 下界与比较模型 | ✓ |
+| `algorithms.graphs` | 10 | `algorithms.graph-representation` | 图的表示与不变量 | ✓ |
+| | 20 | `algorithms.graph-traversal` | 遍历、连通分量与访问不变量 | ✓ |
+| | 30 | `algorithms.dags-and-topological-order` | DAG、拓扑序与环检测 | ✓ |
+| | 40 | `algorithms.shortest-paths` | 最短路径：单位权、非负权与负边 | ✓ |
+| | 50 | `algorithms.connectivity-and-spanning-trees` | 连通性、并查集与最小生成树 | ✓ |
+| `algorithms.techniques` | 10 | `algorithms.divide-and-conquer` | 分治 | ✓ |
+| | 20 | `algorithms.greedy` | 贪心与交换论证 | ✓ |
+| | 30 | `algorithms.dynamic-programming` | 动态规划 | ✓ |
+| | 40 | `algorithms.search-and-pruning` | 状态空间搜索与剪枝 | ✓ |
+| | 50 | `algorithms.randomized-algorithms` | 随机化算法 | ✓ |
+| `algorithms.selection` | 10 | `algorithms.choosing-structures` | 从操作工作负载选择数据结构 | ✓ |
+| | 20 | `algorithms.complexity-in-practice` | 渐进之外：常数、局部性与内存 | ✓ |
 
 ### 3.3 操作系统（`operating-systems`，order 30）
 
@@ -324,7 +324,7 @@
 | 批次 | 范围 | 状态 |
 | --- | --- | --- |
 | 1 | `python`：整模块完成并冻结（basics onboarding 层，objects / functions / iteration，data-model / representation / program / async） | 完成 |
-| 2 | `algorithms`：整模块完成并冻结（complexity / sequences / maps / trees / ordering / graphs / techniques / selection，33 课全部过逐段评审，模块级 integration audit M1–M6 通过） | 完成（已冻结，待发布） |
+| 2 | `algorithms`：整模块完成并冻结（complexity / sequences / maps / trees / ordering / graphs / techniques / selection，33 课全部过逐段评审，模块级 integration audit M1–M6 通过） | 完成（已发布） |
 | 3 | `os.processes`、`os.memory` | 计划 |
 | 4 | `os.concurrency`、`os.io`、`os.resources` | 计划 |
 | 5 | `net.foundations`、`net.transport` | 计划 |
