@@ -1,0 +1,40 @@
+/* Glossary index and full entries. */
+
+
+.glossary-index {
+  max-width: var(--measure);
+}
+
+.glossary-index .entry {
+  margin: 0 0 1.6rem;
+  padding-bottom: 1.2rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.glossary-index .entry h2 {
+  margin: 0 0 0.2rem;
+  font-size: 1.1rem;
+}
+
+.glossary-index .english,
+.glossary-index .aliases {
+  margin: 0.15rem 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.glossary-entry dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.3rem 1rem;
+  margin: 1.2rem 0;
+  font-size: 0.92rem;
+}
+
+.glossary-entry dt {
+  color: var(--muted);
+}
+
+.glossary-entry dd {
+  margin: 0;
+}

@@ -1,0 +1,92 @@
+/* Lesson body typography. */
+
+/* --- lesson body ------------------------------------------------------- */
+
+.prose {
+  max-width: var(--measure);
+}
+
+.prose> :first-child {
+  margin-top: 0;
+}
+
+.prose h2 {
+  margin: 2.4rem 0 0.8rem;
+  font-size: 1.35rem;
+  line-height: 1.4;
+}
+
+.prose h3 {
+  margin: 1.8rem 0 0.6rem;
+  font-size: 1.1rem;
+}
+
+.prose p,
+.prose li {
+  margin: 0.7rem 0;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.4rem;
+}
+
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.1rem 0;
+  font-size: 0.92rem;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid var(--line);
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.prose thead th {
+  background: var(--panel);
+}
+
+.prose blockquote {
+  margin: 1rem 0;
+  padding: 0.1rem 0 0.1rem 0.9rem;
+  border-left: 3px solid var(--line);
+  color: var(--muted);
+}
+
+.prose code {
+  background: var(--code-bg);
+  border-radius: 0.25rem;
+  padding: 0.1em 0.3em;
+  font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.prose pre {
+  margin: 1.1rem 0;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+/* Shiki emits both themes; pick the dark tokens when the reader prefers dark. */
+@media (prefers-color-scheme: dark) {
+
+  .prose pre.astro-code,
+  .prose pre.astro-code span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+  }
+}
+
+.prose pre code {
+  background: none;
+  padding: 0;
+  font-size: 1em;
+}

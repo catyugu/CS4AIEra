@@ -1,0 +1,25 @@
+/* Design tokens. Static-first: no layout depends on client script. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #fdfdfb;
+  --fg: #1b1b19;
+  --muted: #61615c;
+  --line: #deded6;
+  --panel: #f3f3ee;
+  --accent: #2f5d8a;
+  --code-bg: #f5f5f0;
+  --measure: 42rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17171a;
+    --fg: #e6e6e2;
+    --muted: #a0a09a;
+    --line: #33333a;
+    --panel: #202025;
+    --accent: #8ab4dd;
+    --code-bg: #1e1e23;
+  }
+}

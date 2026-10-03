@@ -1,0 +1,32 @@
+/* Course index page. */
+
+/* --- course index ------------------------------------------------------ */
+
+.course-section {
+  margin: 1.6rem 0;
+}
+
+.course-section h2 {
+  margin-bottom: 0.25rem;
+}
+
+.course-section.depth-1,
+.course-section.depth-2 {
+  padding-left: 1rem;
+  border-left: 2px solid var(--line);
+}
+
+.course-section.depth-2 {
+  border-left-color: var(--panel);
+}
+
+.course-section ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.3rem;
+}
+
+.english {
+  color: var(--muted);
+  font-size: 0.8em;
+  font-weight: 400;
+}
