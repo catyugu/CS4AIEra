@@ -5,53 +5,129 @@ order: 10
 title: 分治
 status: published
 objectives:
-  - 写出分治的正确性骨架，并说明唯一的硬条件是递归路径上的良基度量严格下降
-  - 从递归树展开递推式，读出哪一种机制主导结论，并用机制计数支撑它
-  - 写出主定理的假设与边界，说明它不适用时该回到哪个工具
+  - 用拆分、递归求解、合并三个动作描述一个分治方案，并写清每个动作的契约
+  - 用对子调用成立的归纳假设论证递归设计的正确性，再用严格下降的良基度量论证它终止
+  - 说明拆分比例怎样改变调用树的深度与总工作量，并在拆得极不均匀时预测成本退化
+  - 判断一个候选方案为什么不能分治：子问题不再是同一类型，或合并的成本超过拆分省下的
+  - 从 Karatsuba 的三次乘法说明减少子问题个数怎样降低成本的增长阶
 ---
+排序一个序列可以这样安排：把它切成两半，分别排好，再把两个有序半区合成一个有序序列。每一步把规模 $n$ 的问题换成两个同类型的、规模 $n/2$ 的问题，再用这些子问题的答案拼出原答案。二分查找是少了第二个子问题的退化情形（<CrossRef id="algorithms.binary-search" />）：每次只保留一个仍可能包含目标的半区。
 
-二分查找在有序序列上比较一次，就把候选范围砍掉一半，只保留仍然可能包含目标的那一半，再对新的范围重复同一操作，直到范围缩到单个元素（<CrossRef id="algorithms.binary-search" />）。候选区间按 $n, n/2, n/4, \dots$ 收缩，任何时刻手上只有一个待处理的子问题。
+这一课只回答一个设计问题：怎样把原问题变成若干个同类型、更小的问题，并从它们的答案重新拼出原答案。归并排序从头到尾是同一个例子：拆分在哪里发生、子问题带着什么契约被解掉、合并用什么信息把两个子解拼成一个解。
 
-归并排序把待排序列切成两半，分别排序，再把两个有序半区合并成一个有序序列。它每一步产生两个子问题，两个都必须解出来；元素被一层层切成更短的片段，直到每个片段只剩一个元素，再逐层合并回去。第 $i$ 层有 $2^i$ 个长度 $n/2^i$ 的片段，最后一层是 $n$ 个长度 $1$ 的片段。归并排序与快速排序（<CrossRef id="algorithms.comparison-sorting" />）都属于这一形状。
+## 拆分、求解、合并
 
-两个实例在规模上的差别可以数出来。二分查找沿一条链收缩：子问题个数始终是 $1$，规模按固定比例减小，调用像 $n \to n/2 \to n/4 \to \dots \to 1$ 那样串成一列，链的长度是 $\log_2 n$。归并排序展开成一棵分叉的树：子问题个数逐层翻倍，规模逐层减半，同一层的子问题规模相同。这条形状差别决定了它们的成本从哪里累积，也是后面所有分析的起点。
+待解问题记为 $P$，它的抽象契约写清两端：
 
-## 递推式与递归树
+| 契约 | 内容 |
+| --- | --- |
+| `solve(P)` 的前置条件 | $P$ 是这一类问题的一个实例，且规模在可解范围内 |
+| `solve(P)` 的后置条件 | 返回 $P$ 的一个解，且该解满足这类问题的定义 |
 
-两个实例的调用形状直接决定成本从哪里来。二分查找的链上，每一层只产生一个子问题，规模按 $n \to n/2 \to n/4 \to \dots$ 收缩；归并排序的树上，每个结点产生两个子问题，规模逐层减半。把一次调用的成本写成它自己执行的非递归工作加上全部子调用的成本：
+分治版本只用三个动作描述：
 
-$$T(n) = \sum_j T(n_j) + g(n).$$
+| 动作 | 说明 |
+| --- | --- |
+| `divide(P)` | 产生有限个更小的同类子实例 $P_1, \dots, P_k$ |
+| `conquer` | 递归求解这些子实例 |
+| `combine(P, solution_1, \dots, solution_k)` | 用原实例的必要信息与子问题的解，构造 $P$ 的解 |
 
-其中 $g(n)$ 是**本层的全部非递归工作**：拆分、分区、合并以及其它局部处理都算在里面。子问题规模相同、个数固定时，这条式子特化成标准形状：
+归并排序把这三个动作落到具体操作上。`divide` 按下标中点把区间切成两半，两个子实例仍是「排好一个区间」这一类型的问题，规模各约一半；`conquer` 对两个半区递归调用同一个 `solve`；`combine` 做一次归并——反复取两个半区当前更小的首元素，一个半区取空后接上另一个的剩余部分，得到整个区间的有序序列。二分查找是 $k = 1$ 的取法，`combine` 把唯一的子解直接交回；归并排序是 $k = 2$、`combine` 真正做事的取法。快速选择只留一个子实例（<CrossRef id="algorithms.selection-and-top-k" />），快速排序留两个（<CrossRef id="algorithms.comparison-sorting" />）。
 
-$$T(n) = a\,T(n/b) + f(n),$$
+区间用下标表示，`divide` 只算出两个下标范围，不复制元素。
 
-读法是：把规模 $n$ 的问题拆成 $a$ 个规模 $n/b$ 的子问题，而这一次调用自己执行的非递归工作共 $f(n)$。二分查找是 $a = 1$：只有一个 $n/2$ 大小的子问题，$f(n)$ 是一次比较与范围收缩。归并排序是 $a = 2$：两个 $n/2$ 大小的子问题，$f(n)$ 是合并两个已排好半区的工作。Karatsuba 的 $f(n)$ 是三次加减与拼接，快速排序的 $f(n)$ 主要来自 partition，合并阶段不额外计费——把它当成分治实例时，这一点必须写对，否则成本会被记到错误的位置。
+```python run id="alg.techniques.merge-sort"
+def merge(left, right, trace):
+    merged, i, j = [], 0, 0
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            merged.append(left[i]); i += 1
+        else:
+            merged.append(right[j]); j += 1
+    merged.extend(left[i:]); merged.extend(right[j:])
+    trace.append((tuple(left), tuple(right), tuple(merged)))
+    return merged
 
-递推式的解可以直接从**递归树**上读出来。树的根是原问题，每个结点有 $a$ 个孩子，深度每下一层规模除以 $b$：
 
-| 层数 | 第 $i$ 层的结点数 | 每个结点的本层工作 | 第 $i$ 层的总成本 |
-| --- | --- | --- | --- |
-| $0$ | $1$ | $f(n)$ | $f(n)$ |
-| $1$ | $a$ | $f(n/b)$ | $a\,f(n/b)$ |
-| $i$ | $a^i$ | $f(n/b^i)$ | $a^i\,f(n/b^i)$ |
-| $\log_b n$ | $a^{\log_b n} = n^p$ | $\Theta(1)$ | 叶子层 |
+def sort(values, trace):
+    if len(values) <= 1:
+        return values
+    middle = len(values) // 2
+    left = sort(values[:middle], trace)
+    right = sort(values[middle:], trace)
+    return merge(left, right, trace)
 
-其中 $p = \log_b a$，是每层结点数的增长率对规模缩小的比率。
 
-把每一层的成本相加：
+data = [7, 2, 5, 3, 8, 1, 6, 4]
+trace = []
+ordered = sort(data, trace)
+for left, right, merged in trace:
+    print(f"combine {left} + {right} -> {merged}")
+print(f"sorted {ordered}")
+print(f"combine steps: {len(trace)}  (n - 1 = {len(data) - 1})")
+```
 
-$$T(n) = \Theta(n^p) + \sum_{i = 0}^{\log_b n - 1} a^i f(n / b^i).$$
+八个数产生七次 `combine`（$n - 1$ 次）。输出按发生顺序排列：先把长度为 1 的区间两两合成，再往上一层合成更长的区间，最后一步把两个半区拼成整个序列。叶子是长度为 1 的区间，`combine` 从最下一层开始往上拼。
 
-结论就落在这两个部分谁占主导上：叶子的成本按 $n^p$ 增长，本层工作按 $a^i f(n/b^i)$ 逐层累加。三种典型情形由此而来——叶子主导、本层工作主导、两者同阶（此时每一层都贡献同阶的成本，层数 $\log_b n$ 直接乘进去，得到 $\Theta(n^p \log n)$）。
+## 递归设计的正确性骨架
 
-## 机制计数：两个实例
+正确性由对规模的归纳给出：假设每个更小的子实例都返回满足定义的正确解，`combine` 把这些子解与原实例的必要信息合成为 $P$ 的解；基本情形是规模落到可解范围、直接返回的那一步。于是调用树上每个结点的解都正确，根结点的解就是整个问题的解（与 <CrossRef id="algorithms.correctness" /> 的归纳同形）。
 
-成本结论要靠**计数论证**支撑：计数说清「哪些操作被数了、数出的量属于哪种成本类别」，计时只说「这份实现在这台机器上跑得多久」。
+归纳假设必须覆盖每一个实际子调用：归并排序的两个半区都要满足各自的契约，只假设一个成立会漏掉另一个分支。唯一的硬条件是**递归路径上的某个良基度量严格下降**——通常就是问题规模。规模是非负整数，每次递归都取到更小的实例，所以递归深度有限，算法终止。
 
-**归并排序**是逐层同阶的情形。合并两个已排好的半区时，每个元素最多被取出一次，所以一层里所有合并的比较次数总和至多 $n$。递归树一共 $\lceil \log_2 n \rceil + 1$ 层，但最后一层是叶子、不发生合并，真正干活的是至多 $\lceil \log_2 n \rceil$ 个内部层，乘起来就是比较次数的上界 $n\lceil \log_2 n \rceil$。当 $n = 2^k$ 时，最坏情形的精确值是 $n\log_2 n - n + 1$，它由一种让每层合并都「交错」到几乎耗尽一边的输入达到。单元格 A 用两个输入对比这件事——倒序输入只要 192 次比较，位反转排列要 321 次，而 $n\log_2 n - n + 1 = 321$。
+有两句话常被当成分治的定义条件，它们都不是：
 
-**Karatsuba 乘法**是叶子主导的情形。把两个数各拆成高低两半（$x = x_1 B + x_0$，$y = y_1 B + y_0$），朴素做法要算四个半长乘积；Karatsuba 用三次乘法凑出同一个结果：
+**「子问题必须互不重叠」**：这里说的是同一个子问题状态沿不同的递归路径出现，输入数据是否相交是另一回事。即使有重复状态，也不必然导致指数级工作，具体爆炸到什么程度由递推式决定：朴素斐波那契是高度重复导致指数工作的例子，不是一个一般定理。
+
+**「combine 只能用子问题的解」**：`divide` 与 `combine` 完全可以读原实例的数据。很多分治算法的 $\Theta(n)$ 级工作恰恰发生在拆分与合并阶段；本层工作量是这一次调用执行的全部非递归工作，从来不专指「合并子解」。
+
+重复状态是**效率特征**，它决定工作量，不影响方案是否成立，也是动态规划的一条入口：把调用树里反复出现的同一个状态折叠起来，树就变成一张状态 DAG，记忆化与动态规划利用的正是这种复用机会（<CrossRef id="algorithms.dynamic-programming" />）。
+
+## 拆分比例对成本的影响
+
+两个子问题的规模要么按固定比例缩小（各 $n/2$、三段各 $n/3$），要么不。这个区别决定调用树的深度：按固定比例缩小时深度是 $\Theta(\log n)$，只把规模减一时深度是 $\Theta(n)$。把每一层的成本与层数写下来就是一条 <Term id="recurrence">递推式</Term>，它的解要从调用树上读。这一步交给 <CrossRef id="algorithms.recursion" />，这里只把结论用到拆分比例上：规模按固定比例缩小时深度是对数，对数底由缩小比例决定；规模只减一的递归把层数从对数推成 $n$。
+
+同一个「递归求解、再合并」的骨架，只改拆分比例，深度就分开：
+
+```python run id="alg.techniques.split-ratio"
+def merge(left, right):
+    out, i, j = [], 0, 0
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]: out.append(left[i]); i += 1
+        else: out.append(right[j]); j += 1
+    return out + left[i:] + right[j:]
+
+def half(values, depth=0):
+    if len(values) <= 1:
+        return values, depth + 1
+    middle = len(values) // 2
+    left, ldeep = half(values[:middle], depth + 1)
+    right, rdeep = half(values[middle:], depth + 1)
+    return merge(left, right), max(ldeep, rdeep)
+
+def one_off(values, depth=0):
+    if len(values) <= 1:
+        return values, depth + 1
+    rest, deep = one_off(values[1:], depth + 1)
+    head, position = values[0], 0
+    while position < len(rest) and rest[position] < head:
+        position += 1
+    return rest[:position] + [head] + rest[position:], deep
+
+for size in (8, 64, 512):
+    values = list(range(size, 0, -1))
+    hsorted, hdepth = half(values)
+    osorted, odepth = one_off(values)
+    print(f"n={size:>4} half-split depth {hdepth:>4} one-off depth {odepth:>5} both sorted {hsorted == sorted(values) == osorted}")
+```
+
+折半的深度随规模取对数（$n = 512$ 时深度 10），每次只切出一个元素的深度与规模同阶（同一行 512），两种写法都排对。规模只减一时每层只让问题小一点，层数与 $n$ 同阶，总工作量也随之从 $n \log n$ 退化成 $n^2$——这是普通快速排序在极端不平衡划分下递归深度退化的同一机制。
+
+终止与深度是两件事：只要每次递归的规模严格下降，深度就有限、算法一定终止；只有当每次把规模缩到至多固定比例 $\rho n$（$\rho < 1$）时，深度才是 $\Theta(\log n)$。普通快速排序的划分不保证比例，对较小的一侧递归、较大的一侧改成迭代可以把栈控制在 $O(\log n)$，但那是对实现的要求，不是分治自带的性质。递归栈空间随深度增长，<CrossRef id="algorithms.recursion" /> 从调用树上读出这一项。
+
+## 第二个例子：Karatsuba
+
+归并排序的 `divide` 产生两个规模减半的子问题，合并要线性时间。Karatsuba 乘法走的是另一条路：它**减少子问题的个数**。把两个数各拆成高低两半（$x = x_1 B + x_0$，$y = y_1 B + y_0$），朴素做法要算四个半长乘积，Karatsuba 用三次乘法凑出同一个结果：
 
 $$
 \begin{aligned}
@@ -62,349 +138,40 @@ x y &= z_2 B^2 + z_1 B + z_0.
 \end{aligned}
 $$
 
-其中 $z_1$ 恰好等于 $x_0 y_1 + x_1 y_0$。
+其中 $z_1$ 恰好等于 $x_0 y_1 + x_1 y_0$。子问题个数从四降到三，本层工作是线性的，成本的增长阶随之从 $n^2$ 降到 $n^{\log_2 3} \approx n^{1.585}$。
 
-于是 $a = 3$、$p = \log_2 3 \approx 1.585 < 2$，本层工作是线性的，落在叶子主导的情形，得到 $n^p$ 的成本，低于朴素做法的 $n^2$。单元格 A 里这个实现的乘法次数（1157）高出递归树模型的 $3^k = 729$（$n = 2^k$）不少：模型假设每层都是三个恰好一半规模的乘法，而 $(x_0 + x_1)$ 会多出一位，真实递归树并不整齐。指数 $\log_2 3$ 来自算法分析，不是这组数字推出来的，这组数字只说明实现与模型之间没有简单的一一对应。
-
-**二分查找**是 $a = 1$ 的退化情形：每步只留一个子问题，本层工作是常数，$p = \log_b 1 = 0$，于是 $\Theta(n^0 \log n) = \Theta(\log n)$，与 <CrossRef id="algorithms.binary-search" /> 里逐次折半得到的结论一致。
-
-这三个实例展示的是两种机制：Karatsuba 叶子主导，归并排序与二分查找逐层同阶。第三种情形（本层工作主导）这里不再另找算法实例。
-
-```python run id="alg.techniques.mechanism-counts"
-from math import ceil, log2
-
-
-def merge_sort_comparisons(values):
-    """Merge sort counting only the element comparisons the merge step performs."""
-    comparisons = 0
-    calls = 0
-
-    def sort(items):
-        nonlocal comparisons, calls
-        calls += 1
-        if len(items) <= 1:
-            return items
-        middle = len(items) // 2
-        left = sort(items[:middle])
-        right = sort(items[middle:])
-        merged, i, j = [], 0, 0
-        while i < len(left) and j < len(right):
-            comparisons += 1
-            if left[i] <= right[j]:
-                merged.append(left[i]); i += 1
-            else:
-                merged.append(right[j]); j += 1
-        merged.extend(left[i:])
-        merged.extend(right[j:])
-        return merged
-
-    ordered = sort(list(values))
-    return ordered, comparisons, calls
-
-
-def bit_reversal(n):
-    """The permutation that makes every merge interleave as long as possible."""
-    bits = int(log2(n))
-    return [int(format(index, "0%db" % bits)[::-1], 2) for index in range(n)]
-
-
-n = 64
-print("merge sort, n =", n, "(a power of two, so every level splits exactly in half)")
-for name, values in (("reversed", list(range(n, 0, -1))), ("bit-reversal", bit_reversal(n))):
-    ordered, comparisons, calls = merge_sort_comparisons(values)
-    print(f"  {name:12s} comparisons {comparisons:4d} | sorted correctly {ordered == sorted(values)}"
-          f" | <= n*ceil(log2 n) = {n * ceil(log2(n))}: {comparisons <= n * ceil(log2(n))}")
-levels = int(log2(n))
-print("  internal levels that perform a merge: at most", levels,
-      "| the tree has", levels + 1, "levels, but the last one holds only leaves")
-print("  each merge level touches n elements in total, so the bound is n * ceil(log2 n) =", n * levels)
-print("  exact worst case for n = 2^k:", int(n * log2(n) - n + 1),
-      "| reached here by the bit-reversal permutation:",
-      merge_sort_comparisons(bit_reversal(n))[1] == int(n * log2(n) - n + 1))
-print("  recursive calls:", merge_sort_comparisons(list(range(n, 0, -1)))[2], "| 2n - 1 =", 2 * n - 1,
-      "| equal:", merge_sort_comparisons(list(range(n, 0, -1)))[2] == 2 * n - 1)
-
-
+```python run id="alg.techniques.karatsuba"
 def karatsuba(x, y, counter):
-    """Karatsuba on integers; counter records the scalar multiplications reached."""
+    """Karatsuba on integers; counter[0] records scalar multiplications."""
     if x < 10 or y < 10:
         counter[0] += 1
         return x * y
-    half = max(len(str(abs(x))), len(str(abs(y)))) // 2
+    half = max(len(str(x)), len(str(y))) // 2
     base = 10 ** half
-    high_x, low_x = divmod(x, base)
-    high_y, low_y = divmod(y, base)
-    z0 = karatsuba(low_x, low_y, counter)
-    z2 = karatsuba(high_x, high_y, counter)
-    z1 = karatsuba(low_x + high_x, low_y + high_y, counter) - z2 - z0
+    x1, x0 = divmod(x, base)
+    y1, y0 = divmod(y, base)
+    z0 = karatsuba(x0, y0, counter)
+    z2 = karatsuba(x1, y1, counter)
+    z1 = karatsuba(x0 + x1, y0 + y1, counter) - z2 - z0
     return z2 * base * base + z1 * base + z0
 
 
-digits = 64
+digits = 32
 x = int("7" * digits)
 y = int("3" * digits)
 counter = [0]
 product = karatsuba(x, y, counter)
-level = int(log2(digits))
-print()
-print("Karatsuba on two", digits, "-digit numbers")
-print("  product correct:", product == x * y)
-print("  scalar multiplications actually performed:", counter[0])
-print("  recursion-tree model: 3 ** log2(n) =", 3 ** level, "vs the naive 4 ** log2(n) =", 4 ** level)
-print("  the model counts three half-size multiplications per level; carries make")
-print("  (low + high) one digit wider, so this implementation's tree is not perfectly even")
-print("  the exponent comes from the algorithm analysis: log2(3) =", round(log2(3), 3), "< 2")
+print(f"{digits}-digit product correct: {product == x * y}")
+print(f"scalar multiplications performed: {counter[0]}")
+print(f"model of three half-size calls per level: 3^5 = {3 ** 5}, naive 4^5 = {4 ** 5}")
 ```
 
-## 分治的正确性骨架
-
-二分查找与归并排序走的是同一条路：把问题拆成同类的更小问题，解掉小问题，再用小问题的解组装出原问题的解。把这条路写成一般形式。待解问题记为 $P$，它的抽象契约要写清两端：
-
-| 契约 | 内容 |
-| --- | --- |
-| `solve(P)` 的前置条件 | $P$ 是这一类问题的一个实例，并且规模在可解范围内 |
-| `solve(P)` 的后置条件 | 返回 $P$ 的一个解，且该解满足这类问题的定义 |
-
-在此之上，分治版本只用三个动作描述：
-
-| 动作 | 说明 |
-| --- | --- |
-| `divide(P)` | 产生有限个更小的同类子实例 $P_1, \dots, P_k$ |
-| `conquer` | 递归求解这些子实例 |
-| `combine(P, solution_1, ..., solution_k)` | 利用原实例的必要信息与子问题的解，构造 $P$ 的解 |
-
-二分查找是 $k = 1$ 的取法：`divide` 只留下一个子实例，`combine` 把子解直接交回。归并排序是 $k = 2$、`combine` 真的要做事的取法；快速选择也只留一个子实例（<CrossRef id="algorithms.selection-and-top-k" />），快速排序留两个。
-
-正确性由对规模的归纳给出（<CrossRef id="algorithms.recursion" /> 的调用树语言）：假设每个更小的子实例都返回满足定义的正确解，`combine` 把这些子解与原实例的必要信息合成为 $P$ 的解；基本情形是规模落到可解范围、直接返回的那一步。于是调用树上每个结点的解都正确，根结点的解就是整个问题的解。
-
-唯一的硬条件是**递归路径上的某个良基度量严格下降**——通常就是问题规模。规模是非负整数，每次递归都取到更小的实例，所以递归深度有限，算法终止。这条条件不成立时，递归本身没有出口，问题不在拆解方式上。
-
-有两句话常被当成分治的定义条件，它们都不是：
-
-**「子问题必须互不重叠」**：这里说的是同一个子问题状态沿不同的递归路径出现；输入数据是否相交是另一回事。即使有重复状态，也不必然导致指数级工作，具体爆炸到什么程度由递推式决定：朴素斐波那契是高度重复导致指数工作的例子，不是一个一般定理。
-
-**「combine 只能用子问题的解」**：`divide` 与 `combine` 完全可以读原实例的数据。很多分治算法的 $\Theta(n)$ 级工作恰恰发生在拆分与合并阶段；递推式里的 $f(n)$ 是这一次调用自己执行的全部非递归工作，从来不专指「合并子解」。
-
-重复状态是**效率特征**，不是定义条件，而且它正是动态规划的一条入口：把递归树里反复出现的同一个状态折叠起来，树就变成一张状态 DAG，记忆化与动态规划利用的正是这种复用机会。
-
-## 主定理：形式、假设与边界
-
-递归树上的三种情形写成定理，就是主定理（master theorem）：
-
-设 $a \ge 1$、$b > 1$ 是两个常数，$f(n)$ 是一个最终非负的成本函数，$T(n)$ 由递推式
-
-$$T(n) = a\,T(n/b) + f(n)$$
-
-定义（$n/b$ 指 $\lfloor n/b \rfloor$ 或 $\lceil n/b \rceil$，对结论没有影响），并规定基本情形 $T(n) = \Theta(1)$ 对充分小的 $n$ 成立。记 $p = \log_b a$。
-
-| 情形 | 条件 | 结论 |
-| --- | --- | --- |
-| 情形 1 | $f(n)$ 的增长严格慢于 $n^p$，即 $f(n) = O(n^{p - \text{eps}})$ 对某个 $\text{eps} > 0$ 成立 | $T(n) = \Theta(n^p)$ |
-| 情形 2 | $f(n)$ 与 $n^p$ 同阶，即 $f(n) = \Theta(n^p)$ | $T(n) = \Theta(n^p \log n)$ |
-| 情形 3 | $f(n)$ 的增长严格快于 $n^p$，即 $f(n) = \Omega(n^{p + \text{eps}})$ 对某个 $\text{eps} > 0$ 成立，并且满足正则条件 $a\,f(n/b) \le c\,f(n)$ 对某个常数 $c < 1$ 与充分大的 $n$ 成立 | $T(n) = \Theta(f(n))$ |
-
-三条假设都不能省，它们分别对应递归树的三个量：$a \ge 1$ 与 $b > 1$ 保证树在每一层真的变窄；$n/b$ 取整不影响结论，因为取整带来的差异是常数因子；$f$ 与 $n^p$ 的比较是叶层与本层工作两股力量的比较。
-
-情形 3 多出来的**正则条件**容易被忽略，也容易被说反。$a f(n/b) \le c f(n)$（$c < 1$）说的是：**下一层所有结点的本层工作加起来，至多是当前层的固定比例**，也就是向下逐层几何缩水。正因为树越往下本层工作越小，情形 3 才由靠近根部的工作主导。
-
-情形 1 与情形 3 要求 $f$ 与 $n^p$ **相差一个多项式因子**。落在两者之间的 $f$ 不属于任何一个情形，定理在这个区间上不给结论；覆盖范围到此为止，超出的部分要另找工具：
-
-| 递推式 | 为什么定理不适用 | 正确答案 |
-| --- | --- | --- |
-| $T(n) = 2T(n/2) + n \log n$ | $f$ 与 $n^1$ 只差一个 $\log$ 因子，两个情形都不适用 | 递归树直接展开得 $\Theta(n \log^2 n)$ |
-| $T(n) = 2T(n/2) + n / \log n$ | $f$ 比 $n^1$ 小，落在临界指数下方的对数缺口里 | 正确答案是 $\Theta(n \log \log n)$ |
-| $T(n) = T(n/3) + T(2n/3) + n$ | 两个子问题规模不等，不能用单参数 $n/b$ 描述 | 正确答案仍是 $\Theta(n \log n)$，但要用别的工具 |
-| $T(n) = T(n-1) + n$ | 规模只减一，不是常数分数，定理不适用 | 展开得 $\Theta(n^2)$ |
-
-第二个例子说明的是缺口，不是正则条件的作用：$n / \log_2 n$ 首先是 $o(n)$，连情形 3 要求的「$f$ 比 $n$ 大一个多项式因子」都不满足，所以它无法单独隔离出正则条件的必要性。要看清正则条件不能删，需要一个仍然满足多项式间隔、但在相邻两层之间振荡的 $f$——单元格 B 最后用 $f(n) = n^2$（$k$ 为偶数）与 $f(n) = n^3$（$k$ 为奇数）构造了这样的例子：它始终满足 $f = \Omega(n^2)$，可是 $a f(n/b) \le c f(n)$ 在偶数层失败，$T(n)/f(n)$ 也随之无界增长。
-
-自查规则很简单：先把递推式化成 $aT(n/b) + f(n)$ 的形状再谈定理；化不成，或者 $f$ 正好卡在两种情形之间，就回到递归树逐层求和。单元格 B 把上面几种情形都算了一遍：三种能适用情形的归一化比值在这段范围里看不到漂移，落在缺口里的例子只要按情形 2 归一化就会持续增长，振荡的例子则展示了删掉正则条件后 $\Theta(f(n))$ 会失效。
-
-```python run id="alg.techniques.master-theorem"
-from math import log, log2, sqrt
-
-
-def recurrence_value(a, b, f, n):
-    """Exact T(n) for T(n) = a * T(n // b) + f(n) with T(1) = 1."""
-    memo = {1: 1}
-
-    def solve(size):
-        if size not in memo:
-            memo[size] = a * solve(size // b) + f(size)
-        return memo[size]
-
-    return solve(n)
-
-
-def series(a, b, f, predicted, sizes):
-    return [(n, recurrence_value(a, b, f, n), recurrence_value(a, b, f, n) / predicted(n)) for n in sizes]
-
-
-sizes = [2 ** k for k in (6, 7, 8, 9, 10)]
-print("T(n) = a*T(n//b) + f(n), T(1) = 1; p = log_b(a) is the exponent of the recursion-tree leaf count")
-print("every 'consistent' line below only says the finite table shows no drift; it is not a proof of Theta")
-
-print()
-print("case 1: a = 2, b = 2, f(n) = sqrt(n);  f = O(n^(1 - eps)) with eps = 0.5, so T = Theta(n)")
-for n, value, ratio in series(2, 2, sqrt, lambda n: n, sizes):
-    print(f"  n = {n:5d}  T(n) = {value:9.2f}  T(n)/n = {ratio:7.3f}")
-case1 = series(2, 2, sqrt, lambda n: n, sizes)
-print("  numerically consistent with a constant over this range:", abs(case1[-1][2] - case1[-2][2]) < 0.05)
-
-print()
-print("case 2: a = 2, b = 2, f(n) = n;  f = Theta(n^p), so T = Theta(n log n)")
-case2 = series(2, 2, lambda n: n, lambda n: n * log2(n), sizes)
-for n, value, ratio in case2:
-    print(f"  n = {n:5d}  T(n) = {value:9.2f}  T(n)/(n log2 n) = {ratio:7.3f}")
-print("  numerically consistent with a constant over this range:", abs(case2[-1][2] - case2[-2][2]) < 0.05)
-
-print()
-print("case 3: a = 2, b = 2, f(n) = n^2;  f = Omega(n^(p + eps)) and regular, so T = Theta(f)")
-case3 = series(2, 2, lambda n: n * n, lambda n: n * n, sizes)
-for n, value, ratio in case3:
-    print(f"  n = {n:5d}  T(n) = {value:9.2f}  T(n)/n^2 = {ratio:7.3f}")
-print("  numerically consistent with a constant over this range:", abs(case3[-1][2] - case3[-2][2]) < 0.05)
-print("  regularity holds here: a*f(n/b) = 2*(n/2)^2 = n^2/2 <= c*f(n) with c = 0.5:",
-      all((2 * (n / 2) ** 2) <= 0.5 * (n * n) for n in sizes), "for every n tested")
-
-print()
-print("the gap between the cases: a = 2, b = 2, f(n) = n*log2(n)")
-gap = series(2, 2, lambda n: n * log2(n), lambda n: n * log2(n) ** 2, sizes)
-for n, value, ratio in gap:
-    print(f"  n = {n:5d}  T(n) = {value:9.2f}  T(n)/(n log2 n) = {value / (n * log2(n)):8.3f}"
-          f"  T(n)/(n log2^2 n) = {ratio:7.3f}")
-print("  f = n log2 n is neither O(n^(1-eps)) nor Omega(n^(1+eps)), so no case of the theorem applies")
-gap_first = gap[0][1] / (gap[0][0] * log2(gap[0][0]))
-gap_last = gap[-1][1] / (gap[-1][0] * log2(gap[-1][0]))
-print("  treating it as Theta(n) and applying case 2 gives a ratio that keeps growing instead of settling:",
-      gap_last > gap_first, f"({gap_first:.3f} -> {gap_last:.3f})")
-print("  the recursion tree answers it: T(n)/(n log2^2 n) shows no drift over this range:",
-      abs(gap[-1][2] - gap[-2][2]) < 0.05)
-
-print()
-print("just below the critical exponent: a = 2, b = 2, f(n) = n / log2(n)")
-print("  this f is o(n), so it does not even meet case 3's f = Omega(n^(1+eps)); the example shows")
-print("  how a sub-n growth can still beat the leaf count, it does not isolate the regularity condition")
-below = series(2, 2, lambda n: n / log2(n), lambda n: n * log2(log2(n)), sizes)
-for n, value, ratio in below:
-    print(f"  n = {n:5d}  T(n) = {value:9.3f}  T(n)/(n log2 log2 n) = {ratio:7.3f}")
-print("  numerically consistent with a constant over this range:", abs(below[-1][2] - below[-2][2]) < 0.1)
-
-print()
-print("an intentionally oscillating f shows the regularity condition cannot simply be dropped:")
-print("  n = 2^k, f(n) = n^2 when k is even and n^3 when k is odd, so f = Omega(n^2) always")
-base = [1]           # value[0] = 1
-work = [1]           # work[0] = f(1) = 1
-for k in range(1, 21):
-    n = 2 ** k
-    work.append(n * n if k % 2 == 0 else n ** 3)
-    base.append(2 * base[-1] + work[-1])
-for k in range(3, 21):
-    n = 2 ** k
-    if k % 2 == 0:
-        ratio = base[k] / work[k]
-        ratio_prev = base[k - 2] / work[k - 2]
-        print(f"  k = {k:2d}  n = {n:8d}  f(n)/n^2 = {work[k] / n**2:6.1f}  "
-              f"2*f(n/2)/f(n) = {2 * work[k-1] / work[k]:9.1f}  T(n)/f(n) = {ratio:9.1f}"
-              f"  grew: {ratio > ratio_prev}")
-print("  every level still satisfies f = Omega(n^2), yet a*f(n/b) <= c*f(n) fails for even k,")
-print("  and T(n)/f(n) grows without bound: this is what the regularity condition rules out")
-```
-
-## 终止与空间
-
-终止与深度是两件事，要分开说：
-
-| 项 | 内容 |
-| --- | --- |
-| 终止 | 只要每次递归的规模严格下降，深度就有限，算法一定终止 |
-| 深度 | 只有当每次把规模缩到至多固定比例 $\rho n$（$\rho < 1$）时，深度才是 $\Theta(\log n)$。严格下降不足以推出这一条：每次只减一的递归同样终止，但深度是 $\Theta(n)$ |
-
-普通快速排序正好落在第二种情形：它的划分不保证比例，极端不平衡时递归深度可以是 $\Theta(n)$；对较小的一侧递归、较大的一侧改成迭代，可以把栈控制在 $O(\log n)$，但那是对实现的要求，不是分治自带的性质。
-
-空间按「最长活动递归路径 × 每帧空间」来算：
-
-| 情形 | 空间 |
-| --- | --- |
-| 平衡归并排序 | 栈 $\Theta(\log n)$，另有合并缓冲 $\Theta(n)$ |
-| 原地快速排序 | 额外数组可以很少，但朴素递归栈最坏 $\Theta(n)$ |
-
-在 Python 里还有一条实现边界：解释器有递归深度上限，深递归会先抛 `RecursionError` 而不是算完；Python 也不承诺尾调用消除，所以不要指望把递归写成尾递归就能拿到常数栈。这些是运行时的限制，成本分析里不该把它们当成 $\Theta$ 的存在理由。
+真实实现的三次递归并不总是恰好一半规模：$(x_0 + x_1)$ 会多出一位，实测乘法次数 381 高于 $3^k$ 的整齐模型 243，远低于朴素做法的 1024。指数 $\log_2 3$ 来自对调用树的分析，这组数字只说明实现与整齐模型之间没有一一对应。
 
 ## 什么时候不能分治
 
-这些效率特征失效时，工作量可能显著增加；是否达到指数级，必须由具体递推式决定。
+失效点都在设计上：
 
-**重复状态**是最常见的一种。朴素递归计算斐波那契数，递推式是 $T(n) = T(n-1) + T(n-2) + 1$：两棵递归子树并不互相索取答案，但它们反复走到同一批状态。调用次数满足 $C(n) = C(n-1) + C(n-2) + 1$，两边同时加一就得到 $C(n) + 1 = (C(n-1) + 1) + (C(n-2) + 1)$，所以调用次数是第 $n+1$ 个斐波那契数的两倍减一，按 $\varphi^n$ 增长——$n = 24$ 时就有十五万次调用。处理办法是复用答案：记忆化把实际求值过的不同状态降到 $O(n)$ 个（它仍然可以是递归的），自底向上的动态规划则把同一条递推关系按依赖顺序改写成迭代。
-
-**分治不总是更快**。递推式的解只说明增长阶，常数因子与调用开销要看具体实现。把一个线性扫描求最小值改写成递归对半的版本：如果传的是索引范围，结论仍是 $\Theta(n)$，只是多付了递归调用的常数；如果是每层都切片的写法，每层复制一遍 $\Theta(n)$、共 $\Theta(\log n)$ 层，成本会变成 $\Theta(n \log n)$——同一个想法，两种实现，两个答案。要说明这类差别，机制计数（调用次数、元素移动次数）比计时可靠。
-
-**主定理容易被误用**。不适用的情况有四类：$f$ 卡在两种情形之间、正则条件不成立、子问题规模不等、规模不是常数分数。正则条件的反例在单元格 B；单元格 C 展示不等规模的划分与「每次只减一」这两种，并给出它们各自的正确答案。
-
-```python run id="alg.techniques.outside-the-theorem"
-from math import log2
-
-
-def fib_calls(n):
-    """Naive recursive Fibonacci, counting every call it makes."""
-    calls = 0
-
-    def fib(k):
-        nonlocal calls
-        calls += 1
-        return k if k < 2 else fib(k - 1) + fib(k - 2)
-
-    value = fib(n)
-    return value, calls
-
-
-print("repeated states, not overlapping inputs, are what makes this exponential")
-print("naive recursive Fibonacci, T(n) = T(n-1) + T(n-2) + 1:")
-counts = {}
-for n in range(2, 25):
-    value, calls = fib_calls(n)
-    counts[n] = calls
-    if n in (5, 10, 15, 20, 24):
-        print(f"  n = {n:3d}  value {value:7d}  calls {calls:8d}  calls / calls(n-1) = "
-              f"{calls / counts[n - 1]:6.3f}")
-phi = (1 + 5 ** 0.5) / 2
-print("  the calls obey C(n) = C(n-1) + C(n-2) + 1, so C(n) + 1 = (C(n-1) + 1) + (C(n-2) + 1)")
-fib = [0, 1, 1]
-while len(fib) < 30:
-    fib.append(fib[-1] + fib[-2])
-closed = [n for n in counts if counts[n] == 2 * fib[n + 1] - 1]
-print("  that closed form is C(n) = 2*F(n+1) - 1, so the growth is Theta(phi^n):",
-      len(closed) == len(counts), "| also checked by the ratio:", abs(counts[24] / counts[23] - phi) < 0.01)
-print("  fib(n-1) and fib(n-2) do not need each other's answers, but the two subtrees reach the same")
-print("  states again and again: memoising the answers keeps the distinct states evaluated down to O(n),")
-print("  and a bottom-up DP rewrites the same recurrence as an iteration in dependency order")
-
-print()
-print("unbalanced splits are outside the theorem: T(n) = T(floor(n/3)) + T(n - floor(n/3)) + n")
-sizes = [3 ** k for k in range(2, 8)]
-memo = {1: 1, 2: 2}          # below 3 the split would stop making progress, so treat it as the base
-for size in range(3, sizes[-1] + 1):
-    left = size // 3
-    memo[size] = memo[left] + memo[size - left] + size
-
-
-def uneven(n):
-    return memo[n]
-
-
-for n in sizes:
-    print(f"  n = {n:6d}  T(n) = {uneven(n):8d}  T(n)/(n log2 n) = {uneven(n) / (n * log2(n)):6.3f}")
-last_two = [(n, uneven(n) / (n * log2(n))) for n in sizes[-2:]]
-print("  no drift over this range:", abs(last_two[1][1] - last_two[0][1]) < 0.05)
-print("  yet no case of the theorem applies, because the two parts do not have equal size n/b")
-
-print()
-print("a split that is not a constant fraction is also outside the theorem: T(n) = T(n-1) + n")
-linear_memo = {1: 1}
-for n in range(2, 2001):
-    linear_memo[n] = linear_memo[n - 1] + n
-for n in (10, 100, 1000, 2000):
-    print(f"  n = {n:5d}  T(n) = {linear_memo[n]:8d}  T(n)/n^2 = "
-          f"{linear_memo[n] / (n * n):6.3f}  vs 1/2 = 0.500")
-print("  the answer is Theta(n^2), reached by unfolding the recurrence, not by the theorem")
-```
+- **子问题不再是同一类型**。拆分得到的实例必须能交给同一个 `solve`。若切出来的子问题换了问题、缺少原问题的一部分约束，递归调用没有可用的契约，方案在这里断掉。
+- **合并的成本超过拆分省下的**。把问题拆小，只有在子问题各自变便宜、并且合并代价被这层省下的工作覆盖时才有意义。若 `combine` 必须重新扫描原实例的绝大部分，每层付 $\Theta(n)$、共 $\Theta(\log n)$ 层，总成本相对不拆的版本没有改善。
+- **分治不总是更快**。增长阶相同的两份实现，常数因子与调用开销可以决定胜负。把一个线性扫描求最小值改写成递归对半的版本：传索引范围时结论仍是 $\Theta(n)$，只多付递归调用的常数；每层都切片的写法每层复制一遍 $\Theta(n)$、共 $\Theta(\log n)$ 层，成本变成 $\Theta(n \log n)$——同一个想法，两种实现，两个答案。要说明这类差别，机制计数（调用次数、元素移动次数）比计时可靠。

@@ -5,19 +5,15 @@ order: 30
 title: 动态规划
 status: published
 objectives:
-  - 用状态、递推式与求值顺序写出一份动态规划，并说明状态为什么足以决定剩余子问题
-  - 用沿依赖顺序的归纳证明递推式给出的值就是问题的最优值
-  - 说明求值顺序为什么必须是状态依赖图的拓扑序，并解释 n 乘 W 的时间为什么是伪多项式
-  - 把「单个前驱值加局部增量」的递推读成状态依赖图上的路径优化，并说明一次转移同时组合多个子状态的递推为什么不属于这一类
+  - 从 0/1 背包的取与不取写出最优值的递推式，并说明两条分支为什么都要保留
+  - 指出朴素递归在同一情形上反复求值，并说明命名成状态、每个只算一次怎样消掉这些重复
+  - 说明求值顺序为什么必须是状态依赖图的一个拓扑序，并预测填错顺序时的错误答案
+  - 解释 n 乘 W 的时间为什么只对输入数值是多项式，按输入位数却是指数界
+  - 说明状态要保存哪些信息才足以决定剩余子问题，并指出状态空间可能膨胀到穷举规模
+  - 把单个前驱值加局部增量的递推读成状态依赖图上的路径优化，并指出一次组合多个子状态的递推为什么落在框架外
 ---
 
-贪心把「每一步之后，当前的部分解仍然可以扩展成原问题的一个最优解」当作主不变量，而它在 0/1 背包上从第一步就不成立。既然不存在「选中它以后仍保持最优」的承诺，「取」与「不取」两条分支就必须同时留着，于是要把分支枚举出来；把这两条分支直接展开成递归又会发现，不同的选择序列反复走到同一个情形——「考虑完前 $i$ 件物品、剩余容量 $c$」。枚举解决分支的取舍，状态复用解决情形的重合：把这层情形显式写成一个状态、按依赖顺序每个状态只求一次，就是动态规划。
-
-两个成分缺一不可：**状态空间有限**，以及**同一个状态只求一次**。前者让求值有界，后者把重复的状态合并成一次计算。回忆 <CrossRef id="algorithms.divide-and-conquer" /> 里朴素斐波那契的调用树——同类的子问题互相重叠，把重叠的部分折叠起来就得到这里的方法。
-
-## 0/1 背包的状态与转移
-
-回到这组物品。契约：
+0/1 背包给出一组物品，每件物品有重量 $w_i$ 与价值 $v_i$，以及一个容量 $W$：选出一个子集，使总重量不超过 $W$、总价值最大，且每件物品至多取一次。
 
 | 项 | 内容 |
 | --- | --- |
@@ -25,47 +21,67 @@ objectives:
 | 可行 | 总重量不超过 $W$ 的子集 |
 | 输出 | 最大总价值 |
 
-离散性：容量型动态规划要求状态取值离散——$W$ 是整数，或可取值集合有限。连续容量下状态不可数，要么离散化并接受近似，要么换方法。
+决定落在最后一件物品上。不取第 $i$ 件时，最优价值是「只用前 $i-1$ 件、容量为 $c$」的最优价值；取第 $i$ 件时（前提 $w_i \le c$），先得到 $v_i$，剩下的问题恰好是「只用前 $i-1$ 件、容量为 $c - w_i$」，是同一族的更小实例。两个值谁大取决于具体的数，无法先验排除任一个，于是把两条分支都留下。设 $best(i, c)$ 为「只用前 $i$ 件、容量为 $c$」的最大总价值：
 
-状态取 $(i, c)$，值是「只考虑前 $i$ 件物品、容量为 $c$」时的最大总价值。一份动态规划由四件事描述：
+$$best(i, c) = \max\bigl(best(i-1, c),\ best(i-1, c - w_i) + v_i\bigr), \quad w_i \le c ;$$
 
-| 项 | 内容 |
-| --- | --- |
-| 状态 | 把子问题压缩成的有限个「情形」，每个状态带一个值 |
-| 值 | 状态的值是这一类子问题的答案（这里是最大总价值） |
-| 递推 | 一个状态的值由其它状态的值算出，这一步称为转移 |
-| 依赖 | 递推引用的状态必须先算出来，求值顺序是状态依赖图的一个拓扑序 |
+当 $w_i > c$ 时第 $i$ 件装不下，只有 $best(i, c) = best(i-1, c)$；基本情形 $i = 0$ 的值是 $0$。按价值密度 $v_i / w_i$ 降序扫描的贪心没有这条递推可用（<CrossRef id="algorithms.greedy" />）。
 
-基本情形是没有更小状态可引用的那些状态，它们的值直接给出；这里 $i = 0$ 时价值为 $0$。
+递推的第二个参数 $c$ 取整数值。容量型动态规划要求状态取值离散——$W$ 是整数，或其可取值集合有限；连续容量下状态不可数，要么离散化并接受近似，要么换方法。
 
-**状态必须足以决定剩余子问题**。判断办法是问：给定这个状态，剩下的子问题答案唯一吗？两条不同的路径走到同一个状态之后，后续可能的成本或计数若不同，被压缩掉的信息就不够，状态写错了。0/1 背包的状态里必须带「考虑过哪些物品」的进度：只留剩余容量，不足以表示「每件物品最多取一次」这个子问题。
+## 同一情形被反复问到
 
-聚合方式不保证状态充分：加法、取最小、取最大、计数都只是把子问题的值合成当前值的方式，它们不保证状态里已经保存了未来所需的全部信息。充分性只有一条判断标准——未来所有合法选择及其贡献，是否都能由当前状态确定；不能就必须扩充状态（把已访问集合、剩余资源或时间并入状态，例如带时间窗的路径成本）。状态空间也会爆炸：约束越多，状态维度越高，「已用过的物品集合」是 $2^n$ 个状态，这时动态规划不比穷举省力——把历史塞进状态之前先看它的规模。
+递推给出了答案的写法，代价要靠展开它才知道。把递推直接写成递归，同一件物品的「取」与「不取」把调用分成两支，不同的选择序列会走到同一个情形——「考虑完前 $i$ 件、容量为 $c$」。数一数同一个情形在朴素递归里被问到多少次：
 
-转移逐件做决定：
+```python run id="alg.dp.repeat-calls"
+calls = {}
 
-$$table[i][c] = \max\bigl(table[i-1][c],\ table[i-1][c - w_i] + v_i\bigr).$$
 
-第一项 $table[i-1][c]$ 与第二项 $table[i-1][c - w_i] + v_i$ 分别对应**不取第 $i$ 件**与**取第 $i$ 件**（当 $w_i \le c$），转移取两者的最大。这个转移补上了贪心缺的那一步：密度规则在第一步无法保证「存在包含当前选择的最优解」，而这里把「取」与「不取」两条分支都枚举出来，因此不需要那条不变量。取第 $i$ 件之后剩下的问题恰好是「前 $i-1$ 件、容量 $c - w_i$」，是同一族的更小实例。
+def best_value(items, capacity, i):
+    """Best value from the first i items with the given capacity."""
+    calls[(i, capacity)] = calls.get((i, capacity), 0) + 1
+    if i == 0:
+        return 0
+    weight, value = items[i - 1]
+    best = best_value(items, capacity, i - 1)
+    if weight <= capacity:
+        best = max(best, best_value(items, capacity - weight, i - 1) + value)
+    return best
+
+
+items = [(6, 8), (5, 5), (5, 5), (4, 4)]
+capacity = 12
+print("best value:", best_value(items, capacity, len(items)))
+repeated = {state: n for state, n in calls.items() if n > 1}
+print("distinct (i, c) states:", len(calls), "| total calls:", sum(calls.values()))
+for (i, c), n in sorted(repeated.items()):
+    print(f"  best({i}, {c}) asked {n} times")
+```
+
+四件物品、容量 12 的实例上，朴素递归触及 19 个不同的 $(i, c)$，做了 25 次调用，其中 6 个情形被问到两次。不同的取法顺序走到同一个情形，递归每次都从头再算一遍。
+
+把这个情形命名为一个**状态**：状态 $(i, c)$ 的值是它所代表的这一类子问题的答案，递推式是状态之间的一条**转移**。`best(1, 3)` 与 `best(1, 7)` 各由两条不同的选择序列到达，值相同。分支反复汇合到同一批状态，是重叠子问题的形状（<CrossRef id="algorithms.divide-and-conquer" />）。
+
+把算过的状态的值存进一张表，再次遇到同一个状态就查表返回，这称为<Term id="memoization">记忆化</Term>。每个状态至多计算一次，重复的调用被折叠：上例的 25 次调用里独立状态只有 19 个，记忆化之后每个只算一次。
+
+## 求值顺序
+
+记忆化是自顶向下的：从 $(n, W)$ 出发，遇到没算过的状态才递归下去。同一条递推也能自底向上填表，能不能这样做，取决于转移引用了哪些状态。$best(i, c)$ 只引用 $(i-1, c)$ 与 $(i-1, c - w_i)$，两者都在第 $i-1$ 行。按 $i$ 从小到大逐行填，填第 $i$ 行时它引用的状态都已算好；同一行内部的转移互不引用，行内顺序任意。逐行递增 $i$ 是状态依赖图的一个**拓扑序**。
 
 ```python run id="alg.dp.knapsack"
-import math
-
-
 def knapsack_table(items, capacity):
-    """table[i][c] is the best value using the first i items with capacity c."""
+    """table[i][c]: best value from the first i items with capacity c."""
     table = [[0] * (capacity + 1) for _ in range(len(items) + 1)]
     for i in range(1, len(items) + 1):
         weight, value = items[i - 1]
         for c in range(capacity + 1):
-            best = table[i - 1][c]
+            table[i][c] = table[i - 1][c]
             if weight <= c:
-                best = max(best, table[i - 1][c - weight] + value)
-            table[i][c] = best
+                table[i][c] = max(table[i][c], table[i - 1][c - weight] + value)
     return table
 
 
-def brute_value(items, capacity):
+def best_subset(items, capacity):
     best = 0
     for mask in range(1 << len(items)):
         weight = value = 0
@@ -73,74 +89,40 @@ def brute_value(items, capacity):
             if mask >> index & 1:
                 weight += w
                 value += v
-        if weight <= capacity and value > best:
-            best = value
+        if weight <= capacity:
+            best = max(best, value)
     return best
 
 
-def greedy_by_density(items, capacity):
-    """The greedy density rule, which 0/1 knapsack refutes."""
-    chosen, total = [], 0
-    for weight, value in sorted(items, key=lambda item: item[1] / item[0], reverse=True):
-        if total + weight <= capacity:
-            chosen.append((weight, value))
-            total += weight
-    return sum(value for _, value in chosen)
-
-
-items = [(6, 8), (5, 5), (5, 5)]
-capacity = 10
-print("the density-greedy counterexample, solved by the capacity recurrence")
-print("  recurrence value:", knapsack_table(items, capacity)[-1][-1],
-      "| exhaustive oracle:", brute_value(items, capacity),
-      "| density greedy:", greedy_by_density(items, capacity))
-print("  table cells:", (len(items) + 1) * (capacity + 1), "| transitions per cell: at most 2")
-
-print()
-print("the same logical instance with every weight scaled: W acts through its magnitude")
-print(f"{'factor':>7} {'n':>2} {'W':>7} {'states':>9} {'bits of W':>10} {'optimal':>8}")
-for factor in (1, 10, 100, 1000):
-    scaled = [(w * factor, v) for w, v in items]
-    big = capacity * factor
-    print(f"{factor:>7} {len(scaled):>2} {big:>7} {(len(scaled) + 1) * (big + 1):>9} "
-          f"{int(math.log2(big)) + 1:>10} {knapsack_table(scaled, big)[-1][-1]:>8}")
-
-print()
-print("a one-row table filled in ascending capacity solves the unbounded problem instead:")
-row = [0] * 13
-for c in range(1, 13):
-    if 6 <= c:
-        row[c] = max(row[c], row[c - 6] + 8)
-print("  0/1 with the single item (6, 8) and W = 12:",
-      knapsack_table([(6, 8)], 12)[-1][-1], "| the ascending one-row table:", row[12])
+items = [(6, 8), (5, 5), (5, 5), (4, 4)]
+capacity = 12
+table = knapsack_table(items, capacity)
+print("states filled once:", (len(items) + 1) * (capacity + 1))
+print("best value:", table[-1][-1], "| best of all 16 subsets:", best_subset(items, capacity))
 ```
 
-## 求值顺序与正确性
+表里共 $(n+1)(W+1)$ 个状态，这里 $n = 4$、$W = 12$，是 65 个；填出的最优值 13 与枚举全部 16 个子集得到的最优值一致。
 
-转移的两项都只引用第 $i-1$ 行的状态：$table[i-1][c]$ 与 $table[i-1][c - w_i]$。于是状态 $(i, c)$ 依赖 $(i-1, c)$ 与 $(i-1, c - w_i)$，拓扑序就是按 $i$ 递增逐行求值，同一行内的状态互不依赖。
+状态也可以取区间 $[i, j]$。$[i, j]$ 的转移引用 $[i+1, j-1]$、$[i+1, j]$、$[i, j-1]$，三个都比 $[i, j]$ 短，因此按区间长度从小到大填时，引用到的状态都已算好。最长回文子序列是这个形状：两端字符相同时接上，
 
-依赖方向也决定哪张表算的是哪个问题。把二维表压成一行、按容量**升序**填，转移读到的是同一行已经更新过的格子，同一件物品就能被反复取用，得到的转移算的是无界背包；只有引用第 $i-1$ 行才保持「每件最多取一次」。区分两者靠的是转移引用 $i-1$ 行还是 $i$ 行，这正是「状态必须足以决定剩余子问题」的一个实例（本课的单元格给出这个差别）。
+$$table[i][j] = table[i+1][j-1] + 2,$$
 
-状态也可以取区间 $[i, j]$，只要转移引用严格更短的区间，依赖图就按区间长度分层，拓扑序就是长度递增：先算长度为 $1$ 的区间，再算长度为 $2$ 的，依此类推。最长回文子序列是这个形状的例子。当 $text[i] = text[j]$ 时两端接上：
-
-$$table[i][j] = table[i+1][j-1] + 2.$$
-
-否则丢掉一端：
+否则丢掉一端，
 
 $$table[i][j] = \max\bigl(table[i+1][j],\ table[i][j-1]\bigr).$$
 
-基本情形：$i = j$ 时为 $1$；$i > j$ 时为空区间，取 $0$。转移引用 $[i+1, j-1]$、$[i+1, j]$、$[i, j-1]$，三个都比 $[i, j]$ 短，因此按长度递增求值时它们都已算出。
+基本情形 $i = j$ 时为 $1$，$i > j$ 为空区间取 $0$。
 
 ```python run id="alg.dp.interval-order"
-def longest_palindrome_by_length(text):
-    """States are intervals; fill them in increasing interval length."""
+def longest_palindrome(text):
+    """States are intervals [i, j]; each reads only strictly shorter intervals."""
     n = len(text)
     table = [[0] * n for _ in range(n)]
     order = []
     for length in range(1, n + 1):
-        for i in range(0, n - length + 1):
+        for i in range(n - length + 1):
             j = i + length - 1
-            order.append((i, j))
+            order.append((length, i, j))
             if i == j:
                 table[i][j] = 1
             elif text[i] == text[j]:
@@ -150,39 +132,23 @@ def longest_palindrome_by_length(text):
     return table, order
 
 
-def longest_palindrome_by_left_endpoint(text):
-    """The same recurrence filled in increasing left endpoint: row i reads row i + 1."""
-    n = len(text)
-    table = [[0] * n for _ in range(n)]
-    for i in range(n):
-        for j in range(i, n):
-            if i == j:
-                table[i][j] = 1
-            elif text[i] == text[j]:
-                table[i][j] = table[i + 1][j - 1] + 2
-            else:
-                table[i][j] = max(table[i + 1][j], table[i][j - 1])
-    return table
-
-
 text = "agbdba"
-table, order = longest_palindrome_by_length(text)
-first_per_length = {}
-for i, j in order:
-    first_per_length.setdefault(j - i + 1, (i, j))
-print("text:", text, "| first cell of each interval length:",
-      " ".join(f"L{length}->({i},{j})" for length, (i, j) in sorted(first_per_length.items())))
-print("filled by increasing interval length:", table[0][len(text) - 1])
-print("the same recurrence in increasing left endpoint:",
-      longest_palindrome_by_left_endpoint(text)[0][len(text) - 1],
-      "-> row i reads row i + 1 before it exists")
+table, order = longest_palindrome(text)
+first_of_length = {}
+for length, i, j in order:
+    first_of_length.setdefault(length, (i, j))
+print("first cell of each length, in fill order:",
+      " ".join(f"L{length}->({i},{j})" for length, (i, j) in sorted(first_of_length.items())))
+print("longest palindromic subsequence:", table[0][len(text) - 1])
 ```
 
-**正确性用归纳**，归纳沿依赖图的拓扑序进行：假设每个依赖状态已经持有它对应子问题的正确值，再证明转移式由这些值算出当前状态的正确值。优化问题里「正确值」是最优值，计数问题里是正确的计数，模板同一条。这与分治的归纳基础相同，区别是分治的子问题互不重叠，而这里不同的路径可以汇合到同一个状态。
+按长度递增填 `"agbdba"`，最长回文子序列长度是 5。把外层循环从长度递增改成左端点递增，$[i, j]$ 会先读 $[i+1, \cdot]$ 这一尚未填的行，同一组数上得到 2。填表顺序由转移的引用关系决定。
+
+**正确性用归纳**，归纳沿依赖图的拓扑序进行：假设每个依赖状态已经持有它对应子问题的正确值，再证明转移式由这些值算出当前状态的正确值。优化问题里「正确值」是最优值，计数问题里是正确的计数，模板同一条。归纳基础与分治相同，区别是分治的子问题互不重叠，这里不同的路径可以汇合到同一个状态。
 
 ## 状态数与伪多项式时间
 
-表里一共有 $(n+1)(W+1)$ 个状态，每个状态的转移是常数次操作，且每个状态只被求一次，所以求出整张表的代价与状态数同阶；在 $n, W \ge 1$ 的非退化区域，这个界简写成 $\Theta(nW)$。这里的 $W$ 不能和 $n$ 并列看待。**输入长度**是写清这一组整数所需的位数，其中 $W$ 占 $\Theta(\log(W+1))$ 位；而状态数随 $W$ 的**数值**线性增长。把所有重量与容量同乘 1000，四个整数各多出约十位、输入总共只多几十个比特，状态数却涨了约 1000 倍——这样的界称为**伪多项式**（pseudo-polynomial）：它是输入中数值的多项式，不是输入长度的多项式。标准二进制编码下的整数版 0/1 背包判定问题是 NP 完全的，这里的 $\Theta(nW)$ 与那一事实并不矛盾：两者按不同的量度量规模。
+表里一共有 $(n+1)(W+1)$ 个状态，每个状态的转移是常数次操作，且每个状态只被求一次，所以求出整张表的代价与状态数同阶；在 $n, W \ge 1$ 的非退化区域，这个界简写成 $\Theta(nW)$。这里的 $W$ 不能和 $n$ 并列看待。**输入长度**是写清这一组整数所需的位数，其中 $W$ 占 $\Theta(\log(W+1))$ 位；而状态数随 $W$ 的**数值**线性增长。把所有重量与容量同乘 1000，四个整数各多出约十位、输入总共只多几十个比特，状态数却涨了约 1000 倍——这样的界称为<Term id="pseudo-polynomial">伪多项式</Term>（pseudo-polynomial）：它是输入中数值的多项式，不是输入长度的多项式。标准二进制编码下的整数版 0/1 背包判定问题是 NP 完全的，这里的 $\Theta(nW)$ 与那一事实并不矛盾：两者按不同的量度量规模。
 
 数值很大的整数权重：$W = 2^k$ 只需要 $k + 1$ 个二进制位就能写出，容量 DP 却有 $\Theta(2^k)$ 个容量状态，伪多项式的代价在这里最刺眼。适当条件下可以换成按总价值索引的 DP，让代价依赖 $\sum_i v_i$，但那同样是伪多项式，只是在价值范围远小于容量范围时更合适；只按物品数换轴得不到一般的精确多项式算法。
 
@@ -255,6 +221,10 @@ $$table[i][j] = \min\bigl(table[i-1][j-1] + (0 \text{ if } a[i-1] = b[j-1] \text
 ## 状态依赖图
 
 把状态当作顶点、把转移当作边，约定边由先决状态指向当前状态，本课出现的几种状态形状就落在同一张有向图上。状态充分（无后效性）在这张图上的说法是：一个状态的值只由它的先决状态决定，与走到它的路径无关，同一状态无论被哪条路径到达，值唯一。这正是「状态必须足以决定剩余子问题」，也是<Term id="optimal-substructure">最优子结构</Term>：递推由先决状态的值算出当前状态的值。依赖图无环时，求值顺序就是这个图的一个拓扑序——0/1 背包按物品进度 $i$ 递增逐行求值，区间状态按区间长度递增求值。
+
+**状态要足以决定剩余子问题**。判断办法是问：给定这个状态，剩下的子问题的答案唯一吗？两条不同的路径走到同一个状态之后，后续可能的成本或计数若不同，被压缩掉的信息就不够，状态就写错了。0/1 背包的状态必须带「考虑过哪些物品」的进度 $i$：只留剩余容量，无法表示「每件物品至多取一次」这个子问题。
+
+聚合方式不保证状态充分：取最小、取最大、加法、计数都只是把子问题的值合成当前值的方式，它们不保证状态里已经保存了未来所需的全部信息。充分性只有一条标准——未来所有合法选择及其贡献，是否都能由当前状态确定；不能就必须扩充状态，把已访问集合、剩余资源或时间并入状态，例如带时间窗的路径成本。扩充的代价是状态空间随维度膨胀：「已用过的物品集合」是 $2^n$ 个状态，这时动态规划不比穷举省力，把历史塞进状态之前先看它的规模。
 
 形如「单个前驱的值加一个局部增量」的最优值递推可以读成这张图上的路径优化：
 

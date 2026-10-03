@@ -5,13 +5,14 @@ order: 20
 title: 贪心与交换论证
 status: published
 objectives:
-  - 写出贪心的主不变量，并说明它在算法终止时如何给出最优性
-  - 用交换论证证明一条贪心规则正确，并指出交换成立需要哪条前置条件
-  - 构造一个让某条贪心规则失败的输入，并指出该规则缺了论证的哪一步
-  - 给出贪心算法的终止论证与成本推导，并说明哪些前提一旦失效结论就不再成立
+  - 按结束时刻排序扫描区间，得到一组两两不重叠的区间并说出这条规则为什么取到最大数量
+  - 用把最优解里的一个区间换成贪心选择的这一步，论证最早结束规则正确
+  - 说出贪心的每一步为什么能落进某个最优解，并指出这类论证的名字
+  - 构造一个让按价值密度选择的贪心失败的 0/1 背包输入，并指出真正的最优子集
+  - 说明两个实现的循环为什么终止，以及排序成本在总成本里的位置
 ---
 
-贪心算法一次做一个不可撤回的选择，之后不回头修改，每一步选错都没有回头路。一条规则看起来合理，不足以保证结论正确；它站得住，靠的是你能把这一步选中的对象塞进某个最优解。下面从一道规则一眼能想出来、最优解又能穷举核对的具体题目做起：区间调度。
+贪心算法一次做一个不可撤回的选择，之后不回头修改，每一步选错都没有回头路。一条规则看起来合理，不足以保证结论正确；它站得住，靠的是你能把这一步选中的对象塞进某个最优解。下面从一道规则一眼能想出来的题目做起：区间调度，选出一组两两不重叠的区间，使数量最大。
 
 ## 区间调度
 
@@ -26,11 +27,11 @@ objectives:
 
 本课用半开区间 $[s, f)$，因此 $[0,1)$ 与 $[1,2)$ 相容，而闭区间 $[0,1]$ 与 $[1,2]$ 在点 1 相交。不重叠的判据依赖这条约定，换约定必须重新陈述契约。
 
-最自然的规则是按结束时刻升序扫描：维护上一个被选中区间的结束时刻 `last_finish`，当区间开始时刻不早于 `last_finish` 时选入。结束得越早，后面留给其他区间的位置越多，这是这条规则的全部直觉。用几个小实例把它跑出来，再穷举所有子集核对。
+规则按结束时刻升序扫描：维护上一个被选中区间的结束时刻 `last_finish`，当区间开始时刻不早于 `last_finish` 时把它选入。结束得越早，后面留给其他区间的位置越多，这是这条规则的全部直觉。
 
 ```python run id="alg.greedy.interval-scheduling"
-def by_finish(intervals):
-    """Finish-time rule: scan by finish, keep an interval when it is compatible."""
+def earliest_finish(intervals):
+    """Scan by finish; keep an interval when it is compatible with the last one."""
     chosen, last_finish = [], None
     for start, finish in sorted(intervals, key=lambda interval: interval[1]):
         if last_finish is None or start >= last_finish:
@@ -39,101 +40,30 @@ def by_finish(intervals):
     return chosen
 
 
-def by_start(intervals):
-    """Start-time rule: the same skeleton with a different sort key."""
-    chosen, last_finish = [], None
-    for start, finish in sorted(intervals, key=lambda interval: interval[0]):
-        if last_finish is None or start >= last_finish:
-            chosen.append((start, finish))
-            last_finish = finish
-    return chosen
-
-
-def disjoint(subset):
-    return all(subset[i][1] <= subset[j][0] or subset[j][1] <= subset[i][0]
-               for i in range(len(subset)) for j in range(i + 1, len(subset)))
-
-
-def all_feasible(intervals):
-    feasible = []
-    for mask in range(1 << len(intervals)):
-        subset = [intervals[i] for i in range(len(intervals)) if mask >> i & 1]
-        if disjoint(subset):
-            feasible.append(subset)
-    return feasible
-
-
-def optimum(intervals):
-    """Exhaustive oracle: the best size, plus every witness that reaches it."""
-    feasible = all_feasible(intervals)
-    best_size = max(len(subset) for subset in feasible)
-    return best_size, [subset for subset in feasible if len(subset) == best_size]
-
-
-counterexample = [(0, 10), (1, 2), (3, 4)]
 cases = (
-    ("one long interval plus two short", counterexample),
-    ("three intervals with late finishes", [(0, 4), (1, 2), (2, 3)]),
+    ("one long interval plus two short", [(0, 10), (1, 2), (3, 4)]),
     ("touching half-open intervals", [(0, 3), (3, 5), (4, 6), (5, 6)]),
     ("one interval nested over three", [(1, 9), (2, 3), (4, 5), (6, 7)]),
 )
-print(f"{'input':33s} {'by finish':>9} {'by start':>8} {'optimum':>7}")
 for label, intervals in cases:
-    reference, _ = optimum(intervals)
-    print(f"{label:33s} {len(by_finish(intervals)):>9} "
-          f"{len(by_start(intervals)):>8} {reference:>7}")
-
-print()
-print("the main invariant on", counterexample, ": every greedy prefix stays extendable")
-_, witnesses = optimum(counterexample)
-for length in range(len(by_finish(counterexample)) + 1):
-    prefix = by_finish(counterexample)[:length]
-    extends = any(set(prefix) <= set(witness) for witness in witnesses)
-    print(f"  prefix of size {length}: {prefix}  ->  extendable: {extends}")
+    print(f"{label:33s} {intervals} -> {earliest_finish(intervals)}")
 ```
 
-表格把两种排序键与穷举最优解并排：结束时刻规则在四个实例上都取到最优，开始时刻规则在其中的三个上落后——第一、二行从 2 降到 1，第四行从 3 降到 1。两条规则共用同一段扫描，差别只在排序键。最后一段在反例输入上逐前缀核对一条性质：每一步的部分解都还落在某个最优解里。四个小实例只提供证据，把「它对所有输入都对」交给交换论证。
+第一行丢掉最长的那段、留下两段短区间，第二、三行各留下三段。规则与直觉一致：结束得越早，越早把后面的位置让出来。半开约定在第二行起了作用——$[0,3)$ 与 $[3,5)$ 在点 3 相接仍然相容，闭区间会在这里相交。
 
-## 证明最早结束规则
+## 最早结束为什么正确
 
-上面穷举核对的性质可以写成一条不变量：每一步之后，当前的部分解仍然可以扩展成原问题的一个最优解。它叫**可扩展不变量**（extensibility invariant）。把这条不变量写清楚，一类典型贪心的正确性就归约成一个固定形状的构造：取一条最优解，把其中的某个元素与刚做的贪心选择对调，证明对调之后仍然最优。区间调度上保持它，只需要一次交换。
+**引理**：存在一个包含 $c$ 的最优解，其中 $c$ 是结束时刻最早的区间。
 
-**交换步**。取结束时刻最小的区间 $c$，任取一条按结束时刻排好序的最优解 $o_1, \dots, o_m$。若 $m = 1$，把 $o_1$ 换成 $c$ 之后仍是势为 1 的可行解，交换立即完成；以下设 $m \ge 2$。由 $c$ 的最小性有 $f(c) \le f(o_1)$，于是 $s(o_2) \ge f(o_1) \ge f(c)$。把 $o_1$ 换成 $c$ 之后，剩下的区间都不与 $c$ 重叠，$O' = \lbrace c, o_2, \dots, o_m \rbrace$ 满足两项义务：可行，即两两不重叠；不劣，即势与 $O$ 相同。$O'$ 因此是 $G \cup \lbrace c \rbrace$ 的见证，第一次选择之后不变量仍然成立。下一次选择面对的是所有开始时刻不早于 $f(c)$ 的区间，是同一形状的残余实例，同样的交换在那里重复一次，归纳继续。这种「取一条最优解，把一个元素与贪心选择对调，再证明对调之后仍然最优」的构造叫**交换论证**（exchange argument）。结束时刻相同：交换论证只用到 $f(c) \le f(o_1)$，任何打破平局的方式仍然得到最优解，排序是否稳定不影响解的势。
+证明：任取一个最优解，把它按结束时刻升序排列，记第一个区间为 $o_1$。由 $c$ 的选法有 $f(c) \le f(o_1)$。把 $o_1$ 换成 $c$：解里其余区间原本在 $o_1$ 结束之后才开始，而 $c$ 结束得不晚于 $o_1$，所以它们仍然不与 $c$ 重叠。替换后的集合仍然两两不重叠、势不变，是一个同样好的最优解，且包含 $c$。
 
-**终止论证**。实现只扫描一遍排好序的列表，每一步把下标加一，有限列表保证循环结束。它同时保证「没有候选能加入」，用反证：设存在未选中的区间 $x$，使最终集合 $G$ 并上 $x$ 仍然两两不重叠。看扫描到 $x$ 的那一刻。$x$ 最终未被选中，所以那一刻的 `last_finish` 不可能为 `None`，否则算法会立即选中它，因而当时存在最后一个已选区间 $g$，它也是最终 $G$ 的成员；$x$ 与 $G$ 全部相容，因此与 $g$ 相容。扫描按结束时刻升序，$g$ 先于 $x$ 被处理，故 $f(g) \le f(x)$；相容要求其中一个的结束不晚于另一个的开始，而 $f(g) \le f(x)$ 排除了 $g$ 在后的情形，于是只剩 $f(g) \le s(x)$。那一刻的 `last_finish` 就是 $f(g)$，算法必然选中 $x$，与 $x$ 未被选中矛盾。因此 $G$ 是极大的不重叠集。
+归纳：选定 $c$ 后，残余实例只保留开始时刻不早于 $f(c)$ 的区间。含 $c$ 的最优解去掉 $c$ 是残余实例的可行解；反过来，残余实例的任意可行解加上 $c$ 是原问题的可行解。因此原问题的最优值等于 $1$ 加残余实例的最优值。贪心在原问题上的输出恰好是 $c$ 加上它在残余实例上的输出，对残余实例归纳即得输出最优；基情形是空实例，最优值 $0$。
 
-两条结论在这里都齐了：可扩展性由交换步给出，极大性由终止论证给出。
+## 交换论证
 
-## 一般形状与主不变量
+典型的贪心证明都在做类似的事——证明当前选择可以被塞进某个最优解而不使它变差；这类证明通常称为<Term id="exchange-argument">交换论证</Term>。区间调度上它就是上面那一次替换：把一个最优解的第一个区间换成结束最早的区间，最优性不丢，贪心的选择因此在某个最优解里有位置。
 
-这一类问题有同一个形状。给定候选集合 $C$、可行的子集族 $F$ 与权重函数 $w$，求总权重最大的可行子集；区间调度与背包都落在这个形状里，区别只在 $F$ 是什么。
-
-| 成分 | 含义 |
-| --- | --- |
-| 部分解 $G$ | $G$ 是 $C$ 的子集，并且 $G$ 属于 $F$ |
-| 可扩展 | 原问题存在一个最优解 $O$，满足 $G$ 包含于 $O$ |
-| 选择规则 | 在使 $G$ 并上 $\lbrace c \rbrace$ 仍然可行的候选 $c$ 中挑一个，令 $G$ 变成 $G$ 并上 $\lbrace c \rbrace$ |
-| 终止 | 没有任何候选还能加入 |
-
-**主不变量**：每一步之后 $G$ 都可扩展。它单独不足以保证最优，却足以和终止条件一起给出最优：
-
-设 $F$ 具有继承性——可行集的任意子集都可行。算法终止时 $G$ 可扩展，见证为最优解 $O$，于是 $G$ 包含于 $O$ 且 $G$ 可行。若 $O$ 里还有不在 $G$ 中的元素 $x$，则 $G$ 并上 $\lbrace x \rbrace$ 是 $O$ 的子集，由继承性可行；这与终止条件「没有候选能加入」矛盾。因此 $O$ 等于 $G$，$G$ 就是最优解。
-
-两条前提缺一不可：终止条件把「可扩展」的见证压成等号，继承性把「$O$ 的子集可行」从见证传回候选。区间调度的「两两不重叠」与背包的重量约束都满足继承性。三件事接起来就是最优：极大 ＋ 主不变量 ＋ 继承性 ⇒ 最优。
-
-保持主不变量用的就是交换论证。给定满足主不变量的 $G$、见证最优解 $O$，以及规则选出的候选 $c$：
-
-**情形 $c$ 属于 $O$。** 不用交换，$O$ 本身就是 $G$ 并上 $\lbrace c \rbrace$ 的见证。
-
-**情形 $c$ 不在 $O$。** 构造 $O'$：把 $O$ 去掉 $\lbrace x \rbrace$ 再并上 $\lbrace c \rbrace$，其中 $x$ 取自 $O$ 去掉 $G$。要证明两件事——可行，即 $O'$ 属于 $F$；不劣，即势相同（权重版要求 $w(O') \ge w(O)$）。两者成立就得到 $G$ 并上 $\lbrace c \rbrace$ 的见证 $O'$，归纳步完成。
-
-归纳的基情形是 $G$ 为空：任意最优解都是见证。整条链只需要「存在」一个见证，算法本身从不执行交换。
-
-工作量的两处落在找到合适的 $x$ 与证明 $O'$ 可行上。选定的规则决定了这两件事能否完成：区间调度的最早结束规则让两件事都完成，密度规则一件也完不成。一对一交换覆盖的只是贪心里的一族；一次替换多个对象、或改用割性质与局部结构变换的证明不在本课范围内。
-
-区间调度这类问题上，「贪心前缀不落后于最优解前缀」的 greedy-stays-ahead 论证是同一个构造的另一种写法，翻译回交换语言不增加内容。由此得到一条实践规则：贪心规则逐题证明，在别处成立不能迁移过来。
-
-**扩展阅读**：本课的一般形状落到更强的结构上就是拟阵（matroid）——在有限、非空且具有继承性的可行集族上，使「按非增权重扫描、能加就加」对任意非负权重函数都得到最大权可行集的，恰好是拟阵，图中的无环边集构成 graphic matroid，<CrossRef id="algorithms.connectivity-and-spanning-trees" /> 的 Kruskal 是同一结构的最小权基版本。区间调度的可行族不是拟阵，它的正确性来自上面的交换论证，一般理论在此不展开。
+**扩展阅读**：这类「按固定次序扫描、能加就加」的规则在组合优化里的一般形式叫拟阵（matroid），<CrossRef id="algorithms.connectivity-and-spanning-trees" /> 的 Kruskal 最小生成树落在其中。
 
 ## 反例：0/1 背包按密度选择
 
@@ -145,88 +75,43 @@ for length in range(len(by_finish(counterexample)) + 1):
 | 可行 | 总重量不超过 $W$ 的子集 |
 | 目标 | 总价值最大 |
 
-规则：按价值密度 $v/w$ 降序扫描，能装下就装。
-
-契约里的 $w_i > 0$ 是密度有定义的前提；允许零重量会让密度无界，契约要另行规定。
+规则：按价值密度 $v/w$ 降序扫描，能装下就装。契约里的 $w_i > 0$ 是密度有定义的前提；允许零重量会让密度无界，契约要另行规定。
 
 ```python run id="alg.greedy.knapsack-density"
-def greedy_by_density(items, capacity):
+def by_density(items, capacity):
     """Take the densest item that still fits; items are (weight, value)."""
-    chosen, total_weight = [], 0
-    for weight, value in sorted(items, key=lambda item: item[1] / item[0], reverse=True):
-        if total_weight + weight <= capacity:
-            chosen.append((weight, value))
-            total_weight += weight
-    return chosen, total_weight, sum(value for _, value in chosen)
+    chosen, weight = [], 0
+    for w, v in sorted(items, key=lambda item: item[1] / item[0], reverse=True):
+        if weight + w <= capacity:
+            chosen.append((w, v))
+            weight += w
+    return chosen
 
 
-def best_value(items, capacity):
-    """Exhaustive oracle over all subsets."""
-    best = 0
-    for mask in range(1 << len(items)):
-        weight = value = 0
-        for index, (w, v) in enumerate(items):
-            if mask >> index & 1:
-                weight += w
-                value += v
-        if weight <= capacity and value > best:
-            best = value
-    return best
-
-
-def fractional_bound(items, capacity):
-    """Relaxation: fractions are allowed, and here greedy by density is optimal."""
-    remaining, bound = capacity, 0.0
-    for weight, value in sorted(items, key=lambda item: item[1] / item[0], reverse=True):
-        take = min(weight, remaining)
-        bound += value * take / weight
-        remaining -= take
-    return bound
+def packed(subset):
+    return sum(w for w, _ in subset), sum(v for _, v in subset)
 
 
 capacity = 10
 items = [(6, 8), (5, 5), (5, 5)]
-chosen, weight, value = greedy_by_density(items, capacity)
-print("capacity", capacity, "| items (weight, value)", items)
-print("  densities         ", [round(v / w, 3) for w, v in items])
-print("  density greedy    ", chosen, "-> weight", weight, "value", value)
-print("  exhaustive optimum", best_value(items, capacity))
-print("  greedy is optimal:", value == best_value(items, capacity))
-print("  fractional bound  ", fractional_bound(items, capacity))
-
-print()
-print("the exchange step has nothing to stand on: the densest item is in no optimum")
-optima = []
-for mask in range(1 << len(items)):
-    subset = [items[i] for i in range(len(items)) if mask >> i & 1]
-    if sum(w for w, _ in subset) <= capacity and sum(v for _, v in subset) == best_value(items, capacity):
-        optima.append(subset)
-print("  optimum subsets:", optima)
-for subset in optima:
-    for dropped in range(len(subset)):
-        rest = subset[:dropped] + subset[dropped + 1:] + [(6, 8)]
-        print(f"    drop one item from {subset} and add (6, 8): weight "
-              f"{sum(w for w, _ in rest)} <= capacity: {sum(w for w, _ in rest) <= capacity}")
+greedy = by_density(items, capacity)
+optimum = [(5, 5), (5, 5)]          # the only subset whose weight reaches the capacity
+print("capacity", capacity, "items (weight, value)", items)
+print("  densities       ", [round(v / w, 3) for w, v in items])
+print("  density greedy  ", greedy, "-> weight, value", packed(greedy))
+print("  true optimum    ", optimum, "-> weight, value", packed(optimum))
 ```
 
-第一个输出给出失败：容量 10、物品 (6, 8) 与两个 (5, 5) 时，密度规则先取 (6, 8)，剩余 4 装不下任何一件，值停在 8；穷举最优解是两件 (5, 5)，值 10。交换步在这里无论如何都完不成：最优解里只有两件 (5, 5)，从其中去掉一件再放进 (6, 8) 会得到重量 11，超出容量，去掉两件则势下降。所以「最密的物品在某个最优解里」这条见证从第一步就不存在，主不变量在整个算法里都不成立。
-
-同一份数据在**分数松弛**下反而让密度规则变成最优：允许切开物品时，最后一件可以只取一部分把容量填满，得到 12 的上界。两者的差别在 $F$ 上——分数版允许以任意比例取物品，可以连续调整占用的容量，本例里所有物品的总重量超过容量，所以能恰好把容量填满；0/1 版的取值只有装与不装，剩余容量只能空着。同一条选择规则在两个可行集族上一个给出最优值、一个给出次优值，差别来自结构。
-
-留作练习：把候选池换成 $\lbrace (1,1), (2,3), (3,4), (4,6), (5,7), (2,2) \rbrace$、容量 8，枚举全部非空子集，数一数密度规则有多少次拿不到穷举最优值，最差的一次相差多少。这类固定规模的枚举给出的比值不构成近似比结论，真正的近似比要按问题规模的下界陈述。
-
-密度相同：不同的平局处理可能改变选中的集合，甚至改变最终价值，这是规则不成立的又一症状；稳定排序只是把输入顺序当作平局规则，修不好密度贪心的一般错误。
-
-失效的原因落在选择规则与可行族的相互作用上：$O \setminus G$ 中没有一件物品能换成密度最高的那件而不超重，构造 $O'$ 的条件不成立，可扩展性拿不到见证。
+密度规则取走 (6, 8)，占掉 6 个单位重量，剩下 4 装不下任何一件，价值停在 8；两件 (5, 5) 合起来重量 10、价值 10，才是最优。含 (6, 8) 的可行子集都不能再放一件 (5, 5)（$6 + 5 > 10$），价值至多是 8，所以「密度最高的物品在某个最优解里」这条见证从第一步起就不存在，交换步没有可用的最优解。同一条扫描规则在区间调度上成立，在 0/1 背包上失败，差别落在约束怎样排除局部选择。
 
 ## 终止与成本
 
-终止在这两个实现里是显然的：排一次序加一遍扫描，下标单调加一，有限列表保证结束。一般形状里「反复挑一个仍可加入的候选」的版本需要另一条论证——每一步要么真的加入一个候选（$|G|$ 严格增加、上界为 $|C|$），要么停止；因此步数不超过 $|C|$。
+两个实现都是先排一次序、再扫一遍：循环下标每轮加一，列表有限，循环必然结束。
 
-成本要按 <CrossRef id="algorithms.cost-model" /> 的四项说清：哪一种实现、什么成本模型、按什么规模度量、成本怎样量化。
+成本按 <CrossRef id="algorithms.cost-model" /> 的四项说清：哪一种实现、什么成本模型、按什么规模度量、成本怎样量化。
 
-- **区间调度**：$n = |C|$，计价的单位是区间比较（排序）与结束时刻比较（扫描），结论属于最坏情形。排序是 $\Theta(n \log n)$ 次比较（见 <CrossRef id="algorithms.sorting" />），扫描是 $\Theta(n)$，合起来是 $\Theta(n \log n)$。输入已经按结束时刻有序时，扫描本身是 $\Theta(n)$。
+- **区间调度**：$n$ 是区间数，计价单位是结束时刻比较与排序时的区间比较，结论属于最坏情形。排序是 $\Theta(n \log n)$ 次比较（见 <CrossRef id="algorithms.sorting" />），扫描是 $\Theta(n)$ 次比较，合起来是 $\Theta(n \log n)$。输入已经按结束时刻有序时，扫描本身是 $\Theta(n)$。
 - **空间**：排序产生一份长度为 $\Theta(n)$ 的引用副本（计价方式见 <CrossRef id="algorithms.arrays-and-lists" />），贪心状态本身是 $\Theta(1)$，输出另计。
 - **背包的密度规则**同样是 $\Theta(n \log n)$ 次比较加 $\Theta(n)$ 次容量检查。这个数字描述的是这段实现，与它返回的答案是否最优无关。
 
-**实现边界**：贪心不回退，不需要为撤销保存中间状态，通常比动态规划省空间；这是实现方式的副产品，不改变上面任何一条正确性结论。动态规划把「复用什么」显式写进状态，代价是要保存一张状态表。
+**实现边界**：贪心不回退，不需要为撤销保存中间状态，通常比动态规划省空间；这是实现方式的副产品，不改变上面任何一条正确性结论。

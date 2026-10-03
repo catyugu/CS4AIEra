@@ -5,10 +5,10 @@ order: 20
 title: 遍历、连通分量与访问不变量
 status: published
 objectives:
-  - 用菱形图上两种标记时刻的队列轨迹，说明一次重复入队从哪里来
-  - 写出三状态访问模型与发现时标记，并用 parent forest 不变量说明父指针为什么不可能成环
+  - 说明标记时刻怎样决定队列里会不会出现重复顶点，并指出它牵动的成本不变量
+  - 说明发现时标记与 parent 表怎样保证父指针不成环，并读出遍历森林
   - 证明可达集合定理，并说明无向图遍历森林的每棵树恰是一个连通分量
-  - 把成本拆成顶点状态操作与邻接项检查两类，并在邻接表、矩阵与边列表上分别核对
+  - 把遍历成本拆成顶点状态操作与邻接项检查两类，并推出单源与全图的渐近界
 ---
 
 「已访问」这个状态记在什么时候——顶点**入队**的那一刻，还是它被**取出**的那一刻？这个选择看似无关紧要，却决定同一个顶点能否反复进入队列。
@@ -22,368 +22,134 @@ objectives:
 | $c$ | $a, b, d$ |
 | $d$ | $b, c$ |
 
-从 $a$ 出发的广度优先搜索用一个队列保存待处理的顶点，这个待处理集合称为 <Term id="frontier">frontier</Term>。下面这段代码对同一张图分别按「取出时标记」与「发现时标记」各跑一遍，逐步打印每次出队后的队列内容。
+从 $a$ 出发的广度优先搜索用一个队列保存待处理的顶点，这个待处理集合称为 <Term id="frontier">frontier</Term>。下面这段代码在顶点进入队列的那一刻就把它记入 `seen`，逐步打印每次出队后的队列。
 
-```python run id="alg.graphs.traversal-marking"
+```python run id="alg.graphs.bfs"
 from collections import deque
 
-adjacency = {
+graph = {
     "a": ["b", "c"],
     "b": ["a", "c", "d"],
     "c": ["a", "b", "d"],
     "d": ["b", "c"],
 }
 
-
-def run(adjacency, source, mark_on_discover):
-    """Trace the queue after each pop; mark on discover or on dequeue."""
-    marked = {source} if mark_on_discover else set()
-    queue = deque([source])
-    trace = []
-    while queue:
-        vertex = queue.popleft()
-        marked.add(vertex)
-        for neighbour in adjacency[vertex]:
-            if neighbour not in marked:
-                if mark_on_discover:
-                    marked.add(neighbour)
-                queue.append(neighbour)
-        trace.append(f"pop {vertex}: queue=[{', '.join(queue)}]")
-    return trace
-
-
-print("== mark on dequeue ==")
-for line in run(adjacency, "a", False):
-    print(line)
-print("== mark on discover ==")
-for line in run(adjacency, "a", True):
-    print(line)
+seen = {"a"}
+queue = deque(["a"])
+while queue:
+    u = queue.popleft()
+    for v in graph[u]:
+        if v not in seen:
+            seen.add(v)
+            queue.append(v)
+    print(f"pop {u}: queue=[{', '.join(queue)}]")
 ```
 
-取出时才标记，队列的逐步轨迹是：
+每次出队的轨迹是：
 
-1. 取出 $a$，$b$、$c$ 未标记，先后入队；队列 $[b, c]$
-2. 取出 $b$，$c$ 未标记（它还在队列里等待），被 $b$ 再送进队尾，$d$ 也入队；队列 $[c, c, d]$
-3. 取出队首的 $c$，$d$ 未标记，第二次入队；队列 $[c, d, d]$
-4. 取出第二个 $c$，$d$ 仍未标记（它排在队尾、还没被取出过），$d$ 第三次入队；队列 $[d, d, d]$
-5. 取出 $d$，邻居都已标记，没有新的入队；队列 $[d, d]$
-6. 取出第二个 $d$，队列 $[d]$
-7. 取出第三个 $d$，队列空
-
-$c$ 入队两次，$d$ 入队三次，队列条目共 7 个，顶点只有 4 个。重复来自 $b$ 与 $c$ 这一对：它们在 $a$ 处先后入队、都还没被取出，谁被处理时都把这个尚未标记的邻居当成新顶点，于是 $d$ 被 $b$ 和两个 $c$ 各发现一次。
-
-把标记时机改到**进入 frontier 的那一刻**，同一张图给出：
-
-1. 取出 $a$，入队前 $b$、$c$ 已被标记；队列 $[b, c]$
-2. 取出 $b$，$d$ 入队前被标记；队列 $[c, d]$
-3. 取出 $c$，邻居都带标记，没有新入队；队列 $[d]$
+1. 取出 $a$，$b$、$c$ 依次入队，队列 $[b, c]$
+2. 取出 $b$，$c$ 已标记，$d$ 入队，队列 $[c, d]$
+3. 取出 $c$，$d$ 已标记，队列 $[d]$
 4. 取出 $d$，队列空
 
-每个顶点恰好入队一次，队列条目恰为 4。这条规则称为**发现时标记**：状态从「未发现」变成「已发现」的时刻，是顶点进入 frontier 的那一刻——入队、压栈或建立递归调用。
+四个顶点各入队一次，队列条目共 4 个。这条规则称为**发现时标记**：顶点进入 frontier 的那一刻就把它记入 `seen`，此后任何已经看到它的邻居都不会再把它送进队列。
 
-发现时标记保证「每个顶点只进 frontier 一次」与随之而来的线性成本界。可达性正确并不要求它：取出时才标记的实现换一套正确性论证也能得到正确的可达集合。本节采用发现时标记，是为了同时得到唯一性与成本界。
+把 `seen.add(v)` 从发现处挪到取出处，再运行一次：顶点都还能找到，但队列里出现重复项——$c$ 入队两次、$d$ 入队三次，四个顶点产生 7 个队列条目。被破坏的是每个顶点只进入 frontier 一次这条成本<Term id="invariant">不变量</Term>。可达性本身不要求发现时标记：取出时才标记的实现换一套论证也能找到全部可达顶点；发现时标记同时给出唯一性与线性成本界。
 
-## 访问状态
-
-广度优先与深度优先的差别在 frontier 用什么容器，共同的骨架是每个顶点的访问状态。两次运行只差一个时机，模型只需要三个状态：
-
-| 状态 | 含义 |
-| --- | --- |
-| `undiscovered` | 尚未被首次发现 |
-| `discovered` | 已经首次发现，但它的邻接扫描尚未完成——它可能还在 frontier 里等待，也可能已经拥有一个活动的栈帧（递归 DFS 的情形） |
-| `finished` | 它的邻接扫描已经完成；在标准 DFS 里，这意味着它递归到的后继都已经返回 |
-
-「未发现」到「已发现」这一步的时机由发现时标记固定；「已发现」到「已完成」这一步发生在一个顶点的全部邻接项扫描完毕时。
-
-**运行<Term id="invariant">不变量</Term>**
-
-1. 每个顶点至多一次从 `undiscovered` 变成 `discovered`
-2. frontier 中的每个顶点都已经 `discovered`、尚未 `finished`
-3. 每个顶点至多拥有一个 frontier 条目或一个活动栈帧
-4. 顶点一旦 `finished`，它自己的全部邻接项已经恰好被扫描一次
-
-终止性是一个独立的事实，不放进运行不变量：图有限，而且每个顶点至多进入 frontier 一次，因此插入 frontier 的次数有限，while 循环与递归必然结束，每个被发现的顶点最终都会 finished。
-
-**建模条件**：本节默认有限简单图——没有 <Term id="self-loop">自环</Term>，也没有 <Term id="parallel-edge">平行边</Term>；规模参数用 $|V|$ 与 $|E|$。单源遍历的前置条件是源点 $s \in V$；本节只讨论图的结构可达性，即使输入图带权，BFS 与 DFS 在本节也不读取权重——权重什么时候参与由加权算法决定。空图是合法的抽象状态，但它没有可选的源点，因此不能发起合法的单源遍历。
+**建模条件**：本节默认有限<Term id="simple-graph">简单图</Term>——没有 <Term id="self-loop">自环</Term>，也没有 <Term id="parallel-edge">平行边</Term>；规模参数用 $|V|$ 与 $|E|$。单源遍历要求源点 $s \in V$；空图没有可选的源点，因此不能发起合法的单源遍历。本节只讨论图的结构可达性：即使输入图带权，BFS 与 DFS 在本节也不读取权重。
 
 ## 两种 frontier
 
-| 方法 | 说明 |
-| --- | --- |
-| BFS | frontier 用队列（先进先出） |
-| DFS | frontier 用栈（后进先出），或者直接用递归调用栈 |
+广度优先与深度优先的差别在 frontier 用什么容器：BFS 用队列（先进先出），DFS 用栈（后进先出），递归实现则直接用调用栈。两者的共同骨架相同——发现时标记，处理一个顶点时扫描它的邻接表。
 
-两者的共同点值得强调，因为正确性论证完全一样：发现时标记、每个顶点只进 frontier 一次、处理时扫描它的邻接表。差别只在于处理的顺序，而顺序决定了两条不同的性质：
+差别落在处理顺序上，而顺序决定一条性质。BFS 从源点出发按层处理：$level[v] = level[parent[v]] + 1$，并且队列里的顶点按非递减的层号被取出。若队首顶点的层号是 $\ell$，队列里只可能出现层号 $\ell$ 与 $\ell + 1$ 的顶点，并且所有 $\ell$ 层顶点都排在所有 $\ell + 1$ 层顶点之前；初始队列只有源点，处理一个 $\ell$ 层顶点时新发现的顶点只以 $\ell + 1$ 追加到队尾，所以性质保持。这条分层性质是 BFS 行为的来源。DFS 沿一条路径尽量深入；它的访问顺序随邻居枚举顺序改变，本节不依赖某个特定次序。
 
-- **BFS** 从源点出发按层处理：$level[v] = level[parent[v]] + 1$，并且队列里的顶点按非递减的层号被取出。后一句需要一个队列不变量，不能靠「邻居都在下一层」一句话带过：若队首顶点的层号是 $\ell$，那么队列里只可能出现层号 $\ell$ 与 $\ell + 1$ 的顶点，而且所有 $\ell$ 层顶点都排在所有 $\ell + 1$ 层顶点之前。初始队列只有源点，性质成立；处理一个 $\ell$ 层顶点时，新发现的顶点只以 $\ell + 1$ 入队到队尾，所以性质保持。本节只建立这条层次结构，不证明层号等于最少边数。
-- **DFS** 沿着一条路径尽量深入。DFS 的契约不规定唯一的访问顺序：改变邻居的枚举顺序可以得到不同的合法 DFS 森林，后面的正确性结论都不依赖某个特定次序。本节给出的显式栈帧实现故意模拟递归调用（每个顶点只有一个活动栈帧，它的邻接扫描未完成之前不 finished），因此在邻居枚举顺序相同时，它与递归实现给出相同的发现顺序。
-
-两种 frontier 的空间都是 $O(|V_R|)$，最坏 $O(|V|)$：BFS 队列里只保存已发现但尚未处理的顶点，每个顶点至多入队一次；DFS 的活动栈帧每层对应一个尚未完成的顶点，深度至多 $|V_R|$。
+两种 frontier 的空间都是 $O(|V_R|)$，$V_R$ 是从源点可达的顶点集合，最坏 $O(|V|)$：队列只保存已发现但尚未处理的顶点，每个顶点至多入队一次。
 
 ## parent forest
 
-遍历过程中每个顶点被首次发现时记下它的父顶点，得到一张 parent 表：
+遍历过程中每个顶点被首次发现时记下它的父顶点，得到一张 parent 表：源点没有父，其余每个被发现的顶点 $v$ 恰有一个 `parent[v]`，它是首次发现 $v$ 的那个顶点，并且 $(parent[v], v)$ 是图中的一条边。从一个尚未发现的顶点重新启动遍历时，它成为一棵新树的根。
 
-**不变量**
+`parent[v]` 的发现时间严格早于 $v$，所以沿 parent 指针走时发现时间严格递减，不可能回到已经过的顶点，parent 关系也就不可能成环。每个顶点至多一个父、又没有环，parent 关系把已发现顶点分成若干棵树——这就是**遍历森林**。同一棵树上，父指针链给出的正是两点之间不重复顶点的那条<Term id="path">路径</Term>，因此森林可以被当作结构来读。
 
-1. 每个非根的已发现顶点 $v$ 恰有一个 `parent[v]`
-2. `parent[v]` 是首次发现 $v$ 的那个顶点，并且 `(parent[v], v)` 是图中的边（无向图为 `{parent[v], v}`）
-3. `parent[v]` 的发现时间严格早于 $v$
-4. 每次从一个尚未发现的顶点重新启动遍历时，该顶点成为一棵新树的根，parent 为空
-
-第 3 条是 parent 表构成森林的理由：父的发现时间严格更早，所以沿着 parent 指针走，发现时间严格递减，不可能回到已经过的顶点，也就不可能成环。每个顶点至多一个父、又没有环，于是 parent 关系把已发现顶点分成若干棵树——这就是**遍历森林**。
-
-```python run id="alg.graphs.traversal-order"
+```python run id="alg.graphs.parent-forest"
 from collections import deque
 
+graph = {
+    "a": ["b", "c"],
+    "b": ["a", "c", "d"],
+    "c": ["a", "b", "d"],
+    "d": ["b", "c"],
+}
 
-def build_adjacency(vertices, edges):
-    adjacency = {vertex: [] for vertex in vertices}
-    for u, v in edges:
-        adjacency[u].append(v)
-        adjacency[v].append(u)
-    return adjacency
+parent = {"a": None}
+seen = {"a"}
+queue = deque(["a"])
+while queue:
+    u = queue.popleft()
+    for v in graph[u]:
+        if v not in seen:
+            seen.add(v)
+            parent[v] = u
+            queue.append(v)
 
-
-def bfs(adjacency, source):
-    """Lazy state: a vertex absent from the table is undiscovered."""
-    state = {source: "discovered"}
-    parent = {source: None}
-    level = {source: 0}
-    order = []
-    events = {"discover": 1, "push": 1, "pop": 0, "finish": 0}
-    queue = deque([source])
-    while queue:
-        vertex = queue.popleft()
-        events["pop"] += 1
-        order.append(vertex)
-        for neighbour in adjacency[vertex]:
-            if state.get(neighbour, "undiscovered") == "undiscovered":
-                state[neighbour] = "discovered"
-                events["discover"] += 1
-                parent[neighbour] = vertex
-                level[neighbour] = level[vertex] + 1
-                queue.append(neighbour)
-                events["push"] += 1
-        state[vertex] = "finished"
-        events["finish"] += 1
-    return order, parent, level, events
-
-
-def dfs_recursive(adjacency, vertex, state, parent, order, events):
-    """The recursive call owns all four events, so the count is 4 * |V_R| like the frame stack."""
-    state[vertex] = "discovered"
-    events["discover"] += 1
-    events["push"] += 1
-    order.append(vertex)
-    for neighbour in adjacency[vertex]:
-        if state.get(neighbour, "undiscovered") == "undiscovered":
-            parent[neighbour] = vertex
-            dfs_recursive(adjacency, neighbour, state, parent, order, events)
-    state[vertex] = "finished"
-    events["finish"] += 1
-    events["pop"] += 1
-
-
-def dfs_frame_stack(adjacency, source):
-    """Explicit frames simulate the recursive calls: one active frame per vertex."""
-    state = {source: "discovered"}
-    parent = {source: None}
-    order = [source]
-    events = {"discover": 1, "push": 1, "pop": 0, "finish": 0}
-    stack = [(source, 0)]
-    while stack:
-        vertex, next_index = stack[-1]
-        if next_index == len(adjacency[vertex]):
-            state[vertex] = "finished"
-            events["finish"] += 1
-            events["pop"] += 1
-            stack.pop()
-            continue
-        neighbour = adjacency[vertex][next_index]
-        stack[-1] = (vertex, next_index + 1)
-        if state.get(neighbour, "undiscovered") == "undiscovered":
-            state[neighbour] = "discovered"
-            events["discover"] += 1
-            parent[neighbour] = vertex
-            order.append(neighbour)
-            stack.append((neighbour, 0))
-            events["push"] += 1
-    return order, parent, events
-
-
-def reachable_from(edges, source):
-    """Independent reachability, computed by repeatedly closing over the edge list."""
-    reached = {source}
-    changed = True
-    while changed:
-        changed = False
-        for u, v in edges:
-            if u in reached and v not in reached:
-                reached.add(v)
-                changed = True
-            if v in reached and u not in reached:
-                reached.add(u)
-                changed = True
-    return reached
-
-
-vertices = ["a", "b", "c", "d", "e", "f", "g", "h"]
-edges = [("a", "b"), ("a", "c"), ("b", "d"), ("c", "d"), ("d", "e"), ("f", "g")]
-adjacency = build_adjacency(vertices, edges)
-
-order, parent, level, bfs_events = bfs(adjacency, "a")
-print("BFS from a:", " ".join(order))
-print("  parent:", {v: parent[v] for v in order})
-print("  level: ", {v: level[v] for v in order})
-print("  vertex/frontier events:", bfs_events, "-> total",
-      sum(bfs_events.values()), "= 4 * |V_R| =", 4 * len(order))
-print("  level invariant:", all(level[v] == level[parent[v]] + 1 for v in order if parent[v] is not None))
-found = set(order)
-print("  discovered set:", sorted(found))
-print("  matches independent reachability:", found == reachable_from(edges, "a"))
-
-rec_state = {}
-rec_parent = {"a": None}
-rec_order = []
-rec_events = {"discover": 0, "push": 0, "pop": 0, "finish": 0}
-dfs_recursive(adjacency, "a", rec_state, rec_parent, rec_order, rec_events)
-frame_order, frame_parent, frame_events = dfs_frame_stack(adjacency, "a")
-print()
-print("DFS recursive:   ", " ".join(rec_order))
-print("DFS frame stack: ", " ".join(frame_order))
-print("  same discovery order:", rec_order == frame_order)
-print("  same visited set:", set(frame_order) == set(rec_order) == found)
-print("  frame stack events:", frame_events, "-> total", sum(frame_events.values()),
-      "= 4 * |V_R| =", 4 * len(frame_order))
-print("  recursive events:  ", rec_events, "-> total", sum(rec_events.values()))
-print("  both implementations agree on the counts:", rec_events == frame_events)
-print("  every vertex finished exactly once:",
-      frame_events["finish"] == frame_events["discover"] == len(frame_order))
-
-reversed_adjacency = {vertex: list(reversed(neighbours)) for vertex, neighbours in adjacency.items()}
-other_order, _, _ = dfs_frame_stack(reversed_adjacency, "a")
-print()
-print("same graph, neighbours enumerated in the opposite order:", " ".join(other_order))
-print("  same discovery order as before:", other_order == frame_order)
-print("  same reachable set:", set(other_order) == found)
+print("parent:", {v: parent[v] for v in sorted(parent)})
+print("parent edges:", sorted((parent[v], v) for v in parent if parent[v] is not None))
+print("each parent edge is a graph edge:",
+      all(v in graph[parent[v]] for v in parent if parent[v] is not None))
 ```
 
-BFS 的父指针与层号满足 $level[v] = level[parent[v]] + 1$（断言在单元格里）；显式栈帧 DFS 与递归 DFS 在这张图上给出相同的发现顺序（$a\,b\,d\,c\,e$），顶点/frontier 事件也都是 $4|V_R| = 20$ 次（每个被发现顶点 discover、push、pop、finish 各一次——递归版本把这四个事件都记在递归调用里，两个实现的计数因此可以逐项比较）。把邻居的枚举顺序反过来，DFS 给出另一个合法顺序 $a\,c\,d\,e\,b$，可达集合不变——这正是「DFS 不规定唯一访问顺序」的实测证据。
+从 $a$ 出发，$b$、$c$ 的父是 $a$，$d$ 的父是 $b$；三条 parent 边 $(a, b)$、$(a, c)$、$(b, d)$ 都出现在图里。$d$ 是被 $b$ 发现的——队首取到 $b$ 时它的邻接表扫到尚未标记的 $d$，因此 `parent[d]` 是 `b`。
 
 ## 可达集合定理
 
 **定理**：遍历终止时，已发现顶点集合恰好等于从源点可达的顶点集合。
 
-要证两件事：每个已发现的顶点都从 $s$ 可达，每个从 $s$ 可达的顶点都被发现。两边都只用到上面的不变量，与 frontier 用队列还是用栈无关。第一件事顺着首次发现的顺序看即可；第二件事是关键，它必须用到终止性。
+要证两件事：每个已发现的顶点都从 $s$ 可达，每个从 $s$ 可达的顶点都被发现。两边都不依赖 frontier 用队列还是用栈。
 
-**（已发现 $\Rightarrow$ 可达）** 按首次发现的顺序归纳。源点 $s$ 可达自身；若已经证明 $u$ 从 $s$ 可达，而扫描边 $(u, v)$ 时首次发现 $v$，则把这条边接在 $s$ 到 $u$ 的路径后面，得到 $s$ 到 $v$ 的路径。无向图完全相同。
+**（已发现 $\Rightarrow$ 可达）** 按首次发现的顺序归纳。源点 $s$ 可达自身；若已证明 $u$ 从 $s$ 可达，而扫描边 $(u, v)$ 时首次发现 $v$，就把这条边接在 $s$ 到 $u$ 的路径后面，得到 $s$ 到 $v$ 的路径。无向图完全相同。
 
-**（可达 $\Rightarrow$ 已发现）——关键一步** 反设算法终止后仍有可达但未发现的 $w$。取一条从 $s$ 到 $w$ 的路径，沿它找到第一个未发现的顶点 $x$，它的前驱 $u$ 已发现。由终止性，$u$ 最终会被处理并完整扫描它的邻接项，包括边 $(u, x)$；那时 $x$ 仍是 `undiscovered`，于是它会在这一步被发现，与「终止后仍未发现」矛盾。
-
-第一个方向走的是首次发现的顺序：parent 指针的箭头与图中边的方向相反，照指针链叙述容易在有向图上出错。第二个方向用到终止性与运行不变量 4（已发现的顶点会完整扫描自己的邻接项），不再需要「发现时标记是可达性的前提」这个过强的说法。
-
-```python run id="alg.graphs.traversal-forest"
-def build_adjacency(vertices, edges):
-    adjacency = {vertex: [] for vertex in vertices}
-    for u, v in edges:
-        adjacency[u].append(v)
-        adjacency[v].append(u)
-    return adjacency
-
-
-def traverse_all(adjacency):
-    """Restart from every undiscovered vertex; return the parent table and the roots."""
-    state = {}
-    parent = {}
-    roots = []
-    finished = []
-    for start in sorted(adjacency):
-        if state.get(start, "undiscovered") != "undiscovered":
-            continue
-        roots.append(start)
-        parent[start] = None
-        state[start] = "discovered"
-        stack = [(start, 0)]
-        while stack:
-            vertex, next_index = stack[-1]
-            if next_index == len(adjacency[vertex]):
-                state[vertex] = "finished"
-                finished.append(vertex)
-                stack.pop()
-                continue
-            neighbour = adjacency[vertex][next_index]
-            stack[-1] = (vertex, next_index + 1)
-            if state.get(neighbour, "undiscovered") == "undiscovered":
-                state[neighbour] = "discovered"
-                parent[neighbour] = vertex
-                stack.append((neighbour, 0))
-    return parent, roots, finished
-
-
-def components_from_edges(vertices, edges):
-    """Independent verifier: close over the edge list, with no shared component state."""
-    remaining = set(vertices)
-    groups = []
-    while remaining:
-        start = min(remaining)
-        reached = {start}
-        changed = True
-        while changed:
-            changed = False
-            for u, v in edges:
-                if u in reached and v not in reached:
-                    reached.add(v)
-                    changed = True
-                if v in reached and u not in reached:
-                    reached.add(u)
-                    changed = True
-        groups.append(reached)
-        remaining -= reached
-    return sorted(groups, key=lambda group: min(group))
-
-
-vertices = ["a", "b", "c", "d", "e", "f", "g", "h"]
-edges = [("a", "b"), ("a", "c"), ("b", "d"), ("c", "d"), ("d", "e"), ("f", "g")]
-adjacency = build_adjacency(vertices, edges)
-parent, roots, finished = traverse_all(adjacency)
-
-trees = {}
-for start in sorted(adjacency):
-    seen = set()
-    vertex = start
-    while parent[vertex] is not None:
-        assert vertex not in seen, "a parent chain must not cycle"
-        seen.add(vertex)
-        vertex = parent[vertex]
-    assert vertex in roots, "every parent chain must end at a root"
-    trees.setdefault(vertex, set()).add(start)
-
-print("restart vertices (roots of the traversal forest):", roots)
-for root in roots:
-    print(f"  tree rooted at {root}: {sorted(trees[root])}")
-print("number of trees:", len(trees))
-independent = components_from_edges(vertices, edges)
-print("independent components:", [sorted(group) for group in independent])
-print("tree vertex sets equal the components:",
-      sorted(sorted(group) for group in trees.values()) == sorted(sorted(group) for group in independent))
-print("isolated vertex h forms a single-root tree:", trees.get("h") == {"h"})
-print("every vertex finished exactly once:", sorted(finished) == sorted(vertices))
-print("each parent edge is an edge of the graph:",
-      all(parent[v] is None or (parent[v], v) in edges or (v, parent[v]) in edges for v in vertices))
-```
+**（可达 $\Rightarrow$ 已发现）——关键一步** 反设算法终止后仍有可达但未发现的 $w$。取一条从 $s$ 到 $w$ 的路径，沿它找到第一个未发现的顶点 $x$，它的前驱 $u$ 已发现。由终止性，$u$ 最终会进入 frontier 并被处理，完整扫描它的邻接项，包括边 $(u, x)$；那时 $x$ 仍未发现，于是它会在这一步被发现，与「终止后仍未发现」矛盾。
 
 ## 连通分量
 
-对无向图，遍历森林不止是副产物，它直接刻画连通性。
+对无向图，遍历森林直接刻画连通性。
 
 **定理**：从每个尚未发现的顶点重新启动一次遍历，每棵遍历树的顶点集合恰好是一个连通分量。因此遍历森林的树根数等于连通分量数；孤立顶点自成一棵只有一个顶点的树。
 
 从未发现的顶点 $r$ 重启一次遍历，按可达集合定理，它恰好发现所有从 $r$ 可达的顶点。无向图里「从 $r$ 可达」正是「与 $r$ 处于同一个连通分量」，所以这棵遍历树的顶点集合恰好是 $r$ 所在的分量。这次遍历结束时该分量内已经没有未发现的顶点，下一次重启必定落在另一个分量。于是每个连通分量恰好对应一棵遍历树，反之亦然。
 
-上面的单元格在一张有两个分量加一个孤立顶点的图上验证了这条对应：树的数量与独立的按边闭合算出的分量数一致，孤立顶点 $h$ 确实是一棵单根树，每条 parent 链都能走到某个根且途中不重复顶点，所有顶点都恰好 finished 一次。
+```python run id="alg.graphs.components"
+from collections import deque
 
-对有向图，重复启动遍历得到的**只是一个遍历森林**，而且它的划分可能依赖顶点的处理顺序——它根本不是强连通分量的分解。强连通分量需要另一类算法，不在本节范围。
+
+def components(graph):
+    parent, sizes = {}, []
+    for start in sorted(graph):
+        if start in parent:
+            continue
+        parent[start] = None
+        queue, size = deque([start]), 0
+        while queue:
+            u = queue.popleft()
+            size += 1
+            for v in graph[u]:
+                if v not in parent:
+                    parent[v] = u
+                    queue.append(v)
+        sizes.append(size)
+    return sizes
+
+
+graph = {
+    "a": ["b", "c"], "b": ["a", "d"], "c": ["a", "d"], "d": ["b", "c"], "e": [],
+}
+print("component count:", len(components(graph)), "sizes:", components(graph))
+```
+
+在这张图上，从 $a$ 出发的一棵树覆盖 $a, b, c, d$ 四个顶点，孤立顶点 $e$ 自成一棵单顶点树：遍历重启两次得到 2 个分量，大小为 $[4, 1]$。这就是遍历森林的树根数等于连通分量数的实例。
+
+对有向图，重复启动遍历得到的只是一个遍历森林，它的划分可能依赖顶点的处理顺序，不能当作强连通分量的分解。强连通分量需要另一类算法，不在本节范围。
 
 ## 两类成本
 
@@ -391,148 +157,43 @@ print("each parent edge is an edge of the graph:",
 
 | 工作类别 | 计数对象 | 单源成本 |
 | --- | --- | --- |
-| 顶点状态与 frontier 操作 | 每个被发现顶点常数次（入队/出队、压栈/弹栈、或一次调用） | $\Theta(\lvert V_R \rvert)$ |
+| 顶点状态与 frontier 操作 | 每个被发现顶点常数次（标记、入队/出队，或一次调用） | $\Theta(\lvert V_R \rvert)$ |
 | 邻接项检查 | 每个已发现顶点的邻居表扫描一次 | $\Theta(\lvert E_R \rvert)$ |
 
 所以单源遍历是 $\Theta(|V_R| + |E_R|)$；源点能到达全部顶点时退化为 $\Theta(|V| + |E|)$。无向图里每条边被看到两次（两个方向各一次），有向图里每个可达出边被看到一次——两者都是 $\Theta(|E_R|)$，常数不影响量级。
 
-这里的 $V_R$ 是从源点可达的顶点集合，$E_R$ 是这些顶点的邻接扫描所触及的边。对有向图，只要边 $(u, v)$ 的尾点 $u \in V_R$，就有 $v \in V_R$，所以被扫描的出边仍留在可达子图内。这个界还有一条前提：访问状态按需建立（状态表中没有的顶点视作 undiscovered）。若实现先初始化全部 $|V|$ 个顶点的状态，那一步要另计 $\Theta(|V|)$，整个调用是 $\Theta(|V| + |E_R|)$。
+这里的 $V_R$ 是从源点可达的顶点集合，$E_R$ 是这些顶点的邻接扫描所触及的边。对有向图，只要边 $(u, v)$ 的尾点 $u \in V_R$，就有 $v \in V_R$，所以被扫描的出边仍留在可达子图内。这个界还有一条前提：访问标记按需建立——标记表里没有的顶点视作尚未发现；若实现先初始化全部 $|V|$ 个顶点的状态，那一步要另计 $\Theta(|V|)$，整个调用是 $\Theta(|V| + |E_R|)$。
 
-全图遍历时，每个顶点要么成为某棵树的根、要么被某个已有顶点首次发现一次，所以顶点状态与 frontier 工作总计 $\Theta(|V|)$；同时每个顶点的邻接表恰好被扫描一次：有向图的每条边作为一个出边项被检查一次，无向图的每条边作为两个邻接项被检查两次。无论有向图中是否存在跨遍历树的边（后一棵树的顶点可以有边指向已经完成的树），总邻接项工作都是 $\Theta(|E|)$。因此全图邻接表遍历为 $\Theta(|V| + |E|)$。
+全图遍历时，每个顶点要么成为某棵树的根、要么被某个已有顶点首次发现一次，所以顶点状态与 frontier 工作总计 $\Theta(|V|)$；同时每个顶点的邻接表恰好被扫描一次：有向图的每条边作为一个出边项被检查一次，无向图的每条边作为两个邻接项被检查两次。无论有向图中是否存在跨遍历树的边，总邻接项工作都是 $\Theta(|E|)$。因此全图邻接表遍历为 $\Theta(|V| + |E|)$。
 
-表示换掉以后常数差别很大，量级也可能不同：
+下面按两类分别计数：
 
-```python run id="alg.graphs.traversal-costs"
+```python run id="alg.graphs.costs"
 from collections import deque
 
-
-def build_adjacency(vertices, edges):
-    adjacency = {vertex: [] for vertex in vertices}
-    for u, v in edges:
-        adjacency[u].append(v)
-        adjacency[v].append(u)
-    return adjacency
-
-
-def bfs_counted(adjacency, sources, counters):
-    """Lazy state plus split counters: four vertex/frontier events per discovered vertex."""
-    state = {}
-    for source in sources:
-        if state.get(source, "undiscovered") != "undiscovered":
-            continue
-        state[source] = "discovered"
-        counters["discover"] += 1
-        queue = deque([source])
-        counters["push"] += 1
-        while queue:
-            vertex = queue.popleft()
-            counters["pop"] += 1
-            for neighbour in adjacency[vertex]:
-                counters["items"] += 1
-                if state.get(neighbour, "undiscovered") == "undiscovered":
-                    state[neighbour] = "discovered"
-                    counters["discover"] += 1
-                    queue.append(neighbour)
-                    counters["push"] += 1
-            state[vertex] = "finished"
-            counters["finish"] += 1
-
-
-def bfs_matrix_counted(vertices, index, matrix, source, counters):
-    """The matrix pays one full row per discovered vertex."""
-    state = {source: "discovered"}
-    counters["discover"] += 1
-    queue = deque([source])
-    counters["push"] += 1
+graph = {"a": ["b", "c"], "b": ["a", "c"], "c": ["a", "b"], "d": []}
+state_ops = item_checks = 0
+state = {}
+for start in sorted(graph):
+    if start in state:
+        continue
+    state[start] = True
+    state_ops += 1
+    queue = deque([start])
+    state_ops += 1
     while queue:
-        vertex = queue.popleft()
-        counters["pop"] += 1
-        for position in range(len(vertices)):
-            counters["slots"] += 1
-            if matrix[index[vertex]][position] and state.get(vertices[position], "undiscovered") == "undiscovered":
-                state[vertices[position]] = "discovered"
-                counters["discover"] += 1
-                queue.append(vertices[position])
-                counters["push"] += 1
-        state[vertex] = "finished"
-        counters["finish"] += 1
-
-
-def bfs_edge_list_counted(vertices, edges, source, counters):
-    """A plain edge list must rescan the whole sequence per discovered vertex."""
-    state = {source: "discovered"}
-    counters["discover"] += 1
-    queue = deque([source])
-    counters["push"] += 1
-    while queue:
-        vertex = queue.popleft()
-        counters["pop"] += 1
-        for u, v in edges:
-            counters["entries"] += 1
-            neighbour = None
-            if u == vertex:
-                neighbour = v
-            elif v == vertex:
-                neighbour = u
-            if neighbour is not None and state.get(neighbour, "undiscovered") == "undiscovered":
-                state[neighbour] = "discovered"
-                counters["discover"] += 1
-                queue.append(neighbour)
-                counters["push"] += 1
-        state[vertex] = "finished"
-        counters["finish"] += 1
-
-
-def blank():
-    return {"discover": 0, "push": 0, "pop": 0, "finish": 0}
-
-
-def events(counters):
-    """Vertex/frontier events only: the read side is counted separately."""
-    return counters["discover"] + counters["push"] + counters["pop"] + counters["finish"]
-
-
-vertices = ["a", "b", "c", "d", "e", "f", "g", "h"]
-edges = [("a", "b"), ("a", "c"), ("b", "d"), ("c", "d"), ("d", "e"), ("f", "g")]
-adjacency = build_adjacency(vertices, edges)
-index = {vertex: position for position, vertex in enumerate(vertices)}
-matrix = [[False] * len(vertices) for _ in vertices]
-for u, v in edges:
-    matrix[index[u]][index[v]] = True
-    matrix[index[v]][index[u]] = True
-
-single = blank()
-single["items"] = 0
-bfs_counted(adjacency, ["a"], single)
-print("single source a, adjacency list: vertex/frontier events", events(single),
-      "| adjacency items read", single["items"])
-print("  events:", {k: single[k] for k in ("discover", "push", "pop", "finish")})
-print("  reachable vertices |V_R| = 5, edges in that part |E_R| = 5")
-print("  events = 4 * |V_R| =", 4 * 5, "| items = 2 * |E_R| =", 2 * 5)
-
-whole = blank()
-whole["items"] = 0
-bfs_counted(adjacency, vertices, whole)
-print("whole graph, adjacency list: vertex/frontier events", events(whole),
-      "| adjacency items read", whole["items"], "= 2|E| =", 2 * len(edges))
-
-matrix_counts = blank()
-matrix_counts["slots"] = 0
-bfs_matrix_counted(vertices, index, matrix, "a", matrix_counts)
-print("single source a, adjacency matrix: vertex/frontier events", events(matrix_counts),
-      "| slots read", matrix_counts["slots"], "= |V_R| * |V| =", 5 * len(vertices))
-
-list_counts = blank()
-list_counts["entries"] = 0
-bfs_edge_list_counted(vertices, edges, "a", list_counts)
-print("single source a, edge list: vertex/frontier events", events(list_counts),
-      "| edge entries read", list_counts["entries"], "= |V_R| * |E| =", 5 * len(edges))
-print()
-print("same graph, same traversal, three representations:",
-      single["items"], "adjacency items vs", matrix_counts["slots"], "matrix slots vs",
-      list_counts["entries"], "edge-list entries")
-print("vertex/frontier events in all three:", events(single),
-      events(matrix_counts), events(list_counts))
+        u = queue.popleft()
+        state_ops += 1
+        for v in graph[u]:
+            item_checks += 1
+            if v not in state:
+                state[v] = True
+                state_ops += 1
+                queue.append(v)
+                state_ops += 1
+E = sum(len(neighbours) for neighbours in graph.values()) // 2
+print("state operations", state_ops, "= 3*|V| =", 3 * len(graph))
+print("adjacency items", item_checks, "= 2*|E| =", 2 * E)
 ```
 
-同一个源点、同一张图：邻接表读了 10 个邻接项，矩阵读了 40 个槽位（$|V_R| \cdot |V|$），普通边列表读了 30 个边项（$|V_R| \cdot |E|$）。顶点/frontier 事件三者都是 20 次（$4|V_R|$），与表示无关；全图遍历是 32 次事件（$4|V|$）加 12 个邻接项（$2|E|$）。
+这张图 $|V| = 4$、$|E| = 3$。顶点状态操作共 12 次，每个顶点 3 次（标记、入队、出队），等于 $3|V|$；邻接项检查共 6 次，每条边两个方向各一次，等于 $2|E|$。孤立顶点 $d$ 仍贡献 3 次顶点状态操作、0 次邻接项检查——成本的两类分别由 $|V|$ 与 $|E|$ 决定。

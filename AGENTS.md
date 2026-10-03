@@ -31,7 +31,6 @@ One normative fact has exactly one home. Link to it instead of restating it.
 | What is taught, in what order, and why? | `doc/CURRICULUM.md` |
 | Which lessons exist, in what order, and what is published? | `_section.yaml` and lesson frontmatter |
 | What metadata, cell options and references are legal? | `src/content-model/schema.ts`, the markdown pipeline, the content validator |
-| What behaviour is verified, and how? | `tests/`, `scripts/check-oracles.ts`, the build |
 | What changed, and when? | Git history |
 
 Documents hold decisions and intent; code, schema, frontmatter and tests hold the precise current facts; Git holds history. Adding a lesson, moving or splitting a section, changing a cell option or advancing publication state must not require editing any of these documents. Where a document and the repository disagree about a current fact, the repository is right and the document is a defect — with one exception: `doc/CURRICULUM.md` states design intent and may describe a module's direction before its lessons reach that shape.

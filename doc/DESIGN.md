@@ -12,7 +12,6 @@
 | 仓库不变量、文档职责与完成标准 | `AGENTS.md` |
 | 一节课怎么写 | `doc/CONTENT_GUIDE.md` |
 | 教什么、模块顺序与理由 | `doc/CURRICULUM.md` |
-| 内容侧的作者验证脚本（算法 oracle 回放） | `scripts/check-oracles.ts`、`tests/oracles/` |
 
 新增一节课、拆分一个章节、给单元格增加一个选项、推进发布状态，都不应该要求修改本文件。只有架构本身变化时才修改它。
 

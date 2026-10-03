@@ -6,9 +6,9 @@ title: 最短路径与松弛
 status: published
 objectives:
   - 用一个统一的距离函数描述单源最短路问题，并区分有限、不可达与负环三种取值
-  - 把距离与具体路径见证分开，说明松弛操作的安全性不变量
+  - 说明松弛操作只把有限标签换成真实行走的权重，解释前驱指针为什么不单独构成路径契约
   - 证明单位权下 BFS 的层号恰等于最少边数
-  - 构造一个让 BFS 层号与真实权重距离不一致的反例
+  - 用一个加权图说明 BFS 的层号与按权重的最轻距离为何不同
 ---
 
 一条边带一个代价，从源点 $s$ 出发到每个顶点最少要花多少代价，这是单源最短路问题。同一张图上答案可能有限，也可能没有下界：有的顶点根本走不到，有的顶点可以绕一个「越绕越便宜」的环把代价压到任意低。本节把这三类回答收进同一个量——距离函数——再给出逼近它的共同原语。
@@ -33,7 +33,7 @@ print("cycle a -> b -> a costs:", weight[("a", "b")] + weight[("b", "a")])
 
 ## 一个统一的问题
 
-把「从 $s$ 出发按边走」这件事叫做**行走**（walk）：一列顶点 $s = u_0, u_1, \dots, u_k = v$，其中每一对相邻顶点都构成一条边；它的权重是各边权重之和。$s \to a \to b \to a$ 是一条绕了 $a \to b \to a$ 一圈的行走，多绕几圈，权重一次次减去 2。行走允许重复顶点，**路径**（path）要求顶点互不重复：$s \to a \to b \to a$ 是行走，删掉末尾那个重复的 $a$ 得到的 $s \to a \to b$ 才是路径。
+把「从 $s$ 出发按边走」这件事叫做 <Term id="walk">行走</Term>（walk）：一列顶点 $s = u_0, u_1, \dots, u_k = v$，其中每一对相邻顶点都构成一条边；它的权重是各边权重之和。$s \to a \to b \to a$ 是一条绕了 $a \to b \to a$ 一圈的行走，多绕几圈，权重一次次减去 2。行走允许重复顶点，**路径**（path）要求顶点互不重复：$s \to a \to b \to a$ 是行走，删掉末尾那个重复的 $a$ 得到的 $s \to a \to b$ 才是路径。
 
 把所有行走的权重收成一个数，就是**距离**。记 $W(s, v)$ 为所有从 $s$ 到 $v$ 的行走的集合，$w(W)$ 为行走 $W$ 的权重（各边权重之和），单源最短路径问的是同一个量。
 
@@ -67,7 +67,7 @@ $-\infty$ 这类回答来自环。**环**（cycle）是一列顶点 $v_0, v_1, \
 
 把距离算出来需要一个共同原语：
 
-<Term id="relaxation">松弛边</Term> $(u, v, weight)$：若 $distance[u] + weight < distance[v]$，则用这个值更新 $distance[v]$。
+<Term id="relaxation">松弛边</Term> $(u, v, weight)$：若 $distance[u] + weight < distance[v]$，则用这个值更新 $distance[v]$，并记下 <Term id="predecessor">前驱</Term> `predecessor[v] = u`。
 
 **安全性不变量**：任何时刻，每个有限的 $distance[v]$ 都是某条真实 $s \rightsquigarrow v$ 行走的权重。
 
@@ -107,82 +107,28 @@ $$
 from collections import deque
 
 
-def build_weighted(vertices, arcs):
-    """arcs are (u, v, weight); adjacency[u] holds (v, weight)."""
-    adjacency = {vertex: [] for vertex in vertices}
-    for u, v, weight in arcs:
-        adjacency[u].append((v, weight))
-    return adjacency
-
-
-def bfs_levels(adjacency, source):
-    """BFS counts edges only; it never looks at the weights."""
+def levels(adjacency, source):
+    """BFS over an adjacency dict; the weights on the edges are never read."""
     level = {source: 0}
     queue = deque([source])
     while queue:
-        vertex = queue.popleft()
-        for neighbour, _ in adjacency[vertex]:
-            if neighbour not in level:
-                level[neighbour] = level[vertex] + 1
-                queue.append(neighbour)
+        u = queue.popleft()
+        for v in adjacency[u]:
+            if v not in level:
+                level[v] = level[u] + 1
+                queue.append(v)
     return level
 
 
-def fewest_edges_by_enumeration(adjacency, source):
-    """Independent oracle: walk every simple path and keep the fewest edges."""
-    best = {source: 0}
+unit = {"s": ["a", "b"], "a": ["c"], "b": ["c"], "c": ["d"], "d": []}
+print("unit weights: level = fewest edges:", levels(unit, "s"))
 
-    def walk(vertex, edges_used, seen):
-        for neighbour, _ in adjacency[vertex]:
-            if neighbour in seen:
-                continue
-            candidate = edges_used + 1
-            if neighbour not in best or candidate < best[neighbour]:
-                best[neighbour] = candidate
-            walk(neighbour, candidate, seen | {neighbour})
-
-    walk(source, 0, {source})
-    return best
-
-
-def lightest_path_by_enumeration(adjacency, source):
-    """Independent oracle for weights: every simple path, least total weight."""
-    best = {source: 0}
-
-    def walk(vertex, weight_so_far, seen):
-        for neighbour, weight in adjacency[vertex]:
-            if neighbour in seen:
-                continue
-            candidate = weight_so_far + weight
-            if neighbour not in best or candidate < best[neighbour]:
-                best[neighbour] = candidate
-            walk(neighbour, candidate, seen | {neighbour})
-
-    walk(source, 0, {source})
-    return best
-
-
-unit_vertices = ["s", "a", "b", "c", "d"]
-unit_arcs = [("s", "a", 1), ("s", "b", 1), ("a", "c", 1), ("b", "c", 1), ("c", "d", 1)]
-unit = build_weighted(unit_vertices, unit_arcs)
-levels = bfs_levels(unit, "s")
-oracle_edges = fewest_edges_by_enumeration(unit, "s")
-print("unit weights: level == fewest edges:",
-      all(levels[v] == oracle_edges[v] for v in oracle_edges),
-      "| levels:", levels)
-
-non_unit_vertices = ["s", "a", "b"]
-non_unit_arcs = [("s", "a", 5), ("s", "b", 1), ("b", "a", 1)]
-non_unit = build_weighted(non_unit_vertices, non_unit_arcs)
-non_unit_levels = bfs_levels(non_unit, "s")
-weights = lightest_path_by_enumeration(non_unit, "s")
-print()
-print("non-unit weights: BFS levels", non_unit_levels)
-print("  least weight by enumeration:", weights)
-print("  BFS says a is 1 edge away, but the lightest path to a costs 2, not the 5 of the single edge")
-print("  level equals the distance in edge count, not in weight:", non_unit_levels["a"] == 1, weights["a"] == 2)
+weighted = {"s": ["a", "b"], "a": [], "b": ["a"]}
+cost = {("s", "a"): 5, ("s", "b"): 1, ("b", "a"): 1}
+level = levels(weighted, "s")
+print("weights: level[a] =", level["a"], "| lightest walk to a costs", cost[("s", "b")] + cost[("b", "a")])
 ```
 
-第二个图是反例：$s \to a$ 的权重是 5，但 $s \to b \to a$ 只要 2。BFS 说 $a$ 是 1 条边之外，这个结论在「边数」问题里正确，在「权重」问题里错误。
+带权的那张图是反例：$s \to a$ 的权重是 5，但 $s \to b \to a$ 只要 2。BFS 说 $a$ 是 1 条边之外，这个结论在「边数」问题里正确，在「权重」问题里错误。
 
 权重统一的假设一旦撤掉，层号与最轻权重就分道扬镳：$level$ 计量边数，$distance$ 计量权重。把权重真正计入距离的推进方式要对权重加一条约束，才能重新获得可以证明的确定结构——这条约束就是非负性 $w(e) \ge 0$。

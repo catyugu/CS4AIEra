@@ -5,54 +5,32 @@ order: 80
 title: 最小生成树
 status: published
 objectives:
-  - 用 cut 与 safe edge 引理证明 Kruskal 与 Prim 的正确性
-  - 说出 Kruskal 维护的三条不变量，以及等权时输出为什么不唯一
+  - 用 cut 与 safe edge 引理证明 Kruskal 与 Prim 选到的边都能放进某棵最小生成树
+  - 预测 Kruskal 与 Prim 在同一张加权图上的选边序列，并说明两者总权重相同、边集顺序不同
   - 区分最小生成树与最短路树这两个不同的优化目标
 ---
 
-连接所有顶点、总权重最小的一棵树：在一张加权无向图上，这就是最小生成树。生成树的数量有限，最小的那棵一定存在；问题是不枚举全部生成树就把它找出来。
+连接所有顶点、总权重最小的一棵树：在一张加权无向图上，这就是最小生成树。困难在于不枚举全部生成树就把它找出来。
 
-并查集维护的划分（<CrossRef id="algorithms.union-find" />）在这里不只是查询工具——Kruskal 靠它判断一条边会不会成环，收下的边数则由 $|E| = |V| - c$ 定出，其中 $c$ 是连通分量数。两个算法都由同一段交换论证支撑：cut 上的 safe edge 引理。
+Kruskal 用并查集维护的划分（<CrossRef id="algorithms.union-find" />）判断一条边会不会成环，连通输入下它收下的边数恰好是 $|V| - 1$。两个算法都由同一段交换论证支撑：cut 上的 safe edge 引理。
 
 ## 最小生成树：目标本身
 
-最小生成树的问题是：在 $G$ 的全部生成树中找权重总和最小的一棵。生成树的数量有限，所以最小值一定存在，不需要额外论证。
+在 $G$ 的全部 <Term id="spanning-tree">生成树</Term>中，权重总和最小的那一棵就是最小生成树（minimum spanning tree，MST）。生成树的数量有限，所以最小值一定存在。本节约定输入是非空连通无向图。
 
-输入约定在这里定死，后面不再重复：
-
-| 输入 | 结论 |
-| --- | --- |
-| 非空连通无向图 | 有生成树，最小生成树（MST）是它里面权重最小的那棵 |
-| 单点图 | 唯一生成树是 0 条边的那棵树，权重 0 |
-| 非空断开图 | 没有生成树，但有最小生成森林（每个分量一棵 MST） |
-| 空图 | 不进这一节的讨论 |
-
-权重**允许任意实数，包括负数**。要求非负权的是 Dijkstra，不是最短路问题本身——Bellman–Ford 就允许负边；真正会让最短行走值降到 $-\infty$ 的是源点可达的负环。最小生成树的候选对象始终是有限多棵无环的生成树，不存在绕环无限下降的问题，所以任意实数边权都不影响它的存在性。
-
-更重要的是，**最小生成树与最短路树是两个不同的目标**，不能互相替代。看一个三点图：
-
-$$w(s, a) = 2, \qquad w(s, b) = 2, \qquad w(a, b) = 1.$$
-
-| 目标 | 取边 | 总权 |
-| --- | --- | --- |
-| 最小生成树 | 取 $s$-$a$ 与 $a$-$b$ | 3 |
-| 以 $s$ 为根的最短路树 | 取 $s$-$a$ 与 $s$-$b$（两条 2） | 4 |
-
-反方向的差别同样存在：MST 里 $s$ 到 $b$ 的路径是 $s \to a \to b$，代价 3，而原图中 $\delta(s, b) = 2$（走 $s$-$b$ 这条边）。
-
-两个方向都说明：一棵最小生成树不必是最短路树，最短路树也不一定是最小生成树。单元格 C 会把这个三角形连同上一个图的实测一起打出来。
+权重允许任意实数，包括负数：候选对象始终是有限多棵无环的生成树，不存在绕环无限下降的可能，边权的取值范围不影响最小值的存在性。
 
 ## cut 与 safe edge 引理
 
-Kruskal 与 Prim 都是贪心算法；它们的正确性都来自下面这个引理。
+Kruskal 与 Prim 都是贪心算法，它们的正确性来自下面这个引理。
 
-先把词汇定死。图的一个 **cut** 是把 $V$ 分成两部分 $(S, V \setminus S)$（$S$ 非空且不含全部顶点）；一条边**跨越**这个 cut，如果它两个端点分别在两侧；它**不被森林 $A$ 跨越**，如果 $A$ 里没有边跨越这个 cut。
+图的一个 <Term id="cut">cut</Term> 是把 $V$ 分成两部分 $(S, V \setminus S)$，其中 $S$ 非空且不含全部顶点；一条边**跨越**这个 cut，如果它两个端点分居两侧；它**不被森林 $A$ 跨越**，如果 $A$ 里没有边跨越这个 cut。
 
 **引理（safe edge）**：设森林 $A$ 被某棵最小生成树 $T$ 包含，cut $(S, V \setminus S)$ 不被 $A$ 的任何边跨越，则这个 cut 上任意一条最轻边 $e$ 都是 safe 的：存在某棵最小生成树包含 $A \cup \lbrace e \rbrace$。
 
-证明就是一次交换：
+证明是一次交换：
 
-**证明。** 若 $e$ 已经在 $T$ 中，直接取 $T$ 即可。否则把 $e$ 加入 $T$：$T$ 是生成树，加一条边后恰好出现一个环 $C$。$e$ 跨越这个 cut，而环上还有另一条边 $f$ 也跨越同一个 cut（因为环要从 $S$ 侧走到 $V \setminus S$ 侧再回来），且 $f \notin A$（cut 不被 $A$ 跨越，$e$ 在环上）。$e$ 是这个 cut 上最轻的边，所以 $w(e) \le w(f)$。把 $f$ 从 $T + e$ 中删掉，得到一棵生成树，它包含 $A \cup \lbrace e \rbrace$，总权不增加，因此仍是一棵最小生成树。
+**证明。** 若 $e$ 已经在 $T$ 中，直接取 $T$。否则把 $e$ 加入 $T$：$T$ 是生成树，加一条边后恰好出现一个环 $C$。$e$ 跨越这个 cut，环上还有另一条边 $f$ 也跨越同一个 cut（环要从 $S$ 侧走到 $V \setminus S$ 侧再回来），且 $f \notin A$（cut 不被 $A$ 跨越，而 $e$ 在环上）。$e$ 是这个 cut 上最轻的边，所以 $w(e) \le w(f)$。把 $f$ 从 $T + e$ 中删掉，得到一棵生成树，它包含 $A \cup \lbrace e \rbrace$，总权不增加，因此仍是一棵最小生成树。
 
 引理只用到两件事：$e$ 在最轻的位置上（给 $w(e) \le w(f)$），以及 $f \notin A$（保证换完之后 $A \cup \lbrace e \rbrace$ 还在）。
 
@@ -60,192 +38,46 @@ Kruskal 与 Prim 都是贪心算法；它们的正确性都来自下面这个引
 
 1. 把无向边按权重升序排成一个序列（每条无向边只出现一次）
 2. $F$ 置空，并查集初始化为 $|V|$ 个单点块
-3. 依序取每条边 $(u, v)$：
-    - 若 `find(u) != find(v)`，接受它，$F$ 加上这条边，并合并两块
-    - 否则跳过
+3. 依序取每条边 $(u, v)$：若 `find(u) != find(v)`，接受它并把两块合并；否则跳过
 4. 返回 $F$
 
-排序输入必须是**每条无向边一次**的边列表。无向邻接表里一条边有两个邻接项，把 $2|E|$ 个邻接项直接当成待排序的边并不会算错——第一份可能被接受，反向副本随后因为端点已连通而被跳过——它违反的是数据契约：待排序项从 $|E|$ 变成 $2|E|$，边数统计、成本分析与调试时的 trace 全部跟着失真。
+排序输入是每条无向边一次的边列表。无向邻接表把一条边存成两个邻接项，把 $2|E|$ 个邻接项当成待排序的边仍然无环——第一份被接受、反向副本随后被跳过——但待排序项从 $|E|$ 变成 $2|E|$，成本分析与调试 trace 一起失真。
 
-算法全程维护三条不变量：
+**Kruskal 用的 cut 是哪一个？** 设当前已选边为 $F$，被接受的是边 $e = (u, v)$，取 $S$ 为 $F$ 中含 $u$ 的那个连通分量的顶点集。$e$ 的两个端点此前属于不同的块，所以 $e$ 跨越 $(S, V \setminus S)$，且这个 cut 不被 $F$ 的任何边跨越。要证 $e$ 是这个 cut 上的最轻边，比较范围是整个 cut——cut 之外还有别的分量，只在两个块之间取最轻并不足以让引理落地。反设有跨这个 cut 的边 $g$ 满足 $w(g) < w(e)$：$g$ 排在 $e$ 之前被处理；处理 $g$ 时它的两个端点不可能同块（同块则此后永远同块，与 $g$ 现在跨越 cut 矛盾），于是当时必被接受、此后它们永久同块，同样矛盾。所以 $e$ 是这个 cut 的最轻边，safe edge 引理给出 $F \cup \lbrace e \rbrace$ 仍被某棵最小生成树包含。
 
-1. $F$ 始终无环（只接受跨越两个不同当前分量的边，两个端点此前不连通，所以不会闭合成环）
-2. 并查集给出的划分，恰好等于 $(V, F)$ 的连通分量划分
-3. 始终存在某个最小生成森林包含 $F$
-
-前两条由算法本身保证。第三条按引理归纳。设某个最小生成森林 $T$ 包含当前的 $F$，并取到一条被接受的边 $e = (u, v)$，记 $S$ 为 $F$ 中含 $u$ 的那个连通分量的顶点集合。$e$ 的两个端点此前属于不同的块，所以 $e$ 跨越 cut $(S, V \setminus S)$；这个 cut 不被 $F$ 的任何边跨越（$F$ 是森林，跨块的边都不在 $F$ 里）。
-
-剩下要证的是 $e$ 是这个 cut 上的**最轻边**，而不能只说「它是最轻的、连接这两个块的边」——cut 外面还有很多别的分量，这两种说法并不等价。反设有跨这个 cut 的边 $g$ 满足 $w(g) < w(e)$。Kruskal 按权重升序处理边，所以 $g$ 在 $e$ 之前就被处理过。处理 $g$ 时它的两个端点不可能已经在同一个块里：块只会继续合并，那么到现在它们仍同属 $S$，与 $g$ 此刻跨越 cut 矛盾。既然当时它们异块，Kruskal 必然接受了 $g$，此后它们永久同属一块，同样与 $g$ 跨越 cut 矛盾。所以不存在更轻的跨 cut 边，$e$ 确实是 light edge。于是 safe edge 引理给出：$F \cup \lbrace e \rbrace$ 仍被某个最小生成森林包含。
-
-**相同权重允许任意打破平局**，所以输出的边集不必唯一。契约只能承诺「返回一棵最小生成树」；单元格 B 用三条 1 权重边组成的三角形跑了两种输入顺序，得到两棵**边集不同**的最小生成树，并直接断言「无向边集不同」与「总权重都为 2」。
-
-成本要分成两段：排序 $O(|E| \log |E|)$，并查集 $O((|V| + |E|)\alpha(|V|))$，合起来是 $O(|E| \log |E| + (|V| + |E|)\alpha(|V|))$。在非平凡输入里由排序主导，所以不要把并查集的近常数成本说成整个算法的成本。
-
-第三条不变量特意写成「最小生成森林」，这样底层算法从头到尾只有一份契约，连通输入只是 $c = 1$ 的特例。证明也是在 $e$ 所在的原始连通分量内应用引理，其余分量的那棵树保持不变。
-
-**断开图不是失败**。`kruskal_forest` 处理任意有限无向加权图，返回最小生成森林：每个原始连通分量各自得到一棵最小生成树，孤立顶点是 0 条边的树。上层契约 `minimum_spanning_tree` 要求输入非空且连通，它复用同一个逻辑并检查最终只剩下一个分量——「MST 要求连通」是上层契约，不是底层算法的能力。
-
-```python run id="alg.graphs.kruskal-invariants"
-from collections import deque
-from itertools import combinations
+```python run id="alg.graphs.kruskal"
+def find(parent, vertex):
+    while parent[vertex] != vertex:
+        parent[vertex] = parent[parent[vertex]]
+        vertex = parent[vertex]
+    return vertex
 
 
-class DisjointSet:
-    def __init__(self, vertices):
-        self.parent = {vertex: vertex for vertex in vertices}
-        self.size = {vertex: 1 for vertex in vertices}
-
-    def find(self, vertex):
-        root = vertex
-        while self.parent[root] != root:
-            root = self.parent[root]
-        while self.parent[vertex] != root:
-            self.parent[vertex], vertex = root, self.parent[vertex]
-        return root
-
-    def union(self, u, v):
-        root_u, root_v = self.find(u), self.find(v)
-        if root_u == root_v:
-            return False
-        if self.size[root_u] < self.size[root_v]:
-            root_u, root_v = root_v, root_u
-        self.parent[root_v] = root_u
-        self.size[root_u] += self.size[root_v]
-        return True
-
-
-def kruskal_forest(vertices, edges, trace=None):
-    """edges: (weight, u, v), each undirected edge exactly once.
-
-    Sorting by weight explicitly (key=lambda edge: edge[0]) keeps the comparison on
-    weights only: the tuple order would fall back to comparing vertex labels.
-    """
-    structure = DisjointSet(vertices)
-    forest = []
-    for weight, u, v in sorted(edges, key=lambda edge: edge[0]):
-        if structure.union(u, v):
-            forest.append((weight, u, v))
-            if trace is not None:
-                trace.append((list(forest), dict(structure.parent)))
-    return forest
-
-
-def blocks_of(vertices, edges):
-    """Independent BFS: the partition into connected components of (V, E)."""
-    adjacency = {vertex: [] for vertex in vertices}
-    for _, u, v in edges:
-        adjacency[u].append(v)
-        adjacency[v].append(u)
-    blocks = []
-    unseen = set(vertices)
-    while unseen:
-        start = min(unseen)
-        seen = {start}
-        queue = deque([start])
-        while queue:
-            current = queue.popleft()
-            for neighbour in adjacency[current]:
-                if neighbour not in seen:
-                    seen.add(neighbour)
-                    queue.append(neighbour)
-        blocks.append(frozenset(seen))
-        unseen -= seen
-    return sorted(blocks, key=sorted)
-
-
-def has_cycle(vertices, edges):
-    """Independent DFS check; no DSU involved."""
-    adjacency = {vertex: [] for vertex in vertices}
-    for _, u, v in edges:
-        adjacency[u].append(v)
-        adjacency[v].append(u)
-    seen = set()
-
-    def walk(vertex, parent):
-        seen.add(vertex)
-        for neighbour in adjacency[vertex]:
-            if neighbour == parent:
-                continue
-            if neighbour in seen or walk(neighbour, vertex):
-                return True
+def union(parent, u, v):
+    root_u, root_v = find(parent, u), find(parent, v)
+    if root_u == root_v:
         return False
-
-    return any(walk(vertex, None) for vertex in vertices if vertex not in seen)
-
-
-def spanning_trees(vertices, edges):
-    """Combinatorial oracle for small graphs: every spanning tree, by subset."""
-    trees = []
-    for subset in combinations(edges, len(vertices) - 1):
-        if len(blocks_of(vertices, subset)) == 1:
-            trees.append(subset)
-    return trees
+    parent[root_v] = root_u
+    return True
 
 
-def undirected_edge_set(edges):
-    """Lists can differ by construction order; the contract is about the edge set."""
-    return frozenset(frozenset((u, v)) for _, u, v in edges)
-
-
-def blocks_from_parent(vertices, parent):
-    """The partition the snapshot records: walk each parent chain to its root."""
-    roots = {}
-    for vertex in vertices:
-        root = vertex
-        while parent[root] != root:
-            root = parent[root]
-        roots.setdefault(root, set()).add(vertex)
-    return sorted((frozenset(block) for block in roots.values()), key=sorted)
-
-
-def tree_weight(tree):
-    return sum(weight for weight, _, _ in tree)
-
-
-main_vertices = ["s", "a", "b", "c", "d"]
-main_edges = [(2, "s", "a"), (2, "s", "b"), (1, "a", "b"), (3, "a", "c"),
-              (-1, "b", "c"), (4, "c", "d"), (5, "b", "d")]
-trees = spanning_trees(main_vertices, main_edges)
-best = min(tree_weight(tree) for tree in trees)
-trace = []
-forest = kruskal_forest(main_vertices, main_edges, trace)
-print("Kruskal on a graph with a negative edge, |V| =", len(main_vertices),
-      "|E| =", len(main_edges), "| spanning trees:", len(trees))
-print("  forest:", forest, "| weight", tree_weight(forest), "| oracle MST weight", best)
-print("  the three invariants hold at every acceptance:")
-for step, (accepted, parent_snapshot) in enumerate(trace, 1):
-    dsu_blocks = blocks_from_parent(main_vertices, parent_snapshot)
-    acyclic = not has_cycle(main_vertices, accepted)
-    same_partition = dsu_blocks == blocks_of(main_vertices, accepted)
-    extendable = min(tree_weight(t) for t in trees if all(e in t for e in accepted)) == best
-    print(f"    step {step}: |F| = {len(accepted)}, accepted {accepted[-1]}, "
-          f"F acyclic {acyclic}, DSU blocks == components of (V, F) {same_partition}, "
-          f"some MST contains F {extendable}")
-print("  equal-weight ties: the edge set is not unique, the contract is one MST of minimum weight")
-equal = [(1, "s", "a"), (1, "s", "b"), (1, "a", "b")]
-equal_trees = spanning_trees(["s", "a", "b"], equal)
-print("    triangle of three 1-weight edges: minimum-weight trees =",
-      len([t for t in equal_trees if tree_weight(t) == 2]), "different edge sets, all weight 2")
-first = kruskal_forest(["s", "a", "b"], equal)
-second = kruskal_forest(["s", "a", "b"], [equal[2], equal[0], equal[1]])
-print("    input order s-a, s-b, a-b gives", first)
-print("    input order a-b, s-a, s-b gives", second)
-print("    different edge sets as unordered pairs:",
-      undirected_edge_set(first) != undirected_edge_set(second),
-      "| same total weight:", tree_weight(first) == tree_weight(second) == 2)
-print("    the tie resolution is free, the weight is not")
-
-split_vertices = ["s", "a", "b", "x", "y", "z", "q"]
-split_edges = [(1, "s", "a"), (2, "a", "b"), (1, "s", "b"), (3, "x", "y"), (4, "y", "z")]
-split_forest = kruskal_forest(split_vertices, split_edges)
-print()
-print("disconnected input, q is isolated: components =",
-      len(blocks_of(split_vertices, split_edges)), "| forest edges", len(split_forest),
-      "| |V| - c =", len(split_vertices) - len(blocks_of(split_vertices, split_edges)))
-print("  the minimum spanning forest:", split_forest, "| weight", tree_weight(split_forest))
-print("  q contributes a 0-edge tree; nothing failed halfway")
-print("  single vertex:", kruskal_forest(["s"], []), "weight 0 -- the unique 0-edge spanning tree")
+vertices = ["s", "a", "b", "c", "d"]
+edges = [(2, "s", "a"), (2, "s", "b"), (1, "a", "b"), (3, "a", "c"),
+         (-1, "b", "c"), (4, "c", "d"), (5, "b", "d")]
+parent = {vertex: vertex for vertex in vertices}
+chosen = []
+for weight, u, v in sorted(edges, key=lambda edge: edge[0]):
+    if union(parent, u, v):
+        chosen.append((weight, u, v))
+print("|V| =", len(vertices), "|E| =", len(edges), "chosen:", chosen)
+print("total weight:", sum(weight for weight, _, _ in chosen))
 ```
+
+Kruskal 在这张图上选出 4 条边、总权重 6，其中包含权重 $-1$ 的 $b$-$c$；负数不影响结论，因为候选始终是有限多棵生成树。
+
+**这棵生成树不是最短路树。** 选中的边包含 $s$-$a$（权重 2）与 $a$-$b$（权重 1），$s$ 与 $b$ 在树上的路径是 $s \to a \to b$，权重 $2 + 1 = 3$；原图里有一条权重 2 的 $s$-$b$ 边被跳过了。一条边是否入选由它对全局总权重的贡献决定，与它在某条两顶点路径上是否最短无关。
+
+成本分两段：排序 $O(|E| \log |E|)$，并查集 $O((|V| + |E|)\alpha(|V|))$，合起来是 $O(|E| \log |E| + (|V| + |E|)\alpha(|V|))$，非平凡输入里由排序主导。权重相同时打破平局的顺序自由，输出边集不必唯一，契约只承诺返回一棵权重最小的生成树。
 
 ## Prim：同一个引理的第二个应用
 
@@ -253,197 +85,48 @@ Prim 从任意一个顶点开始生长一棵树，每次把「树到外面的最
 
 $$key[v] = \min \lbrace w(u, v) : u \text{ 在树中} \rbrace, \qquad \text{对每个 } v \text{ 不在树中}.$$
 
-1. $S$ 为空，$key[r] = 0$，其余为 $+\infty$，把 $r$ 放进优先队列
-2. 反复做 extract-min：取出 $key$ 最小的顶点 $v$（起点 $r$ 就是这样第一个入树的）
-3. 把 $v$ 加入 $S$；若 $v \ne r$（等价地 $parent[v]$ 存在），再把 $(parent[v], v)$ 这条边加入树
+1. $S$ 置空，$key[r] = 0$，其余为 $+\infty$
+2. 反复取 $key$ 最小的顶点 $v$（起点 $r$ 就是这样第一个入树的）
+3. 把 $v$ 加入 $S$；若 $v \ne r$，把 $(parent[v], v)$ 加入树
 4. 用 $v$ 的邻边更新其余顶点的 $key$
 5. 直到所有从 $r$ 可达的顶点都入树
 
-初始化要在伪码里写清楚：$S$ **从空集开始**，起点 $r$ 与其他顶点走同一条 extract-min 路径入树，只是在开始时它的 key 是 0。第 3 步因此要处理 $r$ 这个特例：起点没有父边，加边这一步只对 $v \ne r$ 成立。如果写成「先把 $r$ 放进树」，$r$ 就跳过了第 2、3 步，它的邻边也就不会被用来初始化别人的 key。
+$key[v]$ 是「从 $S$ 到 $v$ 这个顶点」的最轻边，不是从 $r$ 到 $v$ 的路径总权重。Dijkstra（见 <CrossRef id="algorithms.dijkstra" />）维护 `distance[v]`（从源点出发的路径总权重），Prim 维护 `key[v]`（一条边的权重）；两者的松弛更新写法相近，量的含义不同。
 
-`key[v]` 的语义要分两层说，这两层合起来才是引理的入口：
+正确性复用同一个引理：设当前树顶点集为 $S$，被选中的 $v^*$ 的父边是跨 cut $(S, V \setminus S)$ 的最轻边，而 $S$ 内部的边不跨这个 cut，于是引理直接给出「加入这条边后仍存在某棵最小生成树包含新的树」。引理里没有非负假设，负边同样允许。
 
-- **第一层（每个顶点各自）**：$key[v] = \min \lbrace w(u, v) : u \text{ 在 } S \text{ 中} \rbrace$，即「从 $S$ 到 $v$ 这个特定顶点」的最轻边，不是从根到 $v$ 的路径总权重。
-- **第二层（被选中的那个）**：算法再取 $key$ 最小的顶点 $v^*$，它的 parent edge 才是「跨越整个 cut $(S, V \setminus S)$」的最轻边，这一步正是 safe edge 引理所要求的前提。
-
-第一层与路径总权重的区分不是措辞问题：Dijkstra（见 <CrossRef id="algorithms.dijkstra" />）维护 `distance[v]`（从源点到 $v$ 的最轻路径），Prim 维护 `key[v]`（一条边的权重），两者的松弛更新长得很像，含义完全不同。单元格 C 用三角形打出两个数：$key[b] = 1$ 而 $\delta(s, b) = 2$，并核对第二层的等式。
-
-正确性用同一个引理，不需要新证明：设当前树顶点集合为 $S$，按第二层，被选中的 $v^*$ 的 parent edge 是跨 cut $(S, V \setminus S)$ 的最轻边（并列时取任意一条），$S$ 内部的边不跨这个 cut，于是引理直接给出「加入这条边后仍存在某个最小生成森林包含新的树」。**负边同样允许**，引理里没有任何非负假设。
-
-实现上可以复用 Dijkstra 的堆技法：`heapq` 没有 decrease-key，于是把 `(key, serial, vertex)` 压进堆，pop 时丢弃过期条目；`serial` 计数器保证堆永远不会去比较两个顶点——这也正是排序边时必须显式用权重做 key 的原因，两条约定要一致。成本是 $O(|V| + |E| \log |V|)$：每个顶点至多入树一次；$|V|$ 那一项来自必须逐个查看顶点，即使图里大量顶点是孤立点（$|E| = 0$ 时成本是 $\Theta(|V|)$，不是 $O(1)$）。对连通且 $|V| > 1$ 的图有 $|E| \ge |V| - 1$，可以把 $|V|$ 吸收掉，简写成 $O(|E| \log |V|)$。图断开时，对每个连通分量各跑一次，得到最小生成森林。
-
-```python run id="alg.graphs.prim-and-objectives"
-import heapq
-from itertools import count
-
-INF = float("inf")
-
-
-def build_undirected(vertices, edges):
-    adjacency = {vertex: [] for vertex in vertices}
-    for weight, u, v in edges:
-        adjacency[u].append((v, weight))
-        adjacency[v].append((u, weight))
-    return adjacency
+```python run id="alg.graphs.prim"
+def prim(vertices, edges, start):
+    in_tree = {start}
+    chosen = []
+    while len(in_tree) < len(vertices):
+        crossing = [(weight, u, v) for weight, u, v in edges
+                    if (u in in_tree) != (v in in_tree)]
+        weight, inside, outside = min(crossing, key=lambda edge: edge[0])
+        if inside not in in_tree:
+            inside, outside = outside, inside
+        chosen.append((weight, inside, outside))
+        in_tree.add(outside)
+    return chosen
 
 
-def prim_tree(vertices, edges, start):
-    """Lazy heapq with (key, serial, vertex).
-
-    key[v] is the lightest edge from the current tree to that *vertex*; the parent
-    edge of the vertex that extract-min picks is the lightest edge across the whole
-    cut. The log records both numbers so the second claim is checked, not assumed.
-    """
-    adjacency = build_undirected(vertices, edges)
-    serial = count()
-    in_tree = set()
-    key = {start: 0}
-    parent = {start: None}
-    heap = [(0, next(serial), start)]
-    tree = []
-    settle_log = []
-    while heap:
-        weight, _, vertex = heapq.heappop(heap)
-        if vertex in in_tree or weight > key.get(vertex, INF):
-            continue
-        crossing = [w for u in in_tree for (x, w) in adjacency[u] if x not in in_tree]
-        settle_log.append((vertex, weight, min(crossing) if crossing else None))
-        in_tree.add(vertex)
-        if parent[vertex] is not None:
-            tree.append((weight, parent[vertex], vertex))
-        for neighbour, edge_weight in adjacency[vertex]:
-            if neighbour not in in_tree and edge_weight < key.get(neighbour, INF):
-                key[neighbour] = edge_weight
-                parent[neighbour] = vertex
-                heapq.heappush(heap, (edge_weight, next(serial), neighbour))
-    return tree, key, settle_log
-
-
-def dijkstra_distances(vertices, edges, source):
-    adjacency = build_undirected(vertices, edges)
-    serial = count()
-    distance = {source: 0}
-    settled = set()
-    heap = [(0, next(serial), source)]
-    while heap:
-        value, _, vertex = heapq.heappop(heap)
-        if vertex in settled or value > distance.get(vertex, INF):
-            continue
-        settled.add(vertex)
-        for neighbour, weight in adjacency[vertex]:
-            if value + weight < distance.get(neighbour, INF):
-                distance[neighbour] = value + weight
-                heapq.heappush(heap, (value + weight, next(serial), neighbour))
-    return distance
-
-
-def kruskal_forest(vertices, edges):
-    parent = {vertex: vertex for vertex in vertices}
-
-    def find(vertex):
-        while parent[vertex] != vertex:
-            parent[vertex] = parent[parent[vertex]]
-            vertex = parent[vertex]
-        return vertex
-
-    forest = []
-    for weight, u, v in sorted(edges, key=lambda edge: edge[0]):
-        root_u, root_v = find(u), find(v)
-        if root_u != root_v:
-            parent[root_v] = root_u
-            forest.append((weight, u, v))
-    return forest
-
-
-def undirected_edge_set(edges):
-    """Lists can differ by construction order; the edge set is what the contract is about."""
-    return frozenset(frozenset((u, v)) for _, u, v in edges)
-
-
-def components(vertices, edges):
-    adjacency = build_undirected(vertices, edges)
-    blocks, unseen = [], set(vertices)
-    while unseen:
-        start = min(unseen)
-        seen, stack = {start}, [start]
-        while stack:
-            for neighbour, _ in adjacency[stack.pop()]:
-                if neighbour not in seen:
-                    seen.add(neighbour)
-                    stack.append(neighbour)
-        blocks.append(frozenset(seen))
-        unseen -= seen
-    return sorted(blocks, key=sorted)
-
-
-def total(edges):
-    return sum(weight for weight, _, _ in edges)
-
-
-print("the triangle s, a, b: w(s, a) = 2, w(s, b) = 2, w(a, b) = 1")
-triangle_vertices = ["s", "a", "b"]
-triangle_edges = [(2, "s", "a"), (2, "s", "b"), (1, "a", "b")]
-mst = kruskal_forest(triangle_vertices, triangle_edges)
-tree, key, _ = prim_tree(triangle_vertices, triangle_edges, "s")
-distance = dijkstra_distances(triangle_vertices, triangle_edges, "s")
-shortest_path_tree = [(2, "s", "a"), (2, "s", "b")]
-print("  minimum spanning tree:", mst, "| weight", total(mst), "| Prim agrees:", total(tree) == total(mst))
-print("  shortest-path tree from s: the two real edges", shortest_path_tree,
-      "| weight", total(shortest_path_tree))
-print("  the two objectives differ: 3 != 4")
-print("  inside the MST the walk s -> a -> b costs 3, while delta(s, b) = 2")
-print("  Prim's key[b] =", key["b"], "= min(2, 1) is the lightest edge from the tree to b,",
-      "not a path distance: key[b] != delta(s, b) is", key["b"] != distance["b"])
-
-main_vertices = ["s", "a", "b", "c", "d"]
-main_edges = [(2, "s", "a"), (2, "s", "b"), (1, "a", "b"), (3, "a", "c"),
-              (-1, "b", "c"), (4, "c", "d"), (5, "b", "d")]
-prim_edges, _, settle_log = prim_tree(main_vertices, main_edges, "s")
-kruskal_edges = kruskal_forest(main_vertices, main_edges)
-print()
-print("graph with a negative edge, |V| =", len(main_vertices), "|E| =", len(main_edges))
-print("  Prim:", prim_edges, "| weight", total(prim_edges))
-print("  Kruskal:", kruskal_edges, "| weight", total(kruskal_edges))
-print("  same edge set as unordered pairs:", undirected_edge_set(prim_edges) == undirected_edge_set(kruskal_edges),
-      "| the printed order differs because the two constructions visit edges differently")
-print("  the negative edge is inside both trees, and a tree has no cycle,")
-print("  so no negative-cycle descent like the shortest-path case can appear here")
-print("  second layer of the key claim, checked at every settle:")
-for vertex, chosen, cut_minimum in settle_log:
-    if cut_minimum is None:
-        print(f"    {vertex}: the starting vertex, no edge needed yet")
-    else:
-        print(f"    {vertex}: key {chosen} == lightest edge across the whole cut {cut_minimum}:",
-              chosen == cut_minimum)
-
-split_vertices = ["s", "a", "b", "x", "y", "z", "q"]
-split_edges = [(1, "s", "a"), (2, "a", "b"), (1, "s", "b"), (3, "x", "y"), (4, "y", "z")]
-forest = []
-for block in components(split_vertices, split_edges):
-    start = min(block)
-    forest.extend(prim_tree(list(block), [e for e in split_edges if e[1] in block and e[2] in block], start)[0])
-print()
-print("disconnected input: Prim runs once per component and returns a forest")
-print("  Prim forest:", forest, "| weight", total(forest))
-print("  Kruskal forest:", kruskal_forest(split_vertices, split_edges), "| weight",
-      total(kruskal_forest(split_vertices, split_edges)))
-print("  the isolated vertex q contributes no edge, and the two forests have equal weight:",
-      total(forest) == total(kruskal_forest(split_vertices, split_edges)))
+vertices = ["s", "a", "b", "c", "d"]
+edges = [(2, "s", "a"), (2, "s", "b"), (1, "a", "b"), (3, "a", "c"),
+         (-1, "b", "c"), (4, "c", "d"), (5, "b", "d")]
+tree = prim(vertices, edges, "s")
+print("|V| =", len(vertices), "|E| =", len(edges), "chosen:", tree)
+print("total weight:", sum(weight for weight, _, _ in tree))
 ```
+
+在同一个边列表上 Prim 也选出 4 条边、总权重 6，顺序与 Kruskal 不同。上面的实现每一步重扫全部边取最轻的跨 cut 边，成本 $O(|V| |E|)$；改用优先队列维护 $key$ 降到 $O(|V| + |E| \log |V|)$：`heapq` 没有 decrease-key，于是把 $(key, serial, vertex)$ 压进堆、pop 时丢弃过期条目，`serial` 计数器保证堆不去比较两个顶点。$|V|$ 那一项来自必须逐个查看顶点；连通图上 $|E| \ge |V| - 1$，可以简写成 $O(|E| \log |V|)$。
 
 ## 算法对照
 
 | 算法 | 前置条件 | 维护的不变量 | 成本 |
 | --- | --- | --- | --- |
-| Kruskal | 有限无向加权图（允许断开），边列表每条边一次 | $F$ 无环、划分正确、始终可扩展成某个最小生成森林 | $O(\lvert E \rvert \log \lvert E \rvert + (\lvert V \rvert + \lvert E \rvert)\alpha(\lvert V \rvert))$ |
-| Prim | 有限无向加权图（允许断开） | $key[v]$ 是从当前树到 v 的最轻边；被选中的那条是跨整个 cut 的最轻边 | $O(\lvert V \rvert + \lvert E \rvert \log \lvert V \rvert)$ |
+| Kruskal | 非空连通无向图，边列表每条边一次 | $F$ 无环、划分正确、始终可扩展成某棵最小生成树 | $O(\lvert E \rvert \log \lvert E \rvert + (\lvert V \rvert + \lvert E \rvert)\alpha(\lvert V \rvert))$ |
+| Prim | 非空连通无向图 | $key[v]$ 是从当前树到 $v$ 的最轻边；被选中的那条是跨整个 cut 的最轻边 | $O(\lvert V \rvert + \lvert E \rvert \log \lvert V \rvert)$ |
+
+两个算法对 safe edge 引理取了不同的 cut：Kruskal 用按当前分量划分的 cut，Prim 用「已选顶点与其余顶点」的 cut，引理对两者同时成立。
 
 本节不涉及强连通分量、一般动态删边连通性、有向最小生成树（arborescence）、最小割与最大流、Steiner 树、次小生成树、动态 MST 与 Borůvka 算法。
-
-## 小结
-
-- 最小生成树的输入契约是非空连通无向图；单点图有唯一的 0 条边生成树，断开图给最小生成森林。权重允许任意实数（含负数），因为候选对象是有限多棵无环生成树，不存在负环式的无限下降。
-- Kruskal 与 Prim 的正确性都来自 cut safe edge 引理：cut 不被当前森林 $A$ 跨越时，cut 上任意最轻边都可以安全加入，证明是交换论证。
-- Kruskal 维护三条不变量（第三条写成「某个最小生成森林」，断开图因此不是失败案例），等权时输出不唯一，契约只承诺一棵最小生成树。
-- Prim 的 $key[v]$ 是「从当前树到 $v$」的最轻边，不是从根到 $v$ 的路径总权重；只有被 extract-min 选中的那个顶点，它的父边才是跨整个 cut 的最轻边。
-- 最小生成树与最短路树是两个不同目标，三角形 $w(s,a) = w(s,b) = 2$、$w(a,b) = 1$ 同时说明两个方向都不成立。
