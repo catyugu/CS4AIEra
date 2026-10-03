@@ -11,7 +11,7 @@ objectives:
   - 说明期望界为什么不提供确定性的单次运行保证，以及样本均值为什么只是对期望的估计
 ---
 
-上一课用摊还分析处理了一串操作的总成本，其中不需要任何随机性假设。另一种「平均」把成本当成随机变量：随机性要么来自输入，要么来自算法内部。本课只建立这套分析语言；具体随机算法的分类、设计与契约属于 `techniques` 子章节的随机化算法一课（Las Vegas 与 Monte Carlo、全域哈希、随机化快速排序、用重复降低错误概率都在那里）。
+上一课用摊还分析处理了一串操作的总成本，其中不需要任何随机性假设。另一种「平均」把成本当成随机变量：随机性要么来自输入，要么来自算法内部。本课只建立这套分析语言。随机算法的契约、Las Vegas 与 Monte Carlo 的分类、单侧与双侧错误、概率放大属于 <CrossRef id="algorithms.randomized-algorithms" />；随机 pivot 快速排序的具体算法与期望成本在 <CrossRef id="algorithms.comparison-sorting" /> 处理；哈希表的概率模型在 <CrossRef id="algorithms.hash-tables" /> 处理。
 
 ## 两种随机性来源
 
@@ -125,4 +125,4 @@ print("closed forms: (n + 1) / 2 =", (size + 1) / 2, "| n =", size)
 - 期望界不提供确定性的单次运行保证；高概率保证是另一回事，需要另行证明尾概率界。
 - 样本均值只是对期望的估计，复杂度结论来自计数论证。
 - 期望与摊还是两个独立维度，可以叠加但要分开陈述。
-- 本课留下的四个接口：$D_n$ 上的平均情形、固定输入上对随机位取期望、期望的线性性、高概率保证不同于期望保证。具体随机算法（Las Vegas 与 Monte Carlo、全域哈希、随机化快速排序、概率放大）的设计与契约属于 `techniques` 的随机化算法一课。
+- 本课留下的四个接口：$D_n$ 上的平均情形、固定输入上对随机位取期望、期望的线性性、高概率保证不同于期望保证。具体随机算法的契约与设计属于 <CrossRef id="algorithms.randomized-algorithms" />，随机 pivot 快速排序与哈希概率模型分别归属 <CrossRef id="algorithms.comparison-sorting" /> 与 <CrossRef id="algorithms.hash-tables" />。

@@ -1,0 +1,179 @@
+---
+id: algorithms.choosing-structures
+slug: /algorithms/choosing-structures
+order: 10
+title: 从操作工作负载选择数据结构
+status: draft
+objectives:
+  - 把「选哪种结构」拆成语义过滤与工作负载比较两步，并说明顺序为什么不能颠倒
+  - 写出一个工作负载的操作清单，并用语义契约排除不合适的结构
+  - 用频率加权把候选结构的成本算成一个可比较的数
+  - 指出一个只按渐进阶选择结构会得到错误结论的场合
+---
+
+前面每一节都在固定的表示上做算法：数组、链式、哈希表、树、堆、并查集各管一类操作。这一节回到最前面的问题——给一组操作，选哪一种表示。这件事有两条独立的判据，顺序不能颠倒：先看**语义**（这个结构能不能表达我需要的操作），再看**成本**（在给定的操作频率下哪个更便宜）。语义不合格的结构，渐进阶再好也不能用；语义合格之后，成本才由工作负载决定。
+
+## 第一步：用语义契约过滤
+
+语义这一层的清单来自要做的操作本身，与规模无关：
+
+```text
+顺序        遍历顺序要不要稳定、要不要按键有序
+唯一性      同一元素可不可以重复出现
+位置        要不要按下标访问，插删之后旧下标要不要仍然指向同一元素
+句柄        容器给出的、指向其内部位置或节点的句柄，在增删其他元素后要不要仍指向同一逻辑元素
+范围        要不要按键的区间取一段
+极值        要不要反复取出最小或最大的元素
+```
+
+这一步只问一件事：**这个表示有没有丢掉契约需要的信息**。重复元素被去重、旧下标在搬移后指向别的元素、节点引用在结构重建后失效——这些是信息或绑定被丢掉、无法再从表示里恢复，属于语义不合格，与规模无关。判断的分界是：**能从表示已经保存的信息里算出来的适配属于成本问题；契约要求的信息已经被表示丢掉的，属于语义问题。** 给结构额外维护元数据是选择了一个新的复合表示，不算「用更贵的算法把丢掉的信息找回来」。
+
+「顺序」这个词在这里要分成两种。**按键排序**：键值本身还在集合里，`sorted(s)` 就能排出来，属于成本问题。**原始顺序**（插入顺序、历史顺序）：`set` 根本没有保存它，多花时间也恢复不了；要保留就只能从一开始额外维护一份序列，那时候选已经是「`set` + 序列」这个复合表示，不是原来的 `set` 了。同理，范围查询与取极值都只是扫描，扫描一遍筛出区间、扫描一遍取极值，信息都在，属于成本问题；`dict` 的按下标定位可以把键列出来再索引，也是成本问题，而 `set` 若被要求的是原始顺序，就落到上面那一类。只有把候选限死在「结构自带的迭代器与访问原语、不许任何适配步骤」时，才可以直接用这些操作淘汰结构；本课不设这条限制，下面的工作负载单元格里 `dict` 的范围查询正是「扫描 + 排序」这种适配。
+
+语义这一层只排除真正丢掉信息的结构。`set` 与 `dict` 的键各自去重，所以需要保留重复元素时它们直接不合格。动态数组在中间插入或删除时会搬移后续元素，**容器给出的位置句柄**——下标、指向内部存储槽位的指针、按位置走动的迭代器——就不再指向原来那个元素；链表给出的是节点句柄，只要该节点没被删除就继续指向它。要注意区分句柄与对象引用：调用方对**元素对象本身**的外部引用不属于容器句柄，`items[10]` 拿到的对象在列表搬移之后依然是同一个对象，会失效的是那个「第 10 个槽位」的位置含义。这一步的判断不需要数字：
+
+| 需求 | 被排除的常见结构 | 原因 |
+| --- | --- | --- |
+| 同一元素允许重复出现 | `set`、`dict` 的键 | 去重把重复信息丢掉了，恢复不出来 |
+| 增删其他元素后，容器句柄仍指向同一逻辑元素 | 动态数组 | 搬移把位置句柄与那个元素的绑定丢掉了 |
+
+表里只有两类，因为其余常见需求都能靠适配步骤满足，属于第二步。「按键有序遍历」是排序问题；「按键范围取一段」是全扫加筛选；「反复取最小或最大」是每次重新扫描，<CrossRef id="algorithms.heaps" /> 的对数界才是成本上的答案；「按下标定位」对 `dict` 可以利用它已保存的插入顺序，先构造序列再索引，因此属于成本问题；对 bare `set`，若契约中的下标绑定到某种稳定的原始顺序，那顺序已经被表示丢掉，属于语义问题，要支持它只能改选 `set` + 序列这样的复合表示。语义层只负责那些「再怎么花时间也拿不回来」的信息。
+
+## 第二步：用工作负载比较成本
+
+剩下的候选结构在同一条基准上比：把每个操作的单次成本乘以它在工作负载里的次数，求和。**这张表是选择的结果，不是选择的输入**：先写工作负载，再填成本。
+
+频率可以加权，前提是所有候选的「单位成本」来自同一个模型。本课用的模型是：**一次键比较、一次元素搬移、一次散列探测、一次结果元素的产出，各记一个抽象步**。所以二分查找的比较次数要计进去，区间测试 `low <= key < high` 按实际发生的比较计一到两次，排序按「$m\lceil\log_2 m\rceil$ 次比较加同样多次搬移」计，两个候选的区间查询都各自为产出的元素付费。比较、搬移、探测与结果产出之所以能够相加，正是因为本课已经显式把这四类基本操作统一定价为一个抽象步；如果没有这套统一定价，不同种类的原始计数才不能直接相加或比较。
+
+```text
+操作            次数      候选 A 单位成本      候选 B 单位成本
+查找            f_lookup
+插入            f_insert
+删除            f_delete
+按键范围查询    f_range
+取最小 / 出队   f_pop
+```
+
+工作负载至少要写清四件事：操作集合与各自频率、输入规模与增长方式、访问模式（顺序读还是随机读、是否存在局部性、是否成批）、以及对最坏情形的容忍度（摊还界够不够，还是需要单次延迟有界）。比例未知时先去测：同一个问题在读写比不同的两半负载上会得到相反的选择。
+
+```python run id="alg.choose.workload"
+import random
+
+
+def search(data, key):
+    """Binary search that reports its own comparison count."""
+    low, high, steps = 0, len(data), 0
+    while low < high:
+        middle = (low + high) // 2
+        steps += 1
+        if data[middle] < key:
+            low = middle + 1
+        else:
+            high = middle
+    return low, steps
+
+
+def scan(data, low, high):
+    """Interval test that reports the comparisons it actually performs: one for
+    `low <= key`, a second for `key < high` when the first passes."""
+    hits = []
+    comparisons = 0
+    for key in data:
+        comparisons += 1
+        if low <= key:
+            comparisons += 1
+            if key < high:
+                hits.append(key)
+    return hits, comparisons
+
+
+def sort_steps(count):
+    """An abstract comparison sort charges one step per comparison and one per
+    move; both are bounded by count * ceil(log2 count)."""
+    per_pass = (count - 1).bit_length()
+    return 2 * count * per_pass
+
+
+def run(style, keys, queries):
+    """One cost model for both candidates: a key comparison, a moved element, a
+    hash probe and an emitted element each count as one abstract step."""
+    inserts = 0
+    ranges = 0
+    if style == "sorted list":
+        data = []
+        for key in keys:
+            position, steps = search(data, key)
+            inserts += steps + (len(data) - position)
+            data.insert(position, key)
+        for low, high in queries:
+            left, low_steps = search(data, low)
+            right, high_steps = search(data, high)
+            ranges += low_steps + high_steps + (right - left)
+    else:
+        data = {}
+        for key in keys:
+            data[key] = True
+            inserts += 1
+        for low, high in queries:
+            hits, comparisons = scan(data, low, high)
+            ranges += comparisons + len(hits) + sort_steps(len(hits))
+    return inserts, ranges
+
+
+def sample_queries(rng, count, span, width):
+    """Ranges are [low, low + w) with w >= 1, so an interval is never empty."""
+    return [(low, low + rng.randrange(1, width)) for low in (rng.randrange(span) for _ in range(count))]
+
+
+rng = random.Random(20260604)
+# Keys are drawn without replacement: a dict overwrites a repeated key while a
+# sorted list keeps the duplicate, and the two candidates would no longer hold
+# the same logical data.
+keys = rng.sample(range(10_000), 200)
+queries = sample_queries(rng, 400, 9_000, 1_000)
+# Both workloads use the same keys and the first queries of the same list; only
+# the number of inserts against the number of range queries changes. Inserting
+# into a sorted list gets more expensive as it grows, so a change of size would
+# not be attributable to the frequency ratio alone.
+workloads = {
+    "插入 : 查询 = 1 : 2": (keys, queries),
+    "插入 : 查询 = 10 : 1": (keys, queries[:20]),
+}
+print(f"{'操作次数比':<12} {'候选':<12} {'插入总成本':>12} {'范围查询总成本':>16} {'合计':>10}")
+print("（单元格逐次操作计费并累加，表中是各类操作的累计成本）")
+for name, (keys, queries) in workloads.items():
+    totals = {}
+    for style in ("sorted list", "dict"):
+        inserts, ranges = run(style, keys, queries)
+        totals[style] = inserts + ranges
+        print(f"{name:<10} {style:<12} {inserts:>14} {ranges:>18} {inserts + ranges:>10}")
+    winner = min(totals, key=totals.get)
+    loser = max(totals, key=totals.get)
+    print(f"{'':<10} {'→ 更省':<12} {winner}（是 {loser} 的 {totals[loser] / totals[winner]:.1f} 分之一）")
+```
+
+同一份代码、同一组语义、同一套单位成本，同一批 $200$ 个键、同一批范围查询，只把「插入与查询的次数比」从 $1:2$ 换成 $10:1$，胜者就换了人。两组负载用同一批键**是有意的**：有序数组的插入成本随当前规模上升，规模一变，翻转就不能归因于频率。这正是第二步只能用工作负载做输入的原因：离开频率谈「哪个结构更好」没有答案。注意 `dict` 那一列的范围查询：它扫描全部键、再对命中的结果排序，代价正是「没有按键顺序」换来的。
+
+## 常见误判
+
+- **只看渐进阶**：$O(1)$ 与 $O(\log n)$ 的差别可能被常数和访问模式吃掉，而 $O(n)$ 的线性扫描在 $n$ 很小的实际规模上常常最快。
+- **忽略语义代价**：哈希表少一次比较的收益，抵不上一次全扫加排序的开销；而契约层面的不匹配连补救都没有。
+- **用摊还界回答尾延迟问题**：摊还 $O(1)$ 的插入偶尔会有一次 $\Theta(n)$ 的搬移（<CrossRef id="algorithms.amortized" />），对延迟敏感的场景要按单次最坏成本比较。
+- **把未使用的操作放进加权**：权重来自实际工作负载，不来自「将来可能要用」。
+- **比较没有落到同一组操作上**：两个结构必须在同一份操作清单上计分，否则比较的不是同一件事。
+
+## 边界与失效
+
+- **语义优先于成本**：能满足语义的慢结构胜过不能满足语义的快结构，前者只是慢，后者是错的。
+- **成本比较不能停在渐进阶**：同阶候选还要比较单位操作的实际代价、访问模式与表示布局；需要把缓存失配、I/O 等正式计入分析时，应显式换用相应的成本模型，见 <CrossRef id="algorithms.complexity-in-practice" />。
+- **混合结构是合法的答案**：哈希表加一份按键有序的缓存、堆加字典做延迟删除，都比强行二选一更常见；选择的对象是「表示组合」，不是单个结构。
+- **工作负载会变**：选择要写明依据的工作负载；比例变化后结论可能翻转，因此把测量结果和选择理由一起记下来。
+- **接口要挡住实现的泄漏**：如果调用方保存的是下标，那么换成链表仍是替换表示；如果调用方保存的是节点引用，换回动态数组就不再是替换表示，而是改契约。
+
+## 小结
+
+- 选择分两步：先用语义契约过滤，再用工作负载比较成本；顺序不能颠倒。
+- 语义过滤只排除丢掉了契约所需信息、无法从表示里恢复的候选（重复元素、失效的位置句柄、丢失的节点绑定）；按键排序、范围、极值与按下标定位都能靠适配步骤做到，归第二步比成本，而插入顺序这类信息一旦被表示丢掉就是语义问题。
+- 成本比较把每个操作的频率乘以单位成本再求和，结果依赖工作负载，不依赖结构本身的名声。
+- 操作次数比一变，胜者可能翻转；比较时固定规模，比例未知就先测量再决定。
+- 渐进阶只是成本比较的一层；常数、局部性、内存与尾延迟还要分别考虑，见 <CrossRef id="algorithms.complexity-in-practice" />。

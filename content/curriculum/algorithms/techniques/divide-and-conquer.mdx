@@ -44,7 +44,7 @@ combine(P, solution_1, ..., solution_k)：利用原实例的必要信息与子�
     全部非递归工作，从来不专指「合并子解」。
 ```
 
-重复状态是**效率特征**而非定义条件，而且它正是下一个范式的入口：把递归树里反复出现的同一个状态折叠起来，树就变成一张状态 DAG，记忆化与动态规划利用的正是这种复用机会。
+重复状态是**效率特征**而非定义条件，而且它正是动态规划的一条入口：把递归树里反复出现的同一个状态折叠起来，树就变成一张状态 DAG，记忆化与动态规划利用的正是这种复用机会。
 
 本节沿用 <CrossRef id="algorithms.recursion" /> 建立的归纳与调用树语言，把已经见过的例子——归并排序与快速排序（<CrossRef id="algorithms.comparison-sorting" />）、快速选择（<CrossRef id="algorithms.selection-and-top-k" />）、二分查找（<CrossRef id="algorithms.binary-search" />）——抽象成同一套分析框架，并补上这套框架最容易出错的部分：递推式的解。
 
@@ -430,5 +430,5 @@ print("  the answer is Theta(n^2), reached by unfolding the recurrence, not by t
 - 情形 2 覆盖 $f$ 与 $n^p$ 同阶；情形 1 与情形 3 要求两者之间有多项式级间隔，所以临界点附近只差对数因子的 $f$ 不由这个基本版本覆盖。缺口（$T(n) = 2T(n/2) + n\log n$）、临界指数下方的对数缺口（$T(n) = 2T(n/2) + n/\log n$）、不规则划分（$T(n) = T(n/3) + T(2n/3) + n$）、非常数分数（$T(n) = T(n-1) + n$）都要回到递归树，正则条件的必要性要靠振荡的 $f$ 才能隔离出来。
 - 成本结论用机制计数支撑：归并排序的每层 $n$、Karatsuba 的三次乘法（注意 1157 与 729 的差别来自进位，不构成模型结论）、二分查找的单子问题。
 - 终止与深度分开看：严格下降保证有限终止，比例缩小才给出 $\log n$ 深度；空间是最长活动递归路径乘每帧开销，Python 的递归上限与缺失的尾调用消除都属于实现边界。
-- 本节边界：不重复 <CrossRef id="algorithms.comparison-sorting" /> 里的排序算法实现，不展开记忆化与最优子结构（下一节动态规划），不讨论 Akra–Bazzi 之类的不规则递推理论、并行分治与缓存无关算法。
+- 本节边界：不重复 <CrossRef id="algorithms.comparison-sorting" /> 里的排序算法实现，不展开记忆化与最优子结构（后面的 <CrossRef id="algorithms.dynamic-programming" />），不讨论 Akra–Bazzi 之类的不规则递推理论、并行分治与缓存无关算法。
 

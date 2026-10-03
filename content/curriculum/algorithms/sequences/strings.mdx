@@ -73,7 +73,7 @@ for label, text, pattern in cases:
 称 $p[:k]$ 的一个**边界**是它的一段既是真前缀又是真后缀的子串，$\pi$ 记每个前缀的最长边界长度：
 
 $$
-\pi[i] = \max \{\, \ell < i+1 : p[i+1-\ell : i+1] = p[:\ell] \,\}
+\pi[i] = \max \lbrace \, \ell < i+1 : p[i+1-\ell : i+1] = p[:\ell] \, \rbrace
 $$
 
 括号里的条件是：把 $p$ 的后缀 $p[i+1-\ell:i+1]$ 与它的前缀 $p[:\ell]$ 对齐时两者相同。

@@ -1,0 +1,5 @@
+id: algorithms.selection
+label: 在真实约束下选择结构
+order: 80
+summary: 按语义契约过滤、再按工作负载成本比较；渐进阶相同时的常数、局部性、内存与尾延迟。
+status: active
