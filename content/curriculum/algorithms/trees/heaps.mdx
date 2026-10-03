@@ -160,6 +160,4 @@ print("minimum at index 0; maximum at index", items.index(max(items)))
 
 数组按堆序存放，同一个数组的排序序是另一份排列；根是全局最小，最大键落在某个叶子上，下标并不指向它。这几项缺失是接口选择的结果：优先队列只保证最小，堆用紧凑的数组表示把它的成本压到常数与对数。
 
-堆的结论分属最坏与摊还两种类别（一次两个数组槽位的交换记 2 次移动）：查最小为 $O(1)$；插入与取出最小的堆序调整最坏为 $\Theta(\log n)$；一次建堆为 $\Theta(n)$；连续取出全部元素的总时间最坏为 $\Theta(n \log n)$。数组末尾追加的成本由底层动态数组的容量管理决定，属于摊还模型（见 <CrossRef id="algorithms.amortized" />），因此基于动态数组的 push 总体应理解为摊还 $O(\log n)$；堆结构本身不使用概率分析，摊还只来自底层动态数组的容量管理。空间上需要 $\Theta(n)$ 个数组槽位。
-
-**实现边界**：在 Python 中这些槽位保存的是对象引用；动态数组的容量可能暂时大于元素数，这是容量与逻辑长度分离的常见情形；相等元素的相对次序不在契约内（堆序只要求父子之间 `<=`），需要稳定次序时要另外保存序号。[`heapq`](https://docs.python.org/3/library/heapq.html) 把堆当作普通 `list` 上的函数集合（`heapq.heapify` 建堆，`heapq.heappush` / `heapq.heappop` 是插入与取出最小，`heapq.heapreplace` 合并两者，`heapq.nlargest` / `heapq.nsmallest` 是部分选择），不提供按键序遍历，空堆上的取出抛出 `IndexError`。
+堆的结论分属最坏与摊还两种类别（一次两个数组槽位的交换记 2 次移动）：查最小为 $O(1)$；插入与取出最小的堆序调整最坏为 $\Theta(\log n)$；一次建堆为 $\Theta(n)$；连续取出全部元素的总时间最坏为 $\Theta(n \log n)$。数组末尾追加的成本由底层动态数组的容量管理决定，属于摊还模型（见 <CrossRef id="algorithms.amortized" />），因此基于动态数组的 push 总体应理解为摊还 $O(\log n)$；堆结构本身不使用概率分析，摊还只来自底层动态数组的容量管理。空间上需要 $\Theta(n)$ 个数组槽位。这一组最小堆操作由 Python 标准库的 [`heapq`](https://docs.python.org/3/library/heapq.html) 在普通 `list` 上提供。

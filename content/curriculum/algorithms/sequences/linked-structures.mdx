@@ -18,7 +18,7 @@ objectives:
 
 ## 已持有节点与只知道位置
 
-`insert_after(node, value)` 在已持有的节点之后插入，只改两条引用；`insert_at(head, position, value)` 只有入口引用与下标，要走到 `position - 1` 处的前驱再改引用。下面的单元格对同一组值分别用两条路径插入 99，并打印每条路径走过的跳数：
+`insert_after(node, value)` 在已持有的节点之后插入，只改两条引用；`insert_at(head, position, value)` 只有入口引用与下标，要走到 `position - 1` 处的前驱再改引用。
 
 ```python run id="alg.linked.known-node-vs-position"
 class Node:
@@ -132,7 +132,7 @@ print("empty structure:", build([]) is None, to_list(None))
 
 ## 只知道位置时仍然逐个走
 
-已持有的节点句柄让修改是 $\Theta(1)$；只有一个位置编号时，链式表示没有捷径——连续数组按下标一次地址计算就取到元素，链式结构只能从入口引用沿 `next` 走下标步数。下面的单元格在 1000 个元素上取几个位置，打印走到该位置经历的跳数：
+已持有的节点句柄让修改是 $\Theta(1)$；只有一个位置编号时，链式表示没有捷径——连续数组按下标一次地址计算就取到元素，链式结构只能从入口引用沿 `next` 走下标步数。
 
 ```python run id="alg.linked.index-access"
 class Node:
@@ -170,7 +170,7 @@ print("array position 999:", values[999])
 
 ## 双向链表与反向引用
 
-双向链表用一条反向引用换来「已持有节点删除是 $\Theta(1)$」：从目标节点本身就能取到前驱，不必从头搜索。代价是每次结构修改要同时维护正向与反向两条链接。下面的单元格建四个节点、解链第二个，`unlink` 里故意漏掉修正反向指针的那一行：
+双向链表用一条反向引用换来「已持有节点删除是 $\Theta(1)$」：从目标节点本身就能取到前驱，不必从头搜索。代价是每次结构修改要同时维护正向与反向两条链接。`unlink` 里故意漏掉修正反向指针的那一行：
 
 ```python run id="alg.linked.doubly-invariant-check"
 class Node:
@@ -219,38 +219,4 @@ print("c.prev is b:", c.prev is b)
 | 两端插入与删除 | 首尾引用（双向还要 `prev`） | 两端最坏 $\Theta(1)$ |
 | 逐元素存储 | 每个元素一个独立节点对象 | 对象头加字段 |
 
-下面的单元格量一下这个逐元素开销与动态数组的差：
-
-```python run id="alg.linked.memory"
-import sys
-
-
-class Node:
-    __slots__ = ("value", "next")
-
-    def __init__(self, value, next=None):
-        self.value = value
-        self.next = next
-
-
-count = 1000
-head = None
-for value in reversed(range(count)):
-    head = Node(value, head)
-
-node, node_bytes = head, 0
-while node is not None:
-    node_bytes += sys.getsizeof(node)
-    node = node.next
-
-slots = list(range(count))
-print("one node:", sys.getsizeof(head), "bytes | 1000 nodes:", node_bytes)
-print("list header:", sys.getsizeof([]), "| 1000 slots:", sys.getsizeof(slots))
-print("per slot:", round(sys.getsizeof(slots) / count, 3))
-```
-
-每个节点是一个独立对象，逐元素开销因此是 `list` 每个引用槽的数倍；具体的字节数与倍率随解释器版本与指针宽度变化，由上面单元格的当前输出给出（[sys.getsizeof](https://docs.python.org/3/library/sys.html#sys.getsizeof)）。链式结构的这个逐元素开销换来的是已知节点修改与双向链表两端操作的最坏常数成本；动态数组用移动元素换取连续的引用槽数组与更小的逐元素开销。
-
-**实现边界**：本课程使用的 CPython/Pyodide 里，每个节点是一个独立对象；`sys.getsizeof(node)` 统计对象自身的内存，既不递归计入它引用的 `value`，也不含分配器的额外开销，因此单位元素的开销从「一个引用槽」升到「对象头加字段」的量级。列表对象有一个固定头部，「总字节数除以元素数」得到的每槽字节数里含有这部分摊销。标准库没有通用的链表类型；`collections.deque` 由固定长度 block 组成的双向链式结构实现，与这里的逐节点链表不同，提它只为说明这一点（手写链表的用途见 <CrossRef id="algorithms.stacks-and-queues" />）。
-
-访问模式上，CPython 的 `list` 连续的是引用槽数组，payload 对象并不因此连续，遍历时每一槽还要追一次引用；链表的节点在堆上分散分配，也要逐个追逐引用，空间局部性更弱。**本运行时无法测量缓存行为**：WebAssembly 环境读不到硬件缓存计数器，也不能把计时差异归因到缓存；局部性收益要在原生环境用性能计数器受控验证。
+逐元素存储是链式结构与动态数组在内存上的主要差别：每个元素是一个独立节点对象，带上自己的对象头与字段，动态数组只保存一个引用槽；节点在堆上分散分配，遍历时逐个追逐引用，空间局部性弱于连续的槽位数组。链式结构用这份逐元素开销换取已知节点修改与两端操作的最坏常数成本，动态数组用移动元素换取连续的引用槽数组与更小的逐元素开销。字节数与访问模式要装进成本模型才有可比性，测量方法由 <CrossRef id="algorithms.complexity-in-practice" /> 负责。

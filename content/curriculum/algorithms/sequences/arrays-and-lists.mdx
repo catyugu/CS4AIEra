@@ -43,7 +43,7 @@ print("a miss scans the whole input:", search_steps(values, -1), "comparisons fo
 
 ## 插入与删除要移动元素
 
-如果移动量确实由「插入位置之后还有多少槽位」决定，那么把规模翻倍，头插的移动数会怎样变化，尾部插入呢？下面的单元格把这两种移动量数出来。
+如果移动量确实由「插入位置之后还有多少槽位」决定，那么把规模翻倍，头插的移动数会怎样变化，尾部插入呢？
 
 ```python run id="alg.arrays.insert-shift"
 def insert_with_moves(values, index, value):
@@ -73,7 +73,7 @@ for _ in range(removals):
 print(f"deleting the front {removals} times moves about {moved} elements (n = 1000)")
 ```
 
-头部插入移动全部元素，尾部插入不移动任何元素：规模从 100 翻到 200，头插的移动数也跟着翻倍。连续删除头部元素的总移动量随删除次数与输入规模同时增长：初始长度为 $n$、删除 $m$ 次（$1 \le m \le n$）时总移动量是 $\sum_{j=0}^{m-1}(n - j - 1) = m(n - 1) - m(m - 1)/2$，即 $\Theta(n m)$；$n = 1000$、删除 500 次时实测移动 374750 个元素。这种用法代价高昂：这正是「用 `list` 当队列」代价高昂的原因，队列需要另一种表示（见 <CrossRef id="algorithms.stacks-and-queues" />）。
+头部插入移动全部元素，尾部插入不移动任何元素：规模从 100 翻到 200，头插的移动数也跟着翻倍。连续删除头部元素的总移动量随删除次数与输入规模同时增长：初始长度为 $n$、删除 $m$ 次（$1 \le m \le n$）时总移动量是 $\sum_{j=0}^{m-1}(n - j - 1) = m(n - 1) - m(m - 1)/2$，即 $\Theta(n m)$。这种用法代价高昂：这正是「用 `list` 当队列」代价高昂的原因，队列需要另一种表示（见 <CrossRef id="algorithms.stacks-and-queues" />）。
 
 ## 连续数组与动态数组
 
@@ -133,7 +133,7 @@ print("work for the first 16 appends:", costs[:16])
 print("typical append work:", min(costs), "| largest single append:", max(costs), "at append", costs.index(max(costs)) + 1)
 ```
 
-这段代码用的是自己设定的翻倍策略，给出的是成本模型，与上面 `list` 的实际字节变化分开。追加平时只写一个槽位，偶尔一次要把整块搬走：64 次追加里，单次最大的一次写在第 33 次追加上，那一次要搬走 32 个已有元素；其余追加大多只写一个槽位，常态工作量是 1。为什么这样仍然可以称为便宜？这需要一条把整串操作放在一起计数的论证：<Term id="amortized-analysis">摊还分析</Term> 给出的就是这条论证（见 <CrossRef id="algorithms.amortized" />）。
+这段代码用的是自己设定的翻倍策略，给出的是成本模型，与上面 `list` 的实际字节变化分开。追加平时只写一个槽位，偶尔一次要把整块搬走，扩容发生时那一次的工作量与当前规模成正比；其余追加只写一个槽位，常态工作量是常数。为什么这样仍然可以称为便宜？这需要一条把整串操作放在一起计数的论证：<Term id="amortized-analysis">摊还分析</Term> 给出的就是这条论证（见 <CrossRef id="algorithms.amortized" />）。
 
 ## CPython 的 `list` 是具体的动态数组
 

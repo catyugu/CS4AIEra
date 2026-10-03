@@ -12,7 +12,7 @@ objectives:
   - 从一次对 Python 字典的观测里区分语言保证与实现选择
 ---
 
-在一张表里按键查找，最直接的做法是把查询键与每个已存键比较一遍，比较次数随条目数增长。哈希改变了这个起点：先用键算出一个位置，只在它的候选区域里确认目标。这里要问这个位置怎样算出、它把搜索范围缩到多小，以及为什么缩到某个位置之后，一次查找的成本仍然可能失控。
+在一张表里按键查找，最直接的做法是把查询键与每个已存键比较一遍，比较次数随条目数增长。哈希改变了这个起点：先用键算出一个位置，只在它的候选区域里确认目标。这个位置怎样算出、它把搜索范围缩到多小、为什么缩到某个位置之后一次查找的成本仍然可能失控？
 
 哈希函数把键映射成一个整数，再按容量折到槽位下标：
 
@@ -57,13 +57,13 @@ print("keys:", len(keys), "| capacity:", capacity, "| buckets used:", len(bucket
 
 槽位越满，键越容易挤到一起，探测要走得更远。已存条目数与槽位数之比是 <Term id="load-factor">负载因子</Term> $\alpha = n/m$，它衡量表有多满，也是链长与探测长度的自变量：$\alpha$ 越大，落到同一候选区域的键越多，一次查找在链上或探测序列里扫过的槽位越多。链式表示里这一步对应链长，开放寻址法里对应探测序列的长度。
 
-把 $\alpha$ 压在常数以内，一次查找扫过的槽位数就停在由 $\alpha$ 决定的量级上，查询成本随之有界。$\alpha$ 到期望探测长度的精确关系依赖对哈希随机性的建模，均匀探测模型下的推导由 <CrossRef id="algorithms.average-and-randomized" /> 给出。量级的具体取值还取决于哈希把键分散开的程度。
+把 $\alpha$ 压在常数以内是获得常数期望成本的必要结构条件之一，但它不排除所有键落进同一个桶，单凭这一条推不出常数查找；常数期望成本还要加一条关于哈希落点的分布或随机模型。$\alpha$ 到期望探测长度的精确关系由 <CrossRef id="algorithms.average-and-randomized" /> 推导。
 
 ## 扩容与摊还
 
 把 $\alpha$ 维持在阈值以内，条目增长到阈值后就要扩容。扩容分配更大的槽位数组，并让每个条目按新容量重新落位，因为槽位下标依赖容量。链地址法在 $\alpha > 1$ 时仍然正确，扩容是为控制链长或探测长度而选的表示策略。
 
-若容量按几何因子增长，前 $n$ 次插入引起的搬移总量是 $\Theta(n)$，分摊到每次插入是常数；这条论证的是一串操作的总成本（<Term id="amortized-analysis">摊还成本</Term>，见 <CrossRef id="algorithms.amortized" />）。某一次触发扩容时，单是搬移仍然需要 $\Theta(n)$ 工作。下面的实验让容量从 8 起按两倍增长。
+若容量按几何因子增长，前 $n$ 次插入引起的搬移总量是 $\Theta(n)$，分摊到每次插入是常数；这条论证的是一串操作的总成本（<Term id="amortized-analysis">摊还成本</Term>，见 <CrossRef id="algorithms.amortized" />）。某一次触发扩容时，单是搬移仍然需要 $\Theta(n)$ 工作。
 
 ```python run id="alg.hash.resizing"
 def bucket_of(key, capacity):
@@ -124,7 +124,6 @@ for index in range(1000):
 print("growth in bytes (entries, bytes):", observations[:4])
 print("1 == 1.0 and hashes alike:", 1 == 1.0, hash(1) == hash(1.0))
 print("dict keeps one entry for both keys:", {1: "int", 1.0: "float"})
-print("hash(-1) and hash(-2):", hash(-1), hash(-2))
 print("first keys in insertion order:", list(mapping)[:3])
 ```
 
@@ -133,7 +132,3 @@ print("first keys in insertion order:", list(mapping)[:3])
 **`1` 与 `1.0` 是同一个键**：判等用的是键的相等契约，哈希负责把候选缩小到同一个位置。数值哈希用同一条素数取模规则（[sys.hash_info](https://docs.python.org/3/library/sys.html#sys.hash_info) 给出该模数）。
 
 **迭代顺序属于语言保证**：字典保插入序，从 3.7 起是语言规范保证的行为（[stdtypes](https://docs.python.org/3/library/stdtypes.html#dict)），集合不保证迭代顺序；插入序与成本性质无关，需要按键序迭代要用有序映射（见 <CrossRef id="algorithms.maps-and-sets" />）。
-
-**实现边界**：CPython 的 `dict` 使用开放寻址法与带扰动的探测序列（[dictobject.c](https://github.com/python/cpython/blob/main/Objects/dictobject.c)），本节说明机制时用的是链地址法，两者属于不同的表示；`hash(-1)` 与 `hash(-2)` 都打印为 `-2`，因为 C 层把 `-1` 留作哈希失败的指示值（[PyObject_Hash](https://docs.python.org/3/c-api/object.html#c.PyObject_Hash)）。这些解释的是这份实现的输出，正文的推理只用「哈希缩小候选、相等确认目标」这一条性质。
-
-本课反复用到「查询是常数成本」这句话：它成立，是因为探测长度被压在了常数以内。这句话里还藏着一个词——「平均」。一次查找的成本取决于哪些键真的落进了同一候选区域，所以它随输入变化；要对成本说一个与具体键集无关的常数，就得先说明这个平均值对什么取：是对输入的分布取平均，还是对固定输入上算法自己掷出的随机位取平均？这个问题与哈希函数、探测策略无关，它问的是「平均」这个词到底对谁取平均。

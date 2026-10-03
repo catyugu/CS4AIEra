@@ -128,5 +128,3 @@ print("total weight:", sum(weight for weight, _, _ in tree))
 | Prim | 非空连通无向图 | $key[v]$ 是从当前树到 $v$ 的最轻边；被选中的那条是跨整个割的最轻边 | $O(\lvert V \rvert + \lvert E \rvert \log \lvert V \rvert)$ |
 
 两个算法对安全边引理取了不同的割：Kruskal 用按当前分量划分的割，Prim 用「已选顶点与其余顶点」的割，引理对两者同时成立。
-
-本节不涉及强连通分量、一般动态删边连通性、有向最小生成树（arborescence）、最小割与最大流、Steiner 树、次小生成树、动态 MST 与 Borůvka 算法。

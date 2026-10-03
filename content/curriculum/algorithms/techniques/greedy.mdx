@@ -113,5 +113,3 @@ print("  true optimum    ", optimum, "-> weight, value", packed(optimum))
 - **区间调度**：$n$ 是区间数，计数单位是结束时刻比较与排序时的区间比较，结论属于最坏情形。排序是 $\Theta(n \log n)$ 次比较（见 <CrossRef id="algorithms.sorting" />），扫描是 $\Theta(n)$ 次比较，合起来是 $\Theta(n \log n)$。输入已经按结束时刻有序时，扫描本身是 $\Theta(n)$。
 - **空间**：排序产生一份长度为 $\Theta(n)$ 的引用副本（计数方式见 <CrossRef id="algorithms.arrays-and-lists" />），贪心状态本身是 $\Theta(1)$，输出另计。
 - **背包的密度规则**同样是 $\Theta(n \log n)$ 次比较加 $\Theta(n)$ 次容量检查。这个数字描述的是这段实现，与它返回的答案是否最优无关。
-
-**实现边界**：贪心不回退，不需要为撤销保存中间状态，通常比动态规划省空间；这是实现方式的副产品，不改变上面任何一条正确性结论。

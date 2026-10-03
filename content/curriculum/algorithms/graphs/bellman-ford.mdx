@@ -104,5 +104,3 @@ print("first improvable edge's head has no predecessor: vertices", cycle)
 表中三行的「输入条件」是硬前置：Dijkstra 在负边上没有正确性保证，BFS 在非单位权上算的是另一件事。
 
 还有一条必须说清：「Bellman–Ford 支持负权」不等于「存在源点可达负环时它仍能给出有限的普通最短距离」。负环恰恰是让某些 $\delta(s, v)$ 不再是有限值的情形，此时受影响的顶点取 $-\infty$，取值分类见 <CrossRef id="algorithms.shortest-paths" />。
-
-本节的边界：不涉及所有点对最短路（Floyd–Warshall）、稀疏图上的重标号（Johnson）、启发式搜索（A*）、0-1 权重的双端队列优化，也不利用 <CrossRef id="algorithms.dags-and-topological-order" /> 的拓扑序做 DAG 专用最短路；这些都不在本课范围。
