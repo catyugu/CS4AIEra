@@ -37,19 +37,9 @@ docs
 
 排列是否存在，完全由依赖里有没有环决定：一个顶点若能沿有向边走一圈回到它自己，这一圈里的边就构成一个有向环。
 
-**定理**：有向图存在拓扑序，当且仅当它没有有向环（这样的图称为 **DAG**，有向无环图）。
-
-**（存在拓扑序 => 无环）** 若 $v_1 \to v_2 \to \dots \to v_k \to v_1$ 是一个环，拓扑序要求 $\mathrm{pos}(v_1) < \dots < \mathrm{pos}(v_k) < \mathrm{pos}(v_1)$，矛盾。
-
-**（无环 => 存在拓扑序）** 取一条最长的有向路径，它的起点没有入边：若有入边 $(x, \mathrm{start})$，把 $x$ 接在路径前面会得到一条更长的有向路径（沿路径不可能回到 $x$，否则路径上已有环），矛盾。于是每个**非空**有限无环图都有入度为 0 的顶点，称为源点。输出这个源点、从图中删去，剩下的图仍然无环，归纳下去即得。空图的空排列就是它唯一的拓扑序。
-
-第二个方向直接给出 Kahn 算法的构造：反复删除当前入度为 0 的顶点。DFS 则用完成时间的偏序得到拓扑序。
-
-## 三色 DFS 检测环
-
 **有向<Term id="cycle">环</Term>** 是一列顶点 $v_0, v_1, \dots, v_k$，满足 $k \ge 1$、$v_k = v_0$、$v_0, \dots, v_{k-1}$ 两两不同，并且对每个 $0 \le i < k$ 都有有向边 $(v_i, v_{i+1})$。
 
-「除首尾外两两不同」是定义的一部分：只要求「闭合的有向游走」会把更松的重复结构也算进来，而下面所有论证——后向边、Kahn 判环——用的都是这个精确形状。
+「除首尾外两两不同」是定义的一部分：只要求「闭合的有向游走」会把更松的重复结构也算进来。
 
 | 图 | 最短的环 | 两条边能否单独成环 |
 | --- | --- | --- |
@@ -57,7 +47,111 @@ docs
 | 允许自环的有向图 | $v \to v$ | 可以：一条自环就是长度 1 的环 |
 | 无向简单图 | 至少 3 条边 | 不可以：一条边单独不成环 |
 
-判定方法对含自环的图同样有效；默认不出现自环。
+默认不出现自环。
+
+**定理**：有向图存在拓扑序，当且仅当它没有有向环（这样的图称为 **DAG**，有向无环图）。
+
+**（存在拓扑序 => 无环）** 若 $v_1 \to v_2 \to \dots \to v_k \to v_1$ 是一个环，拓扑序要求 $\mathrm{pos}(v_1) < \dots < \mathrm{pos}(v_k) < \mathrm{pos}(v_1)$，矛盾。
+
+**（无环 => 存在拓扑序）** 取一条最长的有向路径，它的起点没有入边：若有入边 $(x, \mathrm{start})$，把 $x$ 接在路径前面会得到一条更长的有向路径（沿路径不可能回到 $x$，否则路径上已有环），矛盾。于是每个**非空**有限无环图都有入度为 0 的顶点，称为源点。输出这个源点、从图中删去，剩下的图仍然无环，归纳下去即得。空图的空排列就是它唯一的拓扑序。
+
+第二个方向直接给出 Kahn 算法的构造：反复删除当前入度为 0 的顶点。
+
+## Kahn 算法
+
+反复取出当前入度为 0 的顶点，就构造出一个拓扑序。
+
+1. 计算每个顶点的入度
+2. 把所有入度为 0 的顶点放进队列
+3. 反复取出队首顶点 $v$，输出 $v$，并把它每条出边 $(v, w)$ 的 $w$ 的入度减一；若某个 $w$ 的入度减到 0，就把 $w$ 放入队列
+4. 队列为空时结束
+
+**运行不变量**（把 `in_degree` 读作「剩余入度」）
+
+1. 对每个尚未输出的顶点 $v$，`in_degree[v]` 恰等于「尚未输出的顶点指向 $v$ 的边数」
+2. 队列恰好保存当前尚未输出、且剩余入度为 0 的顶点
+3. 每条边 $(u, v)$ 只在 $u$ 被输出时处理一次，并把 $v$ 的剩余入度恰好减一
+
+**正确性**：算法在任何时刻产生的 output 都是一个合法的**拓扑前缀**——一个顶点只有在它的所有尚存前驱都已经输出之后才可能进入队列。因此，若算法最终输出了全部 $|V|$ 个顶点，output 就是整张图的拓扑序；若队列提前为空而仍有顶点未输出，算法应返回失败，那段部分输出只是拓扑前缀。
+
+**环判定**：算法输出全部 $|V|$ 个顶点，当且仅当图无环。
+
+**（提前停止 => 剩余子图含环）** 若算法提前停止，剩余子图非空，且其中每个顶点的剩余入度都大于 0。反设剩余子图无环：由「非空有限 DAG 必有源点」，它应有一个剩余入度为 0 的顶点，与「每个剩余顶点的剩余入度都大于 0」矛盾。所以剩余子图含有有向环。
+
+**（无环 => 不会卡住）** 反过来，若原图无环，则每个非空剩余子图仍然无环，因此始终存在源点，Kahn 不会在处理完全部顶点之前卡住。
+
+成本是 $\Theta(|V| + |E|)$：每个顶点入队出队各一次，每条边被检查常数次；队列空间 $O(|V|)$。在同一张 DAG 与含环图上各跑一遍 Kahn：DAG 上它输出全部顶点，含环图上它在剩余入度都大于零处停下。
+
+```python run id="alg.graphs.kahn"
+from collections import deque
+
+
+def kahn(adjacency):
+    """Queue by remaining in-degree; returns the output and the vertices left behind."""
+    in_degree = {v: 0 for v in adjacency}
+    for u in adjacency:
+        for v in adjacency[u]:
+            in_degree[v] += 1
+    queue = deque(v for v in adjacency if in_degree[v] == 0)
+    output = []
+    while queue:
+        u = queue.popleft()
+        output.append(u)
+        for v in adjacency[u]:
+            in_degree[v] -= 1
+            if in_degree[v] == 0:
+                queue.append(v)
+    return output, [v for v in adjacency if v not in set(output)]
+
+
+tasks = {"codegen": ["model", "api"], "model": ["test"], "api": ["test", "package"],
+         "assets": ["package"], "test": [], "package": [], "docs": []}
+cyclic = {"a": ["b"], "b": ["c"], "c": ["b", "d"], "d": []}
+
+output, left = kahn(tasks)
+print("Kahn output:", " ".join(output), "| processed:", len(output), "of", len(tasks))
+output, left = kahn(cyclic)
+print("cyclic graph leaves behind:", sorted(left), "| output:", " ".join(output))
+```
+
+DAG 上 Kahn 输出 $codegen\,assets\,docs\,model\,api\,test\,package$。含环图上它只输出 $a$，剩下 $b, c, d$：每个剩余顶点都还有一条来自剩余集合的入边，是「提前停止 => 剩余子图含环」的一个实例。
+
+拓扑序一般不唯一，Kahn 的队列直接给出判断：某一步队列里同时有多个候选时，先输出哪一个都行，剩下的图仍能按同样规则跑完，于是至少存在两种拓扑序；每一步队列都只有一个候选时，任何拓扑序的首项都被这一步逼定，删去它再对剩余图重复同一推理，整个顺序就被唯一确定。唯一性因此不必枚举排列——在一次 Kahn 运行里记录队列长度是否始终为 1 即可判定，成本仍是 $\Theta(|V| + |E|)$。
+
+```python run id="alg.graphs.topological-uniqueness"
+from collections import deque
+
+
+def candidates_per_step(adjacency):
+    """Kahn by remaining in-degree, recording the candidate count at every step."""
+    in_degree = {v: 0 for v in adjacency}
+    for u in adjacency:
+        for v in adjacency[u]:
+            in_degree[v] += 1
+    queue = deque(v for v in adjacency if in_degree[v] == 0)
+    order, widths = [], []
+    while queue:
+        widths.append(len(queue))
+        u = queue.popleft()
+        order.append(u)
+        for v in adjacency[u]:
+            in_degree[v] -= 1
+            if in_degree[v] == 0:
+                queue.append(v)
+    return order, widths
+
+
+chain = {"a": ["b"], "b": ["c"], "c": ["d"], "d": []}
+diamond = {"a": ["b", "c"], "b": ["d"], "c": ["d"], "d": []}
+
+for name, graph in (("chain", chain), ("diamond", diamond)):
+    order, widths = candidates_per_step(graph)
+    print(f"{name:8s} {' '.join(order):12s} candidates per step: {widths}")
+```
+
+链上每一步的候选数都是 1，输出被唯一确定；菱形图在 $a$ 之后同时出现两个候选，Kahn 输出 $b$ 或 $c$ 都合法，顺序不再唯一。
+
+## 基于 DFS 的环检测算法
 
 有向图里的「可达」沿有向路径定义，方向不可逆。从每个未发现顶点重启的遍历（见 <CrossRef id="algorithms.graph-traversal" />）在有向图上只得到一个**遍历森林**，它的划分可能依赖顶点的处理顺序，因此不能当作分量的分解。
 
@@ -135,97 +229,3 @@ DAG 上完成顺序是 $test\,model\,package\,api\,codegen\,assets\,docs$，反�
 **定理**：若图是 DAG，则 DFS 的完成顺序反转是一个拓扑序。
 
 成本与遍历相同：$\Theta(|V| + |E|)$。一旦发现后向边，正确的返回是指出图含环、不存在拓扑序；把完成顺序反转当作结果，会在有环图上给出一个不满足定义的排列。
-
-## Kahn 算法
-
-第二个构造更直接：反复取出当前入度为 0 的顶点。
-
-1. 计算每个顶点的入度
-2. 把所有入度为 0 的顶点放进队列
-3. 反复取出队首顶点 $v$，输出 $v$，并把它每条出边 $(v, w)$ 的 $w$ 的入度减一；若某个 $w$ 的入度减到 0，就把 $w$ 放入队列
-4. 队列为空时结束
-
-**运行不变量**（把 `in_degree` 读作「剩余入度」）
-
-1. 对每个尚未输出的顶点 $v$，`in_degree[v]` 恰等于「尚未输出的顶点指向 $v$ 的边数」
-2. 队列恰好保存当前尚未输出、且剩余入度为 0 的顶点
-3. 每条边 $(u, v)$ 只在 $u$ 被输出时处理一次，并把 $v$ 的剩余入度恰好减一
-
-**正确性**：算法在任何时刻产生的 output 都是一个合法的**拓扑前缀**——一个顶点只有在它的所有尚存前驱都已经输出之后才可能进入队列。因此，若算法最终输出了全部 $|V|$ 个顶点，output 就是整张图的拓扑序；若队列提前为空而仍有顶点未输出，算法应返回失败，那段部分输出只是拓扑前缀。
-
-**环判定**：算法输出全部 $|V|$ 个顶点，当且仅当图无环。
-
-**（提前停止 => 剩余子图含环）** 若算法提前停止，剩余子图非空，且其中每个顶点的剩余入度都大于 0。反设剩余子图无环：由「非空有限 DAG 必有源点」，它应有一个剩余入度为 0 的顶点，与「每个剩余顶点的剩余入度都大于 0」矛盾。所以剩余子图含有有向环。
-
-**（无环 => 不会卡住）** 反过来，若原图无环，则每个非空剩余子图仍然无环，因此始终存在源点，Kahn 不会在处理完全部顶点之前卡住。
-
-成本同样是 $\Theta(|V| + |E|)$：每个顶点入队出队各一次，每条边被检查常数次；队列空间 $O(|V|)$。两种方法给出的顺序一般不相等（DFS 版本还受邻居枚举顺序影响），两者都只保证输出的是一个拓扑序。在同一张 DAG 与含环图上各跑一遍 Kahn：DAG 上它输出全部顶点，含环图上它在剩余入度都大于零处停下。
-
-```python run id="alg.graphs.kahn"
-from collections import deque
-
-
-def kahn(adjacency):
-    """Queue by remaining in-degree; returns the output and the vertices left behind."""
-    in_degree = {v: 0 for v in adjacency}
-    for u in adjacency:
-        for v in adjacency[u]:
-            in_degree[v] += 1
-    queue = deque(v for v in adjacency if in_degree[v] == 0)
-    output = []
-    while queue:
-        u = queue.popleft()
-        output.append(u)
-        for v in adjacency[u]:
-            in_degree[v] -= 1
-            if in_degree[v] == 0:
-                queue.append(v)
-    return output, [v for v in adjacency if v not in set(output)]
-
-
-tasks = {"codegen": ["model", "api"], "model": ["test"], "api": ["test", "package"],
-         "assets": ["package"], "test": [], "package": [], "docs": []}
-cyclic = {"a": ["b"], "b": ["c"], "c": ["b", "d"], "d": []}
-
-output, left = kahn(tasks)
-print("Kahn output:", " ".join(output), "| processed:", len(output), "of", len(tasks))
-output, left = kahn(cyclic)
-print("cyclic graph leaves behind:", sorted(left), "| output:", " ".join(output))
-```
-
-DAG 上 Kahn 输出 $codegen\,assets\,docs\,model\,api\,test\,package$，与 finish 反转得到的顺序不同，两者都是合法的拓扑序。含环图上它只输出 $a$，剩下 $b, c, d$：每个剩余顶点都还有一条来自剩余集合的入边，是「提前停止 => 剩余子图含环」的一个实例。
-
-拓扑序一般不唯一，Kahn 的队列直接给出判断：某一步队列里同时有多个候选时，先输出哪一个都行，剩下的图仍能按同样规则跑完，于是至少存在两种拓扑序；每一步队列都只有一个候选时，任何拓扑序的首项都被这一步逼定，删去它再对剩余图重复同一推理，整个顺序就被唯一确定。唯一性因此不必枚举排列——在一次 Kahn 运行里记录队列长度是否始终为 1 即可判定，成本仍是 $\Theta(|V| + |E|)$。
-
-```python run id="alg.graphs.topological-uniqueness"
-from collections import deque
-
-
-def candidates_per_step(adjacency):
-    """Kahn by remaining in-degree, recording the candidate count at every step."""
-    in_degree = {v: 0 for v in adjacency}
-    for u in adjacency:
-        for v in adjacency[u]:
-            in_degree[v] += 1
-    queue = deque(v for v in adjacency if in_degree[v] == 0)
-    order, widths = [], []
-    while queue:
-        widths.append(len(queue))
-        u = queue.popleft()
-        order.append(u)
-        for v in adjacency[u]:
-            in_degree[v] -= 1
-            if in_degree[v] == 0:
-                queue.append(v)
-    return order, widths
-
-
-chain = {"a": ["b"], "b": ["c"], "c": ["d"], "d": []}
-diamond = {"a": ["b", "c"], "b": ["d"], "c": ["d"], "d": []}
-
-for name, graph in (("chain", chain), ("diamond", diamond)):
-    order, widths = candidates_per_step(graph)
-    print(f"{name:8s} {' '.join(order):12s} candidates per step: {widths}")
-```
-
-链上每一步的候选数都是 1，输出被唯一确定；菱形图在 $a$ 之后同时出现两个候选，Kahn 输出 $b$ 或 $c$ 都合法，顺序不再唯一。
