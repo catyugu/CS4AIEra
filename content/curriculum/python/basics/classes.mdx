@@ -8,7 +8,7 @@ objectives:
   - 说明 class 语句执行时创建了什么对象，以及名称绑定到哪个对象
   - 判断一个属性来自实例还是类，并预测修改它在哪些对象上可见
   - 解释两个实例为什么会共享同一个可变对象，并给出修正方式
-  - 说明 self 接收到什么，并把一次方法调用改写成函数调用
+  - 说明 self 接收到什么，并解释方法漏写 self 时为什么报错
 ---
 
 要同时维护三条各自独立的计数，用变量就得写三份重复的自增代码。类把一份状态的形状和作用于它的操作绑在一起：每条计数是一个实例，各自保存自己的值，共用同一套操作。
@@ -58,7 +58,7 @@ print(a.members, b.members)
 print(a.members is b.members, Team.members is a.members)
 ```
 
-`members = []` 属于类对象，是所有实例共享的一个对象；实例属性属于单个实例。读取属性时先看实例自己的属性，再看类（含基类），两层都没有则抛 `AttributeError`。
+`members = []` 属于类对象，是所有实例共享的一个对象；实例属性属于单个实例。读取属性时先看实例自己的属性，再看类，两层都没有则抛 `AttributeError`。
 
 `a` 与 `b` 都没有自己的 `members`，读取时沿层次找到类上的那一个，`append` 修改的是同一个列表：两个实例的输出相同，且 `a.members is b.members` 为真。这是<Term id="class-attribute">类属性</Term>最常见的失效模式，执行过程中没有任何错误，只是两个实例的状态合流了。把可变状态放进 `__init__`，属性就属于实例：
 
@@ -76,27 +76,9 @@ b = Team()
 a.add("Ada")
 
 print(a.members, b.members)
-print(a.__dict__, b.__dict__)
 ```
 
 两个实例各有自己的列表，不再互为<Term id="alias">别名</Term>。同样的共享也出现在默认参数上，见 <CrossRef id="python.mutability-and-copy" />。
-
-属性赋值在等号左侧的对象上创建或覆盖属性。`c.retries = 5` 在实例上创建 `retries`，类上的那一个不变：
-
-```python run id="py.classes.rebinding"
-class Config:
-    retries = 3
-
-
-c = Config()
-c.retries = 5
-print(c.retries, Config.retries, c.__dict__)
-
-Config.retries = 7
-print(c.retries, Config.retries, Config().retries)
-```
-
-随后 `Config.retries = 7` 只改类属性：`c` 上的实例属性遮蔽了它，因此 `c.retries` 仍是 5，只有新创建的实例读到 7。读代码时要区分这两种写法：「改共享的默认值」影响所有还没有自己值的实例，「给这个实例设一个值」只影响一个对象。属性赋值不要求预先声明。
 
 ## self 是普通形参
 
@@ -113,31 +95,3 @@ print(greeter.greet())
 ```
 
 方法定义里漏掉 `self` 时，调用把实例当成多出来的实参：`TypeError` 的消息指出 `Greeter.greet()` 接收 0 个位置参数，却收到了 1 个。
-
-## 深入：Python 如何实现方法访问
-
-`Counter` 这个名称绑定的是一个类对象，它和其他对象一样是值：`print(Counter)` 打印出 `<class '__main__.Counter'>`。创建实例的是对类对象本身的调用；`__init__` 在实例已经创建之后运行，把初始属性写进它，`__init__` 没有赋到的属性推迟到读取时才抛 `AttributeError`。
-
-实例把属性放在自己的 `__dict__` 里，类对象的属性放在类的 `__dict__` 里。`a.__dict__` 与 `b.__dict__` 各自列出本实例上的属性，是判断一个属性来自实例还是类的直接证据。读取属性时先查实例的 `__dict__`，再沿类与基类查找；数据描述符优先于实例属性，完整的查找顺序由 <CrossRef id="python.attributes-and-descriptors" /> 细化，继承链的顺序由 <CrossRef id="python.inheritance-and-mro" /> 建立。
-
-`Counter.increment` 是定义在类体里的函数，`instance.increment` 是访问时生成的、绑定到该实例的方法。两者是不同的对象：
-
-```python run id="py.classes.self-is-a-parameter"
-class Counter:
-    def __init__(self, start=0):
-        self.value = start
-
-    def increment(self):
-        self.value += 1
-
-
-instance = Counter()
-Counter.increment(instance)
-instance.increment()
-
-print(instance.value)
-print(type(Counter.increment).__name__, type(instance.increment).__name__)
-print(Counter.increment is instance.increment)
-```
-
-`instance.increment()` 与 `Counter.increment(instance)` 是同一次调用，`self` 按位置接住那个实例。

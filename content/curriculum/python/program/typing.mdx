@@ -7,9 +7,8 @@ status: published
 objectives:
   - 区分类型标注的静态检查与运行时对实际输入的数据校验
   - 说明 Any 与 object 对静态推理的不同影响
-  - 用分支收窄 union，并追踪泛型保留的输入输出关系
-  - 用别名与写入构造可变容器不能协变的反例
-  - 区分 Protocol 的静态结构检查与运行时成员检查
+  - 用分支收窄 union，处理可空值与 object
+  - 了解泛型、方差与 Protocol 表达更强的静态关系，运行时不受标注约束
 ---
 
 `def resize(width: int, height: int) -> int` 声明参数与返回值都是 `int`。给 `width` 传入 `"abc"`，类型检查器会拒绝这次调用：`str` 与 `int` 不一致；解释器不读标注，照常把 `"abc"` 绑定到 `width` 并返回一个字符串。
@@ -95,88 +94,9 @@ for raw in ("12", "abc", "0"):
 
 三个输入都满足 `str` 契约，只有一个满足 `1..100` 的业务约束。解析检查表示是否有效，范围检查建立领域不变量。静态检查回答「依据声明，这段代码的类型使用是否一致」；运行时校验回答「这次实际输入是否满足前提」。跨越不可信数据边界时，需要后者的证据。
 
-## 深入：泛型、方差与 Protocol
+## 更进一步的静态关系（可选）
 
-日常标注核对一次调用的类型是否一致。以下三种标注表达更强的静态关系：泛型把参数与返回值的类型关联起来，方差规定容器的元素类型怎样沿子类型关系赋值，Protocol 按成员与签名判断兼容性而不要求继承。它们的读者仍是检查器。
-
-### 泛型保留类型关系
-
-把参数和返回值都写成 `object` 会丢掉二者之间的关系；都写成 `Any` 则放弃检查。泛型（generic）用同一个类型参数表达这条关系：
-
-```python run id="py.typing.generic-relation"
-from collections.abc import Sequence
-from typing import TypeVar
-
-T = TypeVar("T")
-
-
-def first(values: Sequence[T]) -> T:
-    if not values:
-        raise ValueError("empty sequence")
-    return values[0]
-
-
-print(first([3, 4]), first(["a", "b"]))
-try:
-    first([])
-except ValueError as failure:
-    print(failure)
-```
-
-输入 `Sequence[int]` 时返回 `int`，输入 `Sequence[str]` 时返回 `str`，检查器沿调用保留这条关系（见 [typing：Generics](https://docs.python.org/3.14/library/typing.html#generics)）。`T` 不保证序列非空；空输入时的失败行为仍由函数体规定。
-
-### 可变容器与 invariance
-
-若 `S` 是 `T` 的子类型，容器类型也允许从 `Container[S]` 赋给 `Container[T]`，就称其在该参数上协变（covariant）。对允许写入的 `list`，这个规则会破坏共享对象的元素契约：
-
-```python run id="py.typing.mutable-alias"
-flags: list[bool] = [True]
-numbers: list[int] = flags  # 静态错误；运行时赋值照常建立别名
-numbers.append(2)
-print(flags)
-print(numbers is flags)
-```
-
-`bool` 是 `int` 的子类型，写入整数对 `numbers` 的契约合法，却破坏了 `flags` 只含布尔值的契约。两个名字指向同一个列表，后果来自 <CrossRef id="python.names-and-objects" /> 的别名模型。因此 `list` 的元素类型参数是不变的（invariant）：不能仅凭元素的子类型关系在两种列表类型间赋值（见 [类型规范：方差](https://typing.python.org/en/latest/spec/generics.html#variance)）。
-
-`Sequence[T]` 提供读取接口，不提供 `append` 这类写入操作，因此可以协变；接收 `Sequence[int]` 的函数可读取 `list[bool]`。这不保证底层对象永不变化，只限制通过当前接口可以做什么。
-
-### Protocol 的结构类型
-
-结构类型（structural typing）按成员与签名判断兼容性，不要求对象继承指定类。`Protocol` 可以表达「需要一个无参数、返回字符串的 read 方法」：
-
-```python run id="py.typing.protocol"
-from typing import Protocol, runtime_checkable
-
-
-@runtime_checkable
-class Reader(Protocol):
-    def read(self) -> str: ...
-
-
-class FileReader:
-    def read(self) -> str:
-        return "contents"
-
-
-class WrongSignature:
-    def read(self, size: int) -> str:
-        return "contents"
-
-
-def consume(reader: Reader) -> str:
-    return reader.read()
-
-
-print(consume(FileReader()))
-print(isinstance(WrongSignature(), Reader))
-try:
-    consume(WrongSignature())  # 静态错误：read 要求额外实参
-except TypeError:
-    print("member exists, but the call contract fails")
-```
-
-`FileReader` 没有继承 `Reader`，仍满足静态契约。`WrongSignature` 有同名方法，却要求必传的 `size`，不能替代无参数调用。`@runtime_checkable` 只检查所需成员是否存在，不核对签名或返回类型，因此上面的 `isinstance` 为真；它不能校验列表元素，也不能证明业务行为（见 [typing：runtime_checkable](https://docs.python.org/3.14/library/typing.html#typing.runtime_checkable)）。
+标注还能表达更强的静态关系：泛型（generic）把参数的输入类型与返回值的类型关联起来，方差（variance）规定可变容器的元素类型不能仅凭子类型关系互相赋值，Protocol 按成员与签名判断兼容性而不要求继承。这些标注服务的仍是检查器；运行时同样不读取它们，容器元素被写入之后发生什么，由真实的别名与数据决定。完整定义见 [类型规范：泛型与方差](https://typing.python.org/en/latest/spec/generics.html) 与 [typing 模块](https://docs.python.org/3.14/library/typing.html)。
 
 ## 实现边界
 

@@ -199,4 +199,4 @@ print("KeyboardInterrupt is Exception:", issubclass(KeyboardInterrupt, Exception
 print("GeneratorExit is Exception:", issubclass(GeneratorExit, Exception))
 ```
 
-`SystemExit`、`KeyboardInterrupt` 与 `GeneratorExit` 继承 `BaseException` 而不是 `Exception`，因此 `except Exception` 不会接住它们。写 `except BaseException` 或裸 `except:` 会把解释器的正常退出信号也吞掉，让 Ctrl-C 与进程终止失效。`except Exception: pass` 把可诊断的失败变成继续执行的错误状态，只在明确知道如何恢复时才捕获。异常不是廉价的控制流：逐元素依赖它跳过低频分支可以接受，把它当普通分支使用会同时损害性能与可读性。
+`SystemExit`、`KeyboardInterrupt` 与 `GeneratorExit` 继承 `BaseException` 而不是 `Exception`，因此 `except Exception` 不会接住它们。写 `except BaseException` 或裸 `except:` 会把解释器的正常退出信号也吞掉，让 Ctrl-C 与进程终止失效。`except Exception: pass` 把可诊断的失败变成继续执行的错误状态，只在明确知道如何恢复时才捕获。异常留给异常情况：用它跳过低频分支可以接受，用它代替清楚的普通分支会损害可读性。

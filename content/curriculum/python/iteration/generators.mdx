@@ -7,7 +7,7 @@ status: published
 objectives:
   - 说明调用生成器函数时立即发生了什么，以及函数体从哪一刻开始执行
   - 解释 yield 如何保存局部状态，并预测两次 next 之间哪些名字保持取值
-  - 用 send、return 与 yield from 分别表达双向通信、结束值与委托
+  - 用 yield from 把取值委托给另一个可迭代对象，并区分生成器表达式与列表推导式的求值时机
 ---
 
 在函数体里写一次 `yield`，调用行为就变了。下面 `tracked` 在函数体开头打印，再把每个值乘十；`tracked([1, 2])` 返回一个对象，调用那一刻，函数体里的 `print` 一行也不会执行。
@@ -65,6 +65,22 @@ print("eager version holds every element:", len(materialised))
 
 逐个取值的开销高于直接迭代列表：每次 `next` 都有一次函数调用与状态切换。需要完整结果又在意常数时，先物化成列表反而更快；用生成器是为了让只取一部分、以及一次算不完的序列变得可行。
 
+## 生成器表达式
+
+把一个列表推导式的方括号换成圆括号，得到的对象就是生成器：元素在被取值时才计算，构造它本身不跑循环体。
+
+```python run id="py.gen.genexp"
+squares = (value * value for value in range(5))
+print("type:", type(squares).__name__)
+print("computed on request:", next(squares), next(squares))
+print("the rest:", list(squares))
+
+eager = [value * value for value in range(5)]
+print("already built:", eager)
+```
+
+`squares` 取值时才逐个算 `value * value`，`next` 取两个就算两个，构造它的那一刻一次乘法也没发生；`eager` 的方括号在构造时就把五个乘积全部算完放进列表。同一副骨架换一对括号，决定结果是按需产出还是立即物化。
+
 ## 生成器只能遍历一次
 
 ```python run id="py.gen.state"
@@ -84,104 +100,22 @@ print("after exhaustion:", list(generator))
 
 `total` 在两次 `next` 之间保持取值，它存在挂起的帧里。`iter(generator) is generator` 为真：生成器就是自身的迭代器，状态只有当前位置一处，没有第二个读取位置（见 <CrossRef id="python.iteration-protocol" />）。`list(generator)` 取走剩余部分之后，再 `list(generator)` 只剩空序列，迭代器耗尽不会重启，要重新遍历就重新调用生成器函数拿一个新对象。`for`、推导式与 `zip` 消费的是同一份帧，一个消费者取走的值，另一个看不到。
 
-## 深入：send、结束值与委托
+## 委托：yield from
 
-`next` 只从生成器取值。`yield` 本身是一个表达式，它的值由 `send` 提供；函数还可以用 `return` 交回结束值，用 `yield from` 把取值委托给另一个可迭代对象。
+`yield from` 让一个生成器把取值委托给另一个可迭代对象：内层产出的值直接穿过外层到达调用方，外层不必手写转发循环。
 
-### send 向挂起点交值
-
-```python run id="py.gen.send"
-def accumulator():
-    total = 0
-    while True:
-        value = yield total
-        if value is None:
-            continue
-        if value == "stop":
-            return total
-        total += value
-
-
-generator = accumulator()
-print("first next primes it:", next(generator))
-print("send supplies the value of the suspended yield:", generator.send(5))
-print("next is send(None), so it only reports the total:", next(generator))
-print("send again:", generator.send(7))
-
-try:
-    generator.send("stop")
-except StopIteration as stop:
-    print("the sentinel ended the loop, return value:", stop.value)
-```
-
-`value = yield total` 把挂起点分成两半，`send(x)` 恢复执行时把 `x` 交给左边那个表达式。生成器要先推进到第一个 `yield` 才能接收值，这一步用 `next()` 完成；此时若直接 `send`，生成器还停在帧的起点，没有等待值的挂起点，`send` 抛 `TypeError`。
-
-### return 值与 yield from 委托
-
-```python run id="py.gen.return-and-delegate"
-def finite(values):
+```python run id="py.gen.delegate"
+def doubled(values):
     for value in values:
-        yield value
-    return "all yielded"
+        yield value * 2
 
 
-def delegating(values):
-    result = yield from finite(values)
-    return f"delegate said: {result}"
+def concatenated(first, second):
+    yield from doubled(first)
+    yield from doubled(second)
 
 
-generator = delegating([1, 2])
-print("items:", list(generator))
-
-generator = delegating([1, 2])
-try:
-    while True:
-        print("item:", next(generator))
-except StopIteration as stop:
-    print("delegate returned:", stop.value)
-
-def chained(rows):
-    for row in rows:
-        yield from (value * 2 for value in row)
-
-
-print("yield from over each row:", list(chained([[1, 2], [3]])))
+print("delegated stream:", list(concatenated([1, 2], [3])))
 ```
 
-`return` 的值只对消费端可见，通过 `StopIteration.value` 或 `yield from` 的结果读出。`yield from` 把一个子可迭代对象整体委托出去，并把它 `return` 的值作为自身 `yield from` 表达式的结果返回，异常与 `close` 也沿这条链传递。用它代替手写的内层循环，委托关系在代码里可见。
-
-### 从生成器体内逃出的 StopIteration
-
-```python run id="py.gen.stopiteration"
-def exhausted(values):
-    iterator = iter(values)
-    while True:
-        yield next(iterator)
-
-
-generator = exhausted([1, 2])
-print("first two:", next(generator), next(generator))
-try:
-    next(generator)
-except RuntimeError as exc:
-    print("the escaping StopIteration becomes:", type(exc).__name__, "-", exc)
-
-
-def guarded(values):
-    iterator = iter(values)
-    while True:
-        try:
-            value = next(iterator)
-        except StopIteration:
-            return
-        yield value
-
-
-print("handled explicitly:", list(guarded([1, 2])), list(guarded([])))
-```
-
-迭代器耗尽时 `next` 抛出的 `StopIteration` 从生成器体内逃出，被解释器转换成 `RuntimeError`，上面那个生成器连正常结束的序列都遍历不完。写成 `for` 循环或捕获后 `return` 才正确。转换是刻意的：`StopIteration` 若直接结束生成器，`yield from` 委托链上的异常与实际结束就无法区分。
-
-### 关闭生成器
-
-被丢弃的生成器不会立即结束。`close()` 在挂起点抛 `GeneratorExit` 并运行函数体里的 `finally`；不显式关闭时，结束时机取决于引用何时被回收，资源清理不应依赖这一点（见 <CrossRef id="python.context-managers" />）。
+`concatenated` 依次把两个 `doubled` 的产出委托出去，`list` 消费到两段翻倍连成的完整序列；两行 `yield from` 代替了 `for value in doubled(...): yield value`，谁委托给谁在代码里直接可见。

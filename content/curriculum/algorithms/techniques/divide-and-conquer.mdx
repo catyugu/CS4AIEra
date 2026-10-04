@@ -142,32 +142,4 @@ x y &= z_2 B^2 + z_1 B + z_0.
 \end{aligned}
 $$
 
-其中 $z_1$ 恰好等于 $x_0 y_1 + x_1 y_0$。子问题个数从四降到三，本层工作是线性的，成本的增长阶随之从 $n^2$ 降到 $n^{\log_2 3} \approx n^{1.585}$。
-
-```python run id="alg.techniques.karatsuba"
-def karatsuba(x, y, counter):
-    """Karatsuba on integers; counter[0] records scalar multiplications."""
-    if x < 10 or y < 10:
-        counter[0] += 1
-        return x * y
-    half = max(len(str(x)), len(str(y))) // 2
-    base = 10 ** half
-    x1, x0 = divmod(x, base)
-    y1, y0 = divmod(y, base)
-    z0 = karatsuba(x0, y0, counter)
-    z2 = karatsuba(x1, y1, counter)
-    z1 = karatsuba(x0 + x1, y0 + y1, counter) - z2 - z0
-    return z2 * base * base + z1 * base + z0
-
-
-digits = 32
-x = int("7" * digits)
-y = int("3" * digits)
-counter = [0]
-product = karatsuba(x, y, counter)
-print(f"{digits}-digit product correct: {product == x * y}")
-print(f"scalar multiplications performed: {counter[0]}")
-print(f"model of three half-size calls per level: 3^5 = {3 ** 5}, naive 4^5 = {4 ** 5}")
-```
-
-真实实现的三次递归并不总是恰好一半规模：$(x_0 + x_1)$ 会多出一位，实测乘法次数 381 高于 $3^k$ 的整齐模型 243，远低于朴素做法的 1024。指数 $\log_2 3$ 来自对调用树的分析，这组数字只说明实现与整齐模型之间没有一一对应。
+其中 $z_1$ 恰好等于 $x_0 y_1 + x_1 y_0$。子问题个数从四降到三，本层工作是线性的，成本的增长阶随之从 $n^2$ 降到 $n^{\log_2 3} \approx n^{1.585}$——指数 $\log_2 3$ 来自对调用树的分析。

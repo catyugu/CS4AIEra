@@ -11,7 +11,7 @@ objectives:
   - 区分模块找不到与属性不存在两类错误各自报出什么
 ---
 
-一段能跑通的程序需要被另一个文件复用时，把其中可复用的部分移进单独的 `.py` 文件，再用 `import` 取回，是 Python 组织代码的第一种办法。`import` 在当前文件绑定一个名字，被导入文件顶层的语句在导入时执行一次；同一个文件作为程序启动时执行的是另一套逻辑，两种角色用 `__name__` 区分。
+同一个文件里的代码越来越多，或者一段已经跑通的代码需要在第二个程序里也用到，Python 的做法是把可复用的部分移进单独的 `.py` 文件，再用 `import` 从别的文件里取回。
 
 ## 导入一个模块
 
@@ -40,7 +40,7 @@ print("imported directly:", sqrt(9))
 
 ## 把代码拆到另一个文件
 
-把 `add` 移进 `calculator.py`；`main()` 与末尾的守卫让这个文件也能直接运行。`main.py` 只 `import` 它：
+把 `add` 移进 `calculator.py`；`main.py` 只 `import` 它并调用 `add`：
 
 ```python
 # calculator.py
@@ -66,9 +66,9 @@ import calculator
 print("3 + 4 =", calculator.add(3, 4))
 ```
 
-运行 `python main.py` 打印 `calculator loaded` 与 `3 + 4 = 7`：`import calculator` 找到文件、执行它的顶层语句、把产生的模块对象绑到名字 `calculator`；`calculator loaded` 来自顶层语句里的 `print`，在 `3 + 4 = 7` 之前出现。运行 `python calculator.py` 打印 `calculator loaded` 与 `2 + 3 = 5`：这个文件是程序本身，末尾的守卫成立，`main()` 执行。
+运行 `python main.py` 打印 `calculator loaded` 与 `3 + 4 = 7`：`import calculator` 找到文件，把产生的模块对象绑到名字 `calculator`，`calculator.add` 因此可用。`calculator loaded` 出现在 `3 + 4 = 7` 之前——它是 `calculator.py` 顶层的一句 `print`，导入时就执行了。`import` 执行被导入模块的顶层代码一次，模块对象是这次执行的产物。
 
-`__name__` 是每个模块都有的属性：被导入时它的值是模块名，作为程序启动的那个文件取 `"__main__"`。守卫 `if __name__ == "__main__":` 把只应在直接运行时执行的代码——命令行入口、示例调用——与可复用的定义分开，导入时不执行入口。
+运行 `python calculator.py` 打印 `calculator loaded` 与 `2 + 3 = 5`：这个文件作为程序启动，末尾的守卫成立，`main()` 执行。守卫成立与否取决于 `__name__`——每个模块都有这个属性：被导入时它的值是模块名，作为程序启动的那个文件取 `"__main__"`。`if __name__ == "__main__":` 把只应在直接运行时执行的代码——命令行入口、示例调用——与可复用的定义分开，导入时不执行入口。
 
 模块是一个独立命名空间：`calculator.py` 里定义的名字属于 `calculator`，`main.py` 里定义的名字属于 `main.py`，两边通过 `calculator.名字` 或参数互相访问。Python 按模块名缓存已导入的模块，同一个程序里再次 `import calculator` 拿到的是第一次留下的模块对象，顶层语句不再执行；模块体只在第一次导入时运行一次。搜索路径、包与 `__init__.py`、相对导入与循环导入的规则，以及让模块体重新执行的方式见 <CrossRef id="python.modules-and-imports" />。
 

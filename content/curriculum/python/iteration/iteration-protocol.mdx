@@ -99,41 +99,6 @@ print("second pass over a used iterator:", list(again))
 
 状态放在迭代器实例上而不是类上，这一点与类属性失效模式同源（见 <CrossRef id="python.classes" />）：把 `remaining` 写成类属性会让所有迭代器共享同一个计数器。
 
-## next 的默认值与哨兵迭代
-
-```python run id="py.iter.sentinel"
-from itertools import count, islice
-
-iterator = iter([1, 2])
-print("next with default:", next(iterator, "none left"), next(iterator, "none left"), next(iterator, "none left"))
-
-stream = iter([7, 8, 9, 0, 5])
-print("stopped by sentinel:", list(iter(lambda: next(stream), 0)))
-
-print("bounded slice of an unbounded iterator:", list(islice(count(0), 4)))
-```
-
-`next(iterator, default)` 把「已耗尽」变成返回值，用于可能读空的读取；`iter(callable, sentinel)` 把「反复调用直到得到哨兵值」写成迭代器。无界序列必须由消费者设限，`islice` 是标准做法；`list(infinite)` 不会终止。
-
-## 推导式与生成器表达式
-
-推导式与生成器表达式共用同一个骨架：一个表达式、一个 `for`，后面可以接条件。差别在括号与求值策略——方括号立即求值并建立一个容器，圆括号返回一个生成器，元素等到被请求时才计算：
-
-```python run id="py.iter.comprehension"
-values = [1, 2, 3]
-
-collected = [value * 10 for value in values]
-lazy = (value * 10 for value in values)
-
-print("eager: a list is built now:", type(collected).__name__, collected)
-print("lazy: neither a list nor a tuple:", type(lazy).__name__)
-print("nothing was computed until consumption:", list(lazy))
-print("and the same expression is exhausted now:", list(lazy))
-print("filtering is part of the same skeleton:", list(value for value in values if value > 1))
-```
-
-三个直接后果：**内存**——lazy 版本只保留当前元素，因此能处理放不进内存的序列，eager 版本一定建立完整容器；**一次性**——生成器表达式是迭代器，第二次消费得到空序列，把同一个表达式传给两个消费者是错误的；**副作用时机**——lazy 版本里的计算发生在消费时，调试时看不到「已经算过」。集合推导式 `{...}` 与字典推导式 `{key: value for ...}` 和列表推导式一样立即求值。`yield` 写成的生成器函数、`send` 与委托的完整机制由 <CrossRef id="python.generators" /> 处理。
-
 ## 迭代中修改容器
 
 ```python run id="py.iter.mutate"
@@ -153,4 +118,4 @@ for value in values:
 print("list silently skipped an element:", seen, values)
 ```
 
-字典的保证更弱：**在迭代键视图或项视图时增删条目，可能抛出 `RuntimeError`，也可能让遍历没有走到全部条目**。上面这段代码在当前运行时（Python 3.14.2）观察到的是立即抛 `RuntimeError`，但那是这一次运行的观察结果，不是语言规范保证的行为——依赖它的代码在另一个实现或另一个版本上会静默地遍历不全。列表的迭代器只记位置，删除元素会让它跳过下一个元素，同样没有任何提示。需要边遍历边修改时，遍历副本或先收集要改动的元素。循环体内的异常会结束循环并把迭代器留在半途状态，异常处理无法恢复该迭代器。字典按插入顺序迭代是自 3.7 起的语言保证，`keys()` 与 `items()` 等视图在字典未被修改时沿用同一顺序；`set` 的迭代顺序没有这种保证。需要与输入顺序无关的稳定输出时显式排序（见 <CrossRef id="python.runtime-vs-language" />）。复制能消除到哪一层、遍历副本为什么仍是浅共享，由 <CrossRef id="python.mutability-and-copy" /> 处理。
+字典的保证更弱：**在迭代键视图或项视图时增删条目，可能抛出 `RuntimeError`，也可能让遍历没有走到全部条目**。上面这段代码在当前运行时（Python 3.14.2）观察到的是立即抛 `RuntimeError`，但那是这一次运行的观察结果，不是语言规范保证的行为——依赖它的代码在另一个实现或另一个版本上会静默地遍历不全。列表的迭代器只记位置，删除元素会让它跳过下一个元素，同样没有任何提示。需要边遍历边修改时，遍历副本或先收集要改动的元素。

@@ -10,7 +10,7 @@ objectives:
   - 用异步生成器写异步迭代器，并说明它为什么是一次性的
 ---
 
-`async for` 与 `async with` 是迭代协议与上下文管理器协议的异步版本：取下一个元素、进入资源、退出资源都可能需要等待，于是等待点被写进了语法本身。把它们与 <CrossRef id="python.iteration-protocol" />、<CrossRef id="python.context-managers" /> 的两套同步约定对照着读，差别只有一处——哪一步可以挂起。
+设想程序消费一条消息流：下一条消息什么时候到不由你决定，因此每一次取消息都可能要等；进入一条需要握处理的连接、以及关闭连接，同样可能要等。普通的 `for` 与 `with` 把取元素、进入、退出当作立刻完成的步骤，等待无处安放，事件循环也就无法在等待期间去跑别的任务。`async for` 与 `async with` 让这三点各自可以挂起，做法是在对应位置放入一个 `await`。它们的展开与 <CrossRef id="python.iteration-protocol" />、<CrossRef id="python.context-managers" /> 记下的两套同步约定逐条对应，唯一的差别就是哪一步可以挂起。
 
 ## async for 的展开
 

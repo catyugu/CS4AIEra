@@ -5,11 +5,10 @@ order: 50
 title: 随机化算法
 status: published
 objectives:
-  - 沿用「先固定输入、再对算法的随机位取期望」的量词规则，把固定输入上的期望运行时间与错误概率写成随机化算法的契约
-  - 区分 Las Vegas 与 Monte Carlo 两类契约，并说明把 Monte Carlo 变成精确算法需要什么
-  - 区分单侧错误与双侧错误，并说明放大规则要按不会出错的那一侧选择
-  - 分别写出期望保证与高概率保证，并说明前者为什么给不出同一尺度上的强尾界
-  - 用独立重复放大成功概率，并说明独立性为什么是前提
+  - 把固定输入上的运行时间与错误概率写成随机化算法的契约
+  - 区分 Las Vegas 与 Monte Carlo 两类契约，并说明两类各自保证什么
+  - 用一个 Monte Carlo 判定说明单侧错误：正确结果永不被拒，错误只出在接受错误答案的方向
+  - 用独立重复把单侧错误概率压到指数小，并说明独立性为什么是前提
 ---
 
 快速排序把待排区间按一个 pivot 分成两段，pivot 最终停在区间里的哪个位置，两段就各有多少元素。把 pivot 从末元素改成从区间里随机挑一个，同一份输入上两次运行的划分不再相同：一次分得均匀，递归深度是 $\Theta(\log n)$；一次每次都只切下一个元素，递归塌成一条 $\Theta(n)$ 的链。算法内部一旦有随机位，同一份输入上每次运行的路径就可能不同（随机选择 pivot 的快速排序的期望分析在 <CrossRef id="algorithms.quicksort" />）。
@@ -25,122 +24,16 @@ objectives:
 | Las Vegas | 总是正确 | 随机变量 | 期望时间，或高概率时间 |
 | Monte Carlo | 可能出错 | 确定，或有界 | 错误概率的上界 |
 
-两类都沿用 <CrossRef id="algorithms.average-and-randomized" /> 建立的量词规则：输入 $x$ 固定，量词落在算法随机位 $R$ 上。Las Vegas 的「总是正确」按这条量词写，就是对每个固定输入、每次抽样的 $R$，返回的结果都正确；它的运行时间 $T(x, R)$ 随 $R$ 取值，有限期望还推出算法以概率 $1$ 终止。
+量词落在算法随机位 $R$ 上：输入 $x$ 固定，只在算法可读的随机位上取概率（把输入与随机位分开处理的角度见 <CrossRef id="algorithms.average-and-randomized" />）。Las Vegas 的「总是正确」按这条量词写，就是对每个固定输入、每次抽样的 $R$，返回的结果都正确；它的运行时间 $T(x, R)$ 随 $R$ 取值，有限期望还推出算法以概率 $1$ 终止。
 
-生成一个 $k$ 位随机素数是一份干净的 Las Vegas 契约：用确定性素性检验认证候选值，通过则返回，不通过就换一个候选继续掷。返回的值总是素数，随机的是试验次数。
+## 一个 Monte Carlo 例子：验证矩阵乘积
 
-```python run id="alg.rand.las-vegas"
-import math
-import random
-
-
-def is_prime(n):
-    """Exact trial division; cheap over the small range used below."""
-    return n > 1 and all(n % d for d in range(2, math.isqrt(n) + 1))
-
-
-def random_prime(k, rng):
-    """Las Vegas: every returned value passes the exact test above."""
-    low = 1 << (k - 1)
-    trials = 0
-    while True:
-        trials += 1
-        candidate = low | rng.randrange(low) | 1
-        if is_prime(candidate):
-            return candidate, trials
-
-
-rng = random.Random(20260601)
-k, runs = 20, 25
-counts = [random_prime(k, rng)[1] for _ in range(runs)]
-mean = sum(counts) / runs
-heuristic = k * math.log(2) / 2
-print(f"k = {k} bits | {runs} runs")
-print(f"  mean trials per prime: {mean:.2f}")
-print(f"  prime density heuristic k*ln(2)/2 = {heuristic:.2f} (expected trials)")
-print(f"  longest run: {max(counts)} trials | one-trial runs: {counts.count(1)}")
-```
-
-期望试验次数由素数密度给出：素数定理说 $[2^{k-1}, 2^k)$ 内的素数密度约为 $1/(k \ln 2)$，只看奇数则约为 $2/(k \ln 2)$，因此期望试验次数约为 $k \ln 2 / 2$。抽取过程是独立、有放回、均匀的，因此只要单次命中概率是 $p$，就严格有 $P[\text{试验次数} > m] = (1 - p)^m$；但代进去的 $p \approx 2/(k \ln 2)$ 来自素数分布的**启发式估计**（把素数定理给出的密度当成独立抽样下的概率），所以单元格里那一行只是按该密度算出的期望，**不是**严格上界。要有严格的高概率保证，得换成可证的单次成功概率下界，再套同一个公式。两个保证要分开写：期望保证说平均多少，高概率保证说超限的概率；单元格里 $25$ 次抽样的均值 $9.60$ 与 $6.93$ 同量级，而样本均值本身只是对期望的一次估计（单次最长用了 $33$ 次试验），会围绕真值上下波动。
-
-## 单侧错误与双侧错误
-
-Monte Carlo 算法按出错方向再分一层（这里的「单侧」指出错方向单一，与统计学里的第一类、第二类错误无关）：
-
-| 类型 | 含义 |
-| --- | --- |
-| 单侧错误 | 只在一个方向上出错 |
-| 双侧错误 | 两个方向都可能出错 |
-
-单侧错误常见于「过滤」型的判定。优化形式的最小割给出的就是一个方向的误差：每次收缩得到的都是某个真实的割，只是未必最小，所以返回值永远不会**小于**最小割，错只会偏大。要把它接到标准判定问题，加一个阈值 $t$ 就够了：**只有**找到大小不超过 $t$ 的割才回答 YES。真实最小割大于 $t$ 时绝不会误答 YES；真实最小割不超过 $t$ 时可能因为这一次没找到而误答 NO——误答只出在答 NO 的方向，这才是严格意义上的单侧错误。
-
-```python run id="alg.rand.karger"
-import random
-
-
-def contract(edges, n, rng):
-    """One run of random contraction. The returned number is the size of a real
-    cut of the input graph, so it is never below the minimum cut."""
-    labels = list(range(n))
-    alive = n
-    while alive > 2:
-        u, v = edges[rng.randrange(len(edges))]
-        a, b = labels[u], labels[v]
-        if a == b:
-            continue
-        heavy, light = max(a, b), min(a, b)
-        for i in range(n):
-            if labels[i] == heavy:
-                labels[i] = light
-        edges = [(x, y) for x, y in edges if labels[x] != labels[y]]
-        alive -= 1
-    return len(edges)
-
-
-# Two K4 cliques joined by exactly two edges: the bridge is the unique minimum
-# cut, of size 2.
-n = 8
-dumbbell = [(base + i, base + j)
-            for base in (0, 4) for i in range(4) for j in range(i)]
-dumbbell += [(0, 4), (1, 5)]
-rng = random.Random(20260602)
-trials = 200
-values = [contract(dumbbell, n, rng) for _ in range(trials)]
-hits = values.count(2)
-bound = 2 / (n * (n - 1))
-print("two K4 cliques joined by two edges | unique minimum cut: 2")
-print(f"  {trials} runs: returned the minimum cut {hits} times ({hits / trials:.4f})")
-print(f"  proven lower bound 2/(n(n-1)) = {bound:.4f}")
-print(f"  smallest value returned: {min(values)}")
-for reps in (10, 30):
-    print(f"  repeating {reps} times, success probability at least: "
-          f"{1 - (1 - bound) ** reps:.4f}")
-```
-
-Karger 的这个下界对任何无向连通多重图都成立（保留平行边、去掉自环），因此重复 $m$ 次就把失败概率压到 $(1 - 2/(n(n-1)))^m$ 以下。注意通用下界与实例的真实成功率是两回事：$n = 8$ 时下界只有 $2/(8 \cdot 7) = 3.6\%$，而上面这个哑铃图 $200$ 次里成功 $34$ 次，实测到 $17.0\%$——分析只保证「至少 $3.6\%$」，不是「只有 $3.6\%$」。重复 $10$ 次把成功率抬到约 $30\%$，$30$ 次到约 $66\%$。这是随机化算法的典型用法：单次只给弱保证，靠独立重复把它放大。
-
-## 期望保证与高概率保证
-
-期望界与高概率界不能互相替代：
-
-- **期望保证**：$E[T] \le f(|x|)$。马尔可夫不等式只给 $P[T \ge k \cdot E[T]] \le 1/k$——阈值放大 $k$ 倍，失败概率才降到 $1/k$。期望界本身一般给不出同一时间尺度上的强尾界；要在常数倍阈值附近得到很小的失败概率，需要额外的尾信息或独立重启。
-- **高概率保证**：$P[\text{失败}] \le n^{-c}$ 或 $\le 2^{-k}$。这类界要单独证，通常来自独立重复与集中不等式。
-
-三条常用路径：
-
-| 情形 | 放大方式与失败概率 |
-| --- | --- |
-| 单侧错误 | $k$ 次里按「不会出错的那一侧」取 AND 或 OR，失败概率 $\le p^k$ |
-| 双侧错误 | $k$ 次多数表决，失败概率 $\le \exp(-2k(1/2 - p)^2)$（Hoeffding，要求 $p < 1/2$） |
-| 只有期望界 | $k$ 个独立副本取最先完成者：$P[\min > 2 E[T]] \le (1/2)^k$（马尔可夫） |
-
-只有期望界那一行的做法是启动 $k$ 个独立副本、取最先完成者；不能并行时，改成 $k$ 次各自截断在 $2 E[T]$ 的独立重启：全部超时的概率至多 $2^{-k}$，总预算变成 $2k \cdot E[T]$，而一旦放弃，这一份契约里就多了一个失败分支。
-
-单侧那一行要看清方向：错误方向是「假接受」时用「全部轮次都接受才算接受」，错误方向是「假拒绝」时用「任一轮次接受就算接受」。**三条**路径的前提都是**独立性**：每次运行的随机位互相独立，失败事件才互相独立，概率才相乘。共用同一批随机位会让重复失效。
-
-这与「某个固定输入让算法必错」是两回事：契约本来就固定任意输入 $x$、只对 $R$ 取概率，只要对每个 $x$ 都有 $P_R[\text{出错} \mid x] \le p$，换独立随机位照样能放大；真出现必错的输入，说明原先那条「对每个输入错误概率不超过 $p$」的契约不成立，而不是独立性失效。
+给定 $n \times n$ 矩阵 $A$、$B$ 与候选乘积 $C$，要判断 $C = AB$ 是否成立。把 $C$ 再乘一遍需要 $O(n^3)$ 次乘法；随机位换来的检查更快。抽一个均匀随机的 $0/1$ 向量 $x$，比较 $A(Bx)$ 与 $Cx$：$C = AB$ 时两者对每个 $x$ 都相等；$C \neq AB$ 时 $D = AB - C$ 非零，取它的一行非零 $d$。固定 $x$ 除某个 $d_j \neq 0$ 的分量外的所有取值，只有一个 $x_j$ 的取值能让 $d \cdot x = 0$，于是 $d \cdot x = 0$ 的 $x$ 不超过全部 $0/1$ 向量的一半；$Dx = 0$ 蕴含 $d \cdot x = 0$，一次检查误判的概率因此不超过 $1/2$。运行时间是确定的（一次矩阵向量乘法），代价是可能接受一个错的乘积——错误只出在「接受」这一侧，正确结果在任何一轮都不会被拒绝。
 
 ```python run id="alg.rand.amplify"
+import random
+
+
 def verify_product(a, b, c, rng):
     """Freivalds' check: multiply by a random 0/1 vector on the right.
     A correct product is never rejected; a wrong one is rejected with
@@ -174,33 +67,8 @@ for rounds in (1, 3, 5):
           f"(bound 2^-k = {2 ** -rounds:.5f})")
 ```
 
-正确乘积那一行是 `True`：单侧错误只出现在「接受了一个错的答案」的方向，因此「全部轮次都接受」这个规则把错误概率降到 $2^{-k}$，不会引入新的错误方向。$C = AB$ 时 $(AB - C)x$ 对每个 $x$ 都为零，正确结果在任何一轮都不会被拒绝。
+## 独立重复
 
-另外，单元格里三行的实测频率与 $2^{-k}$ 并不逐行吻合（$k = 1$ 是 $0.5350$ 对 $0.5$，$k = 5$ 是 $0.0400$ 对 $0.03125$）。$2^{-k}$ 约束的是理想独立随机位下**真实**的错误概率，$200$ 次抽样得到的频率只是它的一个估计，围绕真值上下波动。这个例子里真值恰好等于 $2^{-k}$：`wrong` 只把 $C$ 的一个元素加了 $1$，于是 $(AB - C)x$ 是否为 $0$ 完全由对应的那一个随机比特决定，单轮假接受概率恰好是 $1/2$，$k$ 轮恰好是 $2^{-k}$，所以 $2^{-k}$ 既是最坏情形上界也是真值；$k = 1$ 实测的 $0.5350$ 就是 $200$ 次抽样里最常见的那类偏差。
+单轮检查的误判概率上界是 $1/2$。把 $k$ 轮独立重复按「每一轮都接受才算接受」组合起来：接受一个错的乘积，要求每一轮都恰好把 $A(Bx)$ 与 $Cx$ 判成相等。每轮抽自己的随机向量，这些事件互相独立，概率相乘，错误概率降到 $2^{-k}$；正确结果在任何一轮都不会被拒绝，这条规则只压低「接受错答案」的概率，不会引入新的错误方向。上面单元格对同一个错乘积跑 $1$、$3$、$5$ 轮，假接受频率随轮数下降。
 
-## 契约怎么写
-
-一份随机化算法的契约比确定性版本多两栏：
-
-| 栏 | 写法 |
-| --- | --- |
-| 前置 | 与确定性版本相同的输入约束 |
-| 随机性 | 算法可读的随机位 $R$；对固定的输入，量词落在 $R$ 上 |
-| 输出 | Las Vegas 写「总是正确」；Monte Carlo 写「错误概率 $\le p$」 |
-| 时间 | Las Vegas 写期望或高概率界；Monte Carlo 写确定界或高概率界 |
-
-四栏必须互相独立地写清楚。把「期望时间 $O(n)$、错误概率 $1/n$」揉成「期望正确」这种句子，读者就没法判断这个算法能不能用。
-
-## 深入：随机位与对手
-
-确定性算法的最坏情形由对手掌握：对手知道算法，挑一个最坏的输入即可。算法内部一旦有随机位，最坏输入的构造就不再完全有效——同一份输入上算法每次运行走的路径可能不同，对手没法针对某一次运行布置输入。这里的前提要写出来：输入在随机位产生之前固定，随机位不透露给挑输入的一方；随机位一旦公开，对手就能按它构造最坏输入，<CrossRef id="algorithms.average-and-randomized" /> 里适应性对手的讨论同样适用于这里。随机化换来的是**保证形式的改变**。
-
-引入随机化之后，原来的确定性下界是否仍然覆盖随机化算法要逐个确认——有些下界覆盖，有些并不覆盖（确实存在随机化复杂度严格优于确定性的问题）。比较排序属于覆盖的那一类：要求「总是正确」的随机化比较排序，其最坏输入上的期望比较次数仍然是 $\Omega(n \log n)$（确定性比较模型的下界记在 <CrossRef id="algorithms.lower-bounds" />；随机化版本需要更强的平均深度论证，不在那里展开）。
-
-## 实现边界
-
-两类契约可以互相转换，条件要说清。认证只是途径之一，Las Vegas 的定义是零错误，并不要求存在事后认证器。Monte Carlo 转 Las Vegas 需要三件事：候选解由一个随机算法产生；存在确定的过程**认证这个候选解就是正确答案**，而不只是「它满足约束、是一个合法候选」；认证失败可以检出，并且重复下去期望有限次终止。还要加一条成本条件：若希望保留原随机算法的复杂度优势，认证器本身必须足够便宜，不能等价于把原问题重新解一遍。「合法」与「正确」的区别在这里最清楚——收起一个割之后，检查它是不是割很容易，但检查它是不是**全局最小**的割，光看这个割本身做不到；收缩过程因此只给出一侧的误差，按 Monte Carlo 使用，另跑一个精确最小割算法来比对答案则会把随机化省下的开销吃回去。
-
-反方向也有细节：给 Las Vegas 加上运行时间上限，超时不能返回「当前结果」——超时的那一刻可能根本还没有合法结果。正确的写法是超时返回预先约定的默认值或失败标记，并把「超时」记成 Monte Carlo 契约里的失败事件，其概率由尾界控制。分类因此由给出的契约决定。
-
-结果的复现需要记录随机位或种子；「平均很快」不排除偶尔很慢；回答可能出错时必须报出错误概率。这三条都在契约里，不是实现的细节。在一开始只设一次种子、之后连续从同一个随机数生成器取值，与每次重复前都把种子重置回同一个值，是两件不同的事：前者让整批演示可复现，后者才会让每次运行做出相同的选择。上面的单元格属于前者，理论分析则始终假定理想的独立随机位；用线性同余一类的弱生成器时，独立性只当近似成立，放大论证的前提随之松动。
+独立性是这条推导的前提。各轮共用同一批随机位时，同一个 $x$ 会让所有轮次同时成功或同时失败，概率不再相乘，重复不再降低错误概率。

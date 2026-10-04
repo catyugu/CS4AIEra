@@ -109,35 +109,3 @@ print("after replace:", data)
 ```
 
 `grow` 通过形参修改了 `data` 指向的对象，调用方看到 `[1, 99]`。`replace` 只在函数内把形参重绑定到新对象，调用方的 `data` 不变。两个函数的签名相同，接口语义不同：形参是否会原地修改实参属于接口约定的一部分，这条约定从签名看不出来，只能写进文档，或用返回新对象、传入副本、返回不可变视图来体现在代码里。
-
-## 深入：复合赋值
-
-`x += y` 对 target 求值一次，再按 `x` 的类型查找对应的 in-place operation（`+=` 找 `__iadd__`）。该 operation 可能修改原对象并返回它，也可能返回另一个对象；无论哪种情形，结果都重新赋给那个 target。类型没有对应的 in-place operation 时走普通二元运算的回退路径。同一个 `+=` 因此在不同的类型上分叉：
-
-```python run id="py.names.augmented"
-items = [1]
-items_alias = items
-items += [2]
-print("items:      ", items)
-print("items_alias:", items_alias)
-print("same object:", items is items_alias)
-
-pair = (1,)
-pair_alias = pair
-pair += (2,)
-print("pair:      ", pair)
-print("pair_alias:", pair_alias)
-print("same object:", pair is pair_alias)
-```
-
-列表定义了 `__iadd__`，`items += [2]` 修改原对象，别名 `items_alias` 跟着变化；元组没有 `__iadd__`，`pair += (2,)` 走回退路径，产生新元组并把 `pair` 重绑定过去，别名不变。对象有没有被修改，由类型是否提供对应的 in-place operation 决定，运算符的写法本身说明不了；提供了该方法也不保证沿用原对象。
-
-target 只求值一次这一点与类型无关：`a[f()] += y` 只调用 `f()` 一次，`a[f()] = a[f()] + y` 调用两次。in-place operation 按运算符提供：集合与字典的原地合并走 `|=`（`__ior__`），`+=` 只在 `+` 本身有定义的类型上成立。
-
-## 实现边界
-
-- 小整数、短字符串与空元组可能被实现缓存而复用同一对象。这是 CPython 的实现行为，不是语言保证，详见 [The Python Language Reference: Data model](https://docs.python.org/3/reference/datamodel.html)；比较两个值用 `==`。
-- `id` 只在对象存活期内有效。对象被回收后地址可能被复用，把 `id` 存下来稍后比对会给出错误结论。
-- 存在身份相同而 `==` 为假的对象：`x = float("nan")` 之后 `x == x` 为假。`is` 与 `==` 的完整契约见 <CrossRef id="python.equality-and-hashing" />。
-- `==` 的结果由 rich comparison 协议决定，包含反射与 `NotImplemented` 的回退，见 <CrossRef id="python.dunder-protocols" />。
-- 自定义 `__iadd__` 返回新对象时，`+=` 的别名看不到变化。

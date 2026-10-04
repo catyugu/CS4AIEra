@@ -12,21 +12,21 @@ objectives:
   - 写出按入度出队的 Kahn 算法，并用输出顶点数是否等于顶点总数判定环
 ---
 
-一张依赖表给出一组「先做 $u$ 才能做 $v$」的约束。要穿好衣服出门，衣物之间有先后：衬衫要在领带之前，衬衫和皮带都要在外套之前，袜子要在鞋之前。把这些约束排成一条线，让每条「先做」关系都从左指向右，就得到一个可以照着执行的顺序。
+一张依赖表给出一组「先做 $u$ 才能做 $v$」的约束。要完成一次构建，任务之间有先后：生成代码要在编译数据模型层之前，生成代码和编译服务接口层都要在集成测试之前，打包静态资源要在打包发布之前。把这些约束排成一条线，让每条「先做」关系都从左指向右，就得到一个可以照着执行的顺序。
 
-四项衬衫（shirt）、领带（tie）、皮带（belt）、外套（jacket）之间要先排出一条顺序。衬衫没有前置任务，放在最前；领带与皮带都只要求衬衫，二者谁先都可以，取领带，再取皮带；外套要求衬衫、领带、皮带都在它前面，放到最后。得到顺序 $shirt\,tie\,belt\,jacket$。
+四项任务 codegen（生成代码）、model（编译数据模型层）、api（编译服务接口层）、test（集成测试）之间要先排出一条顺序。codegen 没有前置任务，放在最前；model 与 api 都只要求 codegen，二者谁先都可以，取 model，再取 api；test 要求 model 与 api 都在它前面，放到最后。得到顺序 $codegen\,model\,api\,test$。
 
-每一条「先做」关系都得到满足：shirt 在 tie 与 belt 之前，tie 与 belt 都在 jacket 之前。
+每一条「先做」关系都得到满足：codegen 在 model 与 api 之前，model 与 api 都在 test 之前。
 
-把同一组约束补全到七项，就得到一张更大的依赖图——衬衫、领带、皮带、外套之外，另有袜子要在鞋之前，还有一件手表不依赖任何衣物：
+把同一组约束补全到七项，就得到一张更大的依赖图——codegen、model、api、test 之外，另有 assets 要在 package 之前，还有一个 docs 任务不依赖任何其他任务：
 
 ```text
-shirt ──┬─▶ tie ─────┐
-        │            ▼
-        └─▶ belt ─▶ jacket
-             │
-             └─▶ shoes ◀─ socks
-watch
+codegen ──┬─▶ model ───┐
+          │            ▼
+          └─▶ api ───▶ test
+               │
+               └─▶ package ◀─ assets
+docs
 ```
 
 把顶点排成一行、让每条有向边都从左指向右的排列，称为图的 **<Term id="topological-order">拓扑序</Term>**：一个顶点排列 $\pi$，使对每条有向边 $(u, v)$ 都有 $\pi(u) < \pi(v)$。
@@ -105,20 +105,20 @@ def three_colour_dfs(adjacency):
             visit(start, [start])
     return finish_order, back_edge[0]
 
-dressing = {"shirt": ["tie", "belt"], "tie": ["jacket"], "belt": ["jacket", "shoes"],
-            "socks": ["shoes"], "jacket": [], "shoes": [], "watch": []}
+tasks = {"codegen": ["model", "api"], "model": ["test"], "api": ["test", "package"],
+         "assets": ["package"], "test": [], "package": [], "docs": []}
 cyclic = {"a": ["b"], "b": ["c"], "c": ["b", "d"], "d": []}
 
-finish, back = three_colour_dfs(dressing)
+finish, back = three_colour_dfs(tasks)
 place = {v: i for i, v in enumerate(finish[::-1])}
 print("DAG finish order:", " ".join(finish), "| back edge:", back)
 print("  reversed:", " ".join(finish[::-1]), "| every arc left to right:",
-      all(place[u] < place[v] for u in dressing for v in dressing[u]))
+      all(place[u] < place[v] for u in tasks for v in tasks[u]))
 finish, back = three_colour_dfs(cyclic)
 print("cyclic finish order:", " ".join(finish), "| back edge:", back)
 ```
 
-DAG 上完成顺序是 $jacket\,tie\,shoes\,belt\,shirt\,socks\,watch$，反转后得到 $watch\,socks\,shirt\,belt\,shoes\,tie\,jacket$，每条边都从左指向右。含环图上出现后向边 $(c, b)$，它闭合的环是 $b \to c \to b$。
+DAG 上完成顺序是 $test\,model\,package\,api\,codegen\,assets\,docs$，反转后得到 $docs\,assets\,codegen\,api\,package\,model\,test$，每条边都从左指向右。含环图上出现后向边 $(c, b)$，它闭合的环是 $b \to c \to b$。
 
 ## 拓扑序 = finish 顺序的反转
 
@@ -183,17 +183,17 @@ def kahn(adjacency):
     return output, [v for v in adjacency if v not in set(output)]
 
 
-dressing = {"shirt": ["tie", "belt"], "tie": ["jacket"], "belt": ["jacket", "shoes"],
-            "socks": ["shoes"], "jacket": [], "shoes": [], "watch": []}
+tasks = {"codegen": ["model", "api"], "model": ["test"], "api": ["test", "package"],
+         "assets": ["package"], "test": [], "package": [], "docs": []}
 cyclic = {"a": ["b"], "b": ["c"], "c": ["b", "d"], "d": []}
 
-output, left = kahn(dressing)
-print("Kahn output:", " ".join(output), "| processed:", len(output), "of", len(dressing))
+output, left = kahn(tasks)
+print("Kahn output:", " ".join(output), "| processed:", len(output), "of", len(tasks))
 output, left = kahn(cyclic)
 print("cyclic graph leaves behind:", sorted(left), "| output:", " ".join(output))
 ```
 
-DAG 上 Kahn 输出 $shirt\,socks\,watch\,tie\,belt\,jacket\,shoes$，与 finish 反转得到的顺序不同，两者都是合法的拓扑序。含环图上它只输出 $a$，剩下 $b, c, d$：每个剩余顶点都还有一条来自剩余集合的入边，是「提前停止 => 剩余子图含环」的一个实例。
+DAG 上 Kahn 输出 $codegen\,assets\,docs\,model\,api\,test\,package$，与 finish 反转得到的顺序不同，两者都是合法的拓扑序。含环图上它只输出 $a$，剩下 $b, c, d$：每个剩余顶点都还有一条来自剩余集合的入边，是「提前停止 => 剩余子图含环」的一个实例。
 
 拓扑序一般不唯一，Kahn 的队列直接给出判断：某一步队列里同时有多个候选时，先输出哪一个都行，剩下的图仍能按同样规则跑完，于是至少存在两种拓扑序；每一步队列都只有一个候选时，任何拓扑序的首项都被这一步逼定，删去它再对剩余图重复同一推理，整个顺序就被唯一确定。唯一性因此不必枚举排列——在一次 Kahn 运行里记录队列长度是否始终为 1 即可判定，成本仍是 $\Theta(|V| + |E|)$。
 

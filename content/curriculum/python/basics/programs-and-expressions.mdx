@@ -5,10 +5,10 @@ order: 10
 title: 求值、值与名称绑定
 status: published
 objectives:
-  - 追踪表达式求值、得到对象与名称绑定的顺序
+  - 追踪表达式求值、得到值与名称绑定的顺序
   - 区分表达式的结果值、打印输出与语句的作用
   - 用 type 判定对象类型，并预测运算与显式转换的结果
-  - 预测重新赋值后各名称指向的值，并解释赋值为什么不复制对象
+  - 预测重新赋值后各名称指向的值，并说明重新赋值改变了哪一个名称
 ---
 
 一段 Python 程序是一串语句，解释器从第一行往下执行。下面四行用两个量算出一个总数，并打印出来：
@@ -20,9 +20,9 @@ total = price * count
 print(total)
 ```
 
-`price = 20` 把名称 `price` 绑定到对象 `20`。`price * count` 是一个表达式，它读取 `price` 与 `count` 当前绑定的对象，相乘，求值得到新对象 `60`。`total = price * count` 是赋值语句，把名称 `total` 绑定到刚求出的 `60`。`print(total)` 读取 `total` 的绑定，把 `60` 写到输出。运行这四行，输出是 `60`。
+`price = 20` 把名称 `price` 绑定到值 `20`。`price * count` 是一个表达式，它读取 `price` 与 `count` 当前绑定到的值，相乘，求值得到 `60`。`total = price * count` 是赋值语句，把名称 `total` 绑定到刚求出的 `60`。`print(total)` 读取 `total` 的绑定，把 `60` 写到输出。运行这四行，输出是 `60`。
 
-三个词各自指一件事。**表达式**（expression）是求值后得到一个对象的代码片段，例如 `price * count`、`20`、`total`。**语句**（statement）规定一个执行动作，例如 `price = 20` 是赋值语句。**名称绑定**（name binding）让名称指向一个对象。
+三个词各自指一件事。**表达式**（expression）是求值后得到一个值的代码片段，例如 `price * count`、`20`、`total`。**语句**（statement）规定一个执行动作，例如 `price = 20` 是赋值语句。**名称绑定**（name binding）让名称关联到一个值。
 
 ## 对象的值与类型
 
@@ -33,9 +33,9 @@ print(type(1), type(1.5), type("text"), type(True), type(None))
 print(1 + 1, "1" + "1", 1 + 1.5)
 ```
 
-`int` 是整数，`float` 是小数，`str` 是字符串，`bool` 取 `True` 与 `False`。`None` 是 `NoneType` 的唯一实例，表示没有结果或状态缺失；它与 `0`、空字符串、`False` 都不相等，判断「没有值」用 `is None`（<CrossRef id="python.conditionals" />）。
+`int` 是整数，`float` 是浮点数，`str` 是字符串，`bool` 取 `True` 与 `False`。`None` 的类型是 `NoneType`，表示没有结果或状态缺失；它与 `0`、空字符串、`False` 都不相等。
 
-`+` 对两个整数求和，对两个字符串拼接；整数与小数相加得到小数。字符串与整数之间没有这种加法定义：
+`+` 对两个整数求和，对两个字符串拼接；整数与浮点数相加得到浮点数。字符串与整数之间没有这种加法定义：
 
 ```python run id="py.types.mismatch"
 print("abc" + 1)
@@ -45,7 +45,7 @@ print("abc" + 1)
 
 ## 赋值与重新绑定
 
-`price = 20` 与 `total = price * count` 是同一形式：右侧表达式先求值，左侧名称再绑到结果对象。同一个名称可以先后指向不同类型的对象。
+`price = 20` 与 `total = price * count` 是同一形式：右侧表达式先求值，左侧名称再绑到结果值。同一个名称可以先后指向不同类型的值。
 
 ```python run id="py.names.reassignment"
 x = 10
@@ -60,9 +60,9 @@ x = "fifteen"
 print(x, type(x))
 ```
 
-`x = x + 5` 先读取 `x` 的旧绑定算出 `15`，再把 `x` 重新绑到 `15`。`a = b = 0` 把两个名称绑到同一个整数对象；`a = a + 1` 把 `a` 重新绑到 `1`，`b` 仍是 `0`。赋值绑定名称，不复制对象：多个名称指向同一个对象时，通过一个名称修改对象会被其余名称读到，这由 <CrossRef id="python.names-and-objects" /> 展开。
+`x = x + 5` 先读取 `x` 的旧绑定算出 `15`，再把 `x` 重新绑到 `15`。`a = b = 0` 把两个名称都绑到 `0`；`a = a + 1` 把 `a` 重新绑到 `1`，`b` 仍是 `0`。
 
-`x += 1` 与 `x = x + 1` 对整数结果相同；对可变对象，`+=` 可能原地更新（<CrossRef id="python.mutability-and-copy" />）。名称区分大小写，`Width` 与 `width` 不同，且不能以数字开头或使用关键字。函数中绑定的名称通常是局部名称，作用域规则由 <CrossRef id="python.scope-and-closure" /> 处理。
+名称区分大小写，`Width` 与 `width` 不同，且不能以数字开头或使用关键字。
 
 读到没有绑定过的名称会失败：
 
