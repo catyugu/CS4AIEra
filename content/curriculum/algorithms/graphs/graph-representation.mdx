@@ -30,7 +30,7 @@ matrix = [[0, 1, 1], [1, 0, 0], [1, 0, 0]]               # |V| by |V|, rows and 
 edges = [("a", "b"), ("a", "c")]                         # one pass over all edges
 ```
 
-`adjacency` 按顶点索引邻居列表，`matrix` 按顶点对索引一个槽位，`edges` 把全部边排成一个可以一次走完的序列。三种写法存的是同一份连接关系；前两者本身带着顶点集合，`edges` 要另外配上 $V$ 才完整。矩阵按 $0$ 到 $|V| - 1$ 的整数下标索引行列，顶点集合不是这段连续整数时要额外维护一个顶点到下标的映射——单元格里的 `vertices` 就是这个映射；顶点集合一变，矩阵的行与列要跟着重建。
+`adjacency` 按顶点索引邻居列表，`matrix` 按顶点对索引一个槽位，`edges` 把全部边排成一个可以一次走完的序列。三种写法存的是同一份连接关系；前两者本身带着顶点集合，`edges` 要另外配上 $V$ 才完整。矩阵按 $0$ 到 $|V| - 1$ 的整数下标索引行列，顶点集合不是这段连续整数时要额外维护一个顶点到下标的映射——单元格里的 `index` 就是这个映射；顶点集合一变，矩阵的行与列要跟着重建。
 
 默认建模为有限<Term id="simple-graph">简单图</Term>：没有<Term id="self-loop">自环</Term>，也没有<Term id="parallel-edge">平行边</Term>。在邻接表里，简单性表现为邻居列表中不出现顶点自己、也不出现重复项；在邻接矩阵里，表现为对角线全假、非对角元素非零即一。这是本模块各算法的建模条件，离开它之前要先检查哪些结论依赖它。
 
@@ -45,10 +45,11 @@ adjacency = {"a": ["b", "c"], "b": ["a"], "c": ["a"]}
 matrix = [[0, 1, 1], [1, 0, 0], [1, 0, 0]]
 edges = [("a", "b"), ("a", "c")]
 vertices = ["a", "b", "c"]
+index = {"a": 0, "b": 1, "c": 2}
 
 print("adjacency list: one lookup ->", adjacency["a"])
 
-row = vertices.index("a")
+row = index["a"]
 slots, neighbours = 0, []
 for position in range(len(vertices)):
     slots += 1
@@ -74,11 +75,11 @@ print("edge list:", entries, "entries ->", neighbours)
 adjacency = {"a": ["b", "c"], "b": ["a"], "c": ["a"]}
 matrix = [[0, 1, 1], [1, 0, 0], [1, 0, 0]]
 edges = [("a", "b"), ("a", "c")]
-vertices = ["a", "b", "c"]
+index = {"a": 0, "b": 1, "c": 2}
 
 print("adjacency list: 'c' in adjacency['b'] ->", "c" in adjacency["b"])
 
-i, j = vertices.index("b"), vertices.index("c")
+i, j = index["b"], index["c"]
 print("adjacency matrix: matrix[1][2] ->", matrix[i][j])
 
 found, entries = False, 0
