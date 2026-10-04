@@ -5,63 +5,55 @@ order: 45
 title: 分支定界与最优性剪枝
 status: published
 objectives:
-  - 说明最优性剪枝要证明的整棵子树命题，以及当前最优解与界在这个判断里的分工
-  - 用分数松弛构造 0/1 背包的上界，并说明它为什么覆盖每个整数子集
-  - 说明用于剪枝的上界为什么不能因数值误差被低估，并给出一种保证上界性的实现
-  - 区分更松的合法界与不合法界，并解释整数值的界怎样静默丢掉最优解
-  - 把界的计算成本算进每个节点的处理成本
+  - 说出一个已知可行解的目标值为什么给全局最优值一个下界，而未搜索子树的上界从另一个方向夹住同一个值
+  - 说出最优性剪枝与可行性剪枝各自要证明的命题
+  - 举出一个合法但很松的界和一个看似合理却不合法的界
+  - 说明搜索顺序怎样影响剪枝规模
+  - 说明界的计算成本对节点处理成本的影响
 ---
 
-容量 7，四件物品（重,值）为 (3,5)、(3,5)、(4,6)、(2,3)。取一件 (3,5) 与 (4,6)，重量恰好 7，价值 11——这是目前找到的最好方案。回到只取了一件 (3,5) 的那一步：手头价值 5、剩余容量 4，可以接着取 (4,6)，也可以不取。不取时剩下的物品只有 (2,3)，容量 4 装得下它、值 3，这条走法最好也只能到 $5+3=8$。8 到不了 11，于是它连同下面所有取法被整棵跳过，一个节点都不再展开。
+考虑一个容量 10 的 0-1 背包问题，四件物品的重量与价值是 A(6, 30)、B(4, 20)、C(5, 24)、D(2, 9)。每件物品只能取或不取，要求总重量不超过 10，并使总价值最大。
 
-11 是搜索到目前为止拿到的最好值，称**当前最优解**（incumbent）；8 是被跳过的那条分支的**上界**（upper bound）。剪掉一支成立，靠的是这个界**覆盖整棵子树**——子树里每一个可行取法的价值都不超过它。分支定界与回溯共用同一份深度优先枚举骨架 <CrossRef id="algorithms.search-and-pruning" />，每个节点只多出当前最优解与界这两样维护量；节点选择次序不受限制，最优优先同样成立。
+逐件做「取」或「不取」的决定，四件物品铺出一棵所有选择组合的搜索树：$2^4$ 个完整选择，回溯可以一件一件枚举它们，在超重时把整棵子树剪掉（<CrossRef id="algorithms.search-and-pruning" />）。超重检查放不掉的是另一种子树：一个部分选择仍然装得下，但它下面已经不可能给出比手头最好方案更好的结果。这类子树要不要搜进去？
 
-```text
-root              v=0
-├─ take (3,5)     v=5
-│  ├─ take (3,5)   v=10
-│  └─ skip (3,5)   v=5
-│     ├─ take (4,6)   v=11
-│     └─ skip (4,6)   v=5   ×
-└─ skip (3,5)     v=0       ×
-```
+## 第一个可行解给的是下界
 
-树里标 × 的两处都整棵剪掉：一处是上面那条封顶 8 的分支，另一处是根处「不取第一件」的分支，它的界正好追平 11，再往下走也不会更优。
+沿一条分支走到底：取 A，取 B，重量 $6 + 4 = 10$，容量正好装满，价值 $30 + 20 = 50$。这是搜索拿到的第一个完整方案，记当前最好值 $B = 50$。
 
-## 最优性剪枝为什么正确
+$B$ 是不是全局最优值还不知道；可以确定的是全局最优值不会低于它——价值 50 的方案真实存在（取 A 与 B，重量不超过 10），所以最优值至少是 50。对最大化问题，任何已知可行解的目标值都给出全局最优值的一个**下界**。
 
-以求最大值为例，记节点 $p$ 处的界为 $U(p)$。跳过 $p$ 的条件是 $U(p) \le best$（$best$ 为当前最优值），这一步合法的前提是 $U(p)$ 覆盖整棵子树：对子树里每一个可行完成 $x$ 都有 $f(x) \le U(p)$。界算小了，就可能把含最优解的分支一起剪掉，算法照常返回一个答案，只是不再最优。界沿父子节点单调下降不是正确性的必要条件——需要的是上面那条覆盖性。
+## 当前最优解与子树上界
 
-## 0/1 背包的规约
+价值 50 的这个已知方案称为**当前最优可行解**（incumbent），它的目标值 $B$ 随搜索推进只会变大。
 
-| 项 | 规约 |
+节点 $p$ 下面还要一个量：**上界** $U(p)$，要求 $p$ 子树里每一个可行完成 $x$ 都满足 $f(x) \le U(p)$。有了它，判定就是一句话：$U(p) \le B$ 时，$p$ 的子树里不存在能改善当前最优解的方案，整棵删除。
+
+两种剪枝要证的命题不同：
+
+| 剪枝 | 要证明的命题 |
 | --- | --- |
-| 输入 | 物品 $(w_i, v_i)$，$w_i$ 与 $v_i$ 是正整数，$W$ 是非负整数 |
-| 可行 | 总重量不超过 $W$ 的子集 |
-| 输出 | 最大总价值 |
-| 变量 | `best` 搜索到目前为止见过的最大总价值，初始为 0 |
-| 界 | `bound(index, room)` 是「只考虑 `index` 之后的物品、容量为 `room`」时任何可行子集总价值的上界 |
-| 剪枝 | 当 `value + bound(index, room) <= best` 时整棵子树不必进入 |
+| 可行性剪枝 | 这棵子树里没有任何可行完成 |
+| 最优性剪枝 | 这棵子树里每个可行完成的价值都不超过 $B$ |
 
-## 分数松弛
+可行性剪枝证明子树为空；最优性剪枝不要求子树为空，它说的是有解也没用——里面的解都没能力超过已经拿到的最好值。
 
-界的取法决定剪枝的力度。取**分数松弛**：把剩下的物品按价值密度降序摆放，能整件放下就整件放，放不下的那件按比例切开塞满剩余容量。得到的值一定不小于任何整数子集的总价值，因此覆盖整棵子树。这个松弛值正好用来给界——松弛而快的算法专门算界，精确枚举只去走还有希望的分支。
+把这三件事写进一份搜索：进入节点先刷新当前最优解，算出这个节点的上界，界追不上就直接返回，否则照常分支。
 
-下面的代码把界写成可执行的搜索，密度与按比例切开的贡献都用 `fractions.Fraction` 精确计算。
-
-```python run id="alg.search.knapsack"
+```python run id="alg.search.knapsack-branch-and-bound"
 from fractions import Fraction
 
+items = [("A", 6, 30), ("B", 4, 20), ("C", 5, 24), ("D", 2, 9)]
+capacity = 10
 
-def branch_and_bound(items, capacity, use_bound=True):
-    """Return (best value, nodes visited, a set attaining it)."""
-    ordered = sorted(items, key=lambda item: Fraction(item[1], item[0]), reverse=True)
-    best = {"value": 0, "taken": ()}
-    stats = {"nodes": 0}
+
+def solve(items, capacity):
+    """Depth-first branch and bound; returns (best value, items taken, nodes visited)."""
+    ordered = sorted(items, key=lambda item: Fraction(item[2], item[1]), reverse=True)
 
     def bound(index, room):
+        """Fractional-knapsack optimum over ordered[index:]: by density, cut the last item."""
         total = Fraction(0)
-        for weight, value in ordered[index:]:
+        for _, weight, value in ordered[index:]:
             if weight <= room:
                 room -= weight
                 total += value
@@ -70,79 +62,85 @@ def branch_and_bound(items, capacity, use_bound=True):
                 break
         return total
 
-    def explore(index, room, value, taken):
-        stats["nodes"] += 1
-        if value > best["value"]:
-            best["value"], best["taken"] = value, taken
+    best, best_taken, nodes = 0, (), 0
+
+    def search(index, room, value, taken):
+        """One node: refresh the incumbent, stop when the bound cannot beat it, else branch."""
+        nonlocal best, best_taken, nodes
+        nodes += 1
+        if value > best:
+            best, best_taken = value, taken
+        limit = value + bound(index, room)
+        if limit <= best:
+            print(f"prune {taken} value {value} bound {float(limit)}")
+            return
         if index == len(ordered):
             return
-        weight, item_value = ordered[index]
+        _, weight, item_value = ordered[index]
         if weight <= room:
-            explore(index + 1, room - weight, value + item_value, taken + (ordered[index],))
-        if not use_bound or value + bound(index + 1, room) > best["value"]:
-            explore(index + 1, room, value, taken)
+            search(index + 1, room - weight, value + item_value, taken + (ordered[index][0],))
+        search(index + 1, room, value, taken)
 
-    explore(0, capacity, 0, ())
-    return best["value"], stats["nodes"], best["taken"]
+    search(0, capacity, 0, ())
+    return best, best_taken, nodes
 
 
-cases = [([(6, 8), (5, 5), (5, 5)], 10), ([(4, 6), (3, 5), (3, 5), (2, 3)], 7)]
-for items, capacity in cases:
-    value, bounded, taken = branch_and_bound(items, capacity)
-    plain_value, plain, _ = branch_and_bound(items, capacity, use_bound=False)
-    print(f"value {value} == {plain_value} from {taken} | nodes with the bound {bounded}, without it {plain}")
+value, taken, nodes = solve(items, capacity)
+print("best value:", value, "| items:", " ".join(taken), "| nodes visited:", nodes)
 ```
 
-`use_bound=False` 关掉的正是最优性剪枝这一条：两次运行给出同一个最优值，访问的节点数不同。两次运行返回同一个值只是一次回归检查，不能代替对界合法性的证明——界不直接贡献目标值，却参与搜索的控制流，它的合法性是最终最优性的条件。
+三行 `prune` 就是这次搜索砍掉的三棵子树，其中 `prune () value 0 bound 48.5` 是不取 A 的那一棵；另外两棵都在取了 A 之后。最后一行给出最优值、取到的物品与访问过的节点数。界追平 $B$ 的那一棵也被剪掉，因为当前最优解已经由一个真实可行解取到；只有要求列出全部最优方案时，追平的分支才必须继续展开。
 
-## 界的合法性
+## 两边相遇时最优性被证明
 
-上面的界合法，是因为它对每个整数子集都成立。放松这条界不会破坏正确性，只降低剪枝能力：把界换成「剩余物品价值之和」，它不考虑剩余容量是否装得下，仍然覆盖整棵子树，但更难触发最优性剪枝，因此可能访问更多节点。
+记还没有展开完、也没有被剪掉的节点为**活节点**，它们的集合为 $L$。搜索的每一刻，最优值都被两个数夹在中间：
 
-危险在另一个方向：整数贪心填出来的价值**不是合法上界**。它按密度整件整件地放，放不下的跳过，得到的其实是某个可行子集的价值，因而可能低于子树里能达到的最优值。低估落在关键子树上、当前最优解又足够触发这次剪枝时，含有最优解的分支就被整棵跳过，搜索照常返回一个偏小的答案。
+$$B \le OPT \le \max_{p \in L} U(p).$$
 
-```python run id="alg.search.bad-bound"
-def optimize(items, capacity, bound):
-    """One depth-first search; bound(index, room) is the only plug-in, so swapping
-    it swaps the pruning rule."""
-    best = 0
-    def explore(index, room, value):
-        nonlocal best
-        best = max(best, value)
-        if index == len(items):
-            return
-        weight, item_value = items[index]
-        if weight <= room:
-            explore(index + 1, room - weight, value + item_value)
-        if value + bound(index + 1, room) > best:
-            explore(index + 1, room, value)
-    explore(0, capacity, 0)
-    return best
+左边：$B$ 由一个真实的可行解取到，所以它是下界。右边：还没被排除的每一个可能的最优完成，都落在某个活节点的子树里，而该子树的每个完成都不超过它的上界；被剪掉的节点已经由剪枝条件排除在外。
 
+这个夹逼关系不会被搜索的每一步破坏。展开一个活节点时，它的子树换成子节点的子树，每个完成都属于其中一棵，最大值因此不下降；剪掉一个节点时 $U(p) \le B$，删去的那部分里没有超过 $B$ 的完成。搜索在没有活节点时结束，此时每个可能的完成要么已被整条枚举，要么落在某个被剪掉的子树里。于是 $OPT \le B$，与 $B \le OPT$ 合起来就是 $OPT = B$。
 
-def whole_items(items):
-    """Bound over items[index:], listed in decreasing density: pack whole items
-    while they fit, skip the first one that does not. This is an integer greedy
-    value, not a valid upper bound on the subtree."""
-    def bound(index, room):
-        total = 0
-        for weight, value in items[index:]:
-            if weight <= room:
-                room -= weight
-                total += value
-        return total
-    return bound
+分支定界因此是两头同时收紧：新找到的可行解把下界 $B$ 抬高，界把尚未搜索区域的上界压低；两个数相遇时，最优性就被证明了。
 
+## 从放宽约束得到上界
 
-tiny, capacity = [(1, 1), (1, 1), (3, 3)], 3
-print("whole items only, root bound:", whole_items(tiny)(0, capacity),
-      "| best found:", optimize(tiny, capacity, whole_items(tiny)), "| optimum: 3")
-```
+48.5 这个数来自把原问题的约束放宽。原问题要求每件物品取或不取，$x_i$ 只能取 0 或 1；松弛成 $0 \le x_i \le 1$，允许只取一部分。原问题的每个可行解仍然满足松弛的约束，可行域变大：
 
-容量 3 的那个实例只有三个物品：整数贪心填先放进两个各值 1 的物品，把值为 3 的那个物品挡在门外，根处的界因此是 2，而 $(3, 3)$ 单独就把总价值推到 3。这个「界」其实是一个可行子集的价值，从未保证覆盖整棵子树，跳过的正是含最优解的那条分支。
+$$\max_{x \in F_{\text{整数}}} f(x) \le \max_{x \in F_{\text{松弛}}} f(x).$$
 
-界用舍入的表示计算，是失效的另一条来源。以浮点为例，某一步向下舍入就可能把界压到真实上界以下，剪枝条件 $value + bound \le best$ 错误成立，含最优解的分支被整棵剪掉，搜索照常返回、只是不再最优。用于剪枝的界要在证明所假设的算术里计算——精确有理数就是保证它不被低估的一种实现。
+对最大化问题，松弛问题的最优值天然就是合法上界，不管它离原问题有多远。
+
+这个松弛还特别好算。把物品按价值密度降序排列：容量没被用满时，任何没取满的物品都能再多取一点抬高总值，所以最优解会把容量用满；容量用满时，取第一个没被取满的物品 $k$，排在 $k$ 前面的物品都必须整件取下——否则把 $k$ 的一部分重量让给其中密度更高的那一件，总值只会更高。所以「按密度降序整件整件取、最后一件按比例切开」就是松弛的最优解。
+
+由此得到一条可迁移的做法：
+
+$$\text{放宽原问题的约束} \\ \Rightarrow\; \text{解一个更容易的问题} \\ \Rightarrow\; \text{用它的最优值作为原问题的界}.$$
+
+## 合法但松的界与不合法的「界」
+
+同一个节点上换三种候选，结果完全不同。
+
+**剩余物品价值之和**：$20 + 24 + 9 = 53$。它完全不看容量，一定覆盖整棵子树，因此合法；但它比 48.5 松，把容量 10 装不下的东西也算进了上界，剪枝能力更差。
+
+**分数背包松弛**：48.5。它考虑容量，只额外允许切开物品，合法而且更紧。
+
+**按密度整件整件贪心**：这是最危险的一类。容量 50、物品 (10, 60)、(20, 100)、(30, 120)，按密度 6、5、4 整件取：前两件装下，重量 30、价值 160，第三件放不下就跳过，得到 160。而真正的 0/1 最优是取 (20, 100) 与 (30, 120)，重量正好 50，价值 220。160 低于这个实例的最优值，它只是一个已经构造出来的可行解的价值，对最大化问题属于**下界**信息：它连最优值都不一定够，更不可能控制子树。
+
+把这一类比成上界，剪枝条件里就用上了一个偏小的数。低估落在关键子树上、当前最优解又足够触发这次剪枝时，含最优解的分支被整棵跳过，搜索照常返回一个偏小的答案，不报任何错。整数贪心值有时恰好等于某个子树的真实最优值（那棵子树里的物品正好都能整件装下），但合法性要求它对每个节点都成立。
+
+## 搜索顺序影响剪枝效果
+
+只要每个没有被合法剪掉的节点最终都会被处理，节点顺序就不改变正确性：剪枝条件只依赖 $U(p)$ 与当前的 $B$，与什么时候访问 $p$ 无关。
+
+顺序强烈影响规模，因为 $B$ 是动态的。上面的实现把物品按密度降序排列、先试「取」，于是「取 A、取 B」这条分支在第 4 层就把 $B$ 抬到 50；此后每个界不超过 50 的节点立刻被剪。若 $B$ 迟迟停在很低的水平，同样这些节点就都还值得展开。
+
+性能因此有两端：好的顺序更早抬高 $B$，好的界更快压低 $U(p)$。深度优先只保留当前路径上的活动栈帧，并且沿一条路径很快走到底，容易早拿到完整方案；按界优先的做法每次展开 $U(p)$ 最大的活节点，需要维护一个前沿优先队列，换来更早的剪枝。
 
 ## 界的计算成本
 
-界不直接贡献目标值，但每个节点都要算一次，它的成本要算进每个节点的处理成本里。更紧的界剪掉更多节点，更贵的界抬高每个节点的成本，净效果取决于实例——一个更紧但更贵的界有时反而更慢。
+界不直接贡献目标值，但每个访问的节点都要算一次。以「处理一个节点」为计数单位，总成本是
+
+$$T \approx \sum_{p \in \text{访问的节点}} \bigl(C_{\text{分支}}(p) + C_{\text{界}}(p)\bigr).$$
+
+更紧的界主要减少求和项数，更复杂的界抬高每一项里的 $C_{\text{界}}(p)$。上面的实现里，界在每个节点扫一遍剩余物品，$C_{\text{界}}(p)$ 与剩余物品数同阶；预先按密度序存好前缀价值与前缀重量、用二分定位被切开的那一件，可以把这一项降到对数，代价是一次 $O(n)$ 的预处理与 $O(n)$ 的空间。界带来的搜索树缩小值不值得它自己的成本，由实例决定。
