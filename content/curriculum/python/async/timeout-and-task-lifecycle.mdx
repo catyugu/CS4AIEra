@@ -5,11 +5,10 @@ order: 40
 title: 超时与结构化任务生命周期
 status: published
 objectives:
-  - 说明 `asyncio.timeout` 取消的是哪个 task，以及 `TimeoutError` 在哪一层出现
-  - 判断在 `timeout` 块内捕获 `CancelledError` 会改变什么
-  - 说明 `shield` 挡住了什么、没有挡住什么
-  - 说明 `TaskGroup` 在子任务失败与父任务被取消两条路径上分别做什么
-  - 用 except* 选择性处理异常组，并区分创建关系、等待边与任务组作用域
+  - 说明 asyncio.timeout 取消的是哪个 task，以及 TimeoutError 在哪一层出现
+  - 判断在 timeout 块内捕获 CancelledError 会改变什么
+  - 说明 shield 挡住了什么、没有挡住什么
+  - 说明 TaskGroup 在子任务失败与父任务被取消两条路径上分别做什么
 ---
 
 取消本身由 <CrossRef id="python.cancellation-and-timeouts" /> 建立：它是一次注入到执行流里的异常，在挂起点到达。这一课讲取消的两类应用——给一段等待设定期限，和给一组任务划定共同的生命周期。两者的失败模式都来自同一个事实：**谁被取消、谁负责收尾，由结构决定而不是由意图决定**。

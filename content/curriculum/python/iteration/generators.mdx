@@ -6,29 +6,13 @@ title: 生成器与 yield
 status: published
 objectives:
   - 说明调用生成器函数时立即发生了什么，以及函数体从哪一刻开始执行
-  - 解释 `yield` 如何保存局部状态，并预测两次 `next` 之间哪些名字保持取值
-  - 用 `send`、`return` 与 `yield from` 分别表达双向通信、结束值与委托
-  - 判断在生成器体内抛出的 `StopIteration` 会变成什么，并说明原因
+  - 解释 yield 如何保存局部状态，并预测两次 next 之间哪些名字保持取值
+  - 用 send、return 与 yield from 分别表达双向通信、结束值与委托
 ---
 
-生成器是在迭代协议之上引入的 `yield` 机制：它把函数体拆成可以暂停与恢复的片段，从而用顺序代码写惰性序列。三个名字要分清：函数体里含 `yield` 的函数是**生成器函数**，调用它得到**生成器对象**，而生成器对象是**迭代器**，持有的是一份可暂停、可恢复的执行状态。
+在函数体里写一次 `yield`，调用行为就变了。下面 `tracked` 在函数体开头打印，再把每个值乘十；`tracked([1, 2])` 返回一个对象，调用那一刻，函数体里的 `print` 一行也不会执行。
 
-## 生成器函数与挂起的帧
-
-函数体中出现 `yield` 的函数是生成器函数（generator function），它的调用行为与普通函数有两点区别：
-
-- 调用它不执行函数体，而是返回一个生成器对象（generator object），该对象同时是迭代器；
-- 每次 `next()` 推进到下一个 `yield`，函数体在此挂起，局部帧连同已绑定的名字一并保留；下一次 `next()` 从挂起处继续。
-
-由此得到：
-
-- **状态存在挂起的帧里**，不在调用方，也不在可迭代对象上；
-- **生成器是一次性迭代器**（`iter(g) is g` 为真），耗尽后不能重来；生成器表达式同样是一次性的，把它传给两个消费者时，第二个看到的是剩余部分；
-- **`yield` 是表达式**，它的值由 `send()` 提供；`next(g)` 等价于 `g.send(None)`；
-- **`return` 结束迭代**，其值作为 `StopIteration.value` 交给调用方，普通 `for` 看不到它；
-- **被丢弃的生成器不会立即结束**：`close()` 在挂起点抛 `GeneratorExit` 并运行 `finally`，不显式关闭时结束时机取决于引用何时被回收，资源清理不应依赖这一点（见 <CrossRef id="python.context-managers" />）。
-
-## 惰性执行与暂停
+## yield 与 return 的区别
 
 ```python run id="py.gen.lazy"
 def tracked(values):
@@ -49,9 +33,39 @@ except StopIteration:
     print("exhausted")
 ```
 
-函数体在第一次 `next` 之前完全没有执行；`print("generator body starts here")` 出现在第一个 `next` 之后。两次 `next` 之间的时间不消耗任何计算，这就是惰性的实际含义。生成器体内的异常在恢复时才抛出，出现在 `next()` 的调用点，而不是创建生成器的地方，回溯里同时包含两侧的帧。
+函数体直到第一次 `next` 才从头运行，`generator body starts here` 出现在 `first next` 之后。调用生成器函数只负责构造对象，真正的执行在每次取值时推进：函数体运行到下一个 `yield` 停下，局部帧连同已绑定的名字留在原地，下一次取值从挂起处继续。`yield` 交出值之后函数还能接着跑，`return` 交出值就结束这次调用，两者的区别就在帧的去留上。
 
-## 挂起的帧保留局部状态
+函数体里含 `yield` 的函数是生成器函数（generator function），调用它得到生成器对象（generator object）。生成器对象是迭代器（iterator），`for`、`next`、`list` 都按迭代协议消费它。
+
+## 惰性：值在被取用时才算
+
+函数体挂起之后，两次 `next` 之间不消耗计算，调用方取多少，生成器就算多少。两级生成器串成的管道直接体现这一点：
+
+```python run id="py.gen.pipeline"
+def squares(values):
+    for value in values:
+        yield value * value
+
+
+def only_even(values):
+    for value in values:
+        if value % 2 == 0:
+            yield value
+
+
+pipeline = only_even(squares(range(1_000_000)))
+print("first five results:", [next(pipeline) for _ in range(5)])
+print("bounded aggregation:", sum(only_even(squares(range(10)))))
+
+materialised = [value for value in only_even(squares(range(1000)))]
+print("eager version holds every element:", len(materialised))
+```
+
+`only_even(squares(range(1_000_000)))` 描述了一百万个平方再过滤，调用方只取前五个时，`squares` 只算到能交出第五个偶数为止，其余元素从未计算。`materialised` 用列表推导式把每一步算完再放进列表，占用的元素数与输入规模成正比。生成器不保存中间结果，值一个接一个地从函数体传给调用方。
+
+逐个取值的开销高于直接迭代列表：每次 `next` 都有一次函数调用与状态切换。需要完整结果又在意常数时，先物化成列表反而更快；用生成器是为了让只取一部分、以及一次算不完的序列变得可行。
+
+## 生成器只能遍历一次
 
 ```python run id="py.gen.state"
 def running_total(values):
@@ -68,9 +82,13 @@ print("remaining:", list(generator))
 print("after exhaustion:", list(generator))
 ```
 
-`total` 在两次 `next` 之间保持取值，因为它属于挂起的帧。`list(generator)` 消费剩余部分之后就只剩空序列：生成器与其它迭代器一样不重启，需要重新遍历就重新调用生成器函数。
+`total` 在两次 `next` 之间保持取值，它存在挂起的帧里。`iter(generator) is generator` 为真：生成器就是自身的迭代器，状态只有当前位置一处，没有第二个读取位置（见 <CrossRef id="python.iteration-protocol" />）。`list(generator)` 取走剩余部分之后，再 `list(generator)` 只剩空序列，迭代器耗尽不会重启，要重新遍历就重新调用生成器函数拿一个新对象。`for`、推导式与 `zip` 消费的是同一份帧，一个消费者取走的值，另一个看不到。
 
-## yield 作为表达式
+## 深入：send、结束值与委托
+
+`next` 只从生成器取值。`yield` 本身是一个表达式，它的值由 `send` 提供；函数还可以用 `return` 交回结束值，用 `yield from` 把取值委托给另一个可迭代对象。
+
+### send 向挂起点交值
 
 ```python run id="py.gen.send"
 def accumulator():
@@ -96,9 +114,9 @@ except StopIteration as stop:
     print("the sentinel ended the loop, return value:", stop.value)
 ```
 
-`value = yield total` 把挂起点分成两半：左边的值在恢复时由 `send` 提供。因此生成器必须先推进到第一个 `yield` 才能接收值，这一步称为 priming，用 `next()` 完成。忘记这一点时 `send` 会抛 `TypeError`，因为此时生成器还停在帧的起点，没有等待值的挂起点。
+`value = yield total` 把挂起点分成两半，`send(x)` 恢复执行时把 `x` 交给左边那个表达式。生成器要先推进到第一个 `yield` 才能接收值，这一步用 `next()` 完成；此时若直接 `send`，生成器还停在帧的起点，没有等待值的挂起点，`send` 抛 `TypeError`。
 
-## return 与 yield from
+### return 值与 yield from 委托
 
 ```python run id="py.gen.return-and-delegate"
 def finite(values):
@@ -130,9 +148,9 @@ def chained(rows):
 print("yield from over each row:", list(chained([[1, 2], [3]])))
 ```
 
-`yield from` 把一个子可迭代对象整体委托出去，并把它 `return` 的值作为自身 `yield from` 表达式的结果返回；异常与 `close` 也沿这条链传递。用它代替手写的内层循环，委托关系在代码里可见。`return` 的值只对消费端可见，通过 `StopIteration.value` 或 `yield from` 的结果读出。
+`return` 的值只对消费端可见，通过 `StopIteration.value` 或 `yield from` 的结果读出。`yield from` 把一个子可迭代对象整体委托出去，并把它 `return` 的值作为自身 `yield from` 表达式的结果返回，异常与 `close` 也沿这条链传递。用它代替手写的内层循环，委托关系在代码里可见。
 
-## 生成器体内的 StopIteration
+### 从生成器体内逃出的 StopIteration
 
 ```python run id="py.gen.stopiteration"
 def exhausted(values):
@@ -162,28 +180,8 @@ def guarded(values):
 print("handled explicitly:", list(guarded([1, 2])), list(guarded([])))
 ```
 
-迭代器耗尽时 `next` 抛出的 `StopIteration` 从生成器体内逃出，被解释器转换为 `RuntimeError`；因此上面那个生成器连正常结束的序列都无法遍历完。这个转换是刻意设计：如果 `StopIteration` 直接结束生成器，`yield from` 委托链上的异常与实际结束就无法区分。写成 `for` 循环或捕获后 `return` 才是正确写法。
+迭代器耗尽时 `next` 抛出的 `StopIteration` 从生成器体内逃出，被解释器转换成 `RuntimeError`，上面那个生成器连正常结束的序列都遍历不完。写成 `for` 循环或捕获后 `return` 才正确。转换是刻意的：`StopIteration` 若直接结束生成器，`yield from` 委托链上的异常与实际结束就无法区分。
 
-## 惰性管道
+### 关闭生成器
 
-```python run id="py.gen.pipeline"
-def squares(values):
-    for value in values:
-        yield value * value
-
-
-def only_even(values):
-    for value in values:
-        if value % 2 == 0:
-            yield value
-
-
-pipeline = only_even(squares(range(1_000_000)))
-print("first five results:", [next(pipeline) for _ in range(5)])
-print("bounded aggregation:", sum(only_even(squares(range(10)))))
-
-materialised = [value for value in only_even(squares(range(1000)))]
-print("eager version holds every element:", len(materialised))
-```
-
-管道不物化中间结果：`range` 描述区间，两个生成器逐元素传递，调用方只取需要的前几个。换成列表推导式时每一步都会构建完整列表，内存占用与输入规模成正比。逐个元素的开销高于列表迭代，因此在需要完整结果又在意常数时，先物化反而更快。
+被丢弃的生成器不会立即结束。`close()` 在挂起点抛 `GeneratorExit` 并运行函数体里的 `finally`；不显式关闭时，结束时机取决于引用何时被回收，资源清理不应依赖这一点（见 <CrossRef id="python.context-managers" />）。

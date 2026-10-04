@@ -5,10 +5,9 @@ order: 30
 title: 分组与聚合
 status: draft
 objectives:
-  - 区分行级过滤与组级过滤，并说明 `WHERE` 与 `HAVING` 各自作用于处理顺序的哪一步
-  - 解释 `COUNT(*)`、`COUNT(column)` 与 `COUNT(DISTINCT column)` 的差异
+  - 区分行级过滤与组级过滤，并说明 WHERE 与 HAVING 各自作用于处理顺序的哪一步
+  - 解释 COUNT(*)、COUNT(column) 与 COUNT(DISTINCT column) 的差异
   - 预测聚合函数在空输入上的返回值，并说明它与零的区别
-  - 说明连接之后再聚合为什么会放大计数，并给出修正方式
 ---
 
 聚合是报表与指标的计算层。同一份数据可以算出相差数倍的结果，差别来自分母、去重与 NULL 处置，而这些差别不体现在函数名上。读一个聚合查询时要能说出：每组包含哪些行，计数对象是什么，空输入会返回什么。

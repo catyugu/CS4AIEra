@@ -6,9 +6,8 @@ title: NULL 与三值逻辑
 status: draft
 objectives:
   - 说明 NULL 表示「未知」，并据此预测比较运算的结果
-  - 区分比较运算、`IS NULL` 谓词与 `NOT IN` 中的未知传播
+  - 区分比较运算、IS NULL 谓词与 NOT IN 中的未知传播
   - 判断一个返回空集的查询是数据事实还是谓词求值的结果
-  - 指出 `NOT NULL`、`CHECK`、`UNIQUE` 在含 NULL 的列上各自保证什么
 ---
 
 `WHERE` 子句只保留谓词为真的行，而 NULL 参与的比较不产生真或假，只产生未知。由此产生的结果是行静默消失、`NOT IN` 静默返回空集、聚合忽略 NULL 输入、`CHECK` 拦不住 NULL。查询返回空集时，必须能判断这是「确实没有这样的数据」还是「谓词求值为未知」。

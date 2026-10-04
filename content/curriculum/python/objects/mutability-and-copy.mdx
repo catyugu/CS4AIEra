@@ -6,24 +6,13 @@ title: 可变性、原地更新与复制
 status: published
 objectives:
   - 判断一次复制消除到哪一层，并指出仍然共享的部分
-  - 说出深拷贝的副本如何保留原图内的共享与环，以及这条判据为什么比实现细节重要
-  - 区分 `[x] * n` 与推导式构造的结构在写入后的差异
-  - 判断一个函数的返回值是否把内部状态的修改权交给了调用方，并指出谁在什么时候能看到修改
+  - 区分浅拷贝与深拷贝在嵌套结构上的差别，并说明判断隔离为什么依据身份比较
+  - 区分重复引用与推导式构造的嵌套列表在写入后的差异
 ---
 
-复制是控制共享范围的手段，而复制有深度之分。用错深度的代码在只读路径上表现正确，在写入路径上留下仍然共享的部分。判据始终是 `is` 与「写入后另一个名字是否观察到变化」，而不是复制函数的名称。
+`outer = [inner, 3]` 中 `outer[0]` 与 `inner` 是同一个列表。对同一个 `outer` 分别做浅拷贝与深拷贝，再向 `inner` 追加一个元素：浅拷贝跟着变，深拷贝不变。
 
 ## 别名、浅拷贝与深拷贝
-
-三种操作必须分开：
-
-| 操作 | 效果 |
-| --- | --- |
-| `b = a` | 增加一个指向同一对象的名字 |
-| `copy.copy(a)`、`a[:]`、`list(a)`、`dict(a)` | <Term id="shallow-copy">浅拷贝</Term>：新建外层容器，元素仍是原来的引用 |
-| `copy.deepcopy(a)` | <Term id="deep-copy">深拷贝</Term>：递归新建对象图，图内的共享与环都被保留 |
-
-判断共享范围只需要两个问题：两个名字是否指向同一对象（`is`），以及通过一个名字修改后另一个名字是否观察到变化。复制不等于新建：对不可变对象，`copy.copy` 允许返回同一个对象，判断隔离始终用 `is`，不用函数名。不可变容器的不可变性只覆盖元素绑定，不覆盖元素指向的对象：`t = ([1], 2)` 上的 `t[0].append(3)` 合法。
 
 ```python run id="py.copy.depth"
 import copy
@@ -43,28 +32,17 @@ print("shallow[0] is inner:", shallow[0] is inner)
 print("deep[0] is inner:   ", deep[0] is inner)
 ```
 
-浅拷贝复制了外层列表，元素 `inner` 仍是同一个对象：`inner.append(99)` 在 `outer` 与 `shallow` 中都可见，在 `deep` 中不可见。`shallow[0] is inner` 为真说明浅拷贝停在第一层。`list(x)`、`x[:]`、`dict(x)`、`copy.copy(x)` 都只复制一层，嵌套的元素继续共享；分片也是浅拷贝，`a[:] is a` 为假而 `a[:][0] is a[0]` 为真。
+浅拷贝新建了外层列表，元素 `inner` 仍是同一个对象：`inner.append(99)` 在 `outer` 与 `shallow` 中都可见，在 `deep` 中不可见。`shallow[0] is inner` 为真，浅拷贝停在第一层；`deep[0] is inner` 为假，深拷贝复制到了内层。判断共享范围只需两个问题：两个名字是否指向同一对象（`is`），以及通过一个名字写入后另一个名字是否观察到变化。
 
-## 深拷贝与对象图
+复制消除到哪一层由操作决定：
 
-深拷贝要同时满足两个性质：原图中被多处引用的子对象在副本中仍被多处引用，含环的结构不会无限展开。实现方式是维护一张「原对象到副本」的映射——复制一个对象之前先查映射，命中就复用已有的副本。映射是 `copy` 的实现机制；需要长期记住的是判据，不是映射本身。
+| 操作 | 效果 |
+| --- | --- |
+| `b = a` | 增加一个指向同一对象的名字 |
+| `copy.copy(a)`、`a[:]`、`list(a)`、`dict(a)` | <Term id="shallow-copy">浅拷贝</Term>：新建外层容器，元素仍是原来的引用 |
+| `copy.deepcopy(a)` | <Term id="deep-copy">深拷贝</Term>：递归复制到最内层，副本与原件不再共享可变对象 |
 
-```python run id="py.copy.graph"
-import copy
-
-shared = [1]
-graph = [shared, shared]
-graph.append(graph)
-
-clone = copy.deepcopy(graph)
-
-print("clone[0] is clone[1]:", clone[0] is clone[1])
-print("clone[2] is clone:   ", clone[2] is clone)
-print("clone[0] is shared:  ", clone[0] is shared)
-print("len(clone):", len(clone))
-```
-
-原对象中 `graph[0]` 与 `graph[1]` 是同一个列表，`graph[2]` 指向 `graph` 自身。副本保留了这两种关系，同时与原件不再共享任何可变对象——`clone[0] is clone[1]` 为真、`clone[2] is clone` 为真，就是判据本身。不加映射的朴素递归复制会在 `graph[2]` 上无限展开，也复制不出共享。代价随对象图增长：文件、套接字、锁与模块不可复制并会抛错，定义 `__copy__` 或 `__deepcopy__` 的类会改写复制语义。因此深拷贝不是默认的隔离手段——只读共享不需要它，用它会把共享结构退化成重复存储。
+分片、`list(x)`、`dict(x)`、`copy.copy(x)` 都只复制一层，嵌套的元素继续共享：`a[:] is a` 为假，`a[:][0] is a[0]` 为真。复制不等于新建：对不可变对象，`copy.copy` 允许返回同一个对象，判断隔离始终用 `is`。不可变容器的不可变性只覆盖元素绑定，不覆盖元素指向的对象：`t = ([1], 2)` 上的 `t[0].append(3)` 合法。
 
 ## 重复引用与构造顺序
 
@@ -85,41 +63,8 @@ print("rows:", rows)
 
 `grid` 的三行是同一个列表，写入第一行等于写入全部三行。`rows` 的每一行是独立求值得到的列表，写入只影响一行。只读时两者行为相同。
 
-## 共享状态的修改边界
-
-共享状态的修改边界指谁可以修改这份状态。函数返回内部容器，等于把修改权交给调用方。
-
-```python run id="py.copy.ownership"
-class Buffer:
-    def __init__(self):
-        self._items = []
-
-    def add(self, item):
-        self._items.append(item)
-
-    def items(self):
-        return list(self._items)
-
-    def raw_items(self):
-        return self._items
-
-
-buffer = Buffer()
-buffer.add(1)
-
-snapshot = buffer.items()
-snapshot.append(999)
-print("after mutating a copy:", buffer.raw_items())
-
-raw = buffer.raw_items()
-raw.append(999)
-print("after mutating the internals:", buffer.raw_items())
-```
-
-两个访问器签名相同，行为不同：`items()` 返回副本，调用方的修改对 `Buffer` 不可见；`raw_items()` 返回内部列表本身，调用方的修改进入了对象内部状态。返回副本、返回不可变视图、或明确约定「返回值可以修改」都能界定可修改的范围，选择必须写进接口文档；两个访问器的签名相同，因此把内部状态交出去的错误只能靠接口文档与评审发现。**可修改的范围在这里是接口设计概念，不是 Python 提供的语言机制**：语言不追踪谁持有哪份状态，没有借用检查，写错不会有编译期错误。这就是共享总在写入路径上暴露的原因，也是这个模式在本课反复出现的原因。
-
 ## 同一模式的其他出现位置
 
-「定义时求值一次，此后所有使用者共享同一个对象」不只在复制里出现：函数的默认值、类属性、模块顶层的容器都是同一个形状。默认值的求值时机由 <CrossRef id="python.call-semantics" /> 建立，类属性与实例属性各自存在哪个对象上，由 <CrossRef id="python.classes" /> 建立；两者都让状态的存活期超出单次调用，修正方式也都是把对象的可修改范围收回到单次调用之内。
+「定义时求值一次，此后所有使用者共享同一个对象」不只在复制里出现：函数的默认值、类属性、模块顶层的容器都是同一个形状。默认值的求值时机由 <CrossRef id="python.call-semantics" /> 建立，类属性与实例属性各自存在哪个对象上，由 <CrossRef id="python.classes" /> 建立；两者都让状态的存活期超出单次调用，修正方式也都是在单次调用或单个实例内构造容器。
 
 迭代容器时修改它会让迭代跳过或重复元素，这是迭代协议的直接后果，由 <CrossRef id="python.iteration-protocol" /> 建立并给出修法。

@@ -5,10 +5,9 @@ order: 20
 title: 异步迭代与异步上下文
 status: published
 objectives:
-  - 说明 `async for` 展开成哪几步，以及迭代在哪一步结束
-  - 实现 `__aiter__` 与 `__anext__`，并判断一个对象能否用于 `async for`
+  - 说明 async for 展开成哪几步，以及迭代在哪一步结束
+  - 实现 __aiter__ 与 __anext__，并判断一个对象能否用于 async for
   - 用异步生成器写异步迭代器，并说明它为什么是一次性的
-  - 说明 `async with` 的三条退出路径，以及它与 `with` 的对应关系
 ---
 
 `async for` 与 `async with` 是迭代协议与上下文管理器协议的异步版本：取下一个元素、进入资源、退出资源都可能需要等待，于是等待点被写进了语法本身。把它们与 <CrossRef id="python.iteration-protocol" />、<CrossRef id="python.context-managers" /> 的两套同步约定对照着读，差别只有一处——哪一步可以挂起。
