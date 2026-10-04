@@ -7,7 +7,6 @@ aliases:
 short: 定义在类对象上的属性，实例经查找可以读到它；实例上的同名属性会遮蔽它。
 related:
   - alias
-  - mutable-key
 ---
 
 类属性是在类对象上定义的属性，被所有实例共享；实例属性通过 `instance.name = value`（通常在 `__init__` 中）创建，属于单个实例。读取 `instance.name` 时先在实例自己的属性里找，再沿类的继承链查类属性，实例上的同名属性因此会遮蔽它；完整的查找顺序（数据描述符的优先级、方法绑定）由 <CrossRef id="python.attributes-and-descriptors" /> 那一课讲解。

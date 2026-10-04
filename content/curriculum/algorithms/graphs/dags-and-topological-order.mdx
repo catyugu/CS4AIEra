@@ -150,7 +150,7 @@ for name, graph in (("chain", chain), ("diamond", diamond)):
 
 链上每一步的候选数都是 1，输出被唯一确定；菱形图在 $a$ 之后同时出现两个候选，Kahn 输出 $b$ 或 $c$ 都合法，顺序不再唯一。
 
-## 基于 DFS 的环检测算法
+## 深入：基于 DFS 的环检测与另一种拓扑序
 
 有向图里的「可达」沿有向路径定义，方向不可逆。从每个未发现顶点重启的遍历（见 <CrossRef id="algorithms.graph-traversal" />）在有向图上只得到一个**遍历森林**，它的划分可能依赖顶点的处理顺序，因此不能当作分量的分解。
 
@@ -205,7 +205,7 @@ print("cyclic finish order:", " ".join(finish), "| back edge:", back)
 
 DAG 上完成顺序是 $test\,model\,package\,api\,codegen\,assets\,docs$，反转后得到 $docs\,assets\,codegen\,api\,package\,model\,test$，每条边都从左指向右。含环图上出现后向边 $(c, b)$，它闭合的环是 $b \to c \to b$。
 
-## 为什么 DFS 能判定有环
+### 为什么 DFS 能判定有环
 
 **（后向边 => 有环）** 记一条后向边为 $(u, v)$，其中 $v$ 是 `discovered`。$v$ 在栈上，从 $v$ 到 $u$ 恰好是栈上的一段路径，于是 $v \rightsquigarrow u \to v$ 是一个环。
 
@@ -213,7 +213,7 @@ DAG 上完成顺序是 $test\,model\,package\,api\,codegen\,assets\,docs$，反�
 
 指向 `finished` 顶点的边不构成环：目标可能来自同一次遍历里已经完成的子树，也可能来自先前已经完成的遍历树，两种情形在 DAG 中都常见。
 
-## 拓扑序 = finish 顺序的反转
+### 拓扑序 = finish 顺序的反转
 
 完成顺序对任何有向图都存在，能不能反转成拓扑序由后向边决定。对每条边按扫描到 $(u, v)$ 时 $v$ 的状态分类：
 
