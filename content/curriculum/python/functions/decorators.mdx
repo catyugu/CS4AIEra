@@ -7,54 +7,43 @@ status: published
 objectives:
   - 说明 @decorator 与显式重新赋值是同一件事，以及它发生在什么时刻
   - 解释一个包裹函数为什么必须在调用时转交实参，并预测不转发时的错误
-  - 判断装饰器返回的对象缺了哪些原函数属性，并说明恢复它们的方式
+  - 说明包装函数为什么盖掉了原函数的 __name__ 与 __doc__，以及 functools.wraps 恢复的是什么
 ---
 
-有三个已经能工作的函数，现在想让每次调用前后各打印一行日志，又不改动它们的函数体：它们可能已经被别的模块引用，也不想为了加日志往测试过的代码里插入 `print`。
+已经有一个能工作的函数，现在想让每次调用前后各打印一行日志，又不改动它的函数体：它可能已经被别的模块引用，也不想为了加日志往测试过的代码里插入 `print`。
 
-一个办法是不碰原函数，写一个新函数接收它，返回一个在调用前后插了日志的替代品。
+一个办法是不碰原函数，写一个新函数接收它，返回一个在调用前后插了日志的替代品：
 
 ```python run id="py.dec.manual"
 def traced(function):
     def wrapper(*args, **kwargs):
-        print(f"calling {function.__name__}")
+        print(f"before {function.__name__}")
         result = function(*args, **kwargs)
-        print(f"{function.__name__} returned {result!r}")
+        print(f"after {function.__name__} -> {result!r}")
         return result
 
     return wrapper
-
-
-def add(left, right):
-    return left + right
 
 
 def area(width, height):
     return width * height
 
 
-def greet(name):
-    return f"hello {name}"
-
-
-add = traced(add)
 area = traced(area)
-greet = traced(greet)
-
-print(add(2, 3))
 print(area(4, 5))
-print(greet("Ada"))
 ```
 
-`traced` 接收一个函数，返回一个替代它的新函数，函数能作实参、也能作返回值；替代品在调用原函数前后各打印一行。`add = traced(add)` 之后，名字 `add` 指向替代品。接收一个函数、返回一个替代品的函数叫装饰器（decorator），内层返回的 `wrapper` 是包装函数。三个函数各写一行赋值就够了，Python 为这个赋值提供了语法：
+`traced` 接收一个函数、返回一个替代它的新函数——函数在这里是普通的值，可以作实参，也可以作返回值。替代品在调用原函数前后各打印一行。接收一个函数、返回替代品的函数叫装饰器（decorator），内层返回的 `wrapper` 是包装函数。`area = traced(area)` 之后，名字 `area` 指向替代品。
+
+为每个函数手写这个重新绑定既重复又容易漏，Python 给了它语法：
 
 ```python
 @traced
-def add(left, right):
-    return left + right
+def area(width, height):
+    return width * height
 ```
 
-`@traced` 写在 `def` 上方，与 `add = traced(add)` 是同一件事。
+`@traced` 写在 `def` 上方，与 `area = traced(area)` 是同一件事。
 
 ## 装饰就是重新赋值
 
@@ -73,17 +62,17 @@ def traced(function):
 
 
 @traced
-def add(left, right):
-    return left + right
+def area(width, height):
+    return width * height
 
 
 print("events before any call:", events)
-print("result:", add(1, 2))
+print("area(4, 5):", area(4, 5))
 print("events after one call:", events)
-print("name is bound to the wrapper:", add.__name__, add.__qualname__)
+print("name is bound to the wrapper:", area.__name__)
 ```
 
-`decorating add` 在任何调用之前就出现在 `events` 里：`@traced` 在 `def` 语句执行时完成，也就是模块被导入、或函数体执行到这一行的时候。此后调用 `add()` 只是调用替代品，不会重新装饰；装饰器本体里做的事——读文件、建连接、发请求——因此发生在定义那一刻，成本在定义时付出，失败也在定义时暴露。赋值之后 `add` 指向 `wrapper`，`add.__name__` 因此是 `wrapper`；原函数仍被 `wrapper` 的闭包引用，可以取回。
+`decorating area` 在任何调用之前就出现在 `events` 里：`@traced` 在 `def` 语句执行时完成，也就是模块被导入、或函数体执行到这一行的时候。此后调用 `area()` 只是调用替代品，不会重新装饰；装饰器本体里做的事——读文件、建连接、发请求——因此发生在定义那一刻，成本在定义时付出，失败也在定义时暴露。赋值之后 `area` 指向 `wrapper`，`area.__name__` 因此是 `wrapper`；原函数仍被 `wrapper` 的闭包引用。需要保留原函数的 `__name__`、`__doc__` 时，用 `functools.wraps` 在包装函数上复制它们。
 
 ## 转交实参
 
@@ -128,47 +117,9 @@ except TypeError as exc:
     print("wrapper swallowed the arguments:", type(exc).__name__, "-", exc)
 ```
 
-## 恢复被替换的属性
+## 深入：带参装饰器与层叠顺序
 
-```python run id="py.dec.wraps"
-import functools
-
-
-def naive(function):
-    def wrapper(*args, **kwargs):
-        return function(*args, **kwargs)
-
-    return wrapper
-
-
-def documented(function):
-    @functools.wraps(function)
-    def wrapper(*args, **kwargs):
-        return function(*args, **kwargs)
-
-    return wrapper
-
-
-@naive
-def plain(width, height):
-    """Return the area."""
-    return width * height
-
-
-@documented
-def described(width, height):
-    """Return the area."""
-    return width * height
-
-
-print("naive:", plain.__name__, "| doc:", plain.__doc__)
-print("documented:", described.__name__, "| doc:", described.__doc__)
-print("original reachable:", described.__wrapped__ is not None)
-```
-
-包装函数是新建的函数对象，原函数的属性不会自动跟过来：没有 `functools.wraps` 时 `plain.__name__` 是 `wrapper`、`plain.__doc__` 是 `None`。`@functools.wraps(function)` 把原函数的 `__name__`、`__doc__`、`__module__`、`__dict__` 复制到包装函数上，并设置 `__wrapped__` 指向原函数，日志与文档生成这类读属性的工具看到的才是原函数。
-
-## 带参数的装饰器
+装饰器本身也可以带参数。`@repeated(times=3)` 先调用 `repeated(times=3)` 得到装饰器 `decorate`，再对函数应用它，所以要多一层函数：
 
 ```python run id="py.dec.factory"
 def repeated(times=2):
@@ -187,18 +138,10 @@ def roll():
     return "attempt"
 
 
-@repeated()
-def once():
-    return "single"
-
-
 print(roll())
-print(once())
 ```
 
-`@repeated(times=3)` 先调用 `repeated(times=3)` 得到装饰器 `decorate`，再对函数应用它，因此需要多一层函数。`times` 在装饰时被固定并存入闭包，调用期不可更改；需要每次调用不同的次数，就把次数做成被装饰函数的参数。
-
-## 层叠顺序
+`times` 在装饰时固定，存在闭包里，调用期不可更改。多个装饰器叠加时，靠近 `def` 的那个先应用，执行时从外到内进入、从内到外返回：
 
 ```python run id="py.dec.stacking"
 def first(function):
@@ -230,4 +173,4 @@ def action():
 action()
 ```
 
-靠近 `def` 的那个装饰器先应用，因此执行时从外到内进入、从内到外返回。自上而下读代码会把应用顺序读反，这是层叠装饰器的常见误读点。
+自上而下读代码会把应用顺序读反。

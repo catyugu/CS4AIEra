@@ -10,37 +10,16 @@ objectives:
   - 用 try/finally 把获取与释放配对，避免依赖对象被回收的时刻
 ---
 
-资源在这里是广义的：打开的文件、数据库连接、锁、临时目录、需要成对调用的接口。它们的共同点是释放必须发生，且必须在失败时也发生。`with` 就是这段必经路径的语言形式。
-
-## with 展开成 try/finally
-
-`with` 的语义可以完全展开成 `try/finally`：
-
 ```python
-manager = expression
-enter = type(manager).__enter__
-exit = type(manager).__exit__
-value = enter(manager)          # 绑定给 as 的名字
-try:
-    body
-except BaseException as error:
-    if not exit(manager, type(error), error, error.__traceback__):
-        raise
-else:
-    exit(manager, None, None, None)
+with open("report.csv") as handle:
+    rows = handle.read().splitlines()
 ```
 
-由此得到五条不变量：
+读取中途抛出异常时，`handle` 仍然要关闭。句柄没有关闭，进程就少一个可用的文件描述符，失败越多泄漏越多；释放也不能等对象被回收，回收的时刻不确定，句柄可能长时间不还。文件、数据库连接、锁、临时目录都属于这一类：获取之后必须释放，且必须在失败时也释放。`with` 是这条必经路径的语言形式。
 
-- `__enter__` 的返回值绑定到 `as` 后的名字；它不是管理器本身（除非协议实现这样返回）。
-- `__exit__` 在**所有**路径上都调用一次，参数是异常三元组；正常退出时三个参数都是 `None`。
-- `__exit__` 返回真值时异常被吞掉，控制流在 `with` 之后继续；返回假值或 `None` 时异常继续向外传播。
-- 如果有异常正在展开，`__exit__` 自己抛出的异常会替换它，与 `finally` 中的行为一致。
-- `__enter__` 抛异常时 `__exit__` 不会被调用：进入阶段的失败发生在协议建立之前，需要成对时把获取逻辑放进已经建立的管理器内部。
+## 从手写配对到 with
 
-多个管理器写在同一个 `with` 语句里时，进入顺序从左到右，退出顺序从右到左。
-
-## 从 try/finally 到 with
+手写这条路径，要把获取与释放配对：
 
 ```python run id="py.ctx.manual-vs-with"
 events = []
@@ -80,11 +59,9 @@ print("both sessions released:", not manual.open, not managed.open)
 print("bound value was the returned object:", managed_name)
 ```
 
-`with` 与手写的 `try/finally` 表达的是同一条必经路径：进入时获取、退出时释放，正常结束与异常退出都经过同一个释放点。区别是释放逻辑写在资源对象自己身上，使用点只需要一行；一旦进入了 `with` 块，退出协议就一定会运行。
+`with` 与手写的 `try/finally` 表达的是同一条必经路径：进入时获取、退出时释放，正常结束与异常退出都经过同一个释放点。释放逻辑写在资源对象自己身上，使用点只需要一行；一旦进入了 `with` 块，退出协议就一定会运行。
 
-## 异常路径
-
-`__exit__` 收到异常三元组，因此它知道正在发生什么，而不是只知道「要清理了」。
+## __exit__ 收到异常
 
 ```python run id="py.ctx.exit-observes-error"
 class Guard:
@@ -112,64 +89,32 @@ except ValueError as failure:
 
 正常路径与失败路径都调用 `__exit__`，两者的区别只在参数。返回假值意味着清理完成但异常照常传播，调用方仍然看到原始失败。`with` 本身不决定是否捕获，它把异常交给 `__exit__` 并尊重返回值。
 
-## 抑制异常
+## 进入与退出协议
 
-```python run id="py.ctx.suppression"
-class Suppress:
-    def __init__(self):
-        self.seen = None
+`__enter__` 与 `__exit__` 构成完整的协议，`with` 的语义可以完全展开成 `try/finally`：
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, traceback):
-        self.seen = exc_type
-        return True
-
-
+```python
+manager = expression
+enter = type(manager).__enter__
+exit = type(manager).__exit__
+value = enter(manager)          # 绑定给 as 的名字
 try:
-    with Suppress():
-        raise KeyError("missing")
-    print("body failed but control continued past the with block")
-except KeyError:
-    print("this line never runs")
-
-with Suppress() as swallowing:
-    raise KeyError("missing")
-
-print("suppressed type:", swallowing.seen)
+    body
+except BaseException as error:
+    if not exit(manager, type(error), error, error.__traceback__):
+        raise
+else:
+    exit(manager, None, None, None)
 ```
 
-返回真值把异常变成控制流的一部分：`with` 之后的语句继续执行，调用方看不到失败。这是有意的能力，代价同样是静默化——写这类上下文管理器必须让意图在名字上可见，并限制在「该失败在此处确实等价于正常结果」的场合。返回值按真值判断，返回非布尔真值同样抑制异常。
+由此得到以下要求：
 
-## 多个资源的嵌套
+- `__enter__` 的返回值绑定到 `as` 后的名字，它不是管理器本身，除非协议实现这样返回。
+- `__exit__` 在所有路径上都调用一次，参数是异常三元组；正常退出时三个参数都是 `None`。
+- `__exit__` 返回真值时异常被吞掉，控制流在 `with` 之后继续；返回假值或 `None` 时异常继续向外传播。
+- `__enter__` 抛异常时 `__exit__` 不会被调用：进入阶段的失败发生在协议建立之前，成对的获取与释放要放进已经建立的管理器内部。
 
-```python run id="py.ctx.multiple"
-order = []
-
-
-class Named:
-    def __init__(self, name):
-        self.name = name
-
-    def __enter__(self):
-        order.append(f"+{self.name}")
-        return self.name
-
-    def __exit__(self, exc_type, exc, traceback):
-        order.append(f"-{self.name}")
-        return False
-
-
-with Named("outer") as outer, Named("inner") as inner:
-    order.append(f"body {outer}/{inner}")
-
-print("enter left to right, exit right to left:", order)
-```
-
-退出顺序与进入顺序相反，因此内层资源先释放。获取顺序与释放顺序互为逆序，这一点在锁与嵌套事务上直接决定正确性；跨对象的依赖顺序必须由嵌套结构表达，不能靠调用时机凑巧。
-
-## 用生成器写上下文管理器
+## 深入：用生成器写上下文管理器
 
 ```python run id="py.ctx.contextmanager"
 from contextlib import contextmanager
@@ -211,28 +156,6 @@ except RuntimeError:
 print(events)
 ```
 
-`@contextmanager` 把生成器切成 yield 两侧的两个位置：`yield` 之前是进入逻辑，`yield` 的值绑定给 `as`，之后的代码是退出逻辑；异常从 `yield` 处抛回生成器，因此必须用 `try/finally` 包住 `yield` 才能保证退出逻辑运行。`leaky` 缺少这层结构，body 抛异常时 `close leaky` 从未出现——修复了 `opened` 的那个缺陷，就在 `leaky` 里复现了它。生成器写成的管理器只能使用一次：生成器是迭代器，同一实例第二次进入会抛 `RuntimeError`。
+`@contextmanager` 把生成器切成 `yield` 两侧：`yield` 之前是进入逻辑，`yield` 的值绑定给 `as`，之后的代码是退出逻辑；异常从 `yield` 处抛回生成器，因此必须用 `try/finally` 包住 `yield`，退出逻辑才在失败时运行。`leaky` 缺少这层结构，body 抛异常时 `close leaky` 从未出现——修复了 `opened` 的那个缺陷，就在 `leaky` 里复现了它。生成器写成的管理器只能使用一次：生成器是迭代器，同一实例第二次进入会抛 `RuntimeError`。
 
-## 释放点与对象生命周期
-
-```python run id="py.ctx.release-point"
-class Lock:
-    def __init__(self):
-        self.held = False
-
-    def __enter__(self):
-        self.held = True
-        return self
-
-    def __exit__(self, exc_type, exc, traceback):
-        self.held = False
-        return False
-
-
-lock = Lock()
-with lock:
-    print("inside:", lock.held)
-print("object still exists:", lock is not None, "| resource released:", not lock.held)
-```
-
-对象与资源是两件事：`with` 块结束后对象照旧存在，被释放的是它代表的资源。因此获取与释放都必须由 `with` 或 `finally` 表达，而不是「对象没了自然就关了」。
+一个 `with` 语句也能同时管理多个对象，进入从左到右，退出从右到左；锁与嵌套事务的正确性依赖这个逆序。
