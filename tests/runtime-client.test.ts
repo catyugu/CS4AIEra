@@ -226,7 +226,7 @@ describe("LessonRuntime worker lifecycle", () => {
           { type: "stdout", requestId: request.requestId, chunk: "a\n" },
           { type: "stderr", requestId: request.requestId, chunk: "warn\n" },
           { type: "stdout", requestId: request.requestId, chunk: "b\n" },
-          { type: "result", requestId: request.requestId, value: { kind: "repr", text: "42" } },
+          { type: "result", requestId: request.requestId, value: { kind: "text", text: "42" } },
           done(request, 3),
         ];
       }
@@ -243,7 +243,7 @@ describe("LessonRuntime worker lifecycle", () => {
     expect(streamed).toEqual(["stdout:a", "stderr:warn", "stdout:b"]);
     expect(result.stdout).toBe("a\nb\n");
     expect(result.stderr).toBe("warn\n");
-    expect(result.values).toEqual([{ kind: "repr", text: "42" }]);
+    expect(result.values).toEqual([{ kind: "text", text: "42" }]);
     expect(result.elapsedMs).toBe(3);
   });
 

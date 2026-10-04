@@ -63,7 +63,6 @@ export type SqlCell =
  */
 export type RuntimeValue =
   | { kind: "text"; text: string }
-  | { kind: "repr"; text: string }
   | {
       kind: "table";
       columns: string[];

@@ -20,7 +20,7 @@ total = price * count
 print(total)
 ```
 
-`price = 20` 把名称 `price` 绑定到值 `20`。`price * count` 是一个表达式，它读取 `price` 与 `count` 当前绑定到的值，相乘，求值得到 `60`。`total = price * count` 是赋值语句，把名称 `total` 绑定到刚求出的 `60`。`print(total)` 读取 `total` 的绑定，把 `60` 写到输出。运行这四行，输出是 `60`。
+`price = 20` 把名称 `price` 绑定到值 `20`。`price * count` 是一个表达式，它读取 `price` 与 `count` 当前绑定到的值，相乘，求值得到 `60`。`total = price * count` 是赋值语句，把名称 `total` 绑定到刚求出的 `60`。`print(total)` 读取 `total` 的绑定，把 `60` 写到输出。
 
 三个词各自指一件事。**表达式**（expression）是求值后得到一个值的代码片段，例如 `price * count`、`20`、`total`。**语句**（statement）规定一个执行动作，例如 `price = 20` 是赋值语句。**名称绑定**（name binding）让名称关联到一个值。
 
@@ -74,17 +74,7 @@ print("after")
 
 `missing_name` 没有绑定，第二行抛 `NameError`，执行在此停止。已经打印的 `before` 保留，第三行不运行；异常类型与出错行是定位失败的证据。
 
-## 单元格显示最后结果
-
-页面上的单元格执行全部语句，并单独显示末行表达式的结果。这是单元格的显示规则，普通脚本不会自动显示末行表达式的值。
-
-```python run id="py.basics.trailing-expression"
-width = 3
-height = 4
-width * height
-```
-
-两条赋值建立绑定，末行 `width * height` 求值为 `12`，单元格把它单独显示为一个结果。末行换成 `print(width * height)` 时，乘积以打印输出的形式出现，单元格不再显示额外结果。
+## 打印与表示
 
 ```python run id="py.basics.repr"
 total = 42

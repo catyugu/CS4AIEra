@@ -255,8 +255,6 @@ function renderValue(value: RuntimeValue): Node | undefined {
   switch (value.kind) {
     case "text":
       return pre(value.text, "cell-value");
-    case "repr":
-      return value.text === "None" ? undefined : pre(value.text, "cell-value");
     case "table":
       return renderTable(value.columns, value.rows, value.truncated);
     case "affected":

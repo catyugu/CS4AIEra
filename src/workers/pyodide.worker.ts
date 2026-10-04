@@ -205,15 +205,12 @@ async function handleRequest(request: RuntimeRequest): Promise<void> {
 
 function emit(raw: string): void {
   const payload = JSON.parse(raw) as {
-    result?: RuntimeValue;
     results?: RuntimeValue[];
     error?: { kind: string; message: string; detail?: string } | null;
   };
 
-  // A SQL cell can contain several statements, so its payload carries a list;
-  // a Python cell carries at most one value.
-  const values = payload.results ?? (payload.result ? [payload.result] : []);
-  for (const value of values) {
+  // A SQL cell can contain several statements, so its payload carries a list.
+  for (const value of payload.results ?? []) {
     post({ type: "result", requestId: currentRequestId, value });
   }
 

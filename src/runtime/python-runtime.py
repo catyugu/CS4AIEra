@@ -51,23 +51,14 @@ async def _settle(value):
 
 
 async def _execute(source, namespace):
-    """Run source, returning the value of a trailing expression if there is one.
+    """Run source in the cell's namespace.
 
-    A cell is a sequence of statements, but readers expect the last line of a
-    REPL-style cell to show its value. Splitting the trailing expression out of
-    the module is what makes both true at once.
+    A cell is a sequence of statements, and a trailing expression is just
+    another statement: its value is dropped like any other. Nothing is shown
+    that the cell did not print.
     """
     tree = ast.parse(source, "<cell>", "exec")
-    if tree.body and isinstance(tree.body[-1], ast.Expr):
-        head = ast.Module(body=tree.body[:-1], type_ignores=[])
-        ast.fix_missing_locations(head)
-        if head.body:
-            await _settle(eval(compile(head, "<cell>", "exec", flags=_AWAIT_FLAGS), namespace))
-        tail = ast.Expression(body=tree.body[-1].value)
-        ast.fix_missing_locations(tail)
-        return await _settle(eval(compile(tail, "<cell>", "eval", flags=_AWAIT_FLAGS), namespace))
     await _settle(eval(compile(tree, "<cell>", "exec", flags=_AWAIT_FLAGS), namespace))
-    return None
 
 
 def _one_line(exc):
@@ -101,13 +92,6 @@ def _describe(exc):
     }
 
 
-def _safe_repr(value):
-    try:
-        return repr(value)
-    except Exception as exc:  # a broken __repr__ is the cell's problem, not ours
-        return "<repr() failed: %s>" % type(exc).__name__
-
-
 # ---------------------------------------------------------------------------
 # Python cells
 # ---------------------------------------------------------------------------
@@ -116,12 +100,10 @@ def _safe_repr(value):
 async def run_python(source, session):
     namespace = _new_namespace() if session is None else _session_state(session)["namespace"]
     try:
-        value = await _execute(source, namespace)
+        await _execute(source, namespace)
     except BaseException as exc:
-        return json.dumps({"result": None, "error": _describe(exc)})
-    if value is None:
-        return json.dumps({"result": None, "error": None})
-    return json.dumps({"result": {"kind": "repr", "text": _safe_repr(value)}, "error": None})
+        return json.dumps({"error": _describe(exc)})
+    return json.dumps({"error": None})
 
 
 # ---------------------------------------------------------------------------
