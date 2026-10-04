@@ -5,13 +5,37 @@ order: 10
 title: 输入规模与成本模型
 status: published
 objectives:
-  - 说明一条成本论断要固定哪些约定：实现、成本模型与规模度量
-  - 指出「一次操作」的成本由成本模型规定，并说明单位成本模型在什么条件下会改变结论
-  - 说明输入规模是独立于成本模型的选择
-  - 从计数与计时的对比说明两种证据各自支持什么结论
+  - 从一段具体代码确定输入规模与要计数的基本操作
+  - 把操作次数写成输入规模的函数，并说明结论依赖哪些约定
+  - 区分模型中的操作计数与具体机器上的运行时间
 ---
 
-元素个数 $n$ 从 100 变成 200，比较次数怎么变？一段顺序查找会从 100 次变成 200 次，把这个成本写成关于 $n$ 的函数就是 `comparisons(n) = n`；换一段程序，函数可以长成别的形状。要回答「这段程序多快」，先得决定数什么。取一次下标、比对一次元素、搬移一个元素，被记成一次还是几次，直接决定算出来的函数长什么样；同一段代码按元素个数、字节数或位数度量，得到的函数也可以完全不同。
+从列表里判断一个值在不在，最小的写法是逐元素比较：
+
+```python run id="alg.cost.linear-search"
+def contains(values, target):
+    """Return whether target is in values, and the element comparisons used."""
+    comparisons = 0
+    for value in values:
+        comparisons += 1
+        if value == target:
+            return True, comparisons
+    return False, comparisons
+
+
+values = list(range(100))
+for target, label in ((0, "first element"), (99, "last element")):
+    found, comparisons = contains(values, target)
+    print(f"n=100  {label:14s} found={str(found):5s} comparisons={comparisons}")
+
+for size in (100, 200, 400):
+    found, comparisons = contains(list(range(size)), size)
+    print(f"n={size:<4d} absent         found={str(found):5s} comparisons={comparisons}")
+```
+
+长度固定为 100 时，两种命中位置给出不同的比较次数：命中的是第一个元素 1 次，命中的是最后一个元素 100 次。目标不在列表里时，长度 100、200、400 分别对应 100、200、400 次。同一段代码、同一个规模，成本在 1 到 100 之间都能取到，「它要比较多少次」还没有唯一答案。要把它写成关于 $n$ 的函数，先得把研究对象缩小：这里规定只看目标不在列表里的输入，并且只数元素比较。未命中时必须检查完整个列表，比较次数正好是 $n$。
+
+到这里同时定下了三件事：$n$ 是<Term id="input-size">输入规模</Term>；「只数元素比较、每次记 1」是一套 <Term id="cost-model">成本模型</Term>；在这两个约定下得到的函数 $C(n) = n$ 是成本函数。换一个成本模型或换一个规模度量，同一个算法会得到另一条成本函数。
 
 一句成本论断至少得写清三件事：
 
@@ -23,11 +47,9 @@ objectives:
 
 ## 成本模型
 
-为计算选定「哪些操作进入计数、每种操作单价多少」，这套约定就是 <Term id="cost-model">成本模型</Term>。结论永远相对于某个成本模型：「元素比较记 1，下标访问记 1，对象分配记 1」是一套，「只计比较与交换」是另一套；换模型会换结论，所以模型必须与结论一起出现。
+成本模型规定哪些操作进入计数、每种操作单价多少。结论永远相对于某个成本模型：「元素比较记 1，下标访问记 1，对象分配记 1」是一套，「只计比较与交换」是另一套；换模型会换结论，所以模型必须与结论一起出现。
 
 最常用的一套是 <Term id="unit-cost-model">单位成本模型</Term>：每次基本操作记一个固定单位，访问内存里任意位置的代价相同。这是一套假设，不描述测量结果——真实硬件的访问代价取决于数据是否在缓存里、工作集有多大。抹掉这些差异换来结论可脱离机器比较，代价是它预测不出同阶实现之间的实际快慢；要把访问模式当成研究对象，就得换一套更丰富的成本模型，或在原生环境里做受控测量（<Term id="locality">局部性</Term>）。
-
-排序上常用另一套 <Term id="comparison-model">比较模型</Term>，它限制算法获取次序信息的方式：只能通过比较两个键判断相对次序，每次键比较计一次，数据移动与交换另行计数；比较排序的比较次数有一个随 $n \log n$ 增长的下界，这条下界只在比较模型里成立。
 
 单位成本模型里的「一次」必须与操作数的规模匹配。字符串长度没有固定上界时，比较两个字符串不能计作常数：在逐字符比较的模型里，成本取决于要检查多少个字符。具体运行时可能采用额外优化，那属于实现层，写结论时要么换模型，要么把假设写出来。
 
@@ -35,77 +57,12 @@ Python 层面的「一次操作」也常常不是常数时间：`list.insert(0, 
 
 ## 输入规模
 
-成本论断的自变量是 <Term id="input-size">输入规模</Term>，用哪个量度量属于结论的一部分。元素个数 $n$ 最常见，但并非总是正确：图算法通常同时用顶点数 $V$ 与边数 $E$，整数算法按位数算，字符串匹配同时依赖文本长度与模式长度。同一段代码换一种度量，增长阶可以完全不同——试除法分解一个 $k$ 位整数的成本随 $k$ 指数增长，写成按数值的平方根就把指数级藏了起来。
-
-```python run id="alg.cost.linear-search"
-def linear_search(values, target):
-    """Return the index of target, counting element comparisons."""
-    comparisons = 0
-    for index, value in enumerate(values):
-        comparisons += 1
-        if value == target:
-            return index, comparisons
-    return -1, comparisons
-
-
-for size in (100, 200, 400):
-    values = list(range(size))
-    index, comparisons = linear_search(values, size - 1)
-    print(f"n={size:4d}  comparisons={comparisons:4d}  comparisons/n={comparisons / size:.2f}")
-
-index, comparisons = linear_search(list(range(1000)), 2000)
-print("miss:", index, comparisons, "comparisons (the whole input)")
-```
-
-命中位置不同，成本就不同：命中靠前时很少比较，命中末尾或未命中时要扫完整个输入。这一组计数本身还没有定义任何分布，所以它只支持「同一份代码在不同输入上成本不同」这个观察。
+成本论断的自变量是输入规模，用哪个量度量属于结论的一部分。元素个数 $n$ 最常见，但并非总是正确：整数算法按位数算，字符串匹配同时依赖文本长度与模式长度。同一段代码换一种度量，增长阶可以完全不同——试除法分解一个 $k$ 位整数的成本随 $k$ 指数增长，写成按数值的平方根就把指数级藏了起来。
 
 ## 计数与计时各自能回答什么
 
-计数只依赖算法与成本模型，因此可复现、可推理；计时还依赖实现、机器、编译方式与当前负载。
-
-```python run id="alg.cost.constants"
-import time
-
-size = 400_000
-values = list(range(size))
-
-start = time.perf_counter()
-total_loop = 0
-for value in values:
-    total_loop += value
-loop_seconds = time.perf_counter() - start
-
-start = time.perf_counter()
-total_builtin = sum(values)
-builtin_seconds = time.perf_counter() - start
-
-print("same result:", total_loop == total_builtin)
-print(f"python loop: {loop_seconds:.4f}s   builtin sum: {builtin_seconds:.4f}s   ratio: {loop_seconds / builtin_seconds:.1f}x")
-```
-
-绝对数字每次不同，比例也会波动。能稳定得到的结论只有一条：常数因子由实现决定。要比较两个实现，必须固定机器、输入与实现，并把测量条件写出来；一次基准测试只证明这个配置下的行为，把结论推广到别的机器或更大的输入需要另外的论证。
+计数只依赖算法与成本模型，因此可复现、可推理；计时还依赖实现、机器、编译方式与当前负载。操作计数是模型中的量，运行时间是某个实现、某台机器、某个输入上的测量结果。同一段逻辑写成显式循环还是调用内建，计数可以相同，墙钟时间却可能差出一个常数因子——这个因子由实现决定，不改变增长量级。渐近分析研究前者，计时不能代替复杂度论证：一次基准测试只证明这个配置下的行为，把结论推广到别的机器或更大的输入需要另外的论证。
 
 ## 时间与空间是两个维度
 
-空间成本用同一套纪律陈述：先固定模型，再给出规模。以图的存储为例，模型计槽位数，规模是 $V$ 与 $E$。
-
-```python run id="alg.cost.space"
-def matrix_slots(vertices):
-    """Slots held by an adjacency matrix of an undirected graph."""
-    return vertices * vertices
-
-
-def list_slots(vertices, edges):
-    """Vertex entries plus two endpoint entries per edge."""
-    return vertices + 2 * edges
-
-
-print(f"{'V':>5} {'E':>7} {'matrix':>8} {'list':>7} {'ratio':>7}")
-for vertices in (64, 128, 256):
-    edges = 2 * vertices
-    matrix = matrix_slots(vertices)
-    listing = list_slots(vertices, edges)
-    print(f"{vertices:>5} {edges:>7} {matrix:>8} {listing:>7} {matrix / listing:>7.1f}")
-```
-
-顶点数翻倍时矩阵的槽位数变成四倍，邻接表按 $V + 2E$ 增长：每个顶点一个入口，每条边的两个端点各一个条目。这里计的是抽象槽位，不是 Python 对象的真实字节数。邻接表的槽位数是 $V + 2E$：$E$ 与 $V$ 同量级时两项都不可忽略，$E$ 远大于 $V$ 时边条目主导，$E$ 远小于 $V$ 时顶点入口主导。矩阵则始终是 $V^2$ 个槽位：只有 $E$ 已经达到 $V^2$ 的量级时，它的空间才与边数处于同一增长量级；当 $E$ 的增长明显慢于 $V^2$ 时，它为大量不存在的边保留了槽位。单元格里的例子取 $E = 2V$，两项同量级，说明的是第一种情形。表示决定空间成本。时间与空间也不能合成一个数，用空间换时间的选择要分别给出两边的量级与各自依赖的规模。
+成本不只有时间。研究额外存储时，同样先规定计什么单位——槽位、字节或对象数量——再把它写成输入规模的函数。时间与空间是两个独立指标，不能合成一个「总复杂度」；用空间换时间的选择要分别给出两边的量级与各自依赖的规模。

@@ -5,73 +5,76 @@ order: 30
 title: 正确性、循环不变量与终止
 status: published
 objectives:
-  - 把一段代码的规约写成前置条件与后置条件，写清输入域与必须成立的性质
-  - 为循环写出候选不变量，按初始化、保持、退出三步推出后置条件
-  - 区分部分正确性与终止：循环不变量本身不保证循环结束
-  - 用一个每轮严格下降的量论证循环在有限步内结束，并用一个反例推翻不成立的实现
+  - 用前置条件与后置条件写清算法声称满足的性质
+  - 找出循环不变量，并按初始化、保持、退出说明它为什么推出后置条件
+  - 用合法反例推翻错误实现，并用严格下降的非负整数说明循环为什么终止
 ---
 
-从一个整数列表里挑出最大的元素，小到可以一口气写完。下面这段扫描维护一个已比较前缀中的最大值；把 `best` 的初值从列表首元素改成 `0`，它在每个元素都为负的输入上返回 `0`——一个不在列表里的值，输出却看不出任何异常。判断这样一段代码「对」还是「错」，要先把「对」写成一条可以判定真假的命题，再让论证把它接上实现。
+从整数列表里挑出最大的元素，小到可以一口气写完。下面这段扫描维护一个已比较前缀中的最大值，`start` 是 `best` 的初值：
+
+```python run id="alg.correctness.counterexample"
+def maximum(values, start):
+    """Return the largest element, with the running best starting at `start`."""
+    best = start
+    for value in values[1:]:
+        if value > best:
+            best = value
+    return best
+
+
+values = [-3, -1, -2]
+print("start = values[0]:", maximum(values, values[0]))
+print("start = 0:        ", maximum(values, 0))
+```
+
+以列表首元素起算得到 `-1`，也就是输入的最大值。把初值改成 `0` 得到 `0`，而 `0` 不在输入列表里，输出却看不出任何异常。`[-3, -1, -2]` 这一个合法输入就推翻了「这段实现对所有输入都返回最大值」。一个反例足以推翻一条全称主张；反过来，跑通再多输入也只是没发现问题，有限测试不能证明所有输入都正确。判断一段代码「对」还是「错」，要先把「对」写成一条可以判定真假的命题，再让论证把它接上实现。
 
 ## 把「对不对」写成规约
 
 写下这条命题，就是在写这段代码的 <Term id="specification">规约</Term>：<Term id="precondition">前置条件</Term>界定允许执行开始时的状态，由调用方负责满足；<Term id="postcondition">后置条件</Term>界定执行结束后必须成立的性质，可以关联初始状态、最终状态与返回值。
 
-取最大值的后置条件有两条：返回值属于输入列表，且输入中不存在比它更大的元素。两条缺一不可——只写「不小于输入中的每个元素」，会放过一个根本不在列表里的返回值，后面的反例正是这么失败的。前置条件要覆盖实现实际用到的操作：这一族实现在比较元素，所以除了非空，还要求元素两两可比；`[1, "x"]` 非空却无法比较。
+取最大值的后置条件有两条：返回值属于输入列表，且输入中不存在比它更大的元素。两条缺一不可——只写「不小于输入中的每个元素」，会放过一个根本不在列表里的返回值，上面的反例正是这么失败的。前置条件要覆盖实现实际用到的操作：这一族实现在比较元素，所以除了非空，还要求元素两两可比；`[1, "x"]` 非空却无法比较。
 
 ## 循环不变量
 
 **循环不变量**是在**循环头**——每次检查循环条件之前——都成立的性质。这个位置既包括第一次检查，也包括最后一次条件为假、循环即将退出时的检查。它对循环体的要求是：若循环头满足不变量且循环条件为真，则执行一次循环体后，回到下一次循环头时不变量仍然成立。
 
-它与 <CrossRef id="algorithms.abstractions-and-invariants" /> 里的 <Term id="invariant">表示不变量</Term> 共用「不变量」这个词，作用域却不同。表示不变量约束一个数据结构的合法状态，在两次操作之间成立；循环不变量约束一段循环的局部状态，在每轮迭代的边界上成立。两者都是「必须在某处成立、且被操作或循环体维持」的性质，把作用域写清楚就不会混。
-
 ## 用不变量论证扫描
 
-论证一个循环满足后置条件分三步。设 $P$ 是前置条件，$B$ 是循环条件，$Q$ 是后置条件，$I$ 是候选不变量；用 $\lbrace A \rbrace\ S\ \lbrace B \rbrace$ 记「若执行 $S$ 前的状态满足 $A$，则该次执行一旦结束，结束状态就满足 $B$」——它本身不声称 $S$ 一定终止；$S_{\text{init}}$ 是循环前的初始化代码，$S_{\text{body}}$ 是循环体：
+论证一个循环满足后置条件分三步。设 $P$ 是前置条件，$B$ 是循环条件，$Q$ 是后置条件，$I$ 是候选不变量：
 
-1. **初始化**：$\lbrace P \rbrace\ S_{\text{init}}\ \lbrace I \rbrace$——从满足前置条件的状态执行初始化代码之后，第一次到达循环头时 $I$ 成立。循环之前若没有初始化代码，这一步退化成 $P \Rightarrow I$。
-2. **保持**：$\lbrace I \wedge B \rbrace\ S_{\text{body}}\ \lbrace I \rbrace$——若循环头满足 $I$ 且循环条件为真，执行一次循环体之后，回到下一次循环头时 $I$ 仍然成立。这一步必须带上循环体这次状态转移；写成 $I \wedge B \Rightarrow I$ 是恒真的逻辑命题，没有表达「执行」。这一步用循环体的代码说话。
-3. **退出**：$I \wedge \neg B \Rightarrow Q$——循环条件为假时，$I$ 与 $\neg B$ 一起推出 $Q$。
+1. **初始化**：从满足 $P$ 的状态执行循环之前的初始化代码，第一次到达循环头时 $I$ 成立。
+2. **保持**：若循环头满足 $I$ 且 $B$ 为真，执行一次循环体之后，回到下一次循环头时 $I$ 仍然成立。这一步必须用循环体的代码说话。
+3. **退出**：循环条件为假时，$I$ 与 $\neg B$ 一起推出 $Q$。
 
 要论证扫描对每个满足前置条件的输入都给出正确答案，先写下循环头处必须成立的性质。把 $i$ 记为本轮开始时已经比较过的元素个数，候选不变量是：
 
 - `1 <= i <= len(values)`
 - `best == max(values[:i])`
 
-第一条把 $i$ 限制在合法范围里，第二条把 `best` 钉死在已比较前缀的最大值上。它比「返回值是最大值」更强：后者只描述终态，在循环中途无从检查，也无法被循环体逐轮重建。下面的代码在每一次求值循环条件之前检查这两条，并报告每一个不成立的循环头。
+第一条把 $i$ 限制在合法范围里，第二条把 `best` 钉死在已比较前缀的最大值上。它比「返回值是最大值」更强：后者只描述终态，在循环中途无从检查，也无法被循环体逐轮重建。
+
+下面的代码在每一次求值循环条件之前打印已处理的前缀与当前的 `best`：
 
 ```python run id="alg.correctness.loop-invariant"
-def scan(values, start):
-    """Running-best scan. Report the loop heads where the candidate invariant
-    1 <= i <= len(values) and best == max(values[:i]) fails.
-
-    A loop head is checked before each evaluation of the loop condition, so
-    the final head, where the condition is false, is checked too.
-    """
-    n = len(values)
+def maximum(values, start):
+    """Running-best scan; print the state at each loop head."""
     best = start
-    i = 1
-    failures = []
-    while True:
-        if best != max(values[:i]):
-            failures.append(i)
-        if i >= n:
-            break
+    for i in range(1, len(values)):
+        print(f"loop head: processed={list(values[:i])}  best={best}")
         if values[i] > best:
             best = values[i]
-        i += 1
-    return best, failures
+    print(f"loop head: processed={list(values)}  best={best}")
+    return best
 
 
-for values in ((-3,), (-3, -1, -2), (3, 1, 4)):
-    right, failures = scan(values, values[0])
-    wrong, broken = scan(values, 0)
-    print(f"{str(values):13s} largest={right:>3} heads_ok={not failures}  from_zero={wrong:>3} breaks_at={broken}")
+values = [3, 1, 4, 2]
+maximum(values, values[0])
 ```
 
-以 `values[0]` 起算的扫描在三条输入上每一次循环头都满足不变量，输出分别是 `-3`、`-1`、`4`。以 `0` 起算的扫描从第一个循环头起就不满足不变量：不变量要求 `best == max(values[:i])`，而它的 `best` 仍是 `0`。在 `(-3, -1, -2)` 上三个循环头全部失败，在 `(3, 1, 4)` 上它破坏的是 `i = 1` 与 `i = 2` 两处，却仍然返回 `4`——正确答案。内部状态已经偏离，输出看不出来；沿轨迹逐轮检查不变量，偏差才被定位到具体的循环头。
+每次打印出的 `best` 都是 `processed` 这一段的最大值：处理到 `[3]` 时是 `3`，到 `[3, 1]` 时仍是 `3`，到 `[3, 1, 4]` 时是 `4`，整个列表处理完也是 `4`。把这条观察写下来，就是上面两个不等式的第二条；循环体把前缀扩大一格，同时把 `best` 更新到新的前缀最大值。
 
-轨迹检查只在它执行过的那几条输入上成立，不构成一般性的证明。一般的证明要交代三件事。
+轨迹检查只在它执行过的输入上成立，不构成一般性的证明。一般的证明要交代三件事。
 
 **初始化**：循环开始前 `best = values[0]`、$i = 1$，需要 `best == max(values[:1])`。单元素前缀的最大值就是那个元素本身。这一步用到的假设是前置条件里的「列表非空」：`values[0]` 才有定义。
 
@@ -81,49 +84,10 @@ for values in ((-3,), (-3, -1, -2), (3, 1, 4)):
 
 初始化与退出各只需一句话；需要论证的是保持这一步，它必须用循环体的代码说话，并且整段证明只用到元素两两可比这一条假设。
 
-## 反例推翻主张
-
-一个反例就足以推翻一条全称主张，而且最小的反例往往很短。反例还必须满足前置条件：不满足前置条件的输入不在主张的作用范围内——空的 `()` 违反「列表非空」这条前置条件，实现在它上面做什么都不算数。
-
-以 `0` 起算的扫描把所有元素都小于 0 的输入算错。下面在一次完整运行结束时检查后置条件：
-
-```python run id="alg.correctness.counterexample"
-def scan(values, start):
-    """Running-best scan; `start` is the initial value of best."""
-    best = start
-    i = 1
-    while i < len(values):
-        if values[i] > best:
-            best = values[i]
-        i += 1
-    return best
-
-
-def broken_reason(values, result):
-    """Postcondition check on one finished run, or 'holds'."""
-    if result not in values:
-        return f"{result} is not an element of the input"
-    if any(value > result for value in values):
-        return f"{max(values)} exceeds {result}"
-    return "holds"
-
-
-candidates = ((-3,), (-1,), (0,), (3, 1, 4), (-3, -1, -2))
-for values in candidates:
-    right, wrong = scan(values, values[0]), scan(values, 0)
-    print(f"{str(values):13s} largest={right:>3} {broken_reason(values, right):>38}  from_zero={wrong:>3} {broken_reason(values, wrong)}")
-```
-
-`(-3,)`、`(-1,)` 与 `(-3, -1, -2)` 上它都返回 `0`，而 `0` 不在输入列表里。它违反的是后置条件的第一条：返回值必须属于输入列表。只把「最大值」写成一条大小比较条件，就漏掉了这一条。`(0,)` 与 `(3, 1, 4)` 上它返回正确答案。候选表里第一个失败的是 `(-3,)`——长度为 1 的输入就足以暴露它。
-
-以 `values[0]` 起算的扫描在这五个输入上都满足规约，但这不是证明：这五条之外可能还有让它失败的输入，而它的正确性由循环不变量的论证给出——在每一个循环头 `best` 都是已比较前缀的最大值，退出时已比较前缀是整个列表，于是满足后置条件。以 `0` 起算的扫描失败的正是初始化那一步：它的 `best` 从 `0` 起，没有取 `values[0]`，所以第一个循环头就不满足不变量。
-
-反例用于推翻，搜索用于定位，证明用于确立。一段代码通过再多测试，也只说明在这些输入上没发现问题。
-
 ## 终止
 
 循环不变量的三步证明：循环一旦结束，结果就满足后置条件。它没有说循环会不会结束；正确性还要求**终止**——对每个满足前置条件的输入，循环都在有限步内结束。
 
-找最大值的扫描把 $i$ 从 $1$ 推到 $n$，尚未处理的元素个数 $n - i$ 每轮严格减一；非负整数不可能无限下降，所以它一定在有限轮内触底于 $0$，循环必停。取值集合具有「没有无穷下降链」这一性质时，称为 <Term id="well-founded-order">良基序</Term>；$n - i$ 是这个模式套在非负整数上的一个实例。
+找最大值的扫描把 $i$ 从 $1$ 推到 $n$，尚未处理的元素个数 $n - i$ 是非负整数，每轮严格减一，不可能无限下降，因此循环一定在有限轮内触底于 $0$。这种「取值不能无限下降」的结构一般称为 <Term id="well-founded-order">良基序</Term>；$n - i$ 是它套在非负整数上的一个实例。
 
 终止是一条对所有输入成立的主张，观测只覆盖跑过的那些输入，「跑一会儿看会不会停」回答不了它。忘记推进的循环没有可用的下降度量：循环体若从不改变 `index`，`while index < len(values)` 就永远为真，终止主张不成立。

@@ -5,58 +5,64 @@ order: 20
 title: 渐近记号与增长率
 status: published
 objectives:
-  - 把「增长方式相同」写成可检验的定义，区分上界、下界与同一增长量级
-  - 说出常见增长族的相对顺序，以及规模翻倍后各族怎样变化
-  - 把和、积与嵌套循环的成本写成取最大项、相乘与逐层相乘
-  - 说明多参数复杂度为什么保留每一个参数，以及增长更优为什么不保证小输入更快
+  - 用 Θ 判断两个成本函数是否属于同一增长量级，并区分 O、Ω 的单侧含义
+  - 从顺序执行、嵌套循环与依赖范围的循环推出常见增长率
+  - 在成本依赖多个规模时保留必要参数，并解释渐近更优为什么不保证所有有限输入都更快
 ---
 
-顺序查找在最坏情形下要比较 $n$ 次，同一段逻辑加上固定的预处理开销可以写成 $100n + 1000$，两两比较所有元素则要 $n^2$ 次——这些都是 <CrossRef id="algorithms.cost-model" /> 里那种按成本模型数出来的计数函数。$n$ 与 $100n + 1000$ 在具体数值上可以差很远，却共享一件事：$n$ 翻倍时两者都翻倍；$n$ 与 $n^2$ 没有这个共同点。怎样把「增长方式相同」正式写成一个可检验的判断？
+顺序查找在最坏情形下要比较 $n$ 次，同一段逻辑加上固定的预处理开销可以写成 $2n + 5$，两两比较所有元素则要 $n^2$ 次——这些都是 <CrossRef id="algorithms.cost-model" /> 里那种按成本模型数出来的计数函数。$n$ 与 $2n + 5$ 在具体数值上可以差很远，比值 $(2n + 5)/n$ 却始终被一个常数夹住，随 $n$ 增大趋向 2；$n^2$ 与 $n$ 的比值等于 $n$，会持续增大，超过任何固定倍数。怎样把「增长方式相同」正式写成一个可检验的判断？
 
 ```python run id="alg.asymptotic.counts"
 def scan(n):
-    """One comparison per element: the linear scan's worst case."""
+    """One comparison per element."""
     return n
 
 
-def tuned(n):
-    """The same growth shape, with a large constant and an additive overhead."""
-    return 100 * n + 1000
+def scan_with_setup(n):
+    """The same growth shape, with an additive setup cost."""
+    return 2 * n + 5
 
 
-def naive_pairs(n):
-    """Every ordered pair, one comparison each."""
+def all_pairs(n):
+    """One comparison per ordered pair."""
     return n * n
 
 
-print(f"{'n':>7} {'scan':>9} {'tuned':>9} {'tuned/scan':>11} {'pairs':>12} {'pairs/scan':>11}")
+print(f"{'n':>7} {'2n+5':>9} {'(2n+5)/n':>10} {'n^2':>14} {'n^2/n':>9}")
 for n in (100, 1000, 10000, 100000):
-    print(f"{n:>7} {scan(n):>9} {tuned(n):>9} {tuned(n) / scan(n):>11.2f} {naive_pairs(n):>12} {naive_pairs(n) / scan(n):>11.1f}")
+    print(f"{n:>7} {scan_with_setup(n):>9} {scan_with_setup(n) / n:>10.2f} {all_pairs(n):>14} {all_pairs(n) / n:>9.1f}")
 ```
 
-`tuned/scan` 随 $n$ 增大趋向常数 $100$：两个函数只差一个由实现决定的常数因子与一个加性开销，$n$ 翻倍时一起翻倍。`pairs/scan` 随 $n$ 无界增长，落进另一类增长方式。机器改变的是常数与低阶项；比值最终是否被常数夹住，才是与机器无关的量。三个记号把这个判断写成定义，它们分别描述足够大之后不超过、不小于、以及同时被两侧夹住。
+同一列里的比值给出两类行为。$(2n + 5)/n$ 从 2 之上趋近 2，被常数 7 与 2 夹住；$n^2/n$ 随 $n$ 无界增长，任何固定的倍数都会被它超过。前两个函数只差一个由实现决定的常数因子与一个加性开销，属于同一类；第三个落进另一类。机器改变的是常数与低阶项，比值最终是否被常数夹住，才是与机器无关的量。
 
-## 三个记号的精确定义
+## 同一个增长量级：Θ
 
-设 $f$、$g$ 是定义在自然数上的非负函数。把「$f$ 在足够大之后不超过 $g$ 的常数倍」写成 $O$，把「$f$ 不小于 $g$ 的常数倍」写成 $\Omega$，把「同时被两侧夹住」写成 $\Theta$：
+设 $f$、$g$ 是定义在自然数上的非负函数。若存在正数 $c_1$、$c_2$ 与一个起点 $n_0$，使所有 $n \ge n_0$ 都有 $c_1 g(n) \le f(n) \le c_2 g(n)$，就写成 $f(n) = \Theta(g(n))$，读作 $f$ 与 $g$ 属于同一个增长量级。用它判断几个函数：
+
+- $3n + 7 = \Theta(n)$：$3n + 7$ 除以 $n$ 介于 3 与 10 之间（$3n + 7 \le 10n$）。
+- $n^2 + n = \Theta(n^2)$：除以 $n^2$ 介于 1 与 2 之间。
+- $n^2 \ne \Theta(n)$：除以 $n$ 等于 $n$，任何固定的 $c$ 都会在 $n > c$ 之后被超过。
+
+这是一条紧确的<Term id="asymptotic-bound">渐近界</Term>：$\Theta$ 允许相差常数因子，$n$ 与 $1000n$ 都是 $\Theta(n)$，它也不要求 $f(n)/g(n)$ 收敛。它给出的是渐近量级，不是精确值。
+
+## 一侧的信息：O 与 Ω
+
+有时只掌握一侧的信息，因此另有两个记号：
 
 $$
 \begin{aligned}
 f(n) = O(g(n)) &\iff \exists\, c > 0,\ n_0 : \forall n \ge n_0,\ f(n) \le c\,g(n) \\
-f(n) = \Omega(g(n)) &\iff \exists\, c > 0,\ n_0 : \forall n \ge n_0,\ f(n) \ge c\,g(n) \\
-f(n) = \Theta(g(n)) &\iff f(n) = O(g(n)) \wedge f(n) = \Omega(g(n))
+f(n) = \Omega(g(n)) &\iff \exists\, c > 0,\ n_0 : \forall n \ge n_0,\ f(n) \ge c\,g(n)
 \end{aligned}
 $$
 
-三条定义都带「存在常数与存在起点」，说的是足够大之后的形状。$\Theta$ 也可以写成双侧夹逼的形式，注意两个常数彼此独立：
+$O$ 说的是 $f$ 在足够大之后不超过 $g$ 的常数倍，$\Omega$ 说的是 $f$ 不小于 $g$ 的常数倍；$f(n) = \Theta(g(n))$ 当且仅当两者同时成立。
 
-$$
-f(n) = \Theta(g(n)) \iff \exists\, c_1, c_2 > 0,\ n_0 : \forall n \ge n_0,\ c_1\,g(n) \le f(n) \le c_2\,g(n)
-$$
-
-$3n^2 + 5n$ 同时是 $O(n^2)$、$\Omega(n)$、$\Theta(n^2)$，也是 $O(n^3)$：上界不排除更松的界，所以 $O$ 不表示紧确的渐近量级。要断言「同一个渐近量级」只能用 $\Theta$，但 $\Theta$ 仍然允许相差常数因子：$n$ 与 $1000n$ 都是 $\Theta(n)$，它也不要求 $f(n)/g(n)$ 收敛。$\Theta$ 给出的是紧确的<Term id="asymptotic-bound">渐近界</Term>，不是精确值。一个 $\Theta(1)$ 的成本函数当然也是 $O(n)$，只是这个上界很松。同一个算法可以有最佳情形 $\Theta(1)$ 与最坏情形 $\Theta(n)$，那时讨论的是两个不同的成本函数，各自有自己的界。
+$3n^2 + 5n$ 同时是 $O(n^2)$、$\Omega(n)$、$\Theta(n^2)$，也是 $O(n^3)$：上界不排除更松的界，所以 $O$ 不表示紧确的渐近量级。要断言「同一个渐近量级」只能用 $\Theta$。一个 $\Theta(1)$ 的成本函数当然也是 $O(n)$，只是这个上界很松。同一个算法可以有最佳情形 $\Theta(1)$ 与最坏情形 $\Theta(n)$，那时讨论的是两个不同的成本函数，各自有自己的界。
 
 记号允许把常数因子与低阶项排除在结论之外，代价是结论不再说明当前的 $n$ 上谁快，换来的是结论不随常数级差异改变：如果两台机器或两套成本模型对所研究的基本操作只相差与输入规模无关的固定常数因子，$\Theta$ 类不变。实现换掉算法而改变增长量级时，结论当然会变——渐近结论依赖成本模型，只是不区分同一个模型内的常数差异。
+
+$O$、$\Omega$、$\Theta$ 描述的是已经选定的成本函数怎样增长。研究最坏输入、某个输入分布下的期望，还是一串操作的总成本，是另一类问题，各有自己的定义：最坏情形既可以用 $\Theta$ 陈述，也可以只用 $O$；平均情形要先写出输入分布（见 <CrossRef id="algorithms.average-and-randomized" />），摊还要声明操作序列与分摊对象（见 <CrossRef id="algorithms.amortized" />）。把「平均情况是 $O(n)$」读成「最坏情况也是 $O(n)$」，是两处独立错误的叠加。
 
 ## 常见增长族
 
@@ -65,11 +71,9 @@ $3n^2 + 5n$ 同时是 $O(n^2)$、$\Omega(n)$、$\Theta(n^2)$，也是 $O(n^3)$�
 | $1$ | 不变 | 固定次数的基本操作（在已声明的成本模型下） |
 | $\log n$ | 增加一个固定常数（$\log 2n = \log n + \log 2$） | 二分、平衡树的深度 |
 | $n$ | 变为原来的 $2$ 倍 | 一次遍历 |
-| $n \log n$ | 略多于原来的 $2$ 倍 | 归并排序、堆排序等最优比较排序 |
+| $n \log n$ | 略多于原来的 $2$ 倍 | 归并排序、堆排序 |
 | $n^2$ | 变为原来的 $4$ 倍 | 两两层 |
-| $n^3$ | 变为原来的 $8$ 倍 | 三层枚举 |
 | $2^n$ | 变为原来的平方 | 子集枚举 |
-| $n!$ | 变为原来的 $(2n)! / n!$ 倍 | 全排列枚举 |
 
 表中 $\log$ 的底固定且大于 1；换底只改变常数因子，不影响所在增长族。
 
@@ -77,52 +81,70 @@ $3n^2 + 5n$ 同时是 $O(n^2)$、$\Omega(n)$、$\Theta(n^2)$，也是 $O(n^3)$�
 
 ## 和、积与嵌套循环
 
-- 顺序执行的两段代码，成本是两者之和。对非负成本函数恒有 $f + g = \Theta(\max\lbrace f, g \rbrace)$；只有进一步知道 $f = O(g)$ 时，才能把它化简成 $f + g = \Theta(g)$。「只保留较大的那一项」需要这额外前提，参数只有一个并不自动满足它。
-- 嵌套循环的循环体执行次数是各层迭代次数的乘积，前提是各层的范围基数不依赖外层索引：外层 $n$ 次、内层 $m$ 次，得到 $n \cdot m$ 次；如果循环体成本是 $\Theta(1)$，由此得到对应的 $\Theta$ 成本。
-- 内层范围依赖外层大小时代入乘积不成立。`for i in range(n): for j in range(i):` 的总次数是对 $i$ 从 0 到 $n - 1$ 求和，化简为 $n(n - 1)/2$，量级是 $\Theta(n^2)$；把内层每次都按 $n$ 次代入会得到错误的精确计数，两个结果却仍在同一个 $\Theta(n^2)$ 量级——精确计数与渐近量级是两回事。
-- 循环体内如果还有一次规模为 $k$ 的扫描，且这一步与前面各层独立，乘积再乘一次，写成 $n \cdot m \cdot k$。
+三段循环给出三种成本形状：
 
 ```python run id="alg.asymptotic.growth"
-def count_pairs(values):
-    """Count every ordered pair; an intentionally quadratic body."""
-    operations = 0
-    for left in values:
-        for right in values:
-            operations += 1
-    return operations
-
-
-def count_scans(values):
-    """Two linear passes over the same input."""
+def count_scans(n):
+    """Two sequential passes over the input."""
     operations = 0
     for _ in range(2):
-        for _ in values:
+        for _ in range(n):
             operations += 1
     return operations
 
 
-print("pairs / scans, by size:")
-for size in (50, 100, 200, 400):
-    pairs = count_pairs(range(size))
-    scans = count_scans(range(size))
-    print(f"n={size:4d}  pairs={pairs:7d}  scans={scans:4d}  pairs/n^2={pairs / size**2:.3f}  scans/n={scans / size:.3f}")
+def count_pairs(n):
+    """A full loop nested inside a full loop."""
+    operations = 0
+    for _ in range(n):
+        for _ in range(n):
+            operations += 1
+    return operations
+
+
+def count_triangle(n):
+    """The inner range depends on the outer variable."""
+    operations = 0
+    for i in range(n):
+        for _ in range(i):
+            operations += 1
+    return operations
+
+
+print(f"{'n':>5} {'scans':>8} {'scans/n':>9} {'pairs':>10} {'pairs/n^2':>10} {'triangle':>10} {'tri/n^2':>8}")
+for n in (50, 100, 200, 400):
+    print(f"{n:>5} {count_scans(n):>8} {count_scans(n) / n:>9.3f} {count_pairs(n):>10} {count_pairs(n) / n**2:>10.3f} {count_triangle(n):>10} {count_triangle(n) / n**2:>8.3f}")
 ```
 
-$\text{pairs} / n^2$ 稳定在 1 附近，$\text{scans} / n$ 稳定在 2 附近：在这两个多项式例子里，固定常数因子不改变 $\Theta$ 类，$n$ 与 $n^2$ 的幂次区分了增长量级。比率因此可以当作判断候选增长族的经验诊断：在不断扩大的实验区间里 $T(n)/g(n)$ 保持在非零常数量级，这与 $T = \Theta(g)$ 相容，但有限实验不能证明 $T(n)=\Theta(g(n))$；正式的 $\Theta$ 论断仍然要按定义给出常数与起点。
+`scans` 是两遍 $n$ 次，共 $n + n = 2n = \Theta(n)$。`pairs` 的两层范围都是 $n$、互不依赖，次数相乘得到 $n \cdot n = n^2$。`triangle` 的内层范围随外层索引 $i$ 增大，不能直接按 $n \cdot n$ 计数，要逐层求和：
+
+$$
+0 + 1 + \cdots + (n - 1) = \frac{n(n - 1)}{2} = \Theta(n^2).
+$$
+
+三条规则覆盖后面大部分情形：顺序执行时成本相加；各层范围互不依赖时迭代次数相乘；迭代范围依赖外层变量时把逐层次数求和。相加的一条一般式可以放到这里做归纳：对非负成本函数恒有 $f + g = \Theta(\max\lbrace f, g \rbrace)$，只有当进一步知道 $f = O(g)$ 时才能化简成 $f + g = \Theta(g)$，「只保留较大那一项」需要这额外前提。`triangle` 的精确计数 $\frac{n(n-1)}{2}$ 与按 $n^2$ 得到的估计都落在 $\Theta(n^2)$，精确计数与渐近量级是两回事。
 
 ## 一个以上的参数
 
-规模不是一个数时，界的作用域要说清：它对一批合法参数组合统一成立，不只对某一个组合。图的存储与遍历常常写成 $O(V + E)$，它不能被等价地化成 $O(E)$：孤立顶点很多时 $V$ 很大而 $E$ 可以很小，这个上界仍然要由 $V$ 支撑。对简单图可以进一步推出 $O(V^2)$，但那是更松的界，不是等价化简，而且丢掉了稀疏图的信息。朴素字符串匹配同时依赖文本长度 $n$ 与模式长度 $m$，写作 $O(n \cdot m)$，因为内层循环的代价由 $m$ 决定。
+规模不必只由一个数字刻画。外层的范围基数是 $n$、内层是 $m$ 的两层循环：
 
-多参数还取消了「可以把某一个符号项直接丢掉」这条便利：$V$ 与 $E$ 在整个合法输入域上谁也不统一支配谁——孤立顶点很多时 $V$ 占主导，稠密图里 $E$ 占主导，因此两项都要留着。
+```python run id="alg.asymptotic.two-sizes"
+def count_rectangle(n, m):
+    operations = 0
+    for _ in range(n):
+        for _ in range(m):
+            operations += 1
+    return operations
 
-保留参数的写法也让结论对输入类别说得更清楚：若某个成本本身是 $T(V, E) = \Theta(V + E)$，那么在 $E = \Theta(V)$ 与 $E = \Theta(V^2)$ 两类输入上，它的量级分别是 $\Theta(V)$ 与 $\Theta(V^2)$，相差 $\Theta(V)$ 倍。前提必须是 $\Theta(V + E)$；只知道一个 $O(V + E)$ 的上界推不出这些量级。
 
-**深入阅读（多参数的一般定义）**：把「足够大」精确到多个参数：设 $D \subseteq \mathbb{N}^k$ 是合法参数域，$f = O(g)$ 表示存在 $c > 0$ 与 $N$，使所有 $\mathbf{n} \in D$ 且 $n_1 + \cdots + n_k \ge N$ 时都有 $f(\mathbf{n}) \le c\,g(\mathbf{n})$；$\Omega$ 与 $\Theta$ 同理。这样定义的界对所有合法参数组合统一成立，孤立顶点（$E = 0$ 而 $V \to \infty$）也在量词覆盖范围内。
+for n, m in ((100, 200), (200, 100), (100, 10000), (10000, 100)):
+    count = count_rectangle(n, m)
+    print(f"n={n:>6} m={m:>6}  operations={count:>9}  operations/(n*m)={count / (n * m):.1f}")
+```
 
-## 情形不是界
+计数是 $n \cdot m$，写成 $T(n, m) = \Theta(nm)$。$n$ 与 $m$ 是两个独立参数：没有它们之间关系的假设，就不能化成 $\Theta(n^2)$ 或 $\Theta(m^2)$，两个方向都可能更大。
 
-最坏、平均、摊还规定怎样从逐次成本形成要研究的成本函数；$O$、$\Omega$、$\Theta$ 描述这个成本函数与另一个函数之间的渐近关系。两者是独立的坐标：最坏情形既可以用 $\Theta$ 陈述，也可以只用 $O$；平均情形必须先把输入分布写出来才有意义，见 <CrossRef id="algorithms.average-and-randomized" />；摊还则要声明操作序列与分摊对象，见 <CrossRef id="algorithms.amortized" />。把「平均情况是 $O(n)$」读成「最坏情况也是 $O(n)$」，是两处独立错误的叠加。
+多参数同时取消了「把某一项直接丢掉」这条便利。参数只有一个时，非负函数的和总能取最大项；规模相互独立时，一对参数组合里可能 $n$ 大，另一对里 $m$ 大，谁也不在全部合法输入上支配谁，两项都要留着。若额外假设每个合法输入上都有 $n = \Theta(m)$，两个参数才退化成可以合并的量级。
 
 ## 空间
 
@@ -130,6 +152,6 @@ $\text{pairs} / n^2$ 稳定在 1 附近，$\text{scans} / n$ 稳定在 2 附近�
 
 ## 渐近优势与小区间
 
-渐近结论只在足够大时成立，而足够大由常数因子决定。设两个实现的工作量分别是 $100n + 1000$ 与 $n^2 / 2$：前者是 $\Theta(n)$，后者是 $\Theta(n^2)$，但 $n \le 209$ 时后者更小；两式的交点约为 $n = 209.54$，对整数输入就是从 $n = 210$ 起前者更小。渐近上更优的实现，在小输入上可能更慢。
+渐近结论只在足够大时成立，而足够大由常数因子决定。设两个实现的工作量分别是 $1000n$ 与 $n^2$：前者是 $\Theta(n)$，后者是 $\Theta(n^2)$，但在 $n$ 较小时后者完全可能更小，线性式要到某个规模之后才胜出。渐近上更优的实现，在小输入上可能更慢。
 
-要在给定规模上判断谁快，需要计数或测量；引用增长率回答不了这个问题。渐近结论的价值在于它不随规模变化：对这两个具体函数，从整数 $n = 210$ 起线性式一直更小。一般的渐近记号只保证足够大之后的关系，不保证只有一个交叉点，也不给出交叉位置。
+要在给定规模上判断谁快，需要计数或测量；引用增长率回答不了这个问题。渐近结论的价值在于它不随规模变化：只要 $n$ 足够大，线性式就一直更小。一般的渐近记号只保证足够大之后的关系，不保证只有一个交叉点，也不给出交叉位置。
