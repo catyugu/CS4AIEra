@@ -31,7 +31,7 @@ else:
     exit(manager, None, None, None)
 ```
 
-由此得到四条不变量：
+由此得到五条不变量：
 
 - `__enter__` 的返回值绑定到 `as` 后的名字；它不是管理器本身（除非协议实现这样返回）。
 - `__exit__` 在**所有**路径上都调用一次，参数是异常三元组；正常退出时三个参数都是 `None`。
@@ -63,22 +63,25 @@ class Session:
         return False
 
 
-session = Session("manual")
+manual = Session("manual")
+manual.open = True
+events.append(f"open {manual.name}")
 try:
     events.append("body")
 finally:
-    events.append("finally release")
+    manual.open = False
+    events.append(f"close {manual.name}")
 
 with Session("managed") as managed:
     events.append(f"using {managed.name}, open={managed.open}")
     managed_name = managed.name
 
 print("events:", events)
-print("after the with block, still open:", session.open, "| released:", not session.open)
+print("both sessions released:", not manual.open, not managed.open)
 print("bound value was the returned object:", managed_name)
 ```
 
-`with` 与手写的 `try/finally` 表达的是同一条必经路径；区别是释放逻辑写在资源对象自己身上，使用点只需要一行，调用方不可能忘记释放。
+`with` 与手写的 `try/finally` 表达的是同一条必经路径：进入时获取、退出时释放，正常结束与异常退出都经过同一个释放点。区别是释放逻辑写在资源对象自己身上，使用点只需要一行；一旦进入了 `with` 块，退出协议就一定会运行。
 
 ## 异常路径
 

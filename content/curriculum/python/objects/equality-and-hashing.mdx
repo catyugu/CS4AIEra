@@ -69,6 +69,9 @@ print("lookup by a fresh Key(2):", lookup.get(Key(2)))
 ## 定义 `__eq__` 的后果
 
 ```python run id="py.hash.unhashable"
+from dataclasses import FrozenInstanceError, dataclass
+
+
 class Money:
     def __init__(self, cents):
         self.cents = cents
@@ -77,23 +80,28 @@ class Money:
         return isinstance(other, Money) and self.cents == other.cents
 
 
-class FrozenMoney(Money):
-    def __hash__(self):
-        return hash(self.cents)
+@dataclass(frozen=True)
+class FrozenMoney:
+    cents: int
 
 
-print("Money.__hash__ is:", Money.__hash__)
-print("FrozenMoney.__hash__ is None:", FrozenMoney.__hash__ is None)
+print("Money.__hash__ is None:", Money.__hash__ is None)
 
 try:
     {Money(100): "coffee"}
 except TypeError as exc:
     print("failed:", type(exc).__name__, "|", "unhashable" in str(exc))
 
-print("frozen works:", {FrozenMoney(100): "coffee"}[FrozenMoney(100)])
+print("frozen works as a key:", {FrozenMoney(100): "coffee"}[FrozenMoney(100)])
+
+frozen = FrozenMoney(100)
+try:
+    frozen.cents = 200
+except FrozenInstanceError as exc:
+    print("frozen rejects mutation:", type(exc).__name__)
 ```
 
-类一旦定义 `__eq__`，Python 把 `__hash__` 置为 `None`，把它放进字典或集合抛出 `TypeError`。异常消息的具体文本随版本变化，判据是类型名与「不可哈希」这一事实。可哈希性需要显式恢复；`FrozenMoney` 用不变字段 `cents` 计算哈希，因此可以作键。改了 `__eq__` 而没有同步 `__hash__`，字典与集合的行为会静默错误。数据类上的同一个问题表现为：`eq=True` 且未冻结时实例不可哈希，`frozen=True` 时按字段生成 `__hash__`。
+类一旦定义 `__eq__`，Python 把 `__hash__` 置为 `None`，把它放进字典或集合抛出 `TypeError`。异常消息的具体文本随版本变化，判据是类型名与「不可哈希」这一事实。可哈希性需要显式恢复；`@dataclass(frozen=True)` 生成的类拒绝写入字段，并按字段计算哈希，因此 `FrozenMoney(100)` 可以直接作键。真正带来静默错误的是与 `__eq__` 不一致的 `__hash__`：手工只按部分参与相等的字段计算哈希，或对象入表后改动参与哈希的状态，都会让相等的对象落到不同的桶，字典与集合于是漏查、重复。数据类把这两件事绑在一起：`eq=True` 且未冻结时实例不可哈希，`frozen=True` 时按字段生成 `__hash__`。
 
 ## 哈希定位与相等确认
 

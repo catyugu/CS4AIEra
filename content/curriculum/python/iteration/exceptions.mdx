@@ -55,7 +55,7 @@ def load(kind):
             raise ConfigError("bad config")
         if kind == "value":
             raise ValueError("bad value")
-        return "loaded"
+        outcome = "loaded"
     except MissingKey as exc:
         return f"specific handler: {type(exc).__name__}"
     except ConfigError as exc:
@@ -64,6 +64,7 @@ def load(kind):
         return f"tuple handler: {type(exc).__name__}"
     else:
         print("else runs only when nothing was raised")
+        return outcome
     finally:
         print("finally always runs for", kind)
 
