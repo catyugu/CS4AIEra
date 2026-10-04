@@ -21,9 +21,13 @@ manager = expression
 aenter = manager.__aenter__
 aexit = manager.__aexit__
 value = await aenter()
+hit_except = False
+
 try:
+    target = value
     body
 except:
+    hit_except = True
     if not await aexit(*sys.exc_info()):
         raise
 finally:
@@ -31,7 +35,7 @@ finally:
         await aexit(None, None, None)
 ```
 
-由此继承同步版本的全部不变量：`__aenter__` 的返回值绑定给 `as` 的名字；`__aexit__` 在所有路径上恰好调用一次，参数是异常三元组；返回真值时异常被吞掉。三条路径都可以直接观察：
+由此继承同步版本的全部不变量：`__aenter__` 的返回值绑定给 `as` 的名字；`__aenter__` 成功完成之后，离开 `async with` 块的正常路径与异常路径都执行一次 `__aexit__`，参数是异常三元组；返回真值时异常被吞掉。进入阶段本身失败时 `__aexit__` 不执行：展开里 `value = await aenter()` 一旦抛出，`try` 还没有建立。三条路径都可以直接观察：
 
 ```python run id="py.async.async-with-paths"
 import asyncio

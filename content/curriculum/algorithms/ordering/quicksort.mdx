@@ -46,11 +46,11 @@ $$T(n) = T(k) + T(n - k - 1) + \Theta(n).$$
 
 ```python run id="alg.quicksort.partition"
 def partition(items, low, high, rounds):
-    """Postcondition: returns the 主元's final index, with items[low..index) < 主元 <= items[index..high]."""
-    主元 = items[high]
+    """Postcondition: returns the pivot's final index, with items[low..index) < pivot <= items[index..high]."""
+    pivot = items[high]
     boundary = low
     for j in range(low, high):
-        if items[j] < 主元:
+        if items[j] < pivot:
             items[boundary], items[j] = items[j], items[boundary]
             boundary += 1
         rounds.append((j, boundary))
@@ -63,7 +63,7 @@ rounds = []
 position = partition(sample, 0, len(sample) - 1, rounds)
 for j, boundary in rounds:
     print("round", j, "| boundary", boundary)
-print("主元 index:", position, "| 主元 value:", sample[position])
+print("pivot index:", position, "| pivot value:", sample[position])
 ```
 
 在这个分区上，$j$ 从 0 走到 4，$boundary$ 只在 $j = 0$ 与 $j = 2$ 两处前进，正是 `items[j]` 小于主元的两轮；其余三轮把元素留在第二块，分界不动。循环结束后主元落到下标 2，值 4 的左侧都小于 4、右侧都不小于 4，正是上面写的后置条件。
@@ -72,22 +72,22 @@ print("主元 index:", position, "| 主元 value:", sample[position])
 from random import Random
 
 
-def quicksort(items, low, high, 主元_of, comparisons):
+def quicksort(items, low, high, pivot_of, comparisons):
     """Postcondition: items[low..high] is non-decreasing; comparisons[0] counts element comparisons."""
     if low >= high:
         return
-    chosen = 主元_of(low, high)
+    chosen = pivot_of(low, high)
     items[chosen], items[high] = items[high], items[chosen]
-    主元 = items[high]
+    pivot = items[high]
     boundary = low
     for j in range(low, high):
         comparisons[0] += 1
-        if items[j] < 主元:
+        if items[j] < pivot:
             items[boundary], items[j] = items[j], items[boundary]
             boundary += 1
     items[boundary], items[high] = items[high], items[boundary]
-    quicksort(items, low, boundary - 1, 主元_of, comparisons)
-    quicksort(items, boundary + 1, high, 主元_of, comparisons)
+    quicksort(items, low, boundary - 1, pivot_of, comparisons)
+    quicksort(items, boundary + 1, high, pivot_of, comparisons)
 
 
 size = 64
@@ -96,10 +96,10 @@ last_element = lambda low, high: high
 random_element = lambda low, high: rng.randrange(low, high + 1)
 for name, case in (("sorted", list(range(size))), ("reversed", list(range(size, 0, -1)))):
     truth = sorted(case)
-    for label, 主元_of in (("last element", last_element), ("random", random_element)):
+    for label, pivot_of in (("last element", last_element), ("random", random_element)):
         data, comparisons = list(case), [0]
-        quicksort(data, 0, size - 1, 主元_of, comparisons)
-        print(f"{name:>8} | 主元 {label:>12} | comparisons {comparisons[0]:>5} | sorted: {data == truth}")
+        quicksort(data, 0, size - 1, pivot_of, comparisons)
+        print(f"{name:>8} | pivot {label:>12} | comparisons {comparisons[0]:>5} | sorted: {data == truth}")
 worst = size * (size - 1) // 2
 print(f"worst n(n-1)/2 = {worst}")
 ```

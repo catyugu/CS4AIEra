@@ -26,10 +26,10 @@ from random import Random
 
 
 def partition(items, low, high):
-    """Postcondition: returns the 主元 index p with items[low..p) < 主元 <= items[p..high]."""
-    主元, boundary = items[high], low
+    """Postcondition: returns the pivot index p with items[low..p) < pivot <= items[p..high]."""
+    pivot, boundary = items[high], low
     for j in range(low, high):
-        if items[j] < 主元:
+        if items[j] < pivot:
             items[boundary], items[j] = items[j], items[boundary]
             boundary += 1
     items[boundary], items[high] = items[high], items[boundary]
@@ -46,9 +46,9 @@ def quickselect(items, low, high, rank, rng):
     if position == rank:
         return items[position]
     if rank < position:
-        print(f"主元 at {position}: recurse into the left, {high - position + 1} elements excluded")
+        print(f"pivot at {position}: recurse into the left, {high - position + 1} elements excluded")
         return quickselect(items, low, position - 1, rank, rng)
-    print(f"主元 at {position}: recurse into the right, {position - low + 1} elements excluded")
+    print(f"pivot at {position}: recurse into the right, {position - low + 1} elements excluded")
     return quickselect(items, position + 1, high, rank, rng)
 
 
