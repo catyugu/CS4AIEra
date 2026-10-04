@@ -71,7 +71,7 @@ print("after", n - 2, "comparisons at least", len(candidates), "candidates remai
       "you cannot name the minimum yet")
 ```
 
-扫描的实测比较次数是 4095 = $n - 1$，与下界一致。$n = 8$ 的例子说明 $n - 2$ 次比较之后为什么仍然无法给出答案：每一步至多排除一个候选者，所以候选集合至少还剩 2 个。
+扫描的比较次数是 $n - 1$，与下界一致。$n - 2$ 次比较之后仍然无法给出答案：每一步至多排除一个候选者，所以候选集合至少还剩 2 个。
 
 ## 排序的决策树
 
