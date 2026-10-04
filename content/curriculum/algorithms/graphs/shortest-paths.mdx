@@ -38,7 +38,7 @@ print("fewest cost to f:", min(sum(weight[edge] for edge in edges) for edges in 
 
 一条路线就是一列顶点 $s = u_0, u_1, \dots, u_k = f$，其中每一对相邻顶点都有一条边，这样的顶点序列叫 <Term id="walk">游走</Term>（walk）。游走的权重是各边权重之和。游走允许重复顶点；**简单路径**（simple path）额外要求顶点互不重复，上面三条路线都是简单路径。
 
-从 $s$ 到 $f$ 的所有游走里，权重最小的是 2，这个数就是 $s$ 到 $f$ 的**距离**。更大的图里不必枚举游走：给每个顶点一个距离标签，从 $distance[s] = 0$、其余顶点为 $+\infty$ 开始，反复取一条边 $(u, v, weight)$，若 $distance[u] + weight < distance[v]$，就把 $distance[v]$ 换成 $distance[u] + weight$，并记下 <Term id="predecessor">前驱</Term> `predecessor[v] = u`；这个操作叫 <Term id="relaxation">松弛边</Term>。
+从 $s$ 到 $f$ 的所有游走里，权重最小的是 2，这个数就是 $s$ 到 $f$ 的**距离**。更大的图里不必枚举游走：给每个顶点一个距离标签，从 $distance[s] = 0$、其余顶点为 $+\infty$ 开始，反复取一条边 $(u, v, weight)$，若 $distance[u] + weight < distance[v]$，就把 $distance[v]$ 换成 $distance[u] + weight$，并记下 <Term id="predecessor-vertex">前驱顶点</Term> `predecessor[v] = u`；这个操作叫 <Term id="relaxation">松弛边</Term>。
 
 **建模条件**：把图记成有向加权图 $G = (V, E, w)$，源点 $s \in V$，$V$ 与 $E$ 有限，$|E|$ 用「边序列长度」计数；权重由 $w \colon E \to R$ 给出，$w$ 不限制正负。<CrossRef id="algorithms.graph-representation" /> 把权重定义在边上，并给出「全部边构成一个连续可迭代序列」的边列表接口。
 

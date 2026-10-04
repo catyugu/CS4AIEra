@@ -10,7 +10,7 @@ objectives:
   - 说明 super() 调用的是 MRO 上的下一个类，而不是名字写死的某个基类
 ---
 
-继承让子类复用基类的行为，只声明差异。真实的继承结构会让一个方法来自若干层之外，读代码时要能回答两个问题：一次属性读取落到哪一层，`super()` 走到哪一个类。只有一个基类时，这两个问题有直接的答案。
+继承让子类复用基类的行为，只声明差异。读代码时要能回答两个问题：一次属性读取落到哪一层，`super()` 走到哪一个类。只有一个基类时，这两个问题有直接的答案。
 
 ## 单继承：复用、覆盖与 super()
 
@@ -35,18 +35,16 @@ class Dog(Animal):
         return super().speak() + " (woof)"
 
 
-animal = Animal("generic")
 dog = Dog("Rex", "labrador")
 print("mro:", [cls.__name__ for cls in Dog.__mro__])
-print("the base still works alone:", animal.speak())
 print("the override replaced speak:", dog.speak())
 print("label is inherited, not copied:", dog.label(), "|", "label" in Dog.__dict__)
 print("both initializers ran:", dog.name, dog.breed)
 ```
 
-`Dog` 只声明了 `__init__` 与 `speak`，`label` 来自 `Animal`。查一个名字时按 `Dog.__mro__` 的顺序找，找到第一个定义就停：`Dog` 上没有 `label`，于是取到 `Animal.label`，`Dog` 里并不存在它的副本。`Dog.speak` 覆盖了 `Animal.speak`，其中的 `super().speak()` 调用被覆盖的那一份；两个 `__init__` 用同样的方式分工，`Dog.__init__` 设置 `breed`，把 `name` 交给 `Animal.__init__` 设置。
+`Dog` 只声明 `__init__` 与 `speak`；`label` 按 `Dog.__mro__` 的顺序找到 `Animal.label`，`Dog` 里没有它的副本。`Dog.speak` 覆盖 `Animal.speak`，其中的 `super().speak()` 调用被覆盖的那一份；`Dog.__init__` 把 `name` 交给 `Animal.__init__`，自己设置 `breed`。
 
-这条父链上「下一个类」只有一个候选，`super()` 与「父类」在这里指的是同一个类。`__mro__` 是一份从自身排到 `object` 的元组，查找按这个顺序进行。
+这条父链上「下一个类」只有一个候选，`super()` 指的就是父类；`__mro__` 是从自身排到 `object` 的元组，属性查找按这个顺序进行。
 
 ## 覆盖与返回值
 
@@ -74,16 +72,14 @@ class SloppyStore(Store):
 
 store = AuditedStore()
 print(store.save("a"), "|", store.save("b"), "| log:", store.log)
-print("the base still works on its own:", Store().save("c"))
 print("an override that forgets to return loses the result:", SloppyStore().save("d"))
-print("the nearest definition is the one called:", type(store).__mro__[0].__name__)
 ```
 
-`AuditedStore.save` 用 `super().save(record)` 扩展基类行为并交出返回值；`SloppyStore.save` 丢掉了返回值，调用方拿到 `None`。覆盖时基类方法仍然是当前层要负责调用的一部分，它提供的结果需要被传出去。
+`AuditedStore.save` 用 `super().save(record)` 扩展基类行为并交出返回值；`SloppyStore.save` 丢掉返回值，调用方拿到 `None`。覆盖时基类方法仍是当前层要调用的部分，它的结果需要被传出去。
 
 ## 深入：多继承与解析顺序
 
-一个类可以声明多个基类，`class D(B, C)` 让 `D` 同时从 `B` 与 `C` 继承。`B` 与 `C` 又继承同一个基类时，两条路径在 `A` 汇合。`__mro__` 由 C3 线性化在类创建时算出；单继承是它最简单的输入。
+一个类可以声明多个基类，`class D(B, C)` 让 `D` 同时从 `B` 与 `C` 继承。`B` 与 `C` 又继承同一个基类时，两条路径在 `A` 汇合，`__mro__` 由 C3 线性化在类创建时算出。
 
 ```python run id="py.inherit.diamond-mro"
 class A:
@@ -123,9 +119,7 @@ print("C's own behaviour is unchanged:", C().label(), "|", A().label())
 
 `D.__mro__` 是 `(D, B, C, A, object)`。声明顺序把 `B` 排在 `C` 之前，`C` 是 `A` 的子类又把 `C` 排在 `A` 之前，于是 `A` 被推到 `C` 之后。朴素深度优先会先钻到 `B`、再沿 `B` 的基类走到 `A`，取到 `A.label`；实际顺序先经过 `C`，取到 `C.label`。
 
-`__mro__` 由 C3 线性化算出，结果满足：子类排在基类之前；声明时的基类顺序被保留；每个类只出现一次，且一个类的所有后代都排在它之前。这套约束决定读到哪一个实现。`class D(B, C)` 里 `B` 与 `C` 的先后有语义：`super()` 的走向与最终调用的方法都由 `D.__mro__` 解释。
-
-声明顺序与继承关系相冲突时，类创建直接失败：
+`__mro__` 由 C3 线性化算出，保证每个类只出现一次、子类排在基类之前，且声明时的基类顺序被保留；因此 `class D(B, C)` 里 `B` 与 `C` 的先后有语义，`super()` 的走向与最终调用的方法都由 `D.__mro__` 解释。同一条顺序也决定类型检查：对普通类，`isinstance(x, T)` 与 `issubclass` 沿 `type(x).__mro__` 判断，`T` 在其中即为真，`type(x) is T` 只比较实际类型。
 
 ```python run id="py.inherit.inconsistent-order"
 class Root:
@@ -149,7 +143,7 @@ except TypeError as failure:
 print("a valid diamond still builds:", [cls.__name__ for cls in type("Both", (Left, Right), {}).__mro__])
 ```
 
-`Broken` 同时要求 `Root` 在 `Left` 之前（声明顺序）和 `Left` 在 `Root` 之前（`Left` 是 `Root` 的子类），两个要求冲突，类创建时直接抛 `TypeError`。这类错误在创建类对象时立刻出现，不会拖到运行时。
+`Broken` 同时要求 `Root` 在 `Left` 之前（声明顺序）和 `Left` 在 `Root` 之前（`Left` 是 `Root` 的子类），两个要求冲突，类创建时直接抛 `TypeError`。
 
 ## 深入：合作式 super()
 
@@ -186,38 +180,6 @@ print("the class after Left in that order is:", order[order.index("Left") + 1])
 
 四个 `__init__` 各运行一次，顺序是 `Both → Left → Right → Root`。`Left` 里的 `super().__init__(name)` 落到 `Right`：运行时 `self` 是 `Both` 的实例，`super()` 按 `type(self)` 的 `__mro__` 推进，从 `Left` 之后的第一项开始找。`Left` 的直接父类 `Root` 被排在初始化链的末尾，`Root.__init__` 只在末端运行一次。
 
-不带参数的 `super()` 由编译器补上两个参数：定义它的方法所在的那个类（词法作用域里的 `__class__`）和该方法的第一个参数。实例方法里第一个参数是实例，查找因此从 `type(self).__mro__` 中 `__class__` 之后的第一项开始。`__class__` 是方法定义所在的类，`type(self)` 是实例的实际类型；`Left` 与 `Both` 的区别来自这两个位置，方法定义在 `Left`，实例类型是 `Both`。显式写 `super(C, obj)` 时，查找沿 `type(obj)` 的 `__mro__` 从 `C` 之后开始，并要求 `isinstance(obj, C)`；写成 `super(C, C2)` 时要求 `C2` 是 `C` 的子类，沿 `C2.__mro__` 查找。`super()` 依赖 `__class__`，只能在定义于类体里的方法中使用。
-
-两条实践要求：
-
-- 多继承的每一层都要调用 `super().__init__(...)`，否则链条在没人调用的地方断掉，后面的初始化被静默跳过。
-- 参数要能穿透中间层：中间类不认识的关键字参数要原样转发，`*args` 与 `**kwargs` 的转发的完整规则见 <CrossRef id="python.call-semantics" />。
+不带参数的 `super()` 由编译器补上两个参数：定义它的方法所在的类（词法作用域里的 `__class__`）和该方法的第一个参数。`__class__` 是方法定义所在的类，`type(self)` 是实例的实际类型；查找从 `type(self).__mro__` 中 `__class__` 之后的第一项开始，所以方法定义在 `Left`、实例类型是 `Both` 时，`Left` 里的 `super()` 落到 `Right`。`super()` 依赖 `__class__`，只能在定义于类体里的方法中使用。
 
 直接写 `Root.__init__(self)` 之类的写法绕开 `__mro__`，会让同一个初始化执行多次。
-
-## 深入：沿 MRO 的类型检查
-
-```python run id="py.inherit.type-checks"
-class A:
-    pass
-
-
-class B(A):
-    pass
-
-
-class C(A):
-    pass
-
-
-class D(B, C):
-    pass
-
-
-print("isinstance walks the MRO:", isinstance(D(), A), isinstance(D(), C), isinstance(D(), B))
-print("issubclass uses the same order:", issubclass(D, A), issubclass(A, D))
-print("exact type is the stricter question:", type(D()).__name__, type(D()) is A)
-print("every MRO ends at object:", D.__mro__[-1].__name__, issubclass(D, object))
-```
-
-`isinstance(D(), C)` 为真，尽管 `C` 不是 `D` 的直接基类：对普通类，`isinstance(x, T)` 沿 `type(x).__mro__` 判断，`T` 在其中即为真。`type(x) is A` 只比较实际类型，需要按能力分支时用 `isinstance`，需要精确类型时才用 `type(...) is ...`。

@@ -1,0 +1,16 @@
+---
+id: predecessor-vertex
+term: 前驱顶点
+english: predecessor vertex
+aliases:
+  - predecessor
+short: 松弛或发现一个顶点时记下的来源顶点，沿它回溯得到一条路径。
+related:
+  - relaxation
+---
+
+前驱顶点是松弛或发现一个顶点时记下的来源：更新 `distance[v]` 的同时把 `predecessor[v]` 置为 $u$，表示当前的 `distance[v]` 对应经由 $u$ 的那条路线。
+
+表里记的是最后一次让值变好的那次更新。中间状态只对应当时那组候选值，还不构成一条确定的路径；只有标签最终定下来之后，沿前驱回溯才得到路径。遍历里的父指针（parent pointer）是同一类结构，记的是首次发现。
+
+前驱表可以在算法结束时构成一个有向环——负环上的 Bellman–Ford 会留下这种状态，因此「有前驱表」不等于「路径已经可靠」。

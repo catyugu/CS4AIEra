@@ -122,20 +122,16 @@ print("an instance dict entry with the same name changes nothing:", temperature.
 
 `__dict__` 里的存储名是 `_celsius`：描述符协议只在通过 `obj.attr` 读写时被触发，直接写 `__dict__` 可以绕过它。
 
-## 深入：自己写描述符、__slots__ 与 __getattr__
+## 深入：自己写描述符与 __getattr__
 
 描述符的用途是让「通过属性访问」自带行为：校验、惰性计算、把值转发到别处。一个最小实现只需要 `__get__` 与 `__set__`。
 
 ```python run id="py.attr.custom-descriptor"
 class Positive:
-    """A data descriptor that stores the value in the instance dict."""
-
     def __init__(self, name):
         self.name = name
 
     def __get__(self, instance, owner=None):
-        if instance is None:
-            return self
         return instance.__dict__[self.name]
 
     def __set__(self, instance, value):
@@ -146,31 +142,17 @@ class Positive:
 
 class Order:
     quantity = Positive("quantity")
-    price = Positive("price")
-
-    def __init__(self, quantity, price):
-        self.quantity = quantity
-        self.price = price
-
-    def total(self):
-        return self.quantity * self.price
 
 
-order = Order(2, 10.5)
-print("total:", order.total(), "| stored in the instance dict:", order.__dict__)
+order = Order()
+order.quantity = 2
 
 try:
     order.quantity = 0
 except ValueError as failure:
     print("the descriptor rejected it:", failure)
-
-print("reading it on the class returns the descriptor itself:", type(Order.quantity).__name__)
-order.__dict__["quantity"] = 100
-print("writing through __dict__ bypasses __set__:", order.total())
 ```
 
-两个细节：`__get__` 里 `instance is None` 的分支处理「通过类读取」（例如 `Order.quantity`）；描述符实例在类上只创建一次、被所有实例共用，所以值存在实例字典里，描述符只负责规则。
+描述符实例在类上只创建一次、被所有实例共用，所以值存在实例字典里，描述符只负责规则。
 
-`__slots__` 用的是同一套协议：类上为每个名字生成一个数据描述符，值存在实例固定的槽位里；没有实例字典后，给未声明的属性赋值会失败，拼错的名字从静默新建属性变成可见的错误。
-
-`__getattr__` 是查找的兜底：上面全部失败后才被调用，它必须抛 `AttributeError`，`hasattr` 与 `getattr(obj, name, default)` 都靠这个异常判断属性是否存在。覆盖每次访问都要走的 `__getattribute__` 会拦截一切读取，容易写出递归。
+`__getattr__` 是查找的兜底：上面全部失败后才被调用，它必须抛 `AttributeError`，`hasattr` 与 `getattr(obj, name, default)` 都靠这个异常判断属性是否存在。
