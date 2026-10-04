@@ -10,11 +10,30 @@ objectives:
   - 说明 task 与 coroutine 的关系，以及 task 在什么条件下获得执行机会
 ---
 
-读异步代码的常见错误是把 `await` 当成「发起一次调用」或「等待一段时间」。它实际做的是交出控制权。分清楚「谁在驱动谁」之后，输出顺序、卡住的原因与任务之间的关系都可以从代码结构推出。
+一个程序要从两个远端服务各取一份数据，再读一份本地文件，然后把三份汇总。
+
+```python
+import json
+import urllib.request
+
+
+def load_dashboard():
+    with urllib.request.urlopen("https://example.com/profile.json") as response:
+        profile = json.load(response)   # returns after the network round trip
+    with urllib.request.urlopen("https://example.com/prices.json") as response:
+        prices = json.load(response)    # starts only after the first response
+    with open("report.json") as f:
+        report = json.load(f)           # waits on the disk
+    return profile, prices, report
+```
+
+每次 `urlopen` 都要等一次网络往返，`open` 要等磁盘把文件读上来。三段等待依次发生，总耗时是它们的和；第一段没有结束，第二段无法开始，这段时间里 CPU 空闲，本可以去处理已经到达的那一份。
+
+要让等待重叠起来，一个计算需要能在等待处暂停、条件满足后再从原地继续。`async def` 定义的就是这种计算，`await` 标出暂停的位置；谁来接着驱动它、下一次轮到哪个计算，由**事件循环**与**任务**（task）决定。分清「谁在驱动谁」之后，输出顺序与卡住的原因都可以从代码结构推出。
 
 ## 协程、await 与事件循环
 
-- `async def` 定义的是协程函数。调用它不执行函数体，而是返回一个**协程对象**（coroutine object）。协程对象是一次还没有开始的计算。
+- `async def` 定义的是协程函数。调用它返回一个**协程对象**（coroutine object），不执行函数体。协程对象是一次还没有开始的计算。
 - 协程对象是可等待对象：`await expr` 驱动它运行，直到它返回或暂停在挂起点。
 - `await` 有两个效果，在同一个表达式里一起发生：把当前协程挂起、把控制权交回驱动它的调度器，并把被等待对象的结果作为表达式的值。被等待的对象已经就绪时，控制权不离开当前协程。
 - **task** 是被调度器驱动的协程。`asyncio.create_task(coro)` 立即返回一个 task 对象，并把该协程登记进事件循环；协程在下一个挂起点之后才有机会被步进。
@@ -94,7 +113,7 @@ await main()
 
 ## 只依赖队列顺序的输出
 
-两个 task 交替推进，而不是各自跑完。每一轮的入队顺序是确定的，因此输出有唯一结果。
+两个 task 交替推进，一轮里各自前进一步。每一轮的入队顺序是确定的，因此输出有唯一结果。
 
 ```python run id="py.async.ready-queue"
 import asyncio
@@ -113,7 +132,7 @@ async def main():
 await main()
 ```
 
-输出是 `a 0`、`b 0`、`a 1`、`b 1`：`sleep(0)` 把当前 task 放到就绪队列末尾，循环于是先去推进另一个 task。交错不是随机调度，而是队列顺序的结果。基于时间的相对完成顺序则由循环的时钟与负载决定，把它写进测试等于把调度器实现写进断言。
+输出是 `a 0`、`b 0`、`a 1`、`b 1`：`sleep(0)` 把当前 task 放到就绪队列末尾，循环于是先去推进另一个 task。交错由就绪队列的顺序决定。基于时间的相对完成顺序则由循环的时钟与负载决定，把它写进测试等于把调度器实现写进断言。
 
 同样的性质解释了 `gather` 的返回值：任务的**完成顺序**不影响结果的**排列顺序**，结果按传入顺序排。
 
