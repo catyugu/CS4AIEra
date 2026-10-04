@@ -1,196 +1,19 @@
 ---
 id: algorithms.comparison-sorting
 slug: /algorithms/comparison-sorting
-order: 30
-title: 比较排序：归并排序、快速排序与堆排序
+order: 60
+title: 比较排序：三条路线的比较
 status: published
 objectives:
-  - 写出分区的循环不变量，并由它推出分区的后置条件
-  - 由子问题规模推导快速排序的平衡情形与最坏情形，并说明随机 pivot 的期望分析依赖什么假设
-  - 用递推式论证归并排序的对数线性成本，并说明合并怎样保持稳定性
-  - 从堆的结论直接得到堆排序的最坏阶与辅助空间
   - 从最坏成本、期望成本、辅助空间与稳定性比较归并、快速与堆三条路线
+  - 说明随机 pivot 改变的是最坏情形是否容易被输入触发，不是单次运行的成本上界
+  - 区分 Python 内置排序的原地修改接口与算法分析中的辅助空间
 ---
 
-排序问题把任何序列变成非降序的排列，这个结果不记录它是用哪种算法排出来的。三种排序满足同样的正确性条件：归并把整段递归地切成两半、排好再合并；快速排序按一个 pivot 把当前段分成两小段，其余交给递归；堆排序不切分，把整个数组看成一个优先结构，反复取出当前最大值。三者的最坏成本、期望成本、辅助空间与稳定性各自独立决定。pivot 最终停在哪个位置，决定一段递归是摊成 $\Theta(\log n)$ 层、还是塌成一条 $\Theta(n)$ 的链，最坏成本与期望成本因此是两个不同的阶，同一个算法在两种输入上就能分别取到它们。
+三种排序满足 <CrossRef id="algorithms.sorting" /> 给出的同一套正确性条件：<CrossRef id="algorithms.mergesort" /> 把区间对半切开、分别排好再合并，<CrossRef id="algorithms.quicksort" /> 按一个 pivot 分成两段、其余交给递归，<CrossRef id="algorithms.heapsort" /> 不切分，把整个数组看成一个优先结构、反复取出当前最大值。三者决定子问题规模的方式不同，额外空间花的位置也不同，最坏成本、期望成本、辅助空间与稳定性因此各自独立。
 
-## 归并排序：对半切分与线性合并
-
-归并排序把问题对半分，递归排好两半，再合并两个有序序列。合并用两个游标向前走：每次比较两侧当前元素，取较小者写入缓冲；某一侧用完之后把另一侧余下的部分直接接上。合并一次恰好把 $n$ 个元素写进缓冲一次，所以是 $\Theta(n)$。切分与合并的规模都由长度决定，不依赖键的分布，所以最好与最坏落在同一阶。
-
-当 $n$ 是 2 的幂时可以直接写成 $T(n) = 2T(n/2) + \Theta(n)$；对一般的 $n$，更精确地写是 $T(n) = T(\lfloor n/2 \rfloor) + T(\lceil n/2 \rceil) + \Theta(n)$。两者都解为 $\Theta(n \log n)$（见 <CrossRef id="algorithms.recurrences-and-call-trees" />）：递归树有 $\Theta(\log n)$ 层，每层所有合并合计处理 $\Theta(n)$ 个元素。
-
-稳定的实现只有一个细节：合并时两侧键相等就取左侧，这样相等键不会因为合并而换位。
-
-```python run id="alg.ordering.merge-sort"
-from random import Random
-
-
-def merge_sort(records, key, counters):
-    """Postcondition: non-decreasing by key, stable, and a permutation of the input."""
-    if len(records) <= 1:
-        return list(records)
-    middle = len(records) // 2
-    left = merge_sort(records[:middle], key, counters)
-    right = merge_sort(records[middle:], key, counters)
-    merged = []
-    i = 0
-    j = 0
-    while i < len(left) and j < len(right):
-        counters["comparisons"] += 1
-        if key(left[i]) <= key(right[j]):
-            merged.append(left[i])
-            i += 1
-        else:
-            merged.append(right[j])
-            j += 1
-    merged.extend(left[i:])
-    merged.extend(right[j:])
-    return merged
-
-
-print(f"{'n':>6} {'comparisons':>12} {'n log2 n':>9} {'ratio':>6}")
-for size in (8, 64):
-    records = [(index % 4, index) for index in range(size)]
-    Random(20261003).shuffle(records)
-    counters = {"comparisons": 0}
-    merge_sort(records, key=lambda record: record[0], counters=counters)
-    reference = size * (size.bit_length() - 1)
-    print(f"{size:>6} {counters['comparisons']:>12} {reference:>9} "
-          f"{counters['comparisons'] / reference:>6.2f}")
-
-tiny = [(1, "a"), (0, "x"), (1, "b")]
-print("equal keys keep their order:", merge_sort(tiny, key=lambda record: record[0], counters={"comparisons": 0}))
-```
-
-`equal keys keep their order` 一行给出稳定性的证据：输入里 `a` 在 `b` 前面，两条记录键都为 1，输出仍是 `a` 在前——合并分支在两侧键相等时取左侧。合并每次都要一块能放下当层的缓冲，顶层 `merged` 的长度达到 $n$；常见的数组归并排序显式复用一个长度 $n$ 的工作缓冲再加 $O(\log n)$ 的递归栈，辅助空间是 $\Theta(n)$。
-
-## 分区：一条循环不变量
-
-快速排序的核心是一个<Term id="in-place">原地</Term>划分过程：把区间里的元素按「小于 pivot」与「不小于 pivot」分成两段，并让 pivot 落在两段之间的最终位置上。用区间 `items[low .. high]` 与末元素作 pivot，扫描过程把已经处理好的那一段分成相邻的两块，$j$ 是下一个待检查的位置，$boundary$ 是两块的分界：
-
-1. `items[low .. boundary)` 里的元素都 `< pivot`
-2. `items[boundary .. j)` 里的元素都 `>= pivot`
-3. `items[high]` 仍是 pivot 本身，尚未移动
-
-**初始化**：$j = low$、$boundary = low$，两块都为空，三条同时成立，现在只需要证明每一轮之后它们仍然成立。
-
-**维护步**：每轮检查 `items[j]`，它不小于 pivot 时留在原地，第二块右端扩展一格；它小于 pivot 时是整段扫描里唯一需要动作的地方——把 `items[j]` 与 `items[boundary]` 交换，再让 $boundary$ 前进一格。交换前 `items[boundary]` 属于第二块、因此不小于 pivot，交换后它落到位置 $j$ 补进第二块，而小于 pivot 的当前元素进入第一块；当 $boundary = j$ 时这次交换只是自交换。两种情况在处理完位置 $j$ 之后都重新得到 `items[low .. boundary) < pivot` 与 `items[boundary .. j+1) >= pivot`。这一步用到的前提是分界只在 $boundary$ 处移动，两块因此始终相邻、不重叠。
-
-**终止与后置条件**：$j$ 每轮加 1，上界是 $high$，循环必然结束；结束时 $j = high$，两块覆盖了整个 $[low, high)$。把 pivot 与 `items[boundary]` 处的元素交换，后置条件就是「`items[boundary]` 等于 pivot，且左侧全小于、右侧全不小于它」——pivot 已落在最终位置，不再参与后续排序，递归因此可以继续。存在等键元素时，这个位置未必是等键记录之间唯一可能的最终位置。
-
-## 快速排序：从子问题规模推导
-
-分区把 pivot 放到一个最终位置上，这个位置把区间切成两半，而 pivot 自己不再参与递归——每递归一层，待排区间至少少掉一个元素，递归因此一定会停。设当前区间含 $n$ 个元素，pivot 最终落在下标 $p$，并令 $k = p - low$ 表示左侧子问题的元素个数，则右侧有 $n - k - 1$ 个元素，递归式为
-
-$$T(n) = T(k) + T(n - k - 1) + \Theta(n).$$
-
-这里的 $k$ 量的是左侧子问题含有多少个元素，$p$ 才是数组中的绝对下标。对长度为 $n$ 的区间，一次分区把另外 $n-1$ 个元素各与 pivot 比较一次，因此分区成本是 $n-1 = \Theta(n)$。递归式本身不给答案，答案取决于 $k$ 随输入怎么变：
-
-- **平衡情形**：如果每次分区都落在中间附近，比如两侧规模都不超过 $c n$（$c < 1$），递归树每一层合计仍是 $\Theta(n)$，层数是 $\Theta(\log n)$，于是 $\Theta(n \log n)$。
-- **极端不平衡**：如果每次 $k = 0$ 或 $k = n-1$，就是 $T(n) = T(n-1) + \Theta(n) = \Theta(n^2)$。取末元素作 pivot 时，已排序或逆序的输入每次都把 pivot 留在端点，是最坏情形，由输入顺序决定。
-
-这两条说的都是「给定 pivot 选择的后果」。对固定取末元素作 pivot 的实现，如果进一步假设输入是**键两两不同**的均匀随机排列，也可以得到期望 $\Theta(n \log n)$；但这是关于输入分布的假设，任意给定输入并不享有这项保证。
-
-随机 pivot 换了概率来源：算法自己掷随机数，每次递归都从当前区间中独立、均匀地选择一个位置作 pivot，于是 pivot 的秩在当前子问题里均匀分布，与输入原本怎样排列无关——这一条对任意固定的输入都成立。**期望分析用到的假设只有两条**：各次 pivot 的选择相互独立且均匀，且排序键两两不同。有了独立均匀的 pivot，每个子问题的规模在期望意义上按常数比例缩小，期望比较次数因此是 $\Theta(n \log n)$。
-
-二路 `<` / `>=` 分区在大量重复键上可能退化：所有键都相等时，每次分区仍只缩小一个元素，随机 pivot 也避免不了 $\Theta(n^2)$。重复键需要专门的分区策略。
-
-```python run id="alg.ordering.partition-and-quicksort"
-def partition(items, low, high, rounds):
-    """Postcondition: returns the pivot's final index, with items[low..index) < pivot <= items[index..high]."""
-    pivot = items[high]
-    boundary = low
-    for j in range(low, high):
-        if items[j] < pivot:
-            items[boundary], items[j] = items[j], items[boundary]
-            boundary += 1
-        rounds.append((j, boundary))
-    items[boundary], items[high] = items[high], items[boundary]
-    return boundary
-
-
-sample = [3, 8, 2, 5, 6, 4]
-rounds = []
-position = partition(sample, 0, len(sample) - 1, rounds)
-for j, boundary in rounds:
-    print("round", j, "| boundary", boundary)
-print("pivot index:", position, "| pivot value:", sample[position])
-```
-
-六行输出对应分区对 $[3, 8, 2, 5, 6, 4]$ 的逐轮检查。$j$ 从 0 走到 4，$boundary$ 只在 $j = 0$ 与 $j = 2$ 两处前进，正是 `items[j]` 小于 pivot 的两轮；其余三轮把元素留在第二块，分界不动。循环结束后 pivot 落到下标 2，值 4 的左侧都小于 4、右侧都不小于 4，正是上面写的后置条件。
-
-```python run id="alg.ordering.quicksort-cases"
-from random import Random
-
-
-def quicksort(items, low, high, pivot_of, comparisons):
-    """Postcondition: items[low..high] is non-decreasing; comparisons[0] counts element comparisons."""
-    if low >= high:
-        return
-    chosen = pivot_of(low, high)
-    items[chosen], items[high] = items[high], items[chosen]
-    pivot = items[high]
-    boundary = low
-    for j in range(low, high):
-        comparisons[0] += 1
-        if items[j] < pivot:
-            items[boundary], items[j] = items[j], items[boundary]
-            boundary += 1
-    items[boundary], items[high] = items[high], items[boundary]
-    quicksort(items, low, boundary - 1, pivot_of, comparisons)
-    quicksort(items, boundary + 1, high, pivot_of, comparisons)
-
-
-size = 64
-rng = Random(20261013)
-last_element = lambda low, high: high
-random_element = lambda low, high: rng.randrange(low, high + 1)
-for name, case in (("sorted", list(range(size))), ("reversed", list(range(size, 0, -1)))):
-    truth = sorted(case)
-    for label, pivot_of in (("last element", last_element), ("random", random_element)):
-        data, comparisons = list(case), [0]
-        quicksort(data, 0, size - 1, pivot_of, comparisons)
-        print(f"{name:>8} | pivot {label:>12} | comparisons {comparisons[0]:>5} | sorted: {data == truth}")
-worst = size * (size - 1) // 2
-print(f"worst n(n-1)/2 = {worst}")
-```
-
-末元素 pivot 下，已排序与逆序两种输入都做 2016 次比较，正好等于 $n(n-1)/2$，落进 $\Theta(n^2)$ 那一支。把同一个输入上的 pivot 换成随机选择，比较次数降到 368 与 454，与期望值落在同一量级，输入顺序不再决定成本；四个用例排出的结果都与输入的多重集一致。
-
-确定性的 $\Theta(n \log n)$ 最坏界需要别的机制，例如限制递归深度并在退化时切换策略，或用一个线性时间的选取过程来挑 pivot。后者建立在「选择」这一操作上，属于 <CrossRef id="algorithms.selection-and-top-k" />。
-
-## 堆排序：复用堆的两条不变量
-
-<CrossRef id="algorithms.heaps" /> 已经建立了两条不变量——完全二叉树的形状，以及父子之间的顺序——并给出了按「还能下降多少层」计数、总和收敛到 $\Theta(n)$ 的线性建堆论证。这两条不变量里，形状不变量固定，可以取反的只是父子顺序的方向：默认的小顶堆保证父不大于子、堆顶是当前最小值，取反得到最大堆、堆顶就是当前最大值，形状不变量与线性建堆的论证都不变。
-
-堆排序复用这两条结论。它把数组看成最大堆的**前缀**加一段已经排好的**后缀**：初始时后缀为空，先就地建堆，代价 $\Theta(n)$；之后反复交换堆顶与紧挨前缀的那个元素，再对缩短一号的前缀做一次下沉恢复。每个元素一旦进入后缀就不再移动，后缀因此保持非降序，且其中任何元素都不小于前缀里的元素。
-
-$n-1$ 次取出各付 $O(\log n)$，合起来是 $\Theta(n \log n)$；这个界对任何输入都成立，没有「平均」这一层。辅助空间是 $O(1)$：交换与下沉都发生在原数组内，只用常数个下标变量。
-
-```python run id="alg.ordering.heapsort-route"
-import heapq
-
-
-def drain(items):
-    """Postcondition: repeatedly removes the heap top, yielding non-decreasing order."""
-    heap = list(items)
-    heapq.heapify(heap)
-    out = []
-    while heap:
-        out.append(heapq.heappop(heap))
-    return out
-
-
-sample = [7, 3, 9, 1, 5, 3, 8]
-print("input  :", sample, "| drained:", drain(sample))
-```
-
-标准库的 heapq 维护的就是小顶堆，反复取出堆顶因此得到非降序的 `[1, 3, 3, 5, 7, 8, 9]`，重复键 3 也照常各归一位。堆排序把方向取反成最大堆、以原地交换实现同一件事，辅助空间因此降到 $O(1)$；堆顶交换会越过等键记录，它和分区实现的快速排序一样不保证等键记录的相对次序。
 
 ## 三条路线的结构比较
-
-三种排序满足 <CrossRef id="algorithms.sorting" /> 给出的同样的正确性条件，差别来自它们如何决定子问题规模、以及额外空间花在哪里：
 
 | 算法 | 切分与代价 | 成本 | 稳定性 |
 | --- | --- | --- | --- |
@@ -202,6 +25,7 @@ print("input  :", sample, "| drained:", drain(sample))
 - **辅助空间**：递归快速排序在平衡分区时递归深度为 $O(\log n)$，但连续极端分区时深度会达到 $O(n)$，因此它的最坏辅助栈空间是 $O(n)$；随机 pivot 在「键两两不同」的模型下有期望 $O(\log n)$ 的递归深度，单次运行的最坏情形仍是 $O(n)$。常规归并实现使用 $\Theta(n)$ 工作缓冲；堆排序使用 $O(1)$ 辅助空间。
 - **稳定性**：稳定与否取决于恢复结构时有没有远距离交换。分区交换会越过等键元素，堆的堆顶交换同样如此，所以这两份原地实现都不保证等键记录的相对次序；归并把两个有序段按顺序取用，不会越过。稳定性结论针对这两种原地实现；稳定的快速排序与堆排序变体同样存在。
 
-这三条轴的取值互相独立，所以「哪种排序更好」必须先说清在哪个轴上。常数因子由实现与输入共同决定，不在比较之列。
 
-Python 的 `list.sort()` 与 `sorted()` 使用稳定的 Timsort；`list.sort()` 会原地修改列表，`sorted()` 构造新列表。这里的「原地修改 API 对象」不要与算法分析中的 $O(1)$ 辅助空间混为一谈：Timsort 可以使用随输入规模增长的临时存储。在 Python 里手写这一节的快速排序，目的是显式观察分区不变量与子问题规模；它不构成替代内置排序的性能建议。`heapq.nsmallest()` 与 `heapq.nlargest()` 提供部分排序接口：文档把它们描述为单遍扫描、只保留所需数量元素的方案，当前实现通常维护一个大小受 $k$ 限制的堆，并在 $k$ 不小于输入长度时直接退回完整排序。至于完整比较排序为什么存在 $\Omega(n \log n)$ 的比较下界，需要先建立比较模型与决策树，见 <CrossRef id="algorithms.lower-bounds" />。
+这三条轴的取值互相独立，所以「哪种排序更好」必须先说清在哪个轴上看。常数因子由实现与输入共同决定，不在比较之列。
+
+Python 的 `list.sort()` 与 `sorted()` 使用稳定的 Timsort；`list.sort()` 会原地修改列表，`sorted()` 构造新列表。这里的「原地修改 API 对象」不要与算法分析中的 $O(1)$ 辅助空间混为一谈：Timsort 可以使用随输入规模增长的临时存储。手写两节里的快速排序与堆排序，目的是显式观察分区不变量与堆的两条不变量；它们不构成替代内置排序的性能建议。至于完整比较排序为什么存在 $\Omega(n \log n)$ 的比较下界，需要先建立比较模型与决策树，见 <CrossRef id="algorithms.lower-bounds" />。

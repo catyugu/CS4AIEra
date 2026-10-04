@@ -2,7 +2,7 @@
 id: algorithms.lower-bounds
 slug: /algorithms/lower-bounds
 title: 下界与比较模型
-order: 50
+order: 80
 status: published
 objectives:
   - 说明比较下界的适用范围：它约束的是比较次数，而且只在这个模型内成立
@@ -149,8 +149,8 @@ $$\log_2(n!) = n \log_2 n - \Theta(n),$$
 $\Omega(n \log n)$ 是关于**比较次数**的下界。决策树只数比较，一次比较之后跟着多少次元素移动、占多少额外空间、输出是否稳定，它都没有记录。所以这条下界不推出：
 
 - **写入门槛**：找最小值可以只读不写，也可以每发现一个更小的元素就把它交换到最前面；两者的比较次数都是 $n - 1$，写入次数一个是 0、一个最多 $n - 1$。
-- **辅助空间**：比较次数与空间是两条独立的成本轴。归并排序的比较工作是 $\Theta(n \log n)$，并使用 $\Theta(n)$ 缓冲；<CrossRef id="algorithms.comparison-sorting" /> 里的堆排序具有 $\Theta(n \log n)$ 的最坏比较成本，却只使用 $O(1)$ 辅助空间。比较下界本身推不出空间下界。
-- **稳定性**：稳定性是输出后置条件的一部分（见 <CrossRef id="algorithms.sorting" />），与比较次数之间没有推出关系。归并排序的实现稳定，<CrossRef id="algorithms.comparison-sorting" /> 里的原地堆排序实现不稳定；这一差异不是由 $\Omega(n \log n)$ 比较下界决定的。
+- **辅助空间**：比较次数与空间是两条独立的成本轴。归并排序的比较工作是 $\Theta(n \log n)$，并使用 $\Theta(n)$ 缓冲；<CrossRef id="algorithms.heapsort" /> 里的堆排序具有 $\Theta(n \log n)$ 的最坏比较成本，却只使用 $O(1)$ 辅助空间。比较下界本身推不出空间下界。
+- **稳定性**：稳定性是输出后置条件的一部分（见 <CrossRef id="algorithms.sorting" />），与比较次数之间没有推出关系。归并排序的实现稳定，<CrossRef id="algorithms.heapsort" /> 里的原地堆排序实现不稳定；这一差异不是由 $\Omega(n \log n)$ 比较下界决定的。
 
 模型也有适用条件。如果键带有比较之外可利用的结构，例如键取自一个已知的有限整数域，算法可以检查数字的位或桶编号，而不只是问「谁更小」。计数排序与基数排序就属于这一类，它们不在二元比较决策树里，因此不构成反例。它们的实际成本取决于值域大小、字长与基数。
 

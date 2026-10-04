@@ -1,7 +1,7 @@
 ---
 id: algorithms.selection-and-top-k
 slug: /algorithms/selection-and-top-k
-order: 40
+order: 70
 title: 选择、第 k 个元素与 Top-K
 status: published
 objectives:
@@ -17,7 +17,7 @@ objectives:
 
 秩 $r$ 的顺序统计量（order statistic）是完整排序后位于下标 $r$ 的那个元素，这里要求 $0 \le r < n$，其余元素不要求有序；只需要确定落在位置 $r$ 的那一个元素。
 
-quickselect 复用 <CrossRef id="algorithms.comparison-sorting" /> 的分区：一次分区把区间按 pivot 分成两段，让 pivot 落在它的最终位置 $p$。目标秩小于 $p$ 时答案只在左段，大于 $p$ 时只在右段，相等就直接返回；无论走哪一边，另一侧连同 pivot 一起被排除，此后不再参与任何比较。
+quickselect 复用 <CrossRef id="algorithms.quicksort" /> 的分区：一次分区把区间按 pivot 分成两段，让 pivot 落在它的最终位置 $p$。目标秩小于 $p$ 时答案只在左段，大于 $p$ 时只在右段，相等就直接返回；无论走哪一边，另一侧连同 pivot 一起被排除，此后不再参与任何比较。
 
 它维持的循环不变量是：目标秩始终位于当前区间 $[low, high]$ 内，已经排除在左侧的元素都不大于候选区间里的元素，已经排除在右侧的元素都不小于候选区间里的元素。第一条保证目标还在区间里，后两条保证被丢掉的部分里没有更小的候选：
 
