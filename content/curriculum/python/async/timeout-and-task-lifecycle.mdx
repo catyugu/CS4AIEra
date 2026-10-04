@@ -41,7 +41,7 @@ await main()
 
 被等待的代码在挂起点收到一次普通的取消，因此它的清理路径照常运行；调用方拿到的是 `TimeoutError`。两个异常来源不同：`CancelledError` 进入 task 内部，`TimeoutError` 由上下文管理器在退出时产生（见 [asyncio: Timeouts](https://docs.python.org/3/library/asyncio-task.html#timeouts)）。
 
-`timeout` 只能转换它自己传进去的那个 `CancelledError`。块内的 `except CancelledError` 把它截住并继续执行，上下文退出时就看不到异常，`TimeoutError` 也不会出现——超时被降级成了一次被吞掉的取消，这正是 <CrossRef id="python.cancellation-and-timeouts" /> 描述的破坏。期限内完成的等待不受影响：
+`timeout` 只能转换它自己传进去的那个 `CancelledError`。块内的 `except CancelledError` 把它截住并继续执行，上下文退出时就看不到异常，`TimeoutError` 也不会出现——超时被降级成了一次被吞掉的取消，这正是 <CrossRef id="python.cancellation-and-cleanup" /> 描述的破坏。期限内完成的等待不受影响：
 
 ```python run id="py.async.timeout-not-expired"
 import asyncio
@@ -115,6 +115,20 @@ async def waiting(ready):
         print("sibling cleanup ran")
 
 
+async def blocked_child(started):
+    started.set()
+    await asyncio.Future()
+
+
+async def scoped(started, children):
+    try:
+        async with asyncio.TaskGroup() as group:
+            children.append(group.create_task(blocked_child(started)))
+            await asyncio.Future()
+    finally:
+        print("scope exit waited for children:", all(task.done() for task in children))
+
+
 async def main():
     ready = asyncio.Event()
     try:
@@ -122,27 +136,23 @@ async def main():
             group.create_task(waiting(ready))
             group.create_task(failing(ready))
     except* ValueError as failures:
-        print("caught:", type(failures).__name__, [str(error) for error in failures.exceptions])
+        print("sibling failed:", type(failures).__name__, [str(error) for error in failures.exceptions])
+
+    started = asyncio.Event()
+    children = []
+    outer = asyncio.create_task(scoped(started, children))
+    await started.wait()
+    outer.cancel()
+    try:
+        await outer
+    except asyncio.CancelledError:
+        print("parent cancelled: caller saw CancelledError")
 
 
 await main()
 ```
 
-`ready` 保证等待任务已经进入受清理保护的路径，失败任务才抛异常。任务组交出的通常是 `ExceptionGroup`；若聚合中包含不属于 `Exception` 的基类异常，则使用 `BaseExceptionGroup`。`KeyboardInterrupt` 与 `SystemExit` 有特殊规则：取消并等待其他任务后重新抛出原异常，不聚合它们。
-
-异常组（exception group）是保留多个失败的异常树，不能只按一个异常类型判断整组。普通 `except ValueError` 不会匹配包含 `ValueError` 的异常组；`except* ValueError` 则拆出匹配的子组交给处理块，剩余异常继续传播（见 [语言参考：except*](https://docs.python.org/3.14/reference/compound_stmts.html#except-star)）。即使只有一个失败，TaskGroup 也可能抛出异常组。
-
-```python run id="py.async.exception-group-partial"
-try:
-    try:
-        raise ExceptionGroup("two failures", [ValueError("bad value"), TypeError("bad type")])
-    except* ValueError as matched:
-        print("handled:", [type(error).__name__ for error in matched.exceptions])
-except ExceptionGroup as remaining:
-    print("propagated:", [type(error).__name__ for error in remaining.exceptions])
-```
-
-第二个例子直接构造固定异常组，使选择性处理的结果不依赖任务完成顺序。多个 `except*` 可以各自处理匹配部分；同一个 `try` 不能混写 `except` 与 `except*`。TaskGroup 的聚合规则不保证失败列表的次序，不能把顺序当作接口约定。
+`ready` 保证等待任务已经进入受清理保护的路径，失败任务才抛异常。任务组交出的通常是 `ExceptionGroup`（聚合中含不属于 `Exception` 的基类异常时用 `BaseExceptionGroup`），`KeyboardInterrupt` 与 `SystemExit` 取消并等待其他任务后原样重抛、不参与聚合。异常组是保留多个失败的异常树：普通 `except ValueError` 不匹配包含 `ValueError` 的异常组，`except* ValueError` 拆出匹配的子组交给处理块、剩余异常继续传播（见 [语言参考：except*](https://docs.python.org/3.14/reference/compound_stmts.html#except-star)）；同一个 `try` 不能混写 `except` 与 `except*`，即使只有一个失败，TaskGroup 也可能抛出异常组，且不保证失败列表的次序。
 
 ### 创建关系与等待关系
 
@@ -156,72 +166,4 @@ except ExceptionGroup as remaining:
 
 等待边规则由 [asyncio：Task.cancel](https://docs.python.org/3.14/library/asyncio-task.html#task-cancel) 规定；`shield` 可以挡住沿这条边传给内部任务的取消，不接管内部任务的后续生命周期。
 
-```python run id="py.async.waiting-edge"
-import asyncio
-
-
-async def child(started):
-    started.set()
-    await asyncio.Future()
-
-
-async def parent(inner, await_child):
-    await (inner if await_child else asyncio.Future())
-
-
-for await_child in (False, True):
-    started = asyncio.Event()
-    inner = asyncio.create_task(child(started))
-    outer = asyncio.create_task(parent(inner, await_child))
-    await started.wait()
-    outer.cancel()
-    try:
-        await outer
-    except asyncio.CancelledError:
-        pass
-    print("await child:", await_child, "| child cancelled:", inner.cancelled())
-    inner.cancel()
-    try:
-        await inner
-    except asyncio.CancelledError:
-        pass
-```
-
-不等待 child 时，parent 正在等待另一个 Future，取消先沿那条边传播，child 仍然挂起；调用方随后显式取消并等待它。等待 child 时，取消传入 child，其清理先运行，再传播回 parent。示例里的 child 让取消继续传播；若它吞掉 `CancelledError`，不能据此保证 task 最终处于 cancelled 状态（<CrossRef id="python.cancellation-and-timeouts" />）。
-
-等待边能传递当前取消，却不提供「作用域退出时所有创建的任务都结束」的保证。需要这条保证时，使用 TaskGroup：
-
-```python run id="py.async.task-group-parent-cancel"
-import asyncio
-
-
-async def child(started):
-    started.set()
-    await asyncio.Future()
-
-
-async def parent(started, children):
-    try:
-        async with asyncio.TaskGroup() as group:
-            children.append(group.create_task(child(started)))
-            await asyncio.Future()
-    finally:
-        print("children done before the scope exited:", all(task.done() for task in children))
-
-
-async def main():
-    started = asyncio.Event()
-    children = []
-    outer = asyncio.create_task(parent(started, children))
-    await started.wait()
-    outer.cancel()
-    try:
-        await outer
-    except asyncio.CancelledError:
-        print("caller saw CancelledError")
-
-
-await main()
-```
-
-父任务等待的不是 child，组内 child 仍会被取消并收尾，父任务才离开作用域。这条保证来自任务组的作用域规则。
+等待边能把当前取消传给被等待的任务，却不提供「作用域退出时所有创建的任务都结束」的保证。传播依赖被等待者配合：一个吞掉 `CancelledError` 的 child 不能让调用方据此认定它最终处于 cancelled 状态（<CrossRef id="python.cancellation-and-cleanup" />）。需要这条作用域保证时使用 TaskGroup：组内任务在作用域退出前被取消并等待结束。

@@ -42,7 +42,7 @@ def load_dashboard():
 
 `await` 与协程对象的规定在[语言参考的协程一节](https://docs.python.org/3/reference/compound_stmts.html#coroutines)；task 与事件循环是标准库 [asyncio](https://docs.python.org/3/library/asyncio-task.html) 的接口约定，不是语言语法的一部分；让阻塞部分离开循环属于运行时结构问题，不在语言语法范围内。
 
-## 调用 async def 不执行任何东西
+## 调用得到一个协程，await 驱动它运行
 
 ```python run id="py.async.call-returns-coroutine"
 async def greet(name):
@@ -60,28 +60,7 @@ print("the awaited value is:", value)
 
 调用返回的是 `coroutine` 对象，函数体一行都没有执行：`the body starts here` 出现在 `await` 之后。这一点把「创建一个计算」与「运行这个计算」分开——协程对象可以被传递、放进容器、稍后再驱动，也可以永远不被驱动：调用而不 await 它，函数体永远不执行，解释器在对象被回收时给出「协程从未被 await」的警告，告警点不在调用处。
 
-## await 驱动被等待的对象
-
-```python run id="py.async.await-drives"
-import asyncio
-
-
-async def worker(name):
-    print(name, "starts")
-    await asyncio.sleep(0)
-    print(name, "resumes")
-
-
-async def main():
-    print("main reaches the await")
-    await worker("A")
-    print("main resumes after worker returned")
-
-
-await main()
-```
-
-`await worker("A")` 把控制权交给 `worker` 的协程，直到它返回；`main` 在那一行之后才继续。整段代码的先后顺序由代码结构决定，与 `sleep(0)` 的时长无关——它要求的只是「让出一次」。被等待对象抛出的异常在 `await` 表达式处重新抛出，之后按普通异常传播（见 <CrossRef id="python.exceptions" />）；从未被取回的 task 异常在对应 task 被垃圾回收时记录为一条 “Task exception was never retrieved” 日志（[asyncio — Coroutines and tasks](https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task)）。
+`await expr` 驱动被等待的对象运行，直到它返回或暂停在挂起点：单元格里的 `await pending` 让 `greet` 的协程跑完，驱动它的顶层代码在那一行之后才继续。被等待对象抛出的异常在 `await` 表达式处重新抛出，之后按普通异常传播（见 <CrossRef id="python.exceptions" />）；从未被取回的 task 异常在对应 task 被垃圾回收时记录为一条 “Task exception was never retrieved” 日志（[asyncio — Coroutines and tasks](https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task)）。
 
 ## task 什么时候运行
 
@@ -110,30 +89,11 @@ await main()
 
 在当前运行时的默认调度模式下，`create_task` 返回时 task 处于「已登记、未运行」状态，`done()` 为假；协程体要等 `main` 到达第一个挂起点才被步进，上面输出里的 `finished: False` 与 `the coroutine has not started` 就是本课程当前 Pyodide WebLoop 上的可观察结果。`await task` 取出结果：task 已经完成时它立即返回，未完成时它挂起当前协程直到 task 结束。`create_task` 自 3.14 起接受 `eager_start`：为真时协程在创建调用内立即开始执行，直到第一次阻塞点（[asyncio — Coroutines and tasks](https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task)）。
 
-## 就绪队列顺序下的输出
+## 交错只发生在挂起点
 
-两个 task 交替推进，一轮里各自前进一步。`sleep(0)` 让出控制权时，循环把当前 task 的续跑排在已注册的回调之后，于是先推进另一个 task：
+`await` 一个尚未就绪的对象是挂起点：控制权交回事件循环，循环通过 `call_soon` 把当前 task 的续跑排在已注册的回调之后（[asyncio — Event loop](https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.call_soon)），于是先推进另一个 task。`sleep(0)` 就是这样一次挂起，它要求的只是「让出一次」，与时长无关。整个任务池没有逐条顺序保证，asyncio 的概念文档把任务集合描述为一个队列，元素 generally (but not always) in order（[A conceptual overview of asyncio](https://docs.python.org/3/howto/a-conceptual-overview-of-asyncio.html)）。基于时间的相对完成顺序则由循环的时钟与负载决定，把它写进测试等于把调度器实现写进断言。
 
-```python run id="py.async.ready-queue"
-import asyncio
-
-
-async def worker(name, steps):
-    for step in range(steps):
-        print(name, step)
-        await asyncio.sleep(0)
-
-
-async def main():
-    await asyncio.gather(worker("a", 2), worker("b", 2))
-
-
-await main()
-```
-
-输出是 `a 0`、`b 0`、`a 1`、`b 1`：`sleep(0)` 让出控制权，循环通过 `call_soon` 把当前 task 的续跑排在已注册的回调之后（[asyncio — Event loop](https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.call_soon)），于是先推进另一个 task。这个具体交错是本课程当前 Pyodide WebLoop 上的可观察结果；整个任务池没有逐条顺序保证，asyncio 的概念文档把任务集合描述为一个队列，元素 generally (but not always) in order（[A conceptual overview of asyncio](https://docs.python.org/3/howto/a-conceptual-overview-of-asyncio.html)）。基于时间的相对完成顺序则由循环的时钟与负载决定，把它写进测试等于把调度器实现写进断言。
-
-同样的性质解释了 `gather` 的返回值：任务的**完成顺序**不影响结果的**排列顺序**，结果按传入顺序排。
+任务的完成顺序不影响 `gather` 的结果排列，结果按传入参数的顺序排：
 
 ```python run id="py.async.gather-order"
 import asyncio
@@ -153,9 +113,7 @@ async def main():
 await main()
 ```
 
-## 没有挂起点就没有交错
-
-交错只发生在挂起点。一个内部不挂起的函数从头到尾占住循环。
+一个内部不挂起的函数从头到尾占住循环：
 
 ```python run id="py.async.no-suspension-point"
 import asyncio
