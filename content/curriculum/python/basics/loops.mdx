@@ -113,5 +113,3 @@ print({n % 3 for n in numbers})
 | 集合 | `{表达式 for 元素 in 序列 if 条件}` |
 
 它比循环加 `append` 更紧凑，是构造容器的惯用写法。
-
-**实现边界**：不要在遍历一个列表的同时增删它，否则会跳过或重复元素，原因见 <CrossRef id="python.iteration-protocol" />。循环结束后循环变量仍然存在，值是最后一次迭代的值，`for` 不创建新的作用域（见 <CrossRef id="python.scope-and-closure" />）。

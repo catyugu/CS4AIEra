@@ -36,10 +36,10 @@ def load_dashboard():
 - `async def` 定义的是协程函数。调用它返回一个**协程对象**（coroutine object），不执行函数体。协程对象是一次还没有开始的计算。
 - 协程对象是可等待对象：`await expr` 驱动它运行，直到它返回或暂停在挂起点。
 - `await` 有两个效果，在同一个表达式里一起发生：把当前协程挂起、把控制权交回驱动它的调度器，并把被等待对象的结果作为表达式的值。被等待的对象已经就绪时，控制权不离开当前协程。
-- **task** 是被调度器驱动的协程。`asyncio.create_task(coro)` 立即返回一个 task 对象，并把该协程登记进事件循环；协程在下一个挂起点之后才有机会被步进。
+- **task** 是被调度器驱动的协程。`asyncio.create_task(coro)` 立即返回一个 task 对象，并把该协程交给事件循环调度。默认调度模式下，协程要等创建它的协程到达下一个挂起点才有机会被步进；[asyncio — Coroutines and tasks](https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task) 的 `create_task` 自 3.14 起接受 `eager_start`，为真时协程在创建调用内立刻开始执行，直到第一次阻塞点。
 - **事件循环**持有就绪队列，反复取出下一个条目并推进它。协程只在**挂起点**让出控制权：`await` 一个尚未就绪的对象是挂起点，`await` 一个已经就绪的对象不是。
 - 因此切换总是由被运行的代码自己发起，任何位置都不会被抢占。一个不释放控制权的函数会占住整个循环：在协程里直接调用一个长时间返回的同步函数，循环里的其他 task 全部停住。
-- 可以推理的是**就绪队列的先后**：同一轮里入队的顺序是确定的（先进先出），因此只依赖挂起顺序的实验有唯一输出。不可以推理的是**基于时间的相对顺序**：谁先醒来由循环的时钟与当时的负载决定。
+- 可以推理的是**回调的调用顺序**：事件循环文档保证 `call_soon` 注册的回调按注册顺序调用（[asyncio — Event loop](https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.call_soon)）。整个任务池没有这样的逐条保证：asyncio 的概念文档把事件循环的任务集合描述为一个队列，元素一次处理一个、generally (but not always) in order（[A conceptual overview of asyncio](https://docs.python.org/3/howto/a-conceptual-overview-of-asyncio.html)），因此由挂起顺序决定的输出是这套调度在当前运行时上的可观察结果。不可以推理的是**基于时间的相对顺序**：谁先醒来由循环的时钟与当时的负载决定。
 
 `await` 与协程对象的规定在[语言参考的协程一节](https://docs.python.org/3/reference/compound_stmts.html#coroutines)；task 与事件循环是标准库 [asyncio](https://docs.python.org/3/library/asyncio-task.html) 的接口约定，不是语言语法的一部分；让阻塞部分离开循环属于运行时结构问题，不在语言语法范围内。
 
@@ -82,7 +82,7 @@ async def main():
 await main()
 ```
 
-`await worker("A")` 把控制权交给 `worker` 的协程，直到它返回；`main` 在那一行之后才继续。整段代码的先后顺序由代码结构决定，与 `sleep(0)` 的时长无关——它要求的只是「让出一次」。被等待对象抛出的异常在 `await` 表达式处重新抛出，之后按普通异常传播（见 <CrossRef id="python.exceptions" />）；未被取回的 task 异常由事件循环报告到 worker 控制台。
+`await worker("A")` 把控制权交给 `worker` 的协程，直到它返回；`main` 在那一行之后才继续。整段代码的先后顺序由代码结构决定，与 `sleep(0)` 的时长无关——它要求的只是「让出一次」。被等待对象抛出的异常在 `await` 表达式处重新抛出，之后按普通异常传播（见 <CrossRef id="python.exceptions" />）；从未被取回的 task 异常在对应 task 被垃圾回收时记录为一条 “Task exception was never retrieved” 日志（[asyncio — Coroutines and tasks](https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task)）。
 
 ## task 什么时候运行
 
@@ -109,11 +109,11 @@ async def main():
 await main()
 ```
 
-`create_task` 之后 task 处于「已登记、未运行」状态，`done()` 为假；协程体在 `main` 到达第一个挂起点之后才被步进。`await task` 取出结果：task 已经完成时它立即返回，未完成时它挂起当前协程直到 task 结束。
+在当前运行时的默认调度模式下，`create_task` 返回时 task 处于「已登记、未运行」状态，`done()` 为假；协程体要等 `main` 到达第一个挂起点才被步进，上面输出里的 `finished: False` 与 `the coroutine has not started` 就是本课程当前 Pyodide WebLoop 上的可观察结果。启用 eager 调度时（[asyncio — Coroutines and tasks](https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task) 的 `eager_start`），协程在创建调用内立即开始执行，时序随之改变。`await task` 取出结果：task 已经完成时它立即返回，未完成时它挂起当前协程直到 task 结束。
 
-## 只依赖队列顺序的输出
+## 就绪队列顺序下的输出
 
-两个 task 交替推进，一轮里各自前进一步。每一轮的入队顺序是确定的，因此输出有唯一结果。
+两个 task 交替推进，一轮里各自前进一步。`sleep(0)` 让出控制权时，循环把当前 task 的续跑排在已注册的回调之后，于是先推进另一个 task；下面的交错就是本课程当前 Pyodide WebLoop 上运行这段代码得到的结果。
 
 ```python run id="py.async.ready-queue"
 import asyncio
@@ -132,7 +132,7 @@ async def main():
 await main()
 ```
 
-输出是 `a 0`、`b 0`、`a 1`、`b 1`：`sleep(0)` 把当前 task 放到就绪队列末尾，循环于是先去推进另一个 task。交错由就绪队列的顺序决定。基于时间的相对完成顺序则由循环的时钟与负载决定，把它写进测试等于把调度器实现写进断言。
+输出是 `a 0`、`b 0`、`a 1`、`b 1`：`sleep(0)` 让出控制权，循环通过 `call_soon` 把当前 task 的续跑排在已注册的回调之后（[asyncio — Event loop](https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.call_soon)），于是先推进另一个 task。这个具体交错是本课程当前 Pyodide WebLoop 上的可观察结果；整个任务池没有逐条顺序保证，asyncio 的概念文档把任务集合描述为一个队列，元素 generally (but not always) in order（[A conceptual overview of asyncio](https://docs.python.org/3/howto/a-conceptual-overview-of-asyncio.html)）。基于时间的相对完成顺序则由循环的时钟与负载决定，把它写进测试等于把调度器实现写进断言。
 
 同样的性质解释了 `gather` 的返回值：任务的**完成顺序**不影响结果的**排列顺序**，结果按传入顺序排。
 

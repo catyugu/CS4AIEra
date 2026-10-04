@@ -58,15 +58,13 @@ for size in (200, 400, 800):
 | 表示 | 栈顶 | 队首出队 | 两端操作 | 按位置读取 | 内存 |
 | --- | --- | --- | --- | --- | --- |
 | 动态数组（尾部为栈顶） | 摊还 $O(1)$ | $\Theta(n)$ | 只有一端便宜 | $\Theta(1)$ | 连续块，有空槽 |
-| 动态数组 + 队首下标（只递增 `head`） | — | 最坏 $\Theta(1)$ | — | $\Theta(1)$ | 废弃前缀不会自动回收 |
-| 动态数组 + 队首下标 + 按固定比例阈值压缩 | — | 压缩一次 $\Theta(n)$，出队摊还 $O(1)$ | — | $\Theta(1)$ | 压缩时回收前缀 |
 | 环形缓冲（固定容量） | $\Theta(1)$ | $\Theta(1)$ | $\Theta(1)$ | $\Theta(1)$ | 定长连续块，无分配 |
 | 双向链式（逐节点） | $\Theta(1)$ | $\Theta(1)$ | $\Theta(1)$ | $\Theta(n)$ | 每元素一个节点加两个引用 |
 | 分块双向链式（`deque`） | $\Theta(1)$ | $\Theta(1)$ | $\Theta(1)$ | 两端附近 $O(1)$，中部 $\Theta(n)$ | 块内连续，跨块跳转 |
 
-表中未标摊还的格子都是最坏情形。「周期性」本身不足以推出摊还界：每次出队后都压缩可以退化到 $\Theta(n^2)$ 的总搬移。能支撑证明的是一条阈值规则——废弃前缀达到数组长度的一半时才压缩；此时一次压缩复制不超过上一次压缩以来发生的出队次数，把复制成本摊到这些出队上，每次出队的长期成本是摊还 $O(1)$。链式结构的两端操作绑定在「节点或 block 的分配与链接按常数计成本」的成本模型下；表中把「只递增 `head`」与「再加周期性压缩」分成两行，因为它们的出队成本属于两个不同的实现。
+表中未标摊还的格子都是最坏情形。
 
-按端点选表示：只有一端操作（栈）用动态数组的末尾；两端都要操作（队列、滑动窗口）用环形缓冲或 `deque`，动态数组加队首下标在接受废弃前缀、或配套压缩策略时也可行。摊还界只覆盖一串操作的总成本，不给出单次操作单独的上界，这条论证见 <CrossRef id="algorithms.amortized" />。
+按端点选表示：只有一端操作（栈）用动态数组的末尾；两端都要操作（队列、滑动窗口）用环形缓冲或 `deque`。摊还界只覆盖一串操作的总成本，不给出单次操作单独的上界，这条论证见 <CrossRef id="algorithms.amortized" />。
 
 ## 栈
 
@@ -148,7 +146,7 @@ except OverflowError as failure:
 
 ## 双端队列
 
-Python 的 `collections.deque` 是分块的双向链式结构。在把固定大小 block 的分配、释放与链接视为 $\Theta(1)$ 的成本模型下，两端 `append` 或 `pop` 都是 $\Theta(1)$：它不会像动态数组那样在扩容时复制随 $n$ 增长的整段元素。
+Python 的 `collections.deque` 是分块的双向链式结构。在把固定大小的块（block）的分配、释放与链接视为 $\Theta(1)$ 的成本模型下，两端 `append` 或 `pop` 都是 $\Theta(1)$：它不会像动态数组那样在扩容时复制随 $n$ 增长的整段元素。
 
 ```python run id="alg.deque.both-ends"
 from collections import deque
@@ -171,8 +169,8 @@ print("pushing on the other end evicts the opposite end:", list(bounded))
 
 `maxlen` 把容量约束直接写进接口约定：满时从另一端淘汰元素，不抛错。这类「有界 + 淘汰」的语义适合做滑动窗口，但它同时改变了「插入」的含义——调用方必须明确接受丢弃。
 
-有界队列也可以用动态数组加队首下标实现，成本相差不大；两者的区别在于 deque 的两端操作在上述模型下是 $\Theta(1)$，不需要在扩容时刻承担突发复制，而其中间访问是 $\Theta(n)$，不要按随机访问假定成本。
+deque 的两端操作在上述模型下是 $\Theta(1)$，不需要在扩容时刻承担突发复制，而其中间访问是 $\Theta(n)$，不要按随机访问假定成本。
 
-Python 文档把这两端操作写作「approximately $O(1)$」（[collections — deque objects](https://docs.python.org/3/library/collections.html#collections.deque)），描述的是该实现的实际性能，没有把最坏上界写进接口约定；上面的 $\Theta(1)$ 结论属于「block 操作按常数计成本」的成本模型。
+Python 文档把这两端操作写作「approximately $O(1)$」（[collections — deque objects](https://docs.python.org/3/library/collections.html#collections.deque)），描述的是该实现的实际性能，没有把最坏上界写进接口约定；上面的 $\Theta(1)$ 结论属于「块操作按常数计成本」的成本模型。
 
 决定表示的始终是端点操作模式与延迟要求；抽象类型叫「栈」还是「队列」本身不决定表示。

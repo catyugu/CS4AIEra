@@ -10,31 +10,11 @@ objectives:
   - 判断一段代码需要 global 还是 nonlocal，并说明不加时的实际错误
 ---
 
-模块顶层有列表 `totals`，下面这个函数先往列表里追加一个元素，再把它重置为空列表；追加那一行抛 `UnboundLocalError`。
-
-## 赋值使名字成为局部
-
-```python run id="py.scope.unbound-local"
-totals = [1, 2, 3]
-
-
-def append_bad():
-    try:
-        totals.append(4)
-        totals = []
-    except UnboundLocalError as exc:
-        print("UnboundLocalError:", exc)
-
-
-append_bad()
-print("module-level list is untouched:", totals)
-```
-
-`totals = []` 写在函数体里，于是整个函数中的 `totals` 都是局部名。追加那一行读的是一个还没有绑定的局部名，抛 `UnboundLocalError`；模块层的 `totals` 全程没有被这次调用触及。函数体里任何位置的赋值都让这个名字属于本函数，`for` 目标、`with ... as`、`except ... as` 与解包目标同样如此。要让赋值作用到模块列表上，可以加一行 `global totals`，或者改由参数传入列表、把结果返回给调用方。
+一个名字属于哪一层，由它在函数体里的绑定决定。先看一次普通的读取，再看赋值怎样改变结论。
 
 ## 名称来自哪一层
 
-换一个函数，看它读到的 `size` 是哪一个。
+先看最普通的一次读取：下面这个函数读到的 `size` 是哪一个。
 
 ```python run id="py.scope.resolution"
 size = "module"
@@ -69,6 +49,26 @@ print("builtin fallback:", len("abcd"))
 - **函数对象带着它的定义作用域**。内层函数被返回后，外层帧已经结束，内层函数通过闭包（closure）继续访问外层帧里的那些名字。捕获的是变量本身，读取发生在函数被调用的时候。
 
 模块对象是全局层的载体：模块顶层的名字存放在模块的命名空间里，导入该模块的代码与模块内的函数看到的是同一个对象。模块全局名对所有函数可见且可变，把模块级容器当作跨函数状态就是隐式共享状态，跨调用、跨请求都会累积。
+
+## 赋值使名字成为局部
+
+```python run id="py.scope.unbound-local"
+totals = [1, 2, 3]
+
+
+def append_bad():
+    try:
+        totals.append(4)
+        totals = []
+    except UnboundLocalError as exc:
+        print("UnboundLocalError:", exc)
+
+
+append_bad()
+print("module-level list is untouched:", totals)
+```
+
+`totals = []` 写在函数体里，于是整个函数中的 `totals` 都是局部名。追加那一行读的是一个还没有绑定的局部名，抛 `UnboundLocalError`；模块层的 `totals` 全程没有被这次调用触及。函数体里任何位置的赋值都让这个名字属于本函数，`for` 目标、`with ... as`、`except ... as` 与解包目标同样如此。要让赋值作用到模块列表上，可以加一行 `global totals`，或者改由参数传入列表、把结果返回给调用方。
 
 ## global 与 nonlocal
 
@@ -122,7 +122,7 @@ print("results:", accumulate(1), accumulate(2), accumulate(3))
 print("still accumulating after the outer call returned:", accumulate(4))
 ```
 
-`running` 是 `make_accumulator` 帧里的局部名。外层调用返回后帧本身结束，`add` 仍然读写同一个列表对象，每次调用都在上一次的结果上继续累加。闭包延长的是被引用对象的存活期；外层帧在返回时结束，只有被闭包引用的对象继续存活。被捕获的大对象随函数对象一起存活，长生命周期的回调会因此持有本可释放的内存。
+`running` 是 `make_accumulator` 帧里的局部名。外层调用返回后帧本身结束，`add` 仍然读写同一个列表对象，每次调用都在上一次的结果上继续累加。闭包保留的是外层自由变量的绑定位置，而不是定义时值的副本；这个绑定在外层帧结束后继续存在，因此它当前引用的对象也保持可达，`nonlocal` 重绑定的正是它。被捕获的大对象随函数对象一起存活，长生命周期的回调会因此持有本可释放的内存。
 
 ## 延迟绑定
 

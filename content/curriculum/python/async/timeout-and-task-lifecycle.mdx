@@ -7,7 +7,6 @@ status: published
 objectives:
   - 说明 asyncio.timeout 取消的是哪个 task，以及 TimeoutError 在哪一层出现
   - 判断在 timeout 块内捕获 CancelledError 会改变什么
-  - 说明 shield 挡住了什么、没有挡住什么
   - 说明 TaskGroup 在子任务失败与父任务被取消两条路径上分别做什么
 ---
 
@@ -67,7 +66,7 @@ await main()
 
 到期时间由循环的时钟决定，`timeout` 保证的是「不会早于」这个下界，不保证毫秒级的准时（见 <CrossRef id="python.asyncio-scheduling" />）。期限在创建时还不知道时用 `asyncio.timeout(None)` 加 `reschedule()`，之后用 `expired()` 读回是否已经到期。
 
-## 屏蔽
+## 深入：屏蔽取消
 
 `shield` 的目标是让内部任务在外部这次取消中活下来。它挡住的只是取消本身，不改变调用方仍在被取消这个事实：
 

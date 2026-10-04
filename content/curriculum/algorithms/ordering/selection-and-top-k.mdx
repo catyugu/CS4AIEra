@@ -6,7 +6,7 @@ title: 选择、第 k 个元素与 Top-K
 status: published
 objectives:
   - 区分第 k 个顺序统计量、无序 Top-K 与已排序 Top-K 三种问题的后置条件
-  - 用一次分区与单侧递归写出 quickselect，并由「等待一次落在中间一半的 pivot」推导期望线性
+  - 用一次分区与单侧递归写出 quickselect，并由「等待一次落在中间一半的主元」推导期望线性
   - 用大小受 k 限制的堆在只能单遍读取的输入上维护 Top-K，说明时间与空间各由哪个参数决定
   - 由每种需求必须保存的结果推导它的典型成本，并在改变 n 与 k 时预测各条成本表达式怎样变化
 ---
@@ -17,7 +17,7 @@ objectives:
 
 秩 $r$ 的顺序统计量（order statistic）是完整排序后位于下标 $r$ 的那个元素，这里要求 $0 \le r < n$，其余元素不要求有序；只需要确定落在位置 $r$ 的那一个元素。
 
-quickselect 复用 <CrossRef id="algorithms.quicksort" /> 的分区：一次分区把区间按 pivot 分成两段，让 pivot 落在它的最终位置 $p$。目标秩小于 $p$ 时答案只在左段，大于 $p$ 时只在右段，相等就直接返回；无论走哪一边，另一侧连同 pivot 一起被排除，此后不再参与任何比较。
+quickselect 复用 <CrossRef id="algorithms.quicksort" /> 的分区：一次分区把区间按主元（pivot）分成两段，让主元落在它的最终位置 $p$。目标秩小于 $p$ 时答案只在左段，大于 $p$ 时只在右段，相等就直接返回；无论走哪一边，另一侧连同主元一起被排除，此后不再参与任何比较。
 
 它维持的循环不变量是：目标秩始终位于当前区间 $[low, high]$ 内，已经排除在左侧的元素都不大于候选区间里的元素，已经排除在右侧的元素都不小于候选区间里的元素。第一条保证目标还在区间里，后两条保证被丢掉的部分里没有更小的候选：
 
@@ -26,10 +26,10 @@ from random import Random
 
 
 def partition(items, low, high):
-    """Postcondition: returns the pivot index p with items[low..p) < pivot <= items[p..high]."""
-    pivot, boundary = items[high], low
+    """Postcondition: returns the 主元 index p with items[low..p) < 主元 <= items[p..high]."""
+    主元, boundary = items[high], low
     for j in range(low, high):
-        if items[j] < pivot:
+        if items[j] < 主元:
             items[boundary], items[j] = items[j], items[boundary]
             boundary += 1
     items[boundary], items[high] = items[high], items[boundary]
@@ -46,9 +46,9 @@ def quickselect(items, low, high, rank, rng):
     if position == rank:
         return items[position]
     if rank < position:
-        print(f"pivot at {position}: recurse into the left, {high - position + 1} elements excluded")
+        print(f"主元 at {position}: recurse into the left, {high - position + 1} elements excluded")
         return quickselect(items, low, position - 1, rank, rng)
-    print(f"pivot at {position}: recurse into the right, {position - low + 1} elements excluded")
+    print(f"主元 at {position}: recurse into the right, {position - low + 1} elements excluded")
     return quickselect(items, position + 1, high, rank, rng)
 
 
@@ -60,9 +60,9 @@ value = quickselect(case, 0, size - 1, rank, Random(20261040))
 print("rank", rank, "->", value, "| matches a full sort:", value == sorted(case)[rank])
 ```
 
-quickselect 只在目标秩所在的一侧递归，另一侧连同 pivot 一起被排除，此后不再参与任何比较；各轮排除的元素合计 $n - 1$ 个，区间里只剩目标秩上的那一个元素。打印出的值与完整排序中同一秩的元素一致。
+quickselect 只在目标秩所在的一侧递归，另一侧连同主元一起被排除，此后不再参与任何比较；各轮排除的元素合计 $n - 1$ 个，区间里只剩目标秩上的那一个元素。打印出的值与完整排序中同一秩的元素一致。
 
-随机 pivot 的秩在当前区间里均匀分布，落在中间一半（约 $m/4$ 到 $3m/4$）的概率不低于 $1/2$；一旦如此，区间长度降到至多 $3m/4$。等到一次这样的成功，轮数期望不超过 2，每轮成本不超过 $m$ 次比较，把区间收到 $3m/4$ 的期望成本是 $O(m)$。总期望成本因此是公比为 $3/4$ 的几何级数：
+随机主元的秩在当前区间里均匀分布，落在中间一半（约 $m/4$ 到 $3m/4$）的概率不低于 $1/2$；一旦如此，区间长度降到至多 $3m/4$。等到一次这样的成功，轮数期望不超过 2，每轮成本不超过 $m$ 次比较，把区间收到 $3m/4$ 的期望成本是 $O(m)$。总期望成本因此是公比为 $3/4$ 的几何级数：
 
 $$
 O\left(m + \frac{3}{4} m + \left(\frac{3}{4}\right)^2 m + \cdots\right) = O(m).
@@ -70,7 +70,7 @@ $$
 
 这条论证对任意固定秩都成立：最小、中位数或第 $n - 1$ 个，期望成本都是 $O(n)$。
 
-**边界**：上面的期望界依赖键两两不同；二路 `<` / `>=` 分区在大量重复键上会退化，随机 pivot 也避免不了。最坏情形仍是 $\Theta(n^2)$——pivot 每轮落在区间端点时，区间每轮只缩小一个元素，随机化把这种输入变成低概率事件，单次运行的上界不变。实现沿目标秩所在的一侧递归，额外空间随递归深度增长，键两两不同、随机 pivot 的模型下期望深度为 $O(\log n)$，单次运行最坏仍可能达到 $O(n)$。
+**边界**：上面的期望界依赖键两两不同；二路 `<` / `>=` 分区在大量重复键上会退化，随机主元也避免不了。最坏情形仍是 $\Theta(n^2)$——主元每轮落在区间端点时，区间每轮只缩小一个元素，随机化把这种输入变成低概率事件，单次运行的上界不变。实现沿目标秩所在的一侧递归，额外空间随递归深度增长，键两两不同、随机主元的模型下期望深度为 $O(\log n)$，单次运行最坏仍可能达到 $O(n)$。
 
 ## 前 k 个元素：一个有界堆
 

@@ -8,7 +8,7 @@ objectives:
   - 定义并调用函数，说明实参怎样绑定到形参、返回值怎样成为调用结果
   - 判断一个没有 return 的函数返回什么
   - 用默认参数与关键字参数让调用意图更清楚
-  - 区分 lambda 表达式与 def 定义的函数，说明各自的写法与适用场景
+  - 说明 lambda 表达式与 def 定义的函数在写法与适用场景上的差别
 ---
 
 矩形的面积是宽乘高，同一段乘法在程序里反复出现。`def` 把这段计算命名，之后换一组宽高调用它，不必每次重写公式。
@@ -24,7 +24,7 @@ print(area(3, 4))
 print(area(5, 2))
 ```
 
-`def area(width, height):` 定义函数，函数体靠缩进界定。调用 `area(3, 4)` 时，实参按书写顺序求值，再绑定到形参 `width` 与 `height`；函数体执行，`return` 的值成为整个调用表达式的值。实参个数与形参不匹配抛 `TypeError`，消息里给出函数签名。形参名和调用方指向同一个对象，函数对形参所指对象的原地修改，调用方看得见（见 <CrossRef id="python.names-and-objects" />）。函数体是一个新的作用域：函数内赋值的名字默认只属于函数内部。形参与实参的完整绑定规则见 <CrossRef id="python.call-semantics" />。
+`def area(width, height):` 定义函数，函数体靠缩进界定。调用 `area(3, 4)` 时，实参按书写顺序求值，再绑定到形参 `width` 与 `height`；函数体执行，`return` 的值成为整个调用表达式的值。实参个数与形参不匹配抛 `TypeError`。函数体是一个新的作用域：函数内赋值的名字默认只属于函数内部。形参与实参的完整绑定规则见 <CrossRef id="python.call-semantics" />。
 
 ## 返回值与 None
 
@@ -81,13 +81,4 @@ print(area.__doc__)
 
 函数体的第一个字符串是文档字符串，`__doc__` 可以取出。它记录函数的接口约定：参数含义、返回值、边界条件。
 
-## lambda 表达式
-
-`lambda parameters: expression` 求值得到一个函数对象。它没有名字，函数体只能是这一个表达式，不能有语句或注解。
-
-```python run id="py.functions.lambda"
-double = lambda value: value * 2
-print(double(4), double.__name__)
-```
-
-`double` 是一个普通名称，指向 `lambda` 产生的函数对象；这个函数对象没有定义时的名字，`__name__` 是 `"<lambda>"`。需要多行逻辑、文档字符串或语句时用 `def`；`lambda` 的实参绑定与 `def` 相同（见 <CrossRef id="python.call-semantics" />）。
+`lambda parameters: expression` 是另一种写函数的方式：它求值得到一个函数对象，函数体只能是这一个表达式，这个函数对象没有定义时的名字，`__name__` 是 `"<lambda>"`。它适合作为一次性传入的小函数；需要多行逻辑、文档字符串或注解时用 `def`。实参绑定与 `def` 相同（见 <CrossRef id="python.call-semantics" />）。

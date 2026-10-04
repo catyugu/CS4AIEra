@@ -8,7 +8,7 @@ objectives:
   - 说明一次异常从抛出点到处理点经过了哪些步骤，以及每层帧上的 finally 何时运行
   - 预测 finally 在正常结束、return 与异常展开三条路径上各自何时运行
   - 解释 finally 中 return 的效果，并说明它为什么吞掉异常
-  - 区分隐式异常链与显式 `raise ... from`，并说明什么时候该断掉链
+  - 区分隐式异常链与显式 `raise ... from`
 ---
 
 一个函数抛出异常，就不再返回它的调用方：控制权沿调用栈逐层向外展开，直到某一层的 `try` 接住它；没有一层接住时，解释器打印回溯（traceback）并结束程序。异常是一段控制流，抛出之后控制权如何沿调用栈离开、哪些代码必然运行、调用方最终看到什么信息，都由这条路径决定。
@@ -153,7 +153,7 @@ except ConfigError as exc:
     print("suppressed chain:", exc.__cause__, "| suppress_context:", exc.__suppress_context__)
 ```
 
-在 `except` 块内抛出的新异常自动带上 `__context__`，指向正在处理的异常，因此原始失败不会丢失。`raise ... from exc` 把它登记为 `__cause__`，语义是「这是本次失败的直接原因」；`raise ... from None` 不设原因，只抑制上下文的显示，用于失败细节对调用方无意义、暴露出去只会干扰阅读的边界（例如把内部解析错误改写为公开的输入错误）。两种写法的 `__suppress_context__` 都是真值，区别在于是否存在明确的原因。
+在 `except` 块内抛出的新异常自动带上 `__context__`，指向正在处理的异常，因此原始失败不会丢失。`raise ... from exc` 把它登记为 `__cause__`，语义是「这是本次失败的直接原因」；`raise ... from None` 不设原因，只抑制上下文的显示。两种写法的 `__suppress_context__` 都是真值，区别在于是否存在明确的原因。
 
 ## 重新抛出
 
@@ -187,7 +187,7 @@ for label, function in [("bare raise", bare_reraise), ("raise instance", instanc
         print(label, "->", len(frames), "frames |", [frame.name for frame in frames])
 ```
 
-裸 `raise` 保留原异常对象、回溯与传播位置，只增加调用方的帧；`raise exc` 抛出的是同一个对象，但把当前这一行记为抛出位置，回溯里因此出现两次处理帧：原始抛出点仍在，处理帧多了一次。需要在中间层记录或转换后再抛时，用裸 `raise`；需要包装成新的失败语义时，用 `raise New from exc`。
+裸 `raise` 保留原异常对象、回溯与传播位置，只增加调用方的帧；`raise exc` 抛出的是同一个对象，但把当前这一行记为抛出位置，回溯里因此出现两次处理帧：原始抛出点仍在，处理帧多了一次。
 
 ## 异常的边界
 
@@ -197,4 +197,4 @@ print("KeyboardInterrupt is Exception:", issubclass(KeyboardInterrupt, Exception
 print("GeneratorExit is Exception:", issubclass(GeneratorExit, Exception))
 ```
 
-`SystemExit`、`KeyboardInterrupt` 与 `GeneratorExit` 继承 `BaseException` 而不是 `Exception`，因此 `except Exception` 不会接住它们。写 `except BaseException` 或裸 `except:` 会把解释器的正常退出信号也吞掉，让 Ctrl-C 与进程终止失效。`except Exception: pass` 把可诊断的失败变成继续执行的错误状态，只在明确知道如何恢复时才捕获。
+`SystemExit`、`KeyboardInterrupt` 与 `GeneratorExit` 继承 `BaseException`，`except Exception` 不会接住它们。
