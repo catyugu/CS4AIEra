@@ -10,7 +10,7 @@ objectives:
   - 用分支收窄 union，处理可空值与 object
 ---
 
-`def resize(width: int, height: int) -> int` 声明参数与返回值都是 `int`。给 `width` 传入 `"abc"`，类型检查器会拒绝这次调用：`str` 与 `int` 不一致；解释器不读标注，照常把 `"abc"` 绑定到 `width` 并返回一个字符串。
+`def resize(width: int, height: int) -> int` 声明参数与返回值都是 `int`。给 `width` 传入 `"abc"`，类型检查器会报告类型错误：`str` 与 `int` 不一致；Python 的调用机制不会根据标注拒绝实参，它照常把 `"abc"` 绑定到 `width` 并返回一个字符串。
 
 ```python run id="py.typing.not-enforced"
 def resize(width: int, height: int) -> int:
@@ -25,7 +25,7 @@ except TypeError:
     print("missing argument: call binding failed")
 ```
 
-检查器拒绝 `resize("abc", 4)`，运行时的乘法把 `"abc"` 重复成 `"abcabcabcabc"`。少传一个参数的调用抛 `TypeError`，来自 <CrossRef id="python.call-semantics" /> 的参数绑定规则，与标注无关。文中标出的静态错误都是类型契约的推导；浏览器单元格运行 Python，不运行静态检查器。
+检查器报告类型错误：`resize("abc", 4)`，运行时的乘法把 `"abc"` 重复成 `"abcabcabcabc"`。少传一个参数的调用抛 `TypeError`，来自 <CrossRef id="python.call-semantics" /> 的参数绑定规则，与标注无关。文中标出的静态错误都是类型契约的推导；浏览器单元格运行 Python，不运行静态检查器。
 
 ## 标注写下的契约
 

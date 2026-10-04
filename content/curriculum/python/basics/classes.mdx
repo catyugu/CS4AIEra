@@ -5,6 +5,7 @@ order: 80
 title: 类与实例
 status: published
 objectives:
+  - 定义一个类、创建多个实例，并区分各实例自己的状态
   - 说明 class 语句执行时创建了什么对象，以及名称绑定到哪个对象
   - 判断一个属性来自实例还是类，并预测修改它在哪些对象上可见
   - 解释两个实例为什么会共享同一个可变对象，并给出修正方式
@@ -60,7 +61,7 @@ print(a.members, b.members)
 print(a.members is b.members, Team.members is a.members)
 ```
 
-`members = []` 属于类对象，是所有实例共享的一个对象；实例属性属于单个实例。读取属性时先看实例自己的属性，再看类，两层都没有则抛 `AttributeError`。
+`members = []` 属于类对象，是所有实例共享的一个对象；实例属性属于单个实例。对这里这种没有描述符的普通属性，读取时先看实例自己的属性，再看类，两层都没有则抛 `AttributeError`（描述符会改变这个顺序，见 <CrossRef id="python.attributes-and-descriptors" />）。
 
 `a` 与 `b` 都没有自己的 `members`，读取时沿层次找到类上的那一个，`append` 修改的是同一个列表：两个实例的输出相同，且 `a.members is b.members` 为真。这是<Term id="class-attribute">类属性</Term>最常见的失效模式，执行过程中没有任何错误，只是两个实例的状态合流了。把可变状态放进 `__init__`，属性就属于实例：
 
