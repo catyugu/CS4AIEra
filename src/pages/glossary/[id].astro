@@ -11,7 +11,8 @@ import CourseLayout from "../../layouts/CourseLayout.astro";
 
 /**
  * Full glossary entries: the third layer of the term system (doc/DESIGN.md, 术语、导航与搜索) at a stable URL. The short definition stays on the index and in
- * the inline popover; this page carries the definition, scope and misuse notes.
+ * the inline popover; this page carries the definition and its disambiguation from
+ * neighbouring concepts (doc/CONTENT_GUIDE.md, 术语与术语表).
  */
 export async function getStaticPaths() {
   const entries = await getCollection("glossary");
