@@ -7,9 +7,9 @@ status: published
 objectives:
   - 用无序数组与有序数组各自的插入与取出成本，说出优先队列的抽象接口只提供哪一组操作
   - 陈述堆的形状不变量与顺序不变量，并在数组下标关系上读出父子位置
+  - 说明数组布局为什么只在近完全形状下保持紧凑
   - 追踪一次堆序破坏沿一条根路径的修复过程，预测每一步交换后的数组
   - 说明自底向上建堆为什么是线性的，并区分堆序与排序序
-  - 说出堆在按值查找、最大键与按键序取出上各自缺少什么
 ---
 
 一个调度系统不断收到新任务，同时不断取出一项当前优先级最高（按优先级取最小）的任务。两种数组表示都能支持这组操作，但线性成本出现在不同的操作上。
@@ -43,9 +43,9 @@ objectives:
 
 顺序不变量沿父子链逐级传递，因此根是全树的最小元素；形状不变量把深度压到 $\lfloor \log_2 n \rfloor$，一条根到叶的路径因此很短。顺序不变量直接约束的只有父子对，左右孩子之间没有约束，节点与更深后代之间的次序由传递性给出。堆把约束收窄到父子之间，换来的是一次修改只需沿一条路径恢复堆序。
 
-## 数组里的完全二叉树
+## 用数组表示完全二叉树
 
-用一个密集数组存节点，下标之间的关系就是树结构本身（见 <CrossRef id="algorithms.tree-representation" />）：
+用一个密集数组存节点，下标之间的关系就是树结构本身。这套下标关系就是表示的不变量：
 
 | 位置 | 下标 |
 | --- | --- |
@@ -56,6 +56,39 @@ objectives:
 | 第一个叶子 | $\lfloor n / 2 \rfloor$ |
 
 只要节点占满连续下标 $0, \dots, n-1$，完全二叉树的形状就由表示本身确定，形状不变量因此**按构造成立**，不需要另做平衡修复；只有表示里真的留下空洞时它才会被破坏。下标 $i$ 的深度是 $\lfloor \log_2 (i + 1) \rfloor$，从下标就能读出它离叶子的距离。基本优先队列不提供「删除任意元素」，抽象接口并不要求定位任意元素；在表示上删除一个中间槽位会移动后继槽位，数组保持连续，形状不变量不受影响，可能被破坏的是堆序。
+
+下标算术省掉每个节点的子指针；把它放到一个完整数组与一条只取右孩子的链上，可以看出这种表示对形状的依赖。
+
+```python run id="alg.trees.array-layout"
+def parent_of(index):
+    return (index - 1) // 2
+
+
+def children_of(index):
+    return 2 * index + 1, 2 * index + 2
+
+
+def chain_of(depth):
+    """A right-only chain of depth+1 nodes under implicit binary-tree indexing."""
+    size = 2 ** (depth + 1) - 1
+    slots = [None] * size
+    index = 0
+    for level in range(depth + 1):
+        slots[index] = "node-" + str(level)
+        index = 2 * index + 2
+    return slots
+
+
+complete = ["A", "B", "C", "D", "E", "F", "G"]
+print("children of", complete[1], "sit at", children_of(1))
+print("parent of", complete[4], "is", complete[parent_of(4)])
+print("complete tree:", len(complete), "nodes in", len(complete), "slots")
+
+chain = chain_of(12)
+print(len(chain), "slots hold", sum(1 for slot in chain if slot is not None), "chain nodes")
+```
+
+完全形状下数组可以没有空洞；稀疏形状仍然满足同一套下标规则，却可能产生指数级浪费。对连续取右孩子的高度 $h$ 链，最深节点下标为 $2^{h+1}-2$，因此截断到最后一个已用槽位的数组也需要 $2^{h+1}-1$ 个槽位：13 个节点就需要 8191 个槽位。连续取左孩子时需要的槽位数是 $2^{h}$，常数因子不同，但两者都是 $\Theta(2^{h})$。
 
 ## 破坏一处，沿一条路径修复
 

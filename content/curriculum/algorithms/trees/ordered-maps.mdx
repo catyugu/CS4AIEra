@@ -138,7 +138,62 @@ print("nodes entered:", len(entered), "of 7:", entered)
 
 普通 BST 对形状不作要求，高度可以坏到 $\Theta(n)$，那批路径操作的 $O(h)$ 保证也就可能退化到线性。要拿到对数级的保证，需要在 BST 不变量之外再维持一条限制形状的**平衡不变量**。自平衡搜索树（self-balancing search tree）靠这样一条不变量工作，例如 AVL 树要求每个节点的左右子树高度差至多为 1。平衡不变量推出 $h = O(\log n)$，再加上任何二叉树容纳 $n$ 个节点都需要 $h = \Omega(\log n)$，便得到 $h = \Theta(\log n)$。
 
-代价来自更新维护：插入或删除之后要检查并恢复平衡条件，经典实现用**旋转**改变少数引用，同时保持中序序列不变；节点中还保存平衡因子、高度或子树大小等少量元数据。对数高度由这套额外维护换来，BST 不变量本身给不出它。
+代价来自更新维护：插入或删除之后要检查并恢复平衡条件，经典实现用**旋转**（rotation）改变少数引用，同时保持中序序列不变。
+
+旋转把一个节点提升为某棵子树的新根，只重接三处引用。以右旋（right rotation）为例，它作用在有一个左孩子的节点 $y$ 上：设 $y$ 的左孩子是 $x$，$x$ 的右子树是 $B$（$B$ 可以为空）。三个引用这样改：
+
+- $y$ 的左引用从 $x$ 改指 $B$；
+- $x$ 的右引用从 $B$ 改指 $y$；
+- $y$ 的父节点对 $y$ 的引用从 $y$ 改指 $x$；$y$ 是根时，这一处就是树根。
+
+```text
+before                            after
+      y                             x
+     / \                           / \
+    x   C     ==>                 A   y
+   / \                               / \
+  A   B                             B   C
+```
+
+两种形态的中序序列都是 $A, x, B, y, C$。关键是 $B$：它是 $x$ 的右子树，其中的键都大于 $x$；它又是 $y$ 的左子树，其中的键都小于 $y$。$B$ 里每个键因此严格落在 $x$ 与 $y$ 之间，在键序里本来排在 $x$ 之后、$y$ 之前。把 $B$ 从 $x$ 的右孩子挪成 $y$ 的左孩子，只是换了它与这对节点的挂靠点，它该在的键序位置没有变；$x$ 顶到 $y$ 的位置、$y$ 落成 $x$ 的右孩子，把「$y$ 排在 $x$ 之后」这条关系换了个方向表示。旋转后整棵树的中序序列与旋转前逐项相同，BST 不变量继续成立。
+
+下面这棵小树里节点 5 没有左子树，深度全落在右侧：右子树从 50 起沿左孩子一路排到 30、20、10，30 的右孩子是 40。对右子树的根 50 做一次右旋，此时 $x = 30$、$B = 40$：
+
+```python run id="alg.trees.rotate-order"
+class Node:
+    __slots__ = ("key", "left", "right")
+
+    def __init__(self, key, left=None, right=None):
+        self.key, self.left, self.right = key, left, right
+
+
+def height(node):
+    return -1 if node is None else 1 + max(height(node.left), height(node.right))
+
+
+def inorder(node):
+    return inorder(node.left) + [node.key] + inorder(node.right) if node else []
+
+
+tree = Node(5, None, Node(50, Node(30, Node(20, Node(10)), Node(40))))
+
+order_before, height_before = inorder(tree), height(tree)
+
+
+def rotate_right(y):
+    x = y.left
+    y.left = x.right        # the middle subtree B moves to y.left
+    x.right = y             # y becomes the right child of x
+    return x
+
+
+tree.right = rotate_right(tree.right)   # parent link now points to x
+
+print("in-order before:", order_before, "height before:", height_before)
+print("in-order after: ", inorder(tree), "height after: ", height(tree))
+```
+
+两行的中序序列都是 `[5, 10, 20, 30, 40, 50]`，高度从 4 降到 3：三个引用改了，键的次序一个没动。
 
 同一个抽象接口也有别的表示，取舍落在更新一侧：
 
