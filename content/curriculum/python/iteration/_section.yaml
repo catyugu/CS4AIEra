@@ -1,5 +1,5 @@
 id: python.iteration
-label: 迭代与资源
+label: 迭代、异常与资源
 order: 40
 summary: 可迭代对象与迭代器协议、生成器、异常传播与 finally、上下文管理器与资源生命周期。
 status: active

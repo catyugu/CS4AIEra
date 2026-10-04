@@ -11,9 +11,7 @@ objectives:
   - 区分隐式异常链与显式 `raise ... from`，并说明什么时候该断掉链
 ---
 
-异常是一段控制流：抛出之后，控制权如何沿调用栈离开，哪些代码必然运行，调用方最终看到什么信息。
-
-生成器体内的 `StopIteration` 会被转换，这个转换与传播顺序、`finally` 的语义共用同一个机制。
+一个函数抛出异常，就不再返回它的调用方：控制权沿调用栈逐层向外展开，直到某一层的 `try` 接住它；没有一层接住时，解释器打印回溯（traceback）并结束程序。异常是一段控制流，抛出之后控制权如何沿调用栈离开、哪些代码必然运行、调用方最终看到什么信息，都由这条路径决定。
 
 ## 异常传播的路径
 
@@ -21,7 +19,7 @@ objectives:
 
 1. 当前帧的 `try` 语句在子句中从上到下匹配：`except SomeType` 匹配该实例的类型及其子类；
 2. 没有匹配则退出当前帧，进入调用方，重复匹配；每退出一层帧，该层的 `finally` 块与 `with` 的退出逻辑都会运行；
-3. 到达栈顶仍无人处理时，异常终止程序，并由解释器打印回溯（traceback）；
+3. 到达栈顶仍无人处理时，异常终止程序，并由解释器打印回溯；
 4. 处理该异常的 `except` 块执行后，控制权在 `try` 语句之后继续——除非处理块自己又抛出。
 
 一个 `try` 语句的四个部分各自有条件：
@@ -155,7 +153,7 @@ except ConfigError as exc:
     print("suppressed chain:", exc.__cause__, "| suppress_context:", exc.__suppress_context__)
 ```
 
-在 `except` 块内抛出的新异常自动带上 `__context__`，指向正在处理的异常，因此原始失败不会丢失。`raise ... from exc` 把它登记为 `__cause__`，语义是「这是本次失败的直接原因」；`raise ... from None` 不设原因，只抑制上下文的显示，用于失败细节对调用方无意义、暴露出去只会干扰阅读的边界（例如把内部解析错误改写为公开的输入错误）。两种写法的 `__suppress_context__` 都是真值，区别在于是否存在明确的原因。异常对象持有回溯，回溯引用帧，帧又引用其中的局部变量，因此长期保存异常对象会长期持有这些对象。
+在 `except` 块内抛出的新异常自动带上 `__context__`，指向正在处理的异常，因此原始失败不会丢失。`raise ... from exc` 把它登记为 `__cause__`，语义是「这是本次失败的直接原因」；`raise ... from None` 不设原因，只抑制上下文的显示，用于失败细节对调用方无意义、暴露出去只会干扰阅读的边界（例如把内部解析错误改写为公开的输入错误）。两种写法的 `__suppress_context__` 都是真值，区别在于是否存在明确的原因。
 
 ## 重新抛出
 
@@ -199,4 +197,4 @@ print("KeyboardInterrupt is Exception:", issubclass(KeyboardInterrupt, Exception
 print("GeneratorExit is Exception:", issubclass(GeneratorExit, Exception))
 ```
 
-`SystemExit`、`KeyboardInterrupt` 与 `GeneratorExit` 继承 `BaseException` 而不是 `Exception`，因此 `except Exception` 不会接住它们。写 `except BaseException` 或裸 `except:` 会把解释器的正常退出信号也吞掉，让 Ctrl-C 与进程终止失效。`except Exception: pass` 把可诊断的失败变成继续执行的错误状态，只在明确知道如何恢复时才捕获。异常留给异常情况：用它跳过低频分支可以接受，用它代替清楚的普通分支会损害可读性。
+`SystemExit`、`KeyboardInterrupt` 与 `GeneratorExit` 继承 `BaseException` 而不是 `Exception`，因此 `except Exception` 不会接住它们。写 `except BaseException` 或裸 `except:` 会把解释器的正常退出信号也吞掉，让 Ctrl-C 与进程终止失效。`except Exception: pass` 把可诊断的失败变成继续执行的错误状态，只在明确知道如何恢复时才捕获。

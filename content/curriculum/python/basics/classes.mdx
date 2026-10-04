@@ -34,9 +34,11 @@ print(first.value, second.value)
 print(Counter)
 ```
 
-`class Counter:` 执行时创建一个类对象并把名字 `Counter` 绑定到它；`Counter()` 调用这个类对象创建**实例**，返回值是实例。`first` 与 `second` 是两份独立实例，各自持有自己的 `value`，因此 `first` 自增两次之后 `second` 的值不受影响。
+`first` 与 `second` 是两份独立实例，各自持有自己的 `value`，因此 `first` 自增两次之后 `second` 的值不受影响。`increment` 定义在类体里，每次调用改的是接收它的那个实例的状态。
 
-`instance.value` 是属性访问，`instance.value = 3` 是属性赋值，赋值在实例上创建或覆盖属性。`increment` 定义在类体里，所有实例共用这一份代码，每次调用改的是接收它的那个实例的状态。
+`instance.value` 是属性访问，`instance.value = 3` 是属性赋值，赋值在实例上创建或覆盖属性。
+
+`Counter` 本身也是一个对象：`class Counter:` 执行时创建一个类对象并把名字 `Counter` 绑定到它，调用这个类对象创建**实例**，返回值是实例。
 
 ## 实例属性与类属性
 

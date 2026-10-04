@@ -5,17 +5,16 @@ order: 110
 title: 文件读写
 status: published
 objectives:
-  - 说明文本模式的 open 在字节与字符串之间做了什么转换，以及 encoding 参数的作用
   - 用 with 打开文件，并说明块结束时关闭为什么必须发生
   - 用 write、read 与按行迭代读写一个文本文件
   - 判断文件不存在与编码不匹配两类失败发生在哪一步，各报出什么异常
 ---
 
-程序把结果写进文件，下次运行还能读回来。磁盘上存放的是字节，读写一段文本要经过一次编码或解码；文件对象同时还是一个必须释放的资源。
+程序退出后，内存里的数据随之消失。把结果写进文件，下次运行时读回来，是数据跨运行留存的最简方式。
 
 ## 打开、读写与关闭
 
-`open(path, "r", encoding="utf-8")` 返回一个文件对象：它在字节之上加一层解码，读出 `str`；`"w"` 模式把写入的 `str` 按同一编码编成字节。文件对象用完要关闭，`with` 在块结束时关闭它：
+`open(path, "w", encoding="utf-8")` 打开文件用于写入，`open(path, "r", encoding="utf-8")` 用于读取，两者都返回一个文件对象。把一段文本写进去，再读回来：
 
 ```python run id="py.files.text"
 text = "first line\nsecond line\ncafé\n"
@@ -31,27 +30,7 @@ print("closed after the block:", handle.closed)
 print("read back:", repr(content))
 ```
 
-`write` 返回写入的字符数；文本模式读出的是 `str`，内容与写入的字符串一致，`repr` 让换行在输出里可见。`with` 在块结束时关闭文件，块内抛出异常时同样关闭。编码与解码的模型见 <CrossRef id="python.text-and-bytes" />，`with` 的进入与退出协议见 <CrossRef id="python.context-managers" />。
-
-## 文本模式与二进制模式
-
-同一个文件，文本模式的 `read` 得到 `str`，二进制模式的 `read` 得到 `bytes`，两者之间差的就是那一次解码：
-
-```python run id="py.files.modes"
-with open("notes.txt", "wb") as handle:
-    handle.write("café".encode("utf-8"))
-
-with open("notes.txt", "rb") as handle:
-    raw = handle.read()
-
-with open("notes.txt", "r", encoding="utf-8") as handle:
-    decoded = handle.read()
-
-print("binary mode gives bytes:", type(raw).__name__, len(raw), raw)
-print("text mode decodes to str:", type(decoded).__name__, len(decoded), decoded)
-```
-
-二进制模式不经过编解码，`read` 原样返回磁盘上的字节；文本模式按 `encoding` 把同一串字节解码成字符串。`café` 的四个字符在 UTF-8 下占五个字节，`len(raw)` 与 `len(decoded)` 因此不同。编码选错时，同一个字节序列会解出不同的字符串，也可能直接解码失败。
+`write` 返回写入的字符数；`read` 读回的是 `str`，内容与写入的字符串一致，`repr` 让换行在输出里可见。文件对象持有一个操作系统的文件句柄，进程能同时打开的句柄数有限，所以文件用完必须关闭；`with` 在块结束时关闭它，块内抛出异常时同样关闭。文本模式负责在磁盘字节与字符串之间做一次转换，这套模型见 <CrossRef id="python.text-and-bytes" />；`with` 的进入与退出协议见 <CrossRef id="python.context-managers" />。
 
 ## 按行读写
 
