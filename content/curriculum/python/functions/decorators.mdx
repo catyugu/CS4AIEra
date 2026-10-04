@@ -83,7 +83,7 @@ print("events after one call:", events)
 print("name is bound to the wrapper:", add.__name__, add.__qualname__)
 ```
 
-`decorating add` 在任何调用之前就出现在 `events` 里：`@traced` 在 `def` 语句执行时完成，也就是模块被导入、或函数体执行到这一行的时候。此后调用 `add()` 只是调用替代品，不会重新装饰；装饰器本体里做的事——读文件、建连接、发请求——因此发生在定义那一刻，成本与失败点都落在定义处。赋值之后 `add` 指向 `wrapper`，`add.__name__` 因此是 `wrapper`；原函数仍被 `wrapper` 的闭包引用，可以取回。
+`decorating add` 在任何调用之前就出现在 `events` 里：`@traced` 在 `def` 语句执行时完成，也就是模块被导入、或函数体执行到这一行的时候。此后调用 `add()` 只是调用替代品，不会重新装饰；装饰器本体里做的事——读文件、建连接、发请求——因此发生在定义那一刻，成本在定义时付出，失败也在定义时暴露。赋值之后 `add` 指向 `wrapper`，`add.__name__` 因此是 `wrapper`；原函数仍被 `wrapper` 的闭包引用，可以取回。
 
 ## 转交实参
 
@@ -196,7 +196,7 @@ print(roll())
 print(once())
 ```
 
-`@repeated(times=3)` 先调用 `repeated(times=3)` 得到真正的装饰器，再对函数应用它，因此需要多一层函数。`times` 在装饰时被固定并存入闭包，调用期不可更改；需要每次调用不同的次数，就把次数做成被装饰函数的参数。
+`@repeated(times=3)` 先调用 `repeated(times=3)` 得到装饰器 `decorate`，再对函数应用它，因此需要多一层函数。`times` 在装饰时被固定并存入闭包，调用期不可更改；需要每次调用不同的次数，就把次数做成被装饰函数的参数。
 
 ## 层叠顺序
 

@@ -150,9 +150,9 @@ print("typical append work:", min(costs), "| largest single append:", max(costs)
 
 ## 实现边界：CPython 的 `list`
 
-上文给出的动态数组是一个抽象模型：块满时分配更大的块并把已有元素复制过去。本课程运行时里的 `list` 是 CPython 的可变长对象引用数组，它采用按比例的 over-allocation（[listobject.c](https://github.com/python/cpython/blob/main/Objects/listobject.c)）；扩容经由 `realloc` 完成，分配器可能就地扩展同一块存储，那种情况下这次整块复制不发生。抽象模型把扩容建模为分配新块并复制全部已有元素，它给出的是搬运量的上界。本课程的浏览器运行时 Pyodide 是 CPython 到 WebAssembly 的移植，这里谈的是这一具体实现，其他实现的 `list` 不保证同样的表示。
+上文给出的动态数组是一个抽象模型：块满时分配更大的块并把已有元素复制过去。浏览器运行时里的 `list` 是 CPython 的可变长对象引用数组，它采用按比例的 over-allocation（[listobject.c](https://github.com/python/cpython/blob/main/Objects/listobject.c)）；扩容经由 `realloc` 完成，分配器可能就地扩展同一块存储，那种情况下这次整块复制不发生。抽象模型把扩容建模为分配新块并复制全部已有元素，它给出的是搬运量的上界。浏览器运行时 Pyodide 是 CPython 到 WebAssembly 的移植，上述表示只属于这一实现，其他实现的 `list` 不保证同样的表示。
 
-CPython 的复杂度表把 `insert` 简写成 $O(n - k)$，按位置参数统一处理端点；本课用 $\Theta(n - i + 1)$ 把靠近尾部的情形与头部情形分开计数。
+CPython 的复杂度表把 `insert` 简写成 $O(n - k)$，按位置参数统一处理端点；对 `insert(i)` 的计数用 $\Theta(n - i + 1)$ 把靠近尾部的情形与头部情形分开计数。
 
 CPython 中的 `list` 存储指向对象的引用，不存储对象本身。`sys.getsizeof` 统计的是直接归属于列表容器的内存，不递归计入它引用的对象——因此容器字节数与 payload 对象本身的大小无关，但确实取决于已分配容量以及运行时的分配与增长历史。每个槽位保存一个对象引用，被引用对象与指针数组分离，多个槽位也可以引用同一个对象。切片返回一个新的 `list`，它建立新的引用数组并复制其中的引用，在单位成本引用复制的模型下，长度 $k$ 的切片成本是 $\Theta(k)$。
 
@@ -173,7 +173,7 @@ print("payload sizes differ:", sys.getsizeof(small[0]), "vs", sys.getsizeof(huge
 
 容器本身是连续排列的引用，被引用的对象与指针数组分离。这有两个后果：下标访问仍然 $O(1)$（引用数组可以按位置计算）；而在关注内存访问的原生成本模型里，引用数组多了一层间接寻址，payload 对象也没有随指针数组紧凑排列，因此通常具有更弱的 <Term id="locality">空间局部性</Term>。这本身推不出「Python 层某个遍历循环必然更快或更慢」——实际时间还包含迭代器实现、装箱与拆箱等成本；紧凑的值数组、引用数组与复制出来的子序列三者的常数与内存行为也各不相同。把「连续数组」与「CPython 的 `list`」当成同一个东西，会得到错误的局部性结论。
 
-需要紧凑布局时用 `array` 模块或 `bytes`/`bytearray` 这类按值存储的类型，它们存的是定长值序列，不是对象引用；本课程的浏览器运行时没有硬件性能计数器，因此无法把 wall-clock 差异归因到缓存行为，局部性收益需要在原生环境里做受控测量才能确认。
+需要紧凑布局时用 `array` 模块或 `bytes`/`bytearray` 这类按值存储的类型，它们存的是定长值序列，不是对象引用；浏览器运行时没有硬件性能计数器，因此无法把 wall-clock 差异归因到缓存行为，局部性收益需要在原生环境里做受控测量才能确认。
 
 ## 序列的抽象接口
 

@@ -28,7 +28,7 @@ objectives:
 - **函数是非数据描述符**，因此函数可以被实例字典里的同名属性遮蔽。
 - **`__getattr__` 是兜底**，它只在正常查找失败时被调用；`__getattribute__` 则是每次访问都要走的入口，覆盖它是最后手段，容易写出递归，需要拦截特定属性时用 `__getattr__`。
 
-特殊方法不走这条顺序：它们在类型上查找，`instance.__len__ = ...` 不影响 `len(instance)`（见 <CrossRef id="python.dunder-protocols" />）。继承与多继承的 MRO、`super()` 的解析由 <CrossRef id="python.inheritance-and-mro" /> 展开；相等与哈希另有一套契约，见 <CrossRef id="python.equality-and-hashing" />。
+特殊方法不走属性查找顺序：它们在类型上查找，`instance.__len__ = ...` 不影响 `len(instance)`（见 <CrossRef id="python.dunder-protocols" />）。继承与多继承的 MRO、`super()` 的解析由 <CrossRef id="python.inheritance-and-mro" /> 展开；相等与哈希另有一套契约，见 <CrossRef id="python.equality-and-hashing" />。
 
 **描述符协议**只有三个可选方法，实现其中任意一个的对象就是描述符：
 
@@ -106,7 +106,7 @@ temperature.__dict__["celsius"] = 999
 print("an instance dict entry with the same name changes nothing:", temperature.celsius)
 ```
 
-最后两步是本课的关键证据：`celsius` 是数据描述符，因此 `temperature.__dict__` 里的同名条目**不参与读取**——实例字典在这一顺位之前就已经被跳过了。`property` 拿到了第一顺位，就用它实现了「读时计算、写时校验」，而不是靠外部约定。
+最后两步是关键证据：`celsius` 是数据描述符，因此 `temperature.__dict__` 里的同名条目**不参与读取**——实例字典在这一顺位之前就已经被跳过了。`property` 拿到了第一顺位，用它实现「读时计算、写时校验」，不靠外部约定。
 
 注意 `__dict__` 里的存储名是 `_celsius`：描述符协议管理的是通过 `obj.attr` 的访问，不是属性字典本身。绕过接口直接写 `__dict__` 仍然能改坏状态，这属于「协议保护接口，不保护内存」。同名条目留在实例字典里成为不可见的死数据，调试时容易误判。
 
@@ -132,7 +132,7 @@ print("each access builds a new object:", counter.increment is counter.increment
 print("calling it:", bound(), counter.increment(5))
 ```
 
-`type(Counter.increment).__name__` 是 `function`，`type(counter.increment).__name__` 是 `method`。绑定方法持有 `__self__`（实例）与 `__func__`（类上的函数），这正是基础课里 `Counter.increment(instance)` 与 `instance.increment()` 等价的原因：后者只是把实例预先绑好了。
+`type(Counter.increment).__name__` 是 `function`，`type(counter.increment).__name__` 是 `method`。绑定方法持有 `__self__`（实例）与 `__func__`（类上的函数），因此基础课里 `Counter.increment(instance)` 与 `instance.increment()` 等价：后者只是把实例预先绑好了。
 
 每次访问都创建一个新的绑定方法对象（`is` 为假，`==` 为真，因为方法按实例与函数比较）。这意味着「把方法存下来备用」存的是一个已经绑定到实例的对象，它不会随实例属性的变化而失效，也不会因为类上函数被替换而更新指向。
 

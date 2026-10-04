@@ -11,7 +11,7 @@ objectives:
   - 说明 TaskGroup 在子任务失败与父任务被取消两条路径上分别做什么
 ---
 
-取消本身由 <CrossRef id="python.cancellation-and-timeouts" /> 建立：它是一次注入到执行流里的异常，在挂起点到达。这一课讲取消的两类应用——给一段等待设定期限，和给一组任务划定共同的生命周期。两者的失败模式都来自同一个事实：**谁被取消、谁负责收尾，由结构决定而不是由意图决定**。
+取消本身由 <CrossRef id="python.cancellation-and-timeouts" /> 建立：它是一次注入到执行流里的异常，在挂起点到达。取消用于两类场景：给一段等待设定期限，和给一组任务划定共同的生命周期。两者的失败模式都来自同一个事实：**谁被取消、谁负责收尾，由结构决定而不是由意图决定**。
 
 ## 超时取消的是当前 task
 
@@ -44,7 +44,7 @@ await main()
 
 被等待的代码看到的是普通的取消，因此它的清理路径照常运行；调用方看到的是 `TimeoutError`。两个异常不是同一个东西，来源也不同：`CancelledError` 进入 task 内部，`TimeoutError` 由上下文管理器在退出时产生（见 [asyncio: Timeouts](https://docs.python.org/3/library/asyncio-task.html#timeouts)）。
 
-这条区分在块内捕获异常时立刻显出后果：`timeout` 只能转换它自己传进去的那个 `CancelledError`。块内的 `except CancelledError` 把它截住并继续执行，上下文退出时就看不到异常，`TimeoutError` 也不会出现——超时被降级成了一次被吞掉的取消，这正是 <CrossRef id="python.cancellation-and-timeouts" /> 里描述的破坏。期限内完成的等待不受影响：
+两类异常的区分在块内捕获异常时立刻显出后果：`timeout` 只能转换它自己传进去的那个 `CancelledError`。块内的 `except CancelledError` 把它截住并继续执行，上下文退出时就看不到异常，`TimeoutError` 也不会出现——超时被降级成了一次被吞掉的取消，这正是 <CrossRef id="python.cancellation-and-timeouts" /> 里描述的破坏。期限内完成的等待不受影响：
 
 ```python run id="py.async.timeout-not-expired"
 import asyncio
@@ -65,7 +65,7 @@ async def main():
 await main()
 ```
 
-到期时间由循环的时钟决定，`timeout` 保证的是「不会早于」意义上的边界，不保证毫秒级的准时（见 <CrossRef id="python.asyncio-scheduling" />）。期限在创建时还不知道时用 `asyncio.timeout(None)` 加 `reschedule()`，之后用 `expired()` 读回是否已经到期。
+到期时间由循环的时钟决定，`timeout` 保证的是「不会早于」这个下界，不保证毫秒级的准时（见 <CrossRef id="python.asyncio-scheduling" />）。期限在创建时还不知道时用 `asyncio.timeout(None)` 加 `reschedule()`，之后用 `expired()` 读回是否已经到期。
 
 ## 屏蔽
 
@@ -157,7 +157,7 @@ except ExceptionGroup as remaining:
 | `parent` 正在 `await child` | 取消 parent 会取消当前等待的 Future 或 Task；取消可沿等待边传播 |
 | `TaskGroup` | 显式建立作用域，按组的取消、等待收尾与失败聚合规则管理任务 |
 
-等待边规则由 [asyncio：Task.cancel](https://docs.python.org/3.14/library/asyncio-task.html#asyncio.Task.cancel) 规定；前文的 `shield` 可以挡住沿这条边传给内部任务的取消。它不会自动接管内部任务的后续生命周期。
+等待边规则由 [asyncio：Task.cancel](https://docs.python.org/3.14/library/asyncio-task.html#asyncio.Task.cancel) 规定；`shield` 可以挡住沿这条边传给内部任务的取消。它不会自动接管内部任务的后续生命周期。
 
 ```python run id="py.async.waiting-edge"
 import asyncio

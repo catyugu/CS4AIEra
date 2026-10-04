@@ -235,4 +235,4 @@ with lock:
 print("object still exists:", lock is not None, "| resource released:", not lock.held)
 ```
 
-对象与资源是两件事：`with` 块结束后对象照旧存在，被释放的是它代表的那份资源。反过来说，对象被回收不保证释放立刻发生，回收时机也不在语言的约定之内（见 <CrossRef id="python.runtime-vs-language" />）。因此获取与释放都必须由 `with` 或 `finally` 表达，而不是「对象没了自然就关了」。`__del__` 的运行时机不在语言约定内，含环的对象还要等垃圾回收，用终结器代替 `with` 只是把释放点推迟到不确定的时刻。
+对象与资源是两件事：`with` 块结束后对象照旧存在，被释放的是它代表的资源。反过来说，对象被回收不保证释放立刻发生，回收时机也不在语言的约定之内（见 <CrossRef id="python.runtime-vs-language" />）。因此获取与释放都必须由 `with` 或 `finally` 表达，而不是「对象没了自然就关了」。`__del__` 的运行时机不在语言约定内，含环的对象还要等垃圾回收，用终结器代替 `with` 只是把释放点推迟到不确定的时刻。

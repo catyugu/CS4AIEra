@@ -114,4 +114,4 @@ print({n % 3 for n in numbers})
 
 它比循环加 `append` 更紧凑，是构造容器的惯用写法。
 
-**实现边界**：在循环里增删正在遍历的序列会跳过或重复元素，原因在迭代器的状态上（见 <CrossRef id="python.iteration-protocol" />）。循环结束后循环变量仍然存在，值是最后一次迭代的值，`for` 不创建新的作用域（见 <CrossRef id="python.scope-and-closure" />）。
+**实现边界**：在循环里增删正在遍历的序列会跳过或重复元素，因为迭代器记录了当前遍历位置（见 <CrossRef id="python.iteration-protocol" />）。循环结束后循环变量仍然存在，值是最后一次迭代的值，`for` 不创建新的作用域（见 <CrossRef id="python.scope-and-closure" />）。

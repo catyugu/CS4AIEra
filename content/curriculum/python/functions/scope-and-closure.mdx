@@ -126,7 +126,7 @@ print("still accumulating after the outer call returned:", accumulate(4))
 
 ## 延迟绑定
 
-被捕获的是变量，读取发生在函数真正被调用时，因此同一变量上的多次修改对已创建的所有函数都可见。
+被捕获的是变量，读取发生在函数被调用时，因此同一变量上的多次修改对已创建的所有函数都可见。
 
 ```python run id="py.scope.late-binding"
 functions = [lambda value: f"{index}:{value}" for index in range(3)]

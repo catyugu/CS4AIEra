@@ -33,7 +33,7 @@ except StopIteration:
     print("exhausted")
 ```
 
-函数体直到第一次 `next` 才从头运行，`generator body starts here` 出现在 `first next` 之后。调用生成器函数只负责构造对象，真正的执行在每次取值时推进：函数体运行到下一个 `yield` 停下，局部帧连同已绑定的名字留在原地，下一次取值从挂起处继续。`yield` 交出值之后函数还能接着跑，`return` 交出值就结束这次调用，两者的区别就在帧的去留上。
+函数体直到第一次 `next` 才从头运行，`generator body starts here` 出现在 `first next` 之后。调用生成器函数只负责构造对象，执行在每次取值时推进：函数体运行到下一个 `yield` 停下，局部帧连同已绑定的名字留在原地，下一次取值从挂起处继续。`yield` 交出值之后函数还能接着跑，`return` 交出值就结束这次调用，两者的区别就在帧的去留上。
 
 函数体里含 `yield` 的函数是生成器函数（generator function），调用它得到生成器对象（generator object）。生成器对象是迭代器（iterator），`for`、`next`、`list` 都按迭代协议消费它。
 

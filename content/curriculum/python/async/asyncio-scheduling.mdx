@@ -41,7 +41,7 @@ def load_dashboard():
 - 因此切换总是由被运行的代码自己发起，任何位置都不会被抢占。一个不释放控制权的函数会占住整个循环：在协程里直接调用一个长时间返回的同步函数，循环里的其他 task 全部停住。
 - 可以推理的是**就绪队列的先后**：同一轮里入队的顺序是确定的（先进先出），因此只依赖挂起顺序的实验有唯一输出。不可以推理的是**基于时间的相对顺序**：谁先醒来由循环的时钟与当时的负载决定。
 
-`await` 与协程对象的规定在[语言参考的协程一节](https://docs.python.org/3/reference/compound_stmts.html#coroutines)；task 与事件循环是标准库 [asyncio](https://docs.python.org/3/library/asyncio-task.html) 的接口约定，不是语言语法的一部分；让阻塞部分离开循环属于运行时结构问题，本课只建立语言层面的执行模型。
+`await` 与协程对象的规定在[语言参考的协程一节](https://docs.python.org/3/reference/compound_stmts.html#coroutines)；task 与事件循环是标准库 [asyncio](https://docs.python.org/3/library/asyncio-task.html) 的接口约定，不是语言语法的一部分；让阻塞部分离开循环属于运行时结构问题，不在语言语法范围内。
 
 ## 调用 async def 不执行任何东西
 
@@ -86,7 +86,7 @@ await main()
 
 ## task 什么时候运行
 
-`create_task` 把协程交给循环，而不是当场执行它。
+`create_task` 只把协程交给循环，执行交给循环调度。
 
 ```python run id="py.async.task-runs-later"
 import asyncio
@@ -179,7 +179,7 @@ async def main():
 await main()
 ```
 
-`await compute(size)` 不是挂起点：`compute` 不等待任何东西，它在被驱动时一次跑完。三个 task 因此依次完成，输出里没有任何交错。把三份工作真正重叠起来，需要它们各自到达一个挂起点，而不是把它们放进同一个 `gather`；页面上的**停止**按钮通过终止 worker 结束执行，它不是协作式的打断。
+`await compute(size)` 不是挂起点：`compute` 不等待任何东西，它在被驱动时一次跑完。三个 task 因此依次完成，输出里没有任何交错。把三份工作重叠起来，需要它们各自到达一个挂起点；放进同一个 `gather` 并不能让它们重叠。页面上的**停止**按钮通过终止 worker 结束执行，它不是协作式的打断。
 
 ## 事件循环由环境提供
 
@@ -192,4 +192,4 @@ print("whose implementation is:", type(loop).__module__ + "." + type(loop).__nam
 print("this loop was provided by the environment, not created by the cell")
 ```
 
-单元格的顶层代码本身运行在一个已经存在的事件循环里，因此单元格用顶层 `await` 驱动协程，而不是自己创建循环。打印出的实现名说明循环由运行环境提供，属于环境事实：本运行时是 Pyodide 的 WebLoop，语言只规定 task 与循环要满足 `asyncio` 的接口，不规定具体类型或时钟精度。`asyncio.current_task()` 给出当前正在被步进的 task，`task.get_name()` 给出名字，而 `type(task)` 的类名随运行环境变化。
+单元格的顶层代码本身运行在一个已经存在的事件循环里，因此单元格用顶层 `await` 驱动协程，不需要自己创建循环。打印出的实现名说明循环由运行环境提供，属于环境事实：本运行时是 Pyodide 的 WebLoop，语言只规定 task 与循环要满足 `asyncio` 的接口，不规定具体类型或时钟精度。`asyncio.current_task()` 给出当前正在被步进的 task，`task.get_name()` 给出名字，而 `type(task)` 的类名随运行环境变化。

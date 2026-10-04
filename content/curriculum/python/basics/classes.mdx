@@ -60,7 +60,7 @@ print(a.members is b.members, Team.members is a.members)
 
 `members = []` 属于类对象，是所有实例共享的一个对象；实例属性属于单个实例。读取属性时先看实例自己的属性，再看类（含基类），两层都没有则抛 `AttributeError`。
 
-`a` 与 `b` 都没有自己的 `members`，读取时沿层次找到类上的那一个，`append` 修改的是同一个列表：两个实例的输出相同，且 `a.members is b.members` 为真。这是<Term id="class-attribute">类属性</Term>最常见的失效模式，执行过程中没有任何错误，只是两个实例的状态合流了。把可变状态放进 `__init__`，属性就落在实例上：
+`a` 与 `b` 都没有自己的 `members`，读取时沿层次找到类上的那一个，`append` 修改的是同一个列表：两个实例的输出相同，且 `a.members is b.members` 为真。这是<Term id="class-attribute">类属性</Term>最常见的失效模式，执行过程中没有任何错误，只是两个实例的状态合流了。把可变状态放进 `__init__`，属性就属于实例：
 
 ```python run id="py.classes.instance-attribute-fix"
 class Team:
@@ -81,7 +81,7 @@ print(a.__dict__, b.__dict__)
 
 两个实例各有自己的列表，不再互为<Term id="alias">别名</Term>。同样的共享也出现在默认参数上，见 <CrossRef id="python.mutability-and-copy" />。
 
-赋值总是落在被赋值的对象上。`c.retries = 5` 在实例上创建 `retries`，类上的那一个不变：
+属性赋值在等号左侧的对象上创建或覆盖属性。`c.retries = 5` 在实例上创建 `retries`，类上的那一个不变：
 
 ```python run id="py.classes.rebinding"
 class Config:

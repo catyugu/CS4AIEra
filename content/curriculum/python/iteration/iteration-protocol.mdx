@@ -10,7 +10,7 @@ objectives:
   - 自己实现一个符合协议的迭代器，并说明它的状态存在哪里
 ---
 
-「能放进 `for` 里」不是一个类型属性，而是两个方法构成的协议。分清协议的两侧之后，`for`、推导式、`zip`、`sum` 与任何接受可迭代对象的库函数的行为都可以统一推出，包括「为什么第二次遍历得到空结果」这类常见故障。
+「能放进 `for` 里」不是一个类型属性，而是两个方法构成的协议。分清协议的两侧之后，`for`、推导式、`zip`、`sum` 与任何接受可迭代对象的库函数的行为都可以从这两个方法推出，包括「为什么第二次遍历得到空结果」这类常见故障。
 
 ## iterable 与 iterator 协议
 
@@ -71,7 +71,7 @@ print("second pass:", list(one_shot))
 print("builtins that consume an iterator:", list(zip(iter(reusable), "xy")))
 ```
 
-判据是一行：`iter(x) is x` 为真说明对象同时是迭代器，因此一次性。把一次性对象传给两个消费者时，第二个消费者看到的是剩余部分或空序列，这个错误没有任何异常伴随。
+判断依据是一行：`iter(x) is x` 为真说明对象同时是迭代器，因此一次性。把一次性对象传给两个消费者时，第二个消费者看到的是剩余部分或空序列，这个错误没有任何异常伴随。
 
 ## 自己实现迭代器
 
@@ -113,7 +113,7 @@ print("stopped by sentinel:", list(iter(lambda: next(stream), 0)))
 print("bounded slice of an unbounded iterator:", list(islice(count(0), 4)))
 ```
 
-`next(iterator, default)` 把「已耗尽」变成返回值，用于边界明确的读取；`iter(callable, sentinel)` 把「反复调用直到得到哨兵值」写成迭代器。无界序列必须由消费者设限，`islice` 是标准做法；`list(infinite)` 不会终止。
+`next(iterator, default)` 把「已耗尽」变成返回值，用于可能读空的读取；`iter(callable, sentinel)` 把「反复调用直到得到哨兵值」写成迭代器。无界序列必须由消费者设限，`islice` 是标准做法；`list(infinite)` 不会终止。
 
 ## 推导式与生成器表达式
 

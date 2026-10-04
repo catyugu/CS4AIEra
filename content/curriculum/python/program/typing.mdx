@@ -27,7 +27,7 @@ except TypeError:
     print("missing argument: call binding failed")
 ```
 
-检查器拒绝 `resize("abc", 4)`，运行时的乘法把 `"abc"` 重复成 `"abcabcabcabc"`。少传一个参数的调用抛 `TypeError`，来自 <CrossRef id="python.call-semantics" /> 的参数绑定规则，与标注无关。本页标出的静态错误都是类型契约的推导；浏览器单元格运行 Python，不运行静态检查器。
+检查器拒绝 `resize("abc", 4)`，运行时的乘法把 `"abc"` 重复成 `"abcabcabcabc"`。少传一个参数的调用抛 `TypeError`，来自 <CrossRef id="python.call-semantics" /> 的参数绑定规则，与标注无关。文中标出的静态错误都是类型契约的推导；浏览器单元格运行 Python，不运行静态检查器。
 
 ## 标注写下的契约
 

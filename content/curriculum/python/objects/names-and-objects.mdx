@@ -130,7 +130,7 @@ print("pair_alias:", pair_alias)
 print("same object:", pair is pair_alias)
 ```
 
-列表定义了 `__iadd__`，`items += [2]` 修改原对象，别名 `items_alias` 跟着变化；元组没有 `__iadd__`，`pair += (2,)` 走回退路径，产生新元组并把 `pair` 重绑定过去，别名不变。对象有没有被修改，判据是类型是否提供对应的 in-place operation，运算符的写法本身说明不了；提供了该方法也不保证沿用原对象。
+列表定义了 `__iadd__`，`items += [2]` 修改原对象，别名 `items_alias` 跟着变化；元组没有 `__iadd__`，`pair += (2,)` 走回退路径，产生新元组并把 `pair` 重绑定过去，别名不变。对象有没有被修改，由类型是否提供对应的 in-place operation 决定，运算符的写法本身说明不了；提供了该方法也不保证沿用原对象。
 
 target 只求值一次这一点与类型无关：`a[f()] += y` 只调用 `f()` 一次，`a[f()] = a[f()] + y` 调用两次。in-place operation 按运算符提供：集合与字典的原地合并走 `|=`（`__ior__`），`+=` 只在 `+` 本身有定义的类型上成立。
 

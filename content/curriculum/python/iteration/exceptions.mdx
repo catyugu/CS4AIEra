@@ -32,11 +32,11 @@ objectives:
 | `else` | `try` 块正常结束且未处理异常时 |
 | `finally` | 无论正常结束、返回、抛出还是被处理，都运行 |
 
-`finally` 的必然性让它成为释放点：它跨 `return`、`break`、`continue` 与异常展开都执行。
+`finally` 跨 `return`、`break`、`continue` 与异常展开都执行，因此是可靠的释放点。
 
 ## 子句顺序与各路径
 
-匹配规则在这里建立：`except` 子句**按书写顺序取第一个匹配**，并且**子类也匹配父类**（`except ConfigError` 会接住 `MissingKey`），因此具体的类型写在前面。在本课的模型里这两条只决定一件事：`finally` 在哪个分支之后运行。`else` 只在 `try` 块没有触发异常时运行，把「正常路径」与「异常处理」分开，避免处理块捕获自己抛出的异常。
+匹配规则是：`except` 子句**按书写顺序取第一个匹配**，并且**子类也匹配父类**（`except ConfigError` 会接住 `MissingKey`），因此具体的类型写在前面。这两条只决定一件事：`finally` 在哪个分支之后运行。`else` 只在 `try` 块没有触发异常时运行，把「正常路径」与「异常处理」分开，避免处理块捕获自己抛出的异常。
 
 ```python run id="py.exc.matching"
 class ConfigError(Exception):
@@ -106,7 +106,7 @@ except RuntimeError as failure:
     print("the failure still reaches the caller:", type(failure).__name__, "-", failure)
 ```
 
-`finally` 在函数真正离开之前运行，因此第一个函数先打印再返回值。第二个函数展示了 `finally` 中 `return` 的效果：它结束函数，原来的 `RuntimeError` 被丢弃，调用方看不到任何失败信号。这是把故障静默化的直接机制，清理代码里不应出现 `return`。
+`finally` 在函数离开之前运行，因此第一个函数先打印再返回值。第二个函数展示了 `finally` 中 `return` 的效果：它结束函数，原来的 `RuntimeError` 被丢弃，调用方看不到任何失败信号。这是把故障静默化的直接机制，清理代码里不应出现 `return`。
 
 ## 异常链
 
@@ -155,7 +155,7 @@ except ConfigError as exc:
     print("suppressed chain:", exc.__cause__, "| suppress_context:", exc.__suppress_context__)
 ```
 
-在 `except` 块内抛出的新异常自动带上 `__context__`，指向正在处理的异常，因此原始失败不会丢失。`raise ... from exc` 把它登记为 `__cause__`，语义是「这是本次失败的直接原因」；`raise ... from None` 不设原因，只抑制上下文的显示，用于失败细节对调用方无意义、暴露出去只会干扰阅读的边界（例如把内部解析错误统一成公开的输入错误）。两种写法的 `__suppress_context__` 都是真值，区别在于是否存在明确的原因。异常对象持有回溯，回溯引用帧，帧又引用其中的局部变量，因此长期保存异常对象会长期持有这些对象。
+在 `except` 块内抛出的新异常自动带上 `__context__`，指向正在处理的异常，因此原始失败不会丢失。`raise ... from exc` 把它登记为 `__cause__`，语义是「这是本次失败的直接原因」；`raise ... from None` 不设原因，只抑制上下文的显示，用于失败细节对调用方无意义、暴露出去只会干扰阅读的边界（例如把内部解析错误改写为公开的输入错误）。两种写法的 `__suppress_context__` 都是真值，区别在于是否存在明确的原因。异常对象持有回溯，回溯引用帧，帧又引用其中的局部变量，因此长期保存异常对象会长期持有这些对象。
 
 ## 重新抛出
 

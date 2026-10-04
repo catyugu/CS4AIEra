@@ -20,7 +20,7 @@ $$\text{hash}(key) \rightarrow \text{整数}, \qquad \text{bucket} = \text{hash}
 
 桶数组有 `capacity` 个槽位。落到同一槽位的键由冲突策略容纳：<Term id="separate-chaining">链地址法</Term>在每个槽位挂一个容器，把落进来的条目都放进去；<Term id="open-addressing">开放寻址法</Term>把条目直接放进槽位，冲突时按 <Term id="probing">探测</Term> 序列依次检查后续槽位。
 
-这份表示维持两条不变量：
+哈希表维持两条不变量：
 
 1. 任意两个已存条目的键都不相等：每个相等类至多有一个条目；
 2. 键 `k` 只可能出现在它自己的候选区域里——`(hash(k) mod capacity)` 那个槽位、挂在它上面的冲突容器，或者从它出发的探测序列。
@@ -63,7 +63,7 @@ print("keys:", len(keys), "| capacity:", capacity, "| buckets used:", len(bucket
 
 把 $\alpha$ 维持在阈值以内，条目增长到阈值后就要扩容。扩容分配更大的槽位数组，并让每个条目按新容量重新落位，因为槽位下标依赖容量。链地址法在 $\alpha > 1$ 时仍然正确，扩容是为控制链长或探测长度而选的表示策略。
 
-若容量按几何因子增长，前 $n$ 次插入引起的搬移总量是 $\Theta(n)$，分摊到每次插入是常数；这条论证的是一串操作的总成本（<Term id="amortized-analysis">摊还成本</Term>，见 <CrossRef id="algorithms.amortized" />）。某一次触发扩容时，单是搬移仍然需要 $\Theta(n)$ 工作。
+若容量按几何因子增长，前 $n$ 次插入引起的搬移总量是 $\Theta(n)$，分摊到每次插入是常数；这是一串操作的总成本界（<Term id="amortized-analysis">摊还成本</Term>，见 <CrossRef id="algorithms.amortized" />）。某一次触发扩容时，单是搬移仍然需要 $\Theta(n)$ 工作。
 
 ```python run id="alg.hash.resizing"
 def bucket_of(key, capacity):
@@ -96,11 +96,11 @@ for count in (1000, 2000, 4000):
     print(f"n={count:5d}  entries moved={moved:6d}  moved/n={moved / count:.2f}")
 ```
 
-$n$ 从 1000 翻到 4000，搬移总数随之增长，`moved/n` 基本不变：搬移的摊还附加成本是常数。这条结论只覆盖扩容引起的搬移，与哈希把键分散得多好无关。
+$n$ 从 1000 翻到 4000，搬移总数随之增长，`moved/n` 基本不变：搬移的摊还附加成本是常数，且只覆盖扩容引起的搬移，与哈希把键分散得多好无关。
 
 ## 冲突退化的两种来源
 
-把 $\alpha$ 压在常数以内，前提是键大致均匀地落到各候选区域。两种机制会打破这条前提。
+把 $\alpha$ 压在常数以内，前提是键大致均匀地落到各候选区域。两种机制会打破这个前提。
 
 第一种是哈希分配不均匀：哈希函数把大量键算到同一个槽位时，链或探测序列线性增长，一次查找退化为 $\Theta(n)$ 次比较。常量哈希是最直接的例子，所有键都落进同一个槽位。哈希表把「按键顺序扫描」换成「按哈希位置扫描」，扫描仍然存在，范围由哈希分配决定。
 

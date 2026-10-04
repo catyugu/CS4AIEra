@@ -68,7 +68,7 @@ type(playlist).__len__ = lambda self: 99
 print("changing the type does change the result:", len(playlist))
 ```
 
-实例上的 `__len__` 完全不起作用：`len()` 在 `type(playlist)` 上查找，实例字典不参与。把 `__len__` 从实例上删掉也不会有任何差别——这个位置对特殊方法从来就不是一个可选来源。类的属性被替换后才生效，因为查找的目标始终是类型。只实现 `__getitem__` 的对象在 `iter()`、`in` 与解包上走的是逐索引路径，效率与语义都与实现了 `__iter__` 的对象不同（见 <CrossRef id="python.iteration-protocol" />）。
+实例上的 `__len__` 不起作用：`len()` 在 `type(playlist)` 上查找，实例字典不参与。把 `__len__` 从实例上删掉也不会有任何差别——实例字典对特殊方法从来就不是一个可选来源。类的属性被替换后才生效，因为查找的目标始终是类型。只实现 `__getitem__` 的对象在 `iter()`、`in` 与解包上走的是逐索引路径，效率与语义都与实现了 `__iter__` 的对象不同（见 <CrossRef id="python.iteration-protocol" />）。
 
 ```python run id="py.dunder.missing-method"
 class Point:
@@ -95,7 +95,7 @@ except TypeError as failure:
     print("  ", failure)
 ```
 
-没有实现协议时错误来自调用点，消息里给出类型名与被调用的协议。这类 `TypeError` 是用错的信号：对象不支持这项操作，而不是它的某个属性有问题。
+没有实现协议时错误来自调用点，消息里给出类型名与被调用的协议。这类 `TypeError` 是用错的信号：对象不支持这项操作。
 
 ## 运算与反向方法
 
@@ -129,9 +129,9 @@ except TypeError as failure:
     print("both sides declined:", failure)
 ```
 
-`2 * Scaled(3)` 先调用 `int.__mul__(2, scaled)`，它不认识 `Scaled` 并返回 `NotImplemented`，解释器于是调用 `scaled.__rmul__(2)`。第三次调用两边都返回 `NotImplemented`，`TypeError` 由解释器给出，而不是由任何一方抛出。
+`2 * Scaled(3)` 先调用 `int.__mul__(2, scaled)`，它不认识 `Scaled` 并返回 `NotImplemented`，解释器于是调用 `scaled.__rmul__(2)`。第三次调用两边都返回 `NotImplemented`，解释器据此给出 `TypeError`。
 
-需要的规则是：**只要你的类型可能与内置类型混合运算，就要实现反向方法**；`__mul__` 里对不认识的操作数返回 `NotImplemented`，而不是抛异常，这样别的类型还有机会处理。运算符重载不等于数学定义：`+` 在自定义类型上的含义由实现者决定，列表的连接、字符串的拼接与数值的加法互不相同。`__lt__` 等六个比较方法各自独立，`sorted` 只需要 `__lt__`；只实现其中一部分时，另一部分语法仍然失败。
+需要的规则是：**只要你的类型可能与内置类型混合运算，就要实现反向方法**；`__mul__` 里对不认识的操作数返回 `NotImplemented`，让别的类型还有机会处理。运算符重载不等于数学定义：`+` 在自定义类型上的含义由实现者决定，列表的连接、字符串的拼接与数值的加法互不相同。`__lt__` 等六个比较方法各自独立，`sorted` 只需要 `__lt__`；只实现其中一部分时，另一部分语法仍然失败。
 
 ## 表示与真假
 
@@ -168,7 +168,7 @@ print("truthiness comes from __len__:", bool(Basket(["apple"])), bool(empty))
 print("no __bool__ and no __len__ means always true:", bool(Bare()))
 ```
 
-`repr` 的默认形式带类型名与地址，对调试没有价值；一个只为内部使用的类定义 `__repr__` 就足够，`str` 会自动回退。反向不成立：只定义 `__str__` 时 `repr` 仍是默认形式，因为两个名字服务于不同读者——`repr` 面向开发者，惯例是无歧义且能看出类型；`str` 面向使用者，可以只求可读。这是设计惯例而非语言强制：语言只要求 `__repr__` 返回字符串，并建议它尽可能是一个能重建该值的表达式，语言保证与实现细节的分界见 <CrossRef id="python.runtime-vs-language" />。真假的来源顺序是 `__bool__`、`__len__`、恒为真：定义 `__len__` 的容器因此自动获得「空即为假」的行为，这是容器语义的一部分，而不是巧合。
+`repr` 的默认形式带类型名与地址，对调试没有价值；一个只为内部使用的类定义 `__repr__` 就足够，`str` 会自动回退。反向不成立：只定义 `__str__` 时 `repr` 仍是默认形式，因为两个名字服务于不同读者——`repr` 面向开发者，惯例是无歧义且能看出类型；`str` 面向使用者，可以只求可读。这是设计惯例：语言只要求 `__repr__` 返回字符串，并建议它尽可能是一个能重建该值的表达式，语言保证与实现细节的分界见 <CrossRef id="python.runtime-vs-language" />。真假的来源顺序是 `__bool__`、`__len__`、恒为真：定义 `__len__` 的容器因此自动获得「空即为假」的行为，这是容器语义的一部分。
 
 ## 检查一个对象支持什么
 

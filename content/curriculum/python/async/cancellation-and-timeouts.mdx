@@ -26,7 +26,7 @@ objectives:
 
 未被取回的异常与取消由事件循环报告，报告位置是 worker 控制台而不是调用处，具体形式随实现变化。取消通过 `CancelledError` 表现，这是语言参考里异常层次的规定；`cancel` 是标准库 `asyncio` 的接口约定，随标准库版本演进。
 
-本课用到的 `async with` 是 `with` 的异步形式，展开与三条退出路径见 <CrossRef id="python.async-iteration-and-context" />；同步版本的完整模型见 <CrossRef id="python.context-managers" />。取消的两类应用——给一段等待设定期限、给一组任务划定共同生命周期——由 <CrossRef id="python.timeout-and-task-lifecycle" /> 处理。
+`async with` 是 `with` 的异步形式，展开与三条退出路径见 <CrossRef id="python.async-iteration-and-context" />；同步版本的完整模型见 <CrossRef id="python.context-managers" />。取消的两类应用——给一段等待设定期限、给一组任务划定共同生命周期——由 <CrossRef id="python.timeout-and-task-lifecycle" /> 处理。
 
 ## 取消在挂起点出现
 
@@ -57,7 +57,7 @@ async def main():
 await main()
 ```
 
-`cancel()` 返回时 task 还没有结束，也没有被打断：真正发生的事是把取消记在事件循环的待办里。下一个挂起点——这里是 `worker` 里被挂起的 `await asyncio.sleep(10)`——把 `CancelledError` 抛进协程，`try` 捕获它、`raise` 让它继续传播，task 随后变成已取消状态。10 秒的等待一秒都没有等。
+`cancel()` 返回时 task 还没有结束，也没有被打断：它把取消记进事件循环的待办里。下一个挂起点——这里是 `worker` 里被挂起的 `await asyncio.sleep(10)`——把 `CancelledError` 抛进协程，`try` 捕获它、`raise` 让它继续传播，task 随后变成已取消状态。10 秒的等待一秒都没有等。
 
 ## 没有挂起点就交不出控制权
 
@@ -86,9 +86,9 @@ async def main():
 await main()
 ```
 
-`busy` 在一次步进里跑完整段循环，`main` 直到那一刻之后才拿回控制权，因此取消请求落在了一个已经结束的 task 上。这不是竞态，而是协作式模型的直接结果：**取消的及时性等于协程到达下一个挂起点的及时性**。
+`busy` 在一次步进里跑完整段循环，`main` 直到那一刻之后才拿回控制权，因此取消请求到达时 task 已经结束。这不是竞态，而是协作式模型的直接结果：**取消的及时性等于协程到达下一个挂起点的及时性**。
 
-未开始的 task 是另一种边界：请求可以早于第一次步进。
+未开始的 task 是另一种情形：请求可以早于第一次步进。
 
 ```python run id="py.async.cancel-before-start"
 import asyncio

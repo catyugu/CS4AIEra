@@ -46,7 +46,7 @@ print("both initializers ran:", dog.name, dog.breed)
 
 `Dog` 只声明了 `__init__` 与 `speak`，`label` 来自 `Animal`。查一个名字时按 `Dog.__mro__` 的顺序找，找到第一个定义就停：`Dog` 上没有 `label`，于是取到 `Animal.label`，`Dog` 里并不存在它的副本。`Dog.speak` 覆盖了 `Animal.speak`，其中的 `super().speak()` 调用被覆盖的那一份；两个 `__init__` 用同样的方式分工，`Dog.__init__` 设置 `breed`，把 `name` 交给 `Animal.__init__` 设置。
 
-这条父链上「下一个类」只有一个候选，`super()` 与「父类」在这里指的是同一个类。一个类可以声明多个基类，规则要给出一个完整的线性顺序：`__mro__` 是一份从自身排到 `object` 的元组，由 C3 线性化在类创建时算出。单继承是这份规则最简单的输入。
+这条父链上「下一个类」只有一个候选，`super()` 与「父类」在这里指的是同一个类。一个类可以声明多个基类，规则要给出一个完整的线性顺序：`__mro__` 是一份从自身排到 `object` 的元组，由 C3 线性化在类创建时算出。单继承是 C3 线性化最简单的输入。
 
 ## 多个基类与解析顺序
 
@@ -151,7 +151,7 @@ order = [cls.__name__ for cls in Both.__mro__]
 print("the class after Left in that order is:", order[order.index("Left") + 1])
 ```
 
-四个 `__init__` 各运行一次，顺序是 `Both → Left → Right → Root`。`Left` 里的 `super().__init__(name)` 落到 `Right`：运行时 `self` 是 `Both` 的实例，`super()` 按 `type(self)` 的 `__mro__` 推进，从 `Left` 之后的第一项开始找。`Left` 的直接父类 `Root` 被排到这条链的末尾，`Root.__init__` 只在末端运行一次。
+四个 `__init__` 各运行一次，顺序是 `Both → Left → Right → Root`。`Left` 里的 `super().__init__(name)` 落到 `Right`：运行时 `self` 是 `Both` 的实例，`super()` 按 `type(self)` 的 `__mro__` 推进，从 `Left` 之后的第一项开始找。`Left` 的直接父类 `Root` 被排在初始化链的末尾，`Root.__init__` 只在末端运行一次。
 
 不带参数的 `super()` 由编译器补上两个参数：定义它的方法所在的那个类（词法作用域里的 `__class__`）和该方法的第一个参数。实例方法里第一个参数是实例，查找因此从 `type(self).__mro__` 中 `__class__` 之后的第一项开始。`__class__` 是方法定义所在的类，`type(self)` 是实例的实际类型；`Left` 与 `Both` 的区别来自这两个位置，方法定义在 `Left`，实例类型是 `Both`。显式写 `super(C, obj)` 时，查找沿 `type(obj)` 的 `__mro__` 从 `C` 之后开始，并要求 `isinstance(obj, C)`；写成 `super(C, C2)` 时要求 `C2` 是 `C` 的子类，沿 `C2.__mro__` 查找。`super()` 依赖 `__class__`，只能在定义于类体里的方法中使用。
 
@@ -222,7 +222,7 @@ print("every MRO ends at object:", D.__mro__[-1].__name__, issubclass(D, object)
 
 `isinstance(D(), C)` 为真，尽管 `C` 不是 `D` 的直接基类：对普通类，`isinstance(x, T)` 沿 `type(x).__mro__` 判断，`T` 在其中即为真。`type(x) is A` 只比较实际类型，需要按能力分支时用 `isinstance`，需要精确类型时才用 `type(...) is ...`。
 
-这条规则是默认实现的结果，`T` 可以定义 `__instancecheck__` 覆盖它。`abc.ABCMeta` 用 `__instancecheck__` 实现注册与结构检查，`SomeABC.register(SomeClass)` 让 `isinstance(SomeClass(), SomeABC)` 为真，而 `SomeABC` 并不出现在 `SomeClass.__mro__` 中，也不带来任何方法。`isinstance` 调用的是 `type(T).__instancecheck__`，默认实现才回到 `__mro__`。`collections.abc` 的结构性检查见 <CrossRef id="python.dunder-protocols" />。自定义异常继承 `Exception`，`except` 的匹配沿类型层次上溯，匹配规则见 <CrossRef id="python.exceptions" />。
+`isinstance` 沿 MRO 判断是默认实现的结果，`T` 可以定义 `__instancecheck__` 覆盖它。`abc.ABCMeta` 用 `__instancecheck__` 实现注册与结构检查，`SomeABC.register(SomeClass)` 让 `isinstance(SomeClass(), SomeABC)` 为真，而 `SomeABC` 并不出现在 `SomeClass.__mro__` 中，也不带来任何方法。`isinstance` 调用的是 `type(T).__instancecheck__`，默认实现才回到 `__mro__`。`collections.abc` 的结构性检查见 <CrossRef id="python.dunder-protocols" />。自定义异常继承 `Exception`，`except` 的匹配沿类型层次上溯，匹配规则见 <CrossRef id="python.exceptions" />。
 
 ## 实现边界
 
