@@ -5,25 +5,15 @@ order: 80
 title: 类与实例
 status: published
 objectives:
-  - 说明 `class` 语句执行时创建了什么对象，以及名称绑定到哪个对象
+  - 说明 class 语句执行时创建了什么对象，以及名称绑定到哪个对象
   - 判断一个属性来自实例还是类，并预测修改它在哪些对象上可见
   - 解释两个实例为什么会共享同一个可变对象，并给出修正方式
-  - 说明 `self` 接收到什么，并把一次方法调用改写成函数调用
+  - 说明 self 接收到什么，并把一次方法调用改写成函数调用
 ---
 
-读一个类时最先要回答两个问题：实例状态放在哪些属性上，哪些属性属于类本身并被所有实例共享。这两类属性在定义处语法相同，行为差别决定程序是否正确。
+要同时维护三条各自独立的计数，用变量就得写三份重复的自增代码。类把一份状态的形状和作用于它的操作绑在一起：每条计数是一个实例，各自保存自己的值，共用同一套操作。
 
-## 类对象、实例与属性
-
-- `class` 语句执行时创建一个类对象（class object），并把名称绑定到它。类对象是普通的值：可以改名、传参、放进容器。
-- 调用类对象 `Counter()` 创建**实例**（instance），返回值是实例。
-- `__init__` 初始化一个已经创建出来的实例；它不创建对象，调用方拿到的实例在 `__init__` 运行之前就已经存在。漏赋某个属性不会在这里报错，而是在别处读取该属性时失败。
-- `self` 是普通形参的惯用名称，不是关键字；它按位置接收实例。
-- `instance.value` 是属性访问，`instance.value = 3` 是属性赋值，赋值在实例上创建或覆盖属性。读取顺序在**不涉及描述符与自定义属性访问的普通类**里，可以先按「先看实例自己的属性，再看类（含基类）」理解：这不是 Python 的一般规则，数据描述符优先于实例属性，完整的查找顺序（数据描述符、实例属性、非数据描述符、类属性）由 <CrossRef id="python.attributes-and-descriptors" /> 细化。两层都没有的属性在读取时抛 `AttributeError`；子类与基类之间的查找顺序由 <CrossRef id="python.inheritance-and-mro" /> 建立。
-- 类属性是所有实例共享的一个对象，实例属性属于单个实例。
-- 方法访问 `instance.increment` 得到一个绑定到该实例的可调用对象，调用时实例作为第一个实参传入。
-
-## 类对象与实例
+## 定义一个类并创建实例
 
 ```python run id="py.classes.instances"
 class Counter:
@@ -44,9 +34,13 @@ print(first.value, second.value)
 print(Counter)
 ```
 
-每次调用 `Counter()` 都创建新实例：`first is second` 为假，两个实例各自持有自己的 `value`，因此 `first` 自增两次之后，`second` 的值不受影响。`type(first).__name__` 给出 `Counter`，而 `Counter` 本身是一个值，打印出来是 `<class '__main__.Counter'>`，它的类型是 `type`。
+`class Counter:` 执行时创建一个类对象并把名字 `Counter` 绑定到它；`Counter()` 调用这个类对象创建**实例**，返回值是实例。`first` 与 `second` 是两份独立实例，各自持有自己的 `value`，因此 `first` 自增两次之后 `second` 的值不受影响。
 
-## 实例状态与类属性
+`instance.value` 是属性访问，`instance.value = 3` 是属性赋值，赋值在实例上创建或覆盖属性。`instance.increment` 得到绑定到该实例的可调用对象，`first.increment()` 修改的是该实例的状态。`__init__` 初始化一个已经创建出来的实例，它不创建对象；漏赋某个属性会推迟到读取它时才失败。类对象本身是普通的值，打印出来是 `<class '__main__.Counter'>`。
+
+## 实例属性与类属性
+
+一份状态该放在实例上还是类上，在定义处语法相同，行为差别决定程序是否正确。下面这个类的 `members` 写在类体里：
 
 ```python run id="py.classes.mutable-class-attribute"
 class Team:
@@ -64,7 +58,9 @@ print(a.members, b.members)
 print(a.members is b.members, Team.members is a.members)
 ```
 
-`members = []` 写在类体里，这个列表属于类对象。两个实例都没有自己的 `members`，读取时沿层次找到类上的那一个，`append` 修改的是同一个列表：两个实例的输出相同，且 `a.members is b.members` 为真。这是<Term id="class-attribute">类属性</Term>最常见的失效模式，执行过程中没有任何错误，只是两个实例的状态合流了。
+`members = []` 属于类对象，是所有实例共享的一个对象；实例属性属于单个实例。读取属性时先看实例自己的属性，再看类（含基类），两层都没有则抛 `AttributeError`；数据描述符优先于实例属性，完整的查找顺序由 <CrossRef id="python.attributes-and-descriptors" /> 细化，继承链的顺序由 <CrossRef id="python.inheritance-and-mro" /> 建立。
+
+`a` 与 `b` 都没有自己的 `members`，读取时沿层次找到类上的那一个，`append` 修改的是同一个列表：两个实例的输出相同，且 `a.members is b.members` 为真。这是<Term id="class-attribute">类属性</Term>最常见的失效模式，执行过程中没有任何错误，只是两个实例的状态合流了。把可变状态放进 `__init__`，属性就落在实例上：
 
 ```python run id="py.classes.instance-attribute-fix"
 class Team:
@@ -83,9 +79,9 @@ print(a.members, b.members)
 print(a.__dict__, b.__dict__)
 ```
 
-在 `__init__` 里给 `self.members` 赋值之后，属性落在实例上，两个实例各有自己的列表，不再互为<Term id="alias">别名</Term>。`a.__dict__` 与 `b.__dict__` 显示属性确实存在实例上，这是判断属性到底存在哪个对象上的直接证据。定义时求值一次、被多处共享的模式也出现在默认参数上，见 <CrossRef id="python.mutability-and-copy" />。
+两个实例各有自己的列表，不再互为<Term id="alias">别名</Term>；`a.__dict__` 与 `b.__dict__` 把属性直接列在实例上，是判断属性归属的直接证据。同样的共享也出现在默认参数上，见 <CrossRef id="python.mutability-and-copy" />。
 
-## 属性赋值与重新绑定
+赋值总是落在被赋值的对象上。`c.retries = 5` 在实例上创建 `retries`，类上的那一个不变：
 
 ```python run id="py.classes.rebinding"
 class Config:
@@ -100,9 +96,7 @@ Config.retries = 7
 print(c.retries, Config.retries, Config().retries)
 ```
 
-`c.retries = 5` 在实例上创建了 `retries`，类上的 `retries` 仍是 3。随后 `Config.retries = 7` 只改类属性：`c` 上的实例属性遮蔽了它，因此 `c.retries` 仍是 5，只有新创建的实例读到 7。
-
-读代码时要区分这两种写法：「改共享的默认值」影响所有还没有自己值的实例，「给这个实例设一个值」只影响一个对象。属性赋值不要求预先声明：`self.x = 1` 在实例上创建属性，名字拼错也会静默创建一个新属性，赋值路径上不报错。
+随后 `Config.retries = 7` 只改类属性：`c` 上的实例属性遮蔽了它，因此 `c.retries` 仍是 5，只有新创建的实例读到 7。读代码时要区分这两种写法：「改共享的默认值」影响所有还没有自己值的实例，「给这个实例设一个值」只影响一个对象。属性赋值不要求预先声明。
 
 ## self 是普通形参
 
@@ -124,7 +118,7 @@ print(type(Counter.increment).__name__, type(instance.increment).__name__)
 print(Counter.increment is instance.increment)
 ```
 
-`Counter.increment` 是函数，`instance.increment` 是绑定到该实例的方法；两者不是同一个对象，调用效果相同。`instance.increment()` 与 `Counter.increment(instance)` 是同一次调用，`self` 接住了那个位置上的实参。
+`Counter.increment` 是函数，`instance.increment` 是绑定到该实例的方法；两者不是同一个对象，调用效果相同。`instance.increment()` 与 `Counter.increment(instance)` 是同一次调用，`self` 按位置接住那个实例；`self` 是普通形参的惯用名称，不是关键字。
 
 ```python run id="py.classes.missing-self"
 class Greeter:
@@ -136,5 +130,4 @@ greeter = Greeter()
 print(greeter.greet())
 ```
 
-方法定义里漏掉 `self` 时，调用把实例当成多出来的实参：`TypeError` 的消息指出 `greet()` 接收 0 个位置参数，却收到了 1 个。看到这两个数字时先数一遍形参。
-
+方法定义里漏掉 `self` 时，调用把实例当成多出来的实参：`TypeError` 的消息指出 `Greeter.greet()` 接收 0 个位置参数，却收到了 1 个。
