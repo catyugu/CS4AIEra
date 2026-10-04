@@ -66,7 +66,7 @@ for j, boundary in rounds:
 print("pivot index:", position, "| pivot value:", sample[position])
 ```
 
-六行输出对应分区对 $[3, 8, 2, 5, 6, 4]$ 的逐轮检查。$j$ 从 0 走到 4，$boundary$ 只在 $j = 0$ 与 $j = 2$ 两处前进，正是 `items[j]` 小于 pivot 的两轮；其余三轮把元素留在第二块，分界不动。循环结束后 pivot 落到下标 2，值 4 的左侧都小于 4、右侧都不小于 4，正是上面写的后置条件。
+在这个分区上，$j$ 从 0 走到 4，$boundary$ 只在 $j = 0$ 与 $j = 2$ 两处前进，正是 `items[j]` 小于 pivot 的两轮；其余三轮把元素留在第二块，分界不动。循环结束后 pivot 落到下标 2，值 4 的左侧都小于 4、右侧都不小于 4，正是上面写的后置条件。
 
 ```python run id="alg.quicksort.cases"
 from random import Random
@@ -104,6 +104,6 @@ worst = size * (size - 1) // 2
 print(f"worst n(n-1)/2 = {worst}")
 ```
 
-末元素 pivot 下，已排序与逆序两种输入都做 2016 次比较，正好等于 $n(n-1)/2$，落进 $\Theta(n^2)$ 那一支。把同一个输入上的 pivot 换成随机选择，比较次数降到 368 与 454，与期望值落在同一量级，输入顺序不再决定成本；四个用例排出的结果都与输入的多重集一致。
+末元素 pivot 下，已排序与逆序两种输入都达到 $n(n-1)/2$ 次比较，落进 $\Theta(n^2)$ 那一支。把同一个输入上的 pivot 换成随机选择，比较次数回到与期望值同一量级，输入顺序不再决定成本；各用例排出的结果都与输入的多重集一致。
 
 确定性的 $\Theta(n \log n)$ 最坏界需要别的机制，例如限制递归深度并在退化时切换策略，或用一个线性时间的选取过程来挑 pivot。后者建立在「选择」这一操作上，属于 <CrossRef id="algorithms.selection-and-top-k" />。

@@ -58,7 +58,7 @@ tiny = [(1, "a"), (0, "x"), (1, "b")]
 print("equal keys keep their order:", merge_sort(tiny, key=lambda record: record[0], counters={"comparisons": 0}))
 ```
 
-表里每一行的比较次数与同规模的 $n \log_2 n$ 同阶，输入包含重复键时比值也落在同一量级。
+比较次数与同规模的 $n \log_2 n$ 同阶，输入包含重复键时也不改变这个量级。
 
 ## 稳定性来自取左侧
 
