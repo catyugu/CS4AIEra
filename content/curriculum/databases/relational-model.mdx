@@ -21,7 +21,7 @@ objectives:
 - **候选键**（<Term id="candidate-key">候选键</Term>）是能唯一标识元组的属性集合，且去掉其中任一属性后不再能唯一标识；**主键**是从候选键中选定的那一个；实体完整性要求主键属性非空且唯一标识元组。
 - **外键**（<Term id="foreign-key">外键</Term>）是引用另一个关系的候选键的属性集合。它的价值在于让引用完整性可以被数据库拒绝，而不必依赖每一处应用代码都记得检查。
 - **完整性约束**（<Term id="integrity-constraint">完整性约束</Term>）分工如下：主键与 `NOT NULL` 保证实体完整性；外键保证参照完整性；`UNIQUE`、`CHECK` 与列类型表达域约束。
-- SQL 表与关系模型有一处差异：表中的行可以重复，查询结果默认是行的**包**（<Term id="bag-semantics">包语义</Term>），需要 `DISTINCT` 才回到集合。列顺序在 SQL 中存在，在关系模型里没有意义。
+- SQL 表与关系模型有一处差异：表中的行可以重复，查询结果默认是行的**多重集**（<Term id="bag-semantics">多重集语义</Term>），需要 `DISTINCT` 才回到集合。列顺序在 SQL 中存在，在关系模型里没有意义。
 - 约束是模式的一部分。判断一个数据库表达了哪些规则，看约束声明，不看应用代码里有多少校验分支。业务不变量写在约束里才在并发下成立：应用层的检查在「两个请求同时通过校验」时失效，数据库的约束在事务提交时仍然生效。
 
 ```sql run id="sql.rel.tables" fixture="sql.orders.basic"
@@ -48,7 +48,7 @@ PRAGMA foreign_key_list(orders);
 
 `table_info` 给出列、声明类型、是否允许空值与主键位置；`foreign_key_list` 给出外键指向的表与列，以及 `on_delete`、`on_update` 的取值（这里是 `NO ACTION`，删除被引用的行会被拒绝）。这两条命令是 SQLite 的接口，其他引擎用 `information_schema` 或等价的系统视图提供同类信息。SQLite 中声明的 `INTEGER PRIMARY KEY` 是内部行标识的别名，这个细节属于实现，不要写进依赖跨引擎行为的模式。每个 `UNIQUE` 与外键都需要维护索引结构，写入越频繁代价越明显，索引的收益与代价在后面讲索引时展开。模式变更（加约束、改类型、改外键动作）要先让既有数据满足新约束，否则迁移会在生产库上失败。
 
-## 包语义
+## 多重集语义
 
 ```sql run id="sql.rel.bag" fixture="sql.orders.basic"
 SELECT country FROM customers ORDER BY country;
@@ -56,7 +56,7 @@ SELECT country FROM customers ORDER BY country;
 SELECT DISTINCT country FROM customers ORDER BY country;
 ```
 
-不加 `DISTINCT` 时，`US` 出现两次：查询返回的是包，行的出现次数有意义，`COUNT(*)` 数出的是出现次数。加 `DISTINCT` 之后结果是集合。这也解释了为什么「连接后的行数」不能直接当作任何一张表的行数。
+不加 `DISTINCT` 时，`US` 出现两次：查询返回的是多重集，行的出现次数有意义，`COUNT(*)` 数出的是出现次数。加 `DISTINCT` 之后结果是集合。这也解释了为什么「连接后的行数」不能直接当作任何一张表的行数。
 
 ## 写入被拒绝的三种情形
 
@@ -128,7 +128,7 @@ ORDER BY placed_on DESC, order_id;
 
 ## 小结
 
-- 关系是属性集合与元组集合，无顺序、不重复；SQL 表允许重复行，查询结果默认是包。
+- 关系是属性集合与元组集合，无顺序、不重复；SQL 表允许重复行，查询结果默认是多重集。
 - 候选键唯一标识元组，主键是选定的候选键，外键引用别处的候选键。
 - 约束在写入时生效，失败发生在语句粒度：该语句无效果，表中不会出现部分写入。
 - `UNIQUE` 允许任意多行 NULL；`CHECK` 不禁止 NULL；SQLite 的外键检查需要每个连接显式开启。

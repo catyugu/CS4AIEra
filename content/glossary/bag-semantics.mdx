@@ -1,10 +1,10 @@
 ---
 id: bag-semantics
-term: 包语义
+term: 多重集语义
 english: bag semantics
 aliases:
   - bag
-  - 多重集语义
+  - 包语义
 short: 查询结果是有重复的行集合，行的出现次数有意义；DISTINCT 才回到集合语义。
 related:
   - relational-model
@@ -13,7 +13,7 @@ related:
 
 ## 定义
 
-SQL 的查询结果默认是行的多重集（包）：同一个元组可以出现多次，次数由数据与运算决定。`SELECT` 不删除重复行，`UNION` 会删除而 `UNION ALL` 保留，`DISTINCT` 显式去重。
+SQL 的查询结果默认是行的多重集（bag semantics）：同一个元组可以出现多次，次数由数据与运算决定。`SELECT` 不删除重复行，`UNION` 会删除而 `UNION ALL` 保留，`DISTINCT` 显式去重。
 
 ## 适用范围
 
