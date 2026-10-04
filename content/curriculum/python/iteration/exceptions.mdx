@@ -108,7 +108,37 @@ except RuntimeError as failure:
 
 ## 异常链
 
-```python run id="py.exc.chaining"
+```python run id="py.exc.chaining-implicit"
+import traceback
+
+
+class ConfigError(Exception):
+    pass
+
+
+def parse(text, mode):
+    try:
+        return int(text)
+    except ValueError as exc:
+        if mode == "from":
+            raise ConfigError(f"not a number: {text!r}") from exc
+        raise ConfigError(f"not a number: {text!r}")
+
+
+for mode in ("implicit", "from"):
+    try:
+        parse("x", mode)
+    except ConfigError as exc:
+        lines = traceback.format_exception(exc)
+    print(mode, [line.strip() for line in lines if line.strip().startswith(("During handling", "The above exception"))])
+```
+
+在 `except` 块里抛出的新异常会与正在处理的异常关联。不写 `from` 时，回溯把原始异常报告为「在处理上一条异常期间发生」；`raise ... from exc` 把 `exc` 登记为新异常的直接原因，回溯据此声明因果。
+
+```python run id="py.exc.chaining-from-none"
+import traceback
+
+
 class ConfigError(Exception):
     pass
 
@@ -117,43 +147,19 @@ def parse(text):
     try:
         return int(text)
     except ValueError:
-        raise ConfigError(f"not a number: {text!r}")
+        raise ConfigError(f"not a number: {text!r}") from None
 
 
 try:
     parse("x")
 except ConfigError as exc:
-    print("implicit chain:", type(exc).__name__, "| cause:", exc.__cause__)
-    print("context kept:", type(exc.__context__).__name__)
-    print("the original message is still reachable:", "invalid literal" in str(exc.__context__))
+    lines = traceback.format_exception(exc)
 
-
-def explicit(text):
-    try:
-        return int(text)
-    except ValueError as exc:
-        raise ConfigError(f"not a number: {text!r}") from exc
-
-
-def suppressed(text):
-    try:
-        return int(text)
-    except ValueError:
-        raise ConfigError(f"not a number: {text!r}") from None
-
-
-try:
-    explicit("x")
-except ConfigError as exc:
-    print("explicit chain:", type(exc.__cause__).__name__, "| suppress_context:", exc.__suppress_context__)
-
-try:
-    suppressed("x")
-except ConfigError as exc:
-    print("suppressed chain:", exc.__cause__, "| suppress_context:", exc.__suppress_context__)
+print("from None connectors:", [line.strip() for line in lines if line.strip().startswith(("During handling", "The above exception"))])
+print("from None exceptions:", [line.strip().split(":")[0].rsplit(".", 1)[-1] for line in lines if "Error:" in line])
 ```
 
-在 `except` 块内抛出的新异常自动带上 `__context__`，指向正在处理的异常，因此原始失败不会丢失。`raise ... from exc` 把它登记为 `__cause__`，语义是「这是本次失败的直接原因」；`raise ... from None` 不设原因，只抑制上下文的显示。两种写法的 `__suppress_context__` 都是真值，区别在于是否存在明确的原因。
+`raise ... from None` 不建立这条关联，回溯里只剩新异常。
 
 ## 重新抛出
 

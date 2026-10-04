@@ -54,12 +54,7 @@ from fractions import Fraction
 
 
 def branch_and_bound(items, capacity, use_bound=True):
-    """Postcondition: (best value, nodes visited, a set attaining it).
-
-    The bound is the fractional relaxation of the remaining items, computed so
-    that no arithmetic step rounds it down; the number the code compares against
-    the incumbent is therefore an upper bound on every completion in the subtree.
-    """
+    """Return (best value, nodes visited, a set attaining it)."""
     ordered = sorted(items, key=lambda item: Fraction(item[1], item[0]), reverse=True)
     best = {"value": 0, "taken": ()}
     stats = {"nodes": 0}
@@ -94,9 +89,8 @@ def branch_and_bound(items, capacity, use_bound=True):
 cases = [([(6, 8), (5, 5), (5, 5)], 10), ([(4, 6), (3, 5), (3, 5), (2, 3)], 7)]
 for items, capacity in cases:
     value, bounded, taken = branch_and_bound(items, capacity)
-    _, plain, _ = branch_and_bound(items, capacity, use_bound=False)
-    print(f"items {items}, capacity {capacity}")
-    print(f"  value {value} from {taken} | nodes with the bound {bounded}, without it {plain}")
+    plain_value, plain, _ = branch_and_bound(items, capacity, use_bound=False)
+    print(f"value {value} == {plain_value} from {taken} | nodes with the bound {bounded}, without it {plain}")
 ```
 
 `use_bound=False` 关掉的正是最优性剪枝这一条：两次运行给出同一个最优值，访问的节点数不同。两次运行返回同一个值只是一次回归检查，不能代替对界合法性的证明——界不直接贡献目标值，却参与搜索的控制流，它的合法性是最终最优性的条件。

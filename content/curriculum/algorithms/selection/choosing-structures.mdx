@@ -62,67 +62,36 @@ $$C_\text{hash} = \left(f_\text{ins} + f_\text{lk}\right)c_\text{probe} + f_\tex
 让 $C_\text{array} = C_\text{hash}$，解出的区间查询次数就是翻转点：频率向量与系数向量共同决定它，把其中任一个当变量都能解出一族临界值。上表的插入记的是中间插入——末尾追加是摊还常数、中间插入要搬移 $\Theta(n)$ 个元素，对单次延迟有上限的场景按单次最坏成本重新比较（见 <CrossRef id="algorithms.amortized" />）。
 
 ```python run id="alg.choose.workload"
-n = 200                       # keys held; both candidates store the same set
-k = 20                        # elements a range query returns
-p = (n - 1).bit_length()      # comparisons to binary-search n keys
+n = 200                        # keys held; both candidates store the same set
+k = 20                         # elements a range query returns
+p = (n - 1).bit_length()       # comparisons to binary-search n keys
 workload = {"insert": 200, "lookup": 800, "range": 40}
 
 
-def per_operation(c):
-    """Per-operation costs for (sorted array, hash table) as coefficient
-    combinations of comparisons, moves, probes and emitted elements."""
-    array = (p * c["cmp"] + (n // 2) * c["move"],
-             p * c["cmp"],
-             2 * p * c["cmp"] + k * c["emit"])
-    hash_ = (c["probe"],
-             c["probe"],
-             n * c["cmp"] + k * c["emit"])
-    return array, hash_
-
-
-def total(costs):
-    insert, lookup, range_ = costs
-    return (workload["insert"] * insert + workload["lookup"] * lookup
-            + workload["range"] * range_)
-
-
 def break_even(c):
-    """Range-query count that ties the two totals, solved from the
-    coefficient vector; None when no frequency can flip the winner."""
-    array, hash_ = per_operation(c)
-    d_insert, d_lookup, d_range = (array[i] - hash_[i] for i in range(3))
-    if d_range == 0:
+    array = (p * c["cmp"] + n // 2 * c["move"], p * c["cmp"],
+             2 * p * c["cmp"] + k * c["emit"])
+    hash_ = (c["probe"], c["probe"], n * c["cmp"] + k * c["emit"])
+    delta = [array[i] - hash_[i] for i in range(3)]
+    if delta[2] == 0:
         return None
-    return -(workload["insert"] * d_insert + workload["lookup"] * d_lookup) / d_range
+    return -(workload["insert"] * delta[0] + workload["lookup"] * delta[1]) / delta[2]
 
 
-unit = {"cmp": 1, "move": 1, "probe": 1, "emit": 1}
-array, hash_ = per_operation(unit)
-print("per-operation costs (coefficients temporarily all 1):")
-print(f"  insert  sorted array {array[0]:>4}   hash table {hash_[0]:>4}")
-print(f"  lookup  sorted array {array[1]:>4}   hash table {hash_[1]:>4}")
-print(f"  range   sorted array {array[2]:>4}   hash table {hash_[2]:>4}")
-totals = {"sorted array": total(array), "hash table": total(hash_)}
-for name, value in totals.items():
-    print(f"  total {name:<13}{value:>8}")
-print("cheaper:", min(totals, key=totals.get))
-print(f"range queries tying the totals: {break_even(unit):.0f}")
-
-print()
-print("C_array - C_hash = f_ins*(p*c_cmp + (n/2)*c_move - c_probe)"
-      " + f_lk*(p*c_cmp - c_probe) + f_rg*((2p - n)*c_cmp)")
-print("break-even as the coefficient vector changes:")
-for label, c in (("all coefficients 1", unit),
-                 ("all coefficients 2", {"cmp": 2, "move": 2, "probe": 2, "emit": 2}),
-                 ("comparison 8x a move", {"cmp": 8, "move": 1, "probe": 1, "emit": 1}),
-                 ("move 8x a comparison", {"cmp": 1, "move": 8, "probe": 1, "emit": 1})):
+vectors = {
+    "all 1":       {"cmp": 1, "move": 1, "probe": 1, "emit": 1},
+    "cmp 8x move": {"cmp": 8, "move": 1, "probe": 1, "emit": 1},
+    "move 8x cmp": {"cmp": 1, "move": 8, "probe": 1, "emit": 1},
+}
+print("coefficients   range queries to break even")
+for label, c in vectors.items():
     be = break_even(c)
     shown = "never" if be is None else f"{be:.0f}"
-    print(f"  {label:<22}{shown:>7}")
+    print(f"  {label:<13}{shown:>5}")
 ```
 
 把四个系数都暂设为 1，总成本表达式退化成可以直接相加的整数计数，可以解出一个示例临界点；这一步不声称四类基本操作的真实单位成本相等。区间查询次数增加时哈希表每次都要扫描全表，累计成本增长更快，因此存在一个翻转点：区间查询少于它时哈希表更便宜，超过之后有序数组更便宜。
 
-系数向量改变时这个临界值移动：一次比较的相对成本调高，翻转点下降；一次搬移的相对成本调高，翻转点上升；四个系数同时乘同一个正数，总成本整体缩放，翻转点不动。只有系数的相对大小影响比较结果，共同缩放只改变两条成本曲线的刻度。所以「哪个结构更便宜」由频率向量与系数向量一起决定：频率说明各类操作各发生多少次，系数说明每个单位各花多少，临界点从两者解出。
+系数向量改变时这个临界值移动：一次比较的相对成本调高，翻转点下降；一次搬移的相对成本调高，翻转点上升。所以「哪个结构更便宜」由频率向量与系数向量一起决定：频率说明各类操作各发生多少次，系数说明每个单位各花多少，临界点从两者解出。
 
 选择的判断按三层收敛：结构先要满足功能需求，丢掉了问题所需信息的表示在任何频率下都不合格，与规模无关；剩下的候选在规模增长下比成本，渐近阶更低的一层直接胜出（见 <CrossRef id="algorithms.asymptotic-analysis" />）；落在同一渐近阶上时，再用实际工作负载、常数因子与内存行为分出高下（见 <CrossRef id="algorithms.complexity-in-practice" />）。

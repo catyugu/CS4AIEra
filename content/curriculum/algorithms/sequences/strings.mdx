@@ -80,8 +80,8 @@ def prefix_function(pattern):
     return pi
 
 
-for pattern in ("ababaca", "aabaaab"):
-    print(pattern, prefix_function(pattern))
+pattern = "aabaaab"
+print(pattern, prefix_function(pattern))
 ```
 
 `"aabaaab"` 这类模式含有多级边界：先取最长边界可以保留最多已经匹配的字符，也就是选择仍可能成立的最近一次对齐；若接下来仍失配，更短的边界由 $\pi$ 链依次覆盖。
@@ -90,12 +90,11 @@ for pattern in ("ababaca", "aabaaab"):
 
 扫描阶段在每轮开始时维护一个量 `length`：已经处理 `text[:i]` 后，`0 <= length < m`，并且 `pattern[:length]` 是 `text[:i]` 的后缀中、长度小于 $m$ 的最长模式前缀（按 <CrossRef id="algorithms.correctness" /> 的三步交代）。初始时 $i = 0$、`length = 0`，性质成立。读入 `text[i]` 后，若当前前缀可以延长就把 `length` 加一；否则沿着 $\pi$ 链依次尝试仍可能成为后缀的较短前缀。若延长后 `length == m`，当前后缀就是完整模式，于是报告位置 `i - m + 1`，再令 `length = pi[m-1]`，重新建立 `length < m` 的不变量，同时保留可能形成重叠匹配的最长边界。扫描结束时，每个完整模式后缀都恰在其最后一个字符被处理时报告，因此得到全部且仅有真实出现位置。
 
-```python run id="alg.strings.kmp"
+```python run id="alg.strings.kmp-match"
 def prefix_function(pattern):
-    """pi[i] is the longest border of pattern[:i+1]."""
     pi, length = [0] * len(pattern), 0
     for i in range(1, len(pattern)):
-        while length > 0 and pattern[i] != pattern[length]:
+        while length and pattern[i] != pattern[length]:
             length = pi[length - 1]
         if pattern[i] == pattern[length]:
             length += 1
@@ -104,38 +103,23 @@ def prefix_function(pattern):
 
 
 def linear_matches(text, pattern):
-    """The match list, and the character comparisons the matcher spent."""
-    m = len(pattern)
-    pi, matches, comparisons, length = prefix_function(pattern), [], 0, 0
+    m, pi = len(pattern), prefix_function(pattern)
+    matches, comparisons, length = [], 0, 0
     for i, char in enumerate(text):
-        while True:
+        while length and char != pattern[length]:
             comparisons += 1
-            if length < m and char == pattern[length]:
-                length += 1
-                break
-            if length == 0:
-                break
             length = pi[length - 1]
+        comparisons += 1
+        if char == pattern[length]:
+            length += 1
         if length == m:
             matches.append(i - m + 1)
             length = pi[length - 1]
     return matches, comparisons
 
 
-def naive_comparisons(text, pattern):
-    m = len(pattern)
-    spent = 0
-    for start in range(len(text) - m + 1):
-        offset = 0
-        while offset < m and text[start + offset] == pattern[offset]:
-            offset += 1
-        spent += offset + (offset < m)
-    return spent
-
-
-text, pattern = "a" * 400, "a" * 39 + "b"
-matches, spent = linear_matches(text, pattern)
-print("matches", len(matches), "linear", spent, "naive", naive_comparisons(text, pattern))
+matches, comparisons = linear_matches("a" * 400, "a" * 39 + "b")
+print("matches", len(matches), "comparisons", comparisons)
 ```
 
 在同一条输入上，线性匹配器的比较次数保持在 $n + m$ 量级，朴素扫描达到 $m(n-m+1)$。

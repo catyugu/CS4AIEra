@@ -13,55 +13,8 @@ objectives:
 
 在序列的头部插入一个元素，连续存放的版本把已有的每个元素依次后移一位，链式存放的版本新建一个结点、改一条引用。两种情况调用方读到的序列完全相同，花掉的工作量却不同。
 
-```python run id="alg.adt.two-representations"
-class Node:
-    def __init__(self, value, next=None):
-        self.value = value
-        self.next = next
-
-
-class Chain:
-    """Linked nodes for a sequence; a tail reference keeps append at one write."""
-
-    def __init__(self):
-        self._head = None
-        self._tail = None
-
-    def append(self, value):
-        node = Node(value)
-        if self._head is None:
-            self._head = self._tail = node
-        else:
-            self._tail.next = node
-            self._tail = node
-
-    def insert_front(self, value):
-        self._head = Node(value, self._head)
-        if self._tail is None:
-            self._tail = self._head
-        return 1
-
-    def get(self, index):
-        node, hops = self._head, 0
-        while hops < index:
-            node, hops = node.next, hops + 1
-        return node.value, hops
-
-    def to_list(self):
-        out, node = [], self._head
-        while node is not None:
-            out.append(node.value)
-            node = node.next
-        return out
-
-
-def array_get(slots, index):
-    """Contiguous slots: one address computation, no element visits."""
-    return slots[index], 0
-
-
+```python run id="alg.adt.head-insert-cost"
 def array_insert_front(slots, value):
-    """Shift every existing slot to the right; count the moves."""
     slots.append(None)
     moves = 0
     for position in range(len(slots) - 1, 0, -1):
@@ -71,89 +24,87 @@ def array_insert_front(slots, value):
     return moves
 
 
-slots = list(range(6))
-chain = Chain()
-for value in range(6):
-    chain.append(value)
+# Node repeats in the indexed-read cell; cells share no state.
+class Node:
+    def __init__(self, value, next=None):
+        self.value, self.next = value, next
 
-moves = array_insert_front(slots, -1)
-writes = chain.insert_front(-1)
-print("contiguous slots after insert(0, -1):", slots, "| element moves:", moves)
-print("linked nodes after insert(0, -1)    :", chain.to_list(), "| reference writes:", writes)
 
-print()
-print(f"{'n':>4} {'array get(n-1)':>15} {'chain get(n-1)':>15}")
-for size in (100, 200, 400):
-    slots = list(range(size))
-    chain = Chain()
-    for value in range(size):
-        chain.append(value)
-    _, array_visits = array_get(slots, size - 1)
-    _, chain_hops = chain.get(size - 1)
-    print(f"{size:>4} {array_visits:>15} {chain_hops:>15}")
+def chain_insert_front(head, value):
+    return Node(value, head), 1
+
+
+print("n", "array moves", "chain writes")
+for n in (100, 200, 400):
+    _, writes = chain_insert_front(None, -1)
+    moves = array_insert_front(list(range(n)), -1)
+    print(n, moves, writes)
 ```
 
-两种存放各自给出自己那条序列，逐项相等：头部插入在连续槽位上移动了全部已有元素，在链式结点上只写了一条引用；按下标读取时，链式结点要走下标那么多步引用，连续槽位不碰其他元素。调用方从返回值读不出用的是哪一种存放。序列接口规定的是按位置读取、追加、插入、删除四种动作与它们的结果（见 <CrossRef id="algorithms.arrays-and-lists" />）；元素放在哪里、每种动作花多少工作量，由存放方式给出，也就是由**表示**给出。同一接口因此允许代价不同的多种表示。
+头部插入在连续槽位上移动全部已有元素，移动次数等于元素个数；在链式结点上新建一个结点、只写一条引用，写入次数不随元素个数变化。
+
+```python run id="alg.adt.index-read-cost"
+# Node repeats in the head-insert cell; cells share no state.
+class Node:
+    def __init__(self, value, next=None):
+        self.value, self.next = value, next
+
+
+def array_get(slots, index):
+    return slots[index], 0
+
+
+def chain_get(head, index):
+    hops = 0
+    while hops < index:
+        head, hops = head.next, hops + 1
+    return head.value, hops
+
+
+head = Node(0, Node(1, Node(2, Node(3, Node(4, Node(5))))))
+slots = list(range(6))
+print("index", "array visits", "chain hops")
+for index in (0, 2, 5):
+    _, visits = array_get(slots, index)
+    _, hops = chain_get(head, index)
+    print(index, visits, hops)
+```
+
+按下标读取时，连续槽位一次取到元素，不碰其他元素；链式结点要走下标那么多步引用，跳数随下标增长。两种存放各自给出自己那条序列，逐项相等，调用方从返回值读不出用的是哪一种存放。序列接口规定的是按位置读取、追加、插入、删除四种动作与它们的结果（见 <CrossRef id="algorithms.arrays-and-lists" />）；元素放在哪里、每种动作花多少工作量，由存放方式给出，也就是由**表示**给出。同一接口因此允许代价不同的多种表示。
 
 ## 表示不变量
 
-链式存放要让追加保持在一次引用改写上，就得随时握住最后一个结点；上面那份实现额外存了一个尾引用 `_tail`。尾引用与结点之间有一条必须成立的关系：它指向从头结点沿引用走到的最后一个结点，且当且仅当链为空时它是 `None`。这条关系不写在任何一次动作的返回值里，它约束的是表示的合法状态。删除末尾的那个结点时，必须把尾引用移回新的末尾；漏掉这一步：
+链式存放要让追加保持在一次引用改写上，就得随时握住最后一个结点；下面这份实现额外存了一个尾引用 `_tail`。尾引用与结点之间有一条必须成立的关系：它指向从头结点沿引用走到的最后一个结点，且当且仅当链为空时它是 `None`。这条关系不写在任何一次动作的返回值里，它约束的是表示的合法状态。删除末尾的那个结点时，必须把尾引用移回新的末尾；漏掉这一步：
 
 ```python run id="alg.adt.invariant-check"
 class Node:
-    def __init__(self, value, next=None):
-        self.value = value
-        self.next = next
-
+    def __init__(self, value, next=None): self.value, self.next = value, next
 
 class Chain:
-    """Linked sequence with a cached tail; delete() never brings the tail back in line."""
-
-    def __init__(self):
-        self._head = None
-        self._tail = None
-
+    def __init__(self): self._head = self._tail = None
     def append(self, value):
         node = Node(value)
-        if self._head is None:
-            self._head = self._tail = node
-        else:
-            self._tail.next = node
-            self._tail = node
+        if self._tail is None: self._head = self._tail = node
+        else: self._tail.next = self._tail = node
+    def delete_last(self):
+        node = self._head
+        while node.next.next is not None: node = node.next
+        node.next = None
+    def tail_holds(self):
+        node = self._head
+        while node.next is not None: node = node.next
+        return node is self._tail
 
-    def delete(self, index):
-        if index == 0:
-            value = self._head.value
-            self._head = self._head.next
-            return value
-        previous = self._head
-        for _ in range(index - 1):
-            previous = previous.next
-        value = previous.next.value
-        previous.next = previous.next.next
-        return value
-
-    def to_list(self):
-        out, node = [], self._head
-        while node is not None:
-            out.append(node.value)
-            node = node.next
-        return out
-
-
-sequence = Chain()
-for value in (5, 6, 7, 8):
-    sequence.append(value)
-print("built:", sequence.to_list(), "| tail:", sequence._tail.value)
-
-removed = sequence.delete(3)
-print("delete(3) returned:", removed, "| sequence now:", sequence.to_list())
-
-sequence.append(9)
-print("after append(9):", sequence.to_list(), "| cached tail:", sequence._tail.value)
+chain = Chain()
+for value in (5, 6, 7, 8): chain.append(value)
+print(chain.tail_holds())
+chain.delete_last()
+print(chain.tail_holds())
+chain.append(9)
+print(chain.tail_holds())
 ```
 
-删除本身做对了：它摘掉位置 3 的结点 8 并返回 8，没有抛出异常，紧跟其后列出的序列是 `[5, 6, 7]`。尾引用仍指着那个已经被摘掉的 8。下一次 `append(9)` 把新结点接到这个已经离开链的结点后面，从头结点出发再也走不到 9——追加执行了，序列却没有变长。缺陷不在这两次调用的任何一次返回上，而在两步之间，尾引用与末尾结点之间那条关系不再成立。
+删除本身做对了：它摘掉末尾的结点 8，`tail_holds` 在删除之前为 `True`，删除之后变成 `False`。尾引用仍指着那个已经被摘掉的 8。下一次 `append(9)` 把新结点接到这个已经离开链的结点后面，从头结点出发再也走不到 9——追加执行了，序列却没有变长，`tail_holds` 仍是 `False`。缺陷不在这两次调用的任何一次返回上，而在两步之间：尾引用与末尾结点之间那条关系不再成立。
 
 尾引用与末尾结点之间那条必须在每个公开操作返回时成立的关系，是链式表示的**表示不变量**（representation invariant）：尾引用指向最后一个结点，链为空时它与头引用同时为 `None`。
 
@@ -172,7 +123,7 @@ print("after append(9):", sequence.to_list(), "| cached tail:", sequence._tail.v
 
 ## 两种表示的成本
 
-两种表示各记一次成本，得到这张对照。计数方式是在单位成本模型下「一次元素移动、一次引用跳转、一次引用改写各记 1」（见 <CrossRef id="algorithms.cost-model" />）；按位置读取与头部插入两列的计数来自上面那段真实运行，追加与删除两列由表示直接读出。
+两种表示各记一次成本，得到这张对照。计数方式是在单位成本模型下「一次元素移动、一次引用跳转、一次引用改写各记 1」（见 <CrossRef id="algorithms.cost-model" />）；按位置读取与头部插入两列的计数来自上面两段真实运行，追加与删除两列由表示直接读出。
 
 | 表示 | `get(i)` | `append(x)` | `insert(0, x)` | `delete(i)` | 额外空间 |
 | --- | --- | --- | --- | --- | --- |

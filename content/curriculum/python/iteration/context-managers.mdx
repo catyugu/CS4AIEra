@@ -116,46 +116,53 @@ else:
 
 ## 深入：用生成器写上下文管理器
 
-```python run id="py.ctx.contextmanager"
+`@contextmanager` 把一个生成器变成上下文管理器：生成器在 `yield` 处切成两段，`yield` 之前是进入逻辑，`yield` 的值绑定给 `as`，之后的代码是退出逻辑。
+
+```python run id="py.ctx.contextmanager-normal"
 from contextlib import contextmanager
-
-events = []
-
 
 @contextmanager
 def opened(name):
-    events.append(f"open {name}")
+    print("enter", name)
     try:
         yield name
     finally:
-        events.append(f"close {name}")
-
-
-@contextmanager
-def leaky(name):
-    events.append(f"open {name}")
-    yield name
-    events.append(f"close {name}")
-
+        print("exit", name)
 
 with opened("safe") as handle:
-    events.append(f"using {handle}")
-
-try:
-    with opened("safe"):
-        raise RuntimeError("body failed")
-except RuntimeError:
-    pass
-
-try:
-    with leaky("leaky"):
-        raise RuntimeError("body failed")
-except RuntimeError:
-    pass
-
-print(events)
+    print("body", handle)
 ```
 
-`@contextmanager` 把生成器切成 `yield` 两侧：`yield` 之前是进入逻辑，`yield` 的值绑定给 `as`，之后的代码是退出逻辑；异常从 `yield` 处抛回生成器，因此必须用 `try/finally` 包住 `yield`，退出逻辑才在失败时运行。`leaky` 缺少这层结构，body 抛异常时 `close leaky` 从未出现——修复了 `opened` 的那个缺陷，就在 `leaky` 里复现了它。生成器写成的管理器只能使用一次：生成器是迭代器，同一实例第二次进入会抛 `RuntimeError`。
+body 抛出异常时，异常从 `yield` 处抛回生成器，退出逻辑写进 `try` 的 `finally` 才会在失败路径上运行。
+
+```python run id="py.ctx.contextmanager-error"
+from contextlib import contextmanager
+
+@contextmanager
+def opened():
+    try:
+        yield
+    finally:
+        print("exit ran")
+
+@contextmanager
+def absorbing():
+    try:
+        yield
+    except ValueError:
+        pass
+
+try:
+    with opened():
+        raise ValueError("body failed")
+except ValueError:
+    print("propagated to caller")
+
+with absorbing():
+    raise ValueError("body failed")
+print("suppressed, caller continued")
+```
+
+生成器在 `yield` 处吸收异常、不再抛出时，`with` 调用的 `__exit__` 返回真值，异常被吞掉，控制流继续；未吸收的异常照常向外传播。生成器写成的管理器只能使用一次：生成器是迭代器，同一实例第二次进入会抛 `RuntimeError`。
 
 一个 `with` 语句也能同时管理多个对象，进入从左到右，退出从右到左；锁与嵌套事务的正确性依赖这个逆序。
