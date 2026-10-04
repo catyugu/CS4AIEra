@@ -51,15 +51,6 @@ const { previous, next } = lessonNeighbors(order, lesson.id);
 const trail = sectionTrail(model, lesson.sectionId).slice(1);
 
 const toc = buildToc(headings);
-
-/**
- * Only what a reader can act on: how many experiments the lesson carries. The
- * body's token count is authoring telemetry, so it stays in the dev build.
- */
-const meta = [
-  import.meta.env.DEV ? `${lesson.tokens} tokens` : undefined,
-  lesson.cells.length > 0 ? `${lesson.cells.length} 个可运行单元格` : undefined,
-].filter((part) => part !== undefined);
 ---
 
 <CourseLayout
@@ -78,7 +69,8 @@ const meta = [
         </ol>
       </nav>
       <h1>{lesson.title}</h1>
-      {meta.length > 0 && <p class="lesson-meta">{meta.join(" · ")}</p>}
+      {/* How much of a model's context the document occupies, so a reader can judge its scale. */}
+      <p class="lesson-meta">{lesson.tokens} tokens</p>
       {
         lesson.objectives.length > 0 && (
           <section class="objectives" aria-labelledby="objectives-heading">
