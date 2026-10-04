@@ -34,7 +34,7 @@ objectives:
 
 ## 子句顺序与各路径
 
-匹配规则是：`except` 子句**按书写顺序取第一个匹配**，并且**子类也匹配父类**（`except ConfigError` 会接住 `MissingKey`），因此具体的类型写在前面。这两条只决定一件事：`finally` 在哪个分支之后运行。`else` 只在 `try` 块没有触发异常时运行，把「正常路径」与「异常处理」分开，避免处理块捕获自己抛出的异常。
+`except` 子句**按书写顺序取第一个匹配**，并且**子类也匹配父类**（`except ConfigError` 会接住 `MissingKey`），因此具体的类型写在前面。`else` 在 `try` 块没有触发异常时运行，把「正常路径」与「异常处理」分开，处理块不会捕获自己抛出的异常。
 
 ```python run id="py.exc.matching"
 class ConfigError(Exception):
@@ -45,35 +45,25 @@ class MissingKey(ConfigError):
     pass
 
 
+CASES = {"missing": MissingKey, "config": ConfigError, "value": ValueError}
+
+
 def load(kind):
     try:
-        if kind == "missing":
-            raise MissingKey("no such key")
-        if kind == "config":
-            raise ConfigError("bad config")
-        if kind == "value":
-            raise ValueError("bad value")
-        outcome = "loaded"
-    except MissingKey as exc:
-        return f"specific handler: {type(exc).__name__}"
-    except ConfigError as exc:
-        return f"general handler: {type(exc).__name__}"
-    except (ValueError, TypeError) as exc:
-        return f"tuple handler: {type(exc).__name__}"
-    else:
-        print("else runs only when nothing was raised")
-        return outcome
-    finally:
-        print("finally always runs for", kind)
+        raise CASES[kind]()
+    except MissingKey:
+        return "except MissingKey"
+    except ConfigError:
+        return "except ConfigError"
+    except (ValueError, TypeError):
+        return "except (ValueError, TypeError)"
 
 
-print(load("missing"))
-print(load("config"))
-print(load("value"))
-print(load("ok"))
+for kind in ("missing", "config", "value"):
+    print(kind, "->", load(kind))
 ```
 
-执行时每个分支结束后都运行一次 `finally`，正常加载的那次还会经过 `else`。这段输出的顺序就是模型里那张表：`else` 只出现在没有异常的那一次，`finally` 出现四次且位置固定在每个分支之后。
+`missing` 抛出的 `MissingKey` 也匹配 `except ConfigError`，书写顺序把它交给写在前面、类型更具体的子句；`config` 与 `value` 各自只匹配一个子句。
 
 ## finally 的执行路径
 

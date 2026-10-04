@@ -35,7 +35,7 @@ finally:
         await aexit(None, None, None)
 ```
 
-由此继承同步版本的全部不变量：`__aenter__` 的返回值绑定给 `as` 的名字；`__aenter__` 成功完成之后，离开 `async with` 块的正常路径与异常路径都执行一次 `__aexit__`，参数是异常三元组；返回真值时异常被吞掉。进入阶段本身失败时 `__aexit__` 不执行：展开里 `value = await aenter()` 一旦抛出，`try` 还没有建立。三条路径都可以直接观察：
+绑定 `as` 的名字、进入成功后正常与异常路径各调用一次 `__aexit__`、返回真值吞掉异常，这些不变量与同步版本相同，差别只在 `__aenter__` 与 `__aexit__` 是 await 的。进入阶段失败时 `__aexit__` 不执行：展开里 `value = await aenter()` 一旦抛出，`try` 还没有建立。三条路径可以直接观察：
 
 ```python run id="py.async.async-with-paths"
 import asyncio
@@ -44,93 +44,105 @@ import asyncio
 class Traced:
     def __init__(self, suppress):
         self.suppress = suppress
+        self.log = []
 
     async def __aenter__(self):
         await asyncio.sleep(0)
-        print("__aenter__ ran")
+        self.log.append("enter")
         return "resource"
 
     async def __aexit__(self, exc_type, exc, traceback):
-        print("__aexit__ ran with:", exc_type.__name__ if exc_type else None)
+        self.log.append(f"exit({exc_type.__name__ if exc_type else None})")
         return self.suppress
 
 
 async def main():
-    async with Traced(suppress=False) as value:
-        print("normal exit, bound to:", value)
+    normal = Traced(suppress=False)
+    async with normal as value:
+        pass
+    print("normal", normal.log, "bound", value)
 
+    failing = Traced(suppress=False)
     try:
-        async with Traced(suppress=False):
+        async with failing:
             raise ValueError("boom")
-    except ValueError as failure:
-        print("the exception kept propagating:", failure)
+    except ValueError:
+        outcome = "propagated"
+    print("raised", failing.log, outcome)
 
-    async with Traced(suppress=True):
-        raise ValueError("swallowed")
-    print("a true return value suppressed the exception")
+    swallowing = Traced(suppress=True)
+    async with swallowing:
+        raise ValueError("boom")
+    print("truthy", swallowing.log, "suppressed")
 
 
 await main()
 ```
 
-正常退出时异常三元组是 `None`；块内抛出 `ValueError` 时 `__aexit__` 拿到它，返回假值让异常继续传播；返回真值时它被吞掉，控制流在 `async with` 之后继续。抑制的代价与同步版本相同：调用方看不到失败，因此只在协议约定如此时使用。
+正常退出时异常三元组是 `None`；块内抛出 `ValueError` 时 `__aexit__` 拿到它，返回假值让异常继续传播，返回真值则吞掉它，控制流在 `async with` 之后继续。抑制成立的条件与代价记在 <CrossRef id="python.context-managers" /> 里。
 
-`contextlib.asynccontextmanager` 把异步生成器直接变成上下文管理器，进入部分停在 `yield` 之前，退出部分写在 `yield` 之后的 `finally` 里：
+`contextlib.asynccontextmanager` 把异步生成器接到 `yield` 分段规则上：`yield` 之前是进入，之后的 `finally` 是退出，`yield` 的值绑定给 `as` 的名字；分段与异常注入的完整规则见 <CrossRef id="python.context-managers" />。
 
 ```python run id="py.async.asynccontextmanager"
 import asyncio
 from contextlib import asynccontextmanager
 
 
+events = []
+
+
 @asynccontextmanager
 async def connected(name):
-    print("acquiring", name)
+    events.append(f"acquire {name}")
     try:
         await asyncio.sleep(0)
         yield name
     finally:
-        print("releasing", name)
+        events.append(f"release {name}")
 
 
 async def main():
     async with connected("db") as handle:
-        print("inside the block:", handle)
+        events.append(f"body bound {handle}")
+    print("normal", events)
 
+    events.clear()
     try:
         async with connected("other"):
             raise RuntimeError("body failed")
     except RuntimeError as failure:
-        print("the release ran before the failure surfaced:", failure)
+        print("failed", events, failure)
 
 
 await main()
 ```
 
-`@asynccontextmanager` 要求每次执行恰好产出一次，`yield` 的值绑定给 `as` 的名字。块内异常会在 `yield` 处重新抛入异步生成器；若只为清理或记录而捕获，必须重新抛出；若捕获后正常结束，则等价于 `__aexit__` 返回真值，会抑制异常（见 [contextlib：生成器上下文管理器](https://docs.python.org/3.14/library/contextlib.html#contextlib.contextmanager) 与 [asynccontextmanager](https://docs.python.org/3.14/library/contextlib.html#contextlib.asynccontextmanager)）。上面的 `finally` 释放资源，没有捕获异常，因此异常继续传播。
+捕获后正常返回会在异步侧同时成立两件事：`__aexit__` 得到真值并抑制异常，异步生成器走到结束，同一个管理器不能第二次进入。
 
 ```python run id="py.async.asynccontextmanager-suppression"
 from contextlib import asynccontextmanager
 
 
 @asynccontextmanager
-async def handle_failure(suppress):
+async def absorbing():
     try:
         yield
     except ValueError:
-        print("caught at yield")
-        if not suppress:
-            raise
-    finally:
-        print("cleanup")
+        pass
 
 
-for suppress in (False, True):
+async def main():
+    manager = absorbing()
+    async with manager:
+        raise ValueError("body failed")
+    print("body ValueError:", "suppressed")
+    reused = True
     try:
-        async with handle_failure(suppress):
-            raise ValueError("body failed")
-        print("continued after suppression")
-    except ValueError:
-        print("propagated to caller")
-```
+        async with manager:
+            pass
+    except Exception:
+        reused = False
+    print("reusable:", reused)
 
-两条路径都会清理。区别在于捕获之后是否重新抛出，抑制异常是显式的失败处理决定。
+await main()
+```

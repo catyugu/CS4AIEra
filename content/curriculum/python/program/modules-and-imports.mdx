@@ -21,7 +21,7 @@ objectives:
 3. **执行**：创建模块对象、放进 `sys.modules`，再在它自己的命名空间里执行模块体。
 4. **绑定**：把名字绑到调用方的命名空间。
 
-缓存按模块名索引，而且在模块体开始执行之前就写入，所以模块体运行期间，别的代码已经能在缓存里找到这个还没执行完的模块。下面的模块自报它执行时看到的缓存状态：
+缓存按模块名索引，而且在模块体开始执行之前就写入，所以模块体运行期间，别的代码已经能在缓存里找到这个还没执行完的模块。模块自报它执行时看到的缓存状态：
 
 ```python
 # resolution_demo.py
@@ -36,7 +36,7 @@ import resolution_demo
 print("already cached while its body ran:", resolution_demo.SEEN_WHILE_RUNNING)
 ```
 
-运行 `python main.py` 打印 `already cached while its body ran: True`。第 3 步还意味着模块体的顶层代码在第一次导入时运行——读配置、连数据库、扫描目录都是导入的代价与失败点。同一个文件作为程序直接运行时用 `"__main__"` 作名字，与作为模块导入时是两个缓存条目，判据见 <CrossRef id="python.modules-basics" />。
+运行 `python main.py` 打印 `already cached while its body ran: True`。第 3 步还意味着模块体的顶层代码在第一次导入时运行——读配置、连数据库、扫描目录都是导入的代价与失败点。同一个文件作为程序直接运行时用 `"__main__"` 作名字，与作为模块导入时是两个缓存条目，两者的区别见 <CrossRef id="python.modules-basics" />。
 
 ## 名字落在哪个文件
 
@@ -55,37 +55,46 @@ import shared_name
 print(shared_name.ORIGIN)      # from first_dir
 ```
 
-被选中的是搜索顺序靠前的那个文件，`shared_name.__file__` 指向它；排在后面的同名文件不为这个名字提供代码。自己写的 `utils.py` 覆盖同名依赖，机制就在这里。
+被选中的是搜索顺序靠前的那个文件，`shared_name.__file__` 指向它；排在后面的同名文件不为这个名字提供代码。自己写的 `utils.py` 覆盖同名依赖，靠的是同一条查找顺序。
 
 `sys.path` 的第一项由启动方式决定：直接运行 `python file.py` 时是 `file.py` 所在目录，以 `-m` 运行模块、以 `-c`、交互式或从标准输入进入时是当前工作目录。因此「脚本所在目录先于已安装的包被搜索」只在直接启动脚本时成立，换一种启动方式，导入可能落到另一个模块。
 
 ## 包与子模块
 
-目录可以整体成为一个模块。目录含 `__init__.py` 时它本身是一个包：导入时执行 `__init__.py`，目录成为这个模块的 `__path__`，子模块的名字是 `包名.子模块名`，对应目录里的文件。目录没有 `__init__.py` 时，只要它在 `sys.path` 上，仍是可导入的命名空间包，只是没有可执行的初始化代码。
+一个目录连同里面的文件可以整体成为一个模块。下面这棵树里，`geometry/` 含 `__init__.py`，是一个包；`metrics/` 是它的子包，`shapes.py` 与 `metrics/area.py` 是子模块：
+
+```text
+project/
+  main.py
+  geometry/
+    __init__.py
+    shapes.py
+    metrics/
+      __init__.py
+      area.py
+```
+
+导入 `geometry` 时执行 `geometry/__init__.py`，目录成为这个模块的 `__path__`，子模块的名字是 `包名.子模块名`，对应目录里的文件。`import geometry.shapes` 在调用方只绑定 `geometry`，`shapes` 是它的一个属性，要用 `geometry.shapes` 访问；`from geometry import metrics` 把子模块对象直接绑到名字 `metrics`。两种写法都会先导入 `geometry`，`__init__.py` 执行一次。
 
 ```python
 # geometry/__init__.py
 KIND = "regular package"
 
-# geometry/shapes.py
-def rectangle(width, height):
-    return width * height
-
-# 调用方
+# main.py 与 geometry/ 同目录，直接运行 python main.py
 import geometry.shapes
-from geometry import shapes
+from geometry import metrics
 
-print(geometry.KIND, geometry.shapes.__name__, shapes.rectangle(3, 4))
-# regular package geometry.shapes 12
+print(geometry.shapes.__name__, geometry.KIND, metrics.__name__)
+# geometry.shapes regular package geometry.metrics
 ```
 
-`import geometry.shapes` 先解析 `geometry` 再解析 `geometry.shapes`，最终只在调用方绑定 `geometry`——子模块成为包的属性，用 `geometry.shapes` 访问。`from geometry import shapes` 把子模块对象直接绑到名字 `shapes`。两种写法都要先导入 `geometry`，会执行一次 `__init__.py`。
+`main.py` 的两条导入成立，靠的是 `project/` 排在 `sys.path` 第一项——直接运行 `python main.py` 时这一项是 `main.py` 所在目录。目录没有 `__init__.py` 时，只要它在 `sys.path` 上，仍是可导入的命名空间包，只是没有可执行的初始化代码。
 
-以 `.` 或 `..` 开头的导入是相对导入：`from . import metrics` 的解析起点是当前模块所在的包，只在包内的模块里有意义，它把模块在树里的位置写进代码。写在 `sys.path` 上的普通文件里（包括被当作脚本直接运行的文件），没有可以相对的「当前包」，运行抛 `ImportError: attempted relative import with no known parent package`；要改的是导入语句所在的位置，改成绝对导入，或把文件移进包里。
+以 `.` 或 `..` 开头的导入是相对导入：`from . import metrics` 的解析起点是当前模块所在的包，它把模块在树里的位置写进代码——写在 `geometry/shapes.py` 中时，`.` 就是 `geometry`。写在 `sys.path` 上的普通文件里（包括被当作脚本直接运行的文件），没有可以相对的「当前包」，运行抛 `ImportError: attempted relative import with no known parent package`；要改的是导入语句所在的位置，改成绝对导入，或把文件移进包里。
 
 ## 循环导入
 
-模块在模块体执行之前就进入缓存，这条顺序让互相导入的两个模块能「半成功」：第二个模块拿到的是已经存在、但还没执行完的模块对象，它的命名空间里只有已经执行过的名字。
+模块在模块体执行之前就进入缓存，互相导入的两个模块因此能「半成功」：第二个模块拿到的是已经存在、但还没执行完的模块对象，它的命名空间里只有已经执行过的名字。
 
 ```python
 # cycle_first.py
@@ -104,4 +113,4 @@ VALUE = cycle_first.CONSTANT
 
 运行 `import cycle_first` 抛 `AttributeError`，抛出点在 `cycle_second.py` 的 `VALUE = cycle_first.CONSTANT` 一行：执行到它时 `cycle_first` 已在缓存里，却只执行到 `import cycle_second`，`CONSTANT` 还没有定义。
 
-把这次读取推迟到函数体里（`read` 在调用时才取 `cycle_first.CONSTANT`），两个模块都能完成初始化，`cycle_first.describe()` 随后拿到值。判据是导入期不读取对方尚未定义的名字；导入期出现 `AttributeError` 时，先看依赖环，再决定把这次读取推迟到哪一步。
+把这次读取推迟到函数体里（`read` 在调用时才取 `cycle_first.CONSTANT`），两个模块都能完成初始化，`cycle_first.describe()` 随后拿到值。导入期不读取对方尚未定义的名字；出现 `AttributeError` 时，先看依赖环，再决定把这次读取推迟到哪一步。
