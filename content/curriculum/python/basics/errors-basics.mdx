@@ -38,7 +38,7 @@ except 某个异常类型 as 变量:
 | `KeyError` / `IndexError` | 键或位置不存在 |
 | `ZeroDivisionError` | 除以零 |
 | `AttributeError` | 对象上没有这个属性 |
-| `FileNotFoundError` | 文件不存在（见 <CrossRef id="python.modules-basics" />） |
+| `FileNotFoundError` | 文件不存在（见 <CrossRef id="python.files-basics" />） |
 
 自定义错误用继承 `Exception` 的类表示。类型是调用方用来分支的依据，消息是给人读的细节，两者不能互相替代。重复的失败处理可以并列多个 `except` 子句；异常的传播路径、子类匹配、`else`/`finally` 的执行顺序、异常链与自定义异常的层次设计由 <CrossRef id="python.exceptions" /> 处理。
 

@@ -1,0 +1,96 @@
+---
+id: python.files-basics
+slug: /python/files-basics
+order: 110
+title: 文件读写
+status: published
+objectives:
+  - 说明文本模式的 open 在字节与字符串之间做了什么转换，以及 encoding 参数的作用
+  - 用 with 打开文件，并说明块结束时关闭为什么必须发生
+  - 用 write、read 与按行迭代读写一个文本文件
+  - 判断文件不存在与编码不匹配两类失败发生在哪一步，各报出什么异常
+---
+
+程序把结果写进文件，下次运行还能读回来。磁盘上存放的是字节，读写一段文本要经过一次编码或解码；文件对象同时还是一个必须释放的资源。
+
+## 打开、读写与关闭
+
+`open(path, "r", encoding="utf-8")` 返回一个文件对象：它在字节之上加一层解码，读出 `str`；`"w"` 模式把写入的 `str` 按同一编码编成字节。文件对象用完要关闭，`with` 在块结束时关闭它：
+
+```python run id="py.files.text"
+text = "first line\nsecond line\ncafé\n"
+
+with open("notes.txt", "w", encoding="utf-8") as handle:
+    written = handle.write(text)
+
+with open("notes.txt", "r", encoding="utf-8") as handle:
+    content = handle.read()
+
+print("write returned the number of characters:", written)
+print("closed after the block:", handle.closed)
+print("read back:", repr(content))
+```
+
+`write` 返回写入的字符数；文本模式读出的是 `str`，内容与写入的字符串一致，`repr` 让换行在输出里可见。`with` 在块结束时关闭文件，块内抛出异常时同样关闭。编码与解码的模型见 <CrossRef id="python.text-and-bytes" />，`with` 的进入与退出协议见 <CrossRef id="python.context-managers" />。
+
+## 文本模式与二进制模式
+
+同一个文件，文本模式的 `read` 得到 `str`，二进制模式的 `read` 得到 `bytes`，两者之间差的就是那一次解码：
+
+```python run id="py.files.modes"
+with open("notes.txt", "wb") as handle:
+    handle.write("café".encode("utf-8"))
+
+with open("notes.txt", "rb") as handle:
+    raw = handle.read()
+
+with open("notes.txt", "r", encoding="utf-8") as handle:
+    decoded = handle.read()
+
+print("binary mode gives bytes:", type(raw).__name__, len(raw), raw)
+print("text mode decodes to str:", type(decoded).__name__, len(decoded), decoded)
+```
+
+二进制模式不经过编解码，`read` 原样返回磁盘上的字节；文本模式按 `encoding` 把同一串字节解码成字符串。`café` 的四个字符在 UTF-8 下占五个字节，`len(raw)` 与 `len(decoded)` 因此不同。编码选错时，同一个字节序列会解出不同的字符串，也可能直接解码失败。
+
+## 按行读写
+
+文件对象是可迭代的，`for line in handle` 一次给一行，行尾的换行符保留在字符串里：
+
+```python run id="py.files.lines"
+with open("notes.txt", "w", encoding="utf-8") as handle:
+    handle.writelines(["alpha\n", "beta\n", "gamma\n"])
+
+with open("notes.txt", "r", encoding="utf-8") as handle:
+    for line in handle:
+        print("line:", repr(line))
+
+with open("notes.txt", "r", encoding="utf-8") as handle:
+    first = handle.readline()
+    rest = handle.read()
+
+print("readline:", repr(first))
+print("read gets the rest:", repr(rest))
+```
+
+`writelines` 接收一个字符串序列，不额外插入换行，换行符要自己写在每一项里。`readline()` 读一行，`read()` 读剩下的全部，`read()` 不带参数会把整个文件读进内存；大文件按行迭代或分批读。
+
+## 失败情形
+
+```python run id="py.files.failures"
+try:
+    open("missing-file.txt", "r", encoding="utf-8")
+except FileNotFoundError as failure:
+    print("missing file:", type(failure).__name__, "-", failure)
+
+with open("notes.txt", "w", encoding="utf-8") as handle:
+    handle.write("café")
+
+try:
+    with open("notes.txt", "r", encoding="ascii") as handle:
+        handle.read()
+except UnicodeDecodeError as failure:
+    print("wrong encoding:", type(failure).__name__, "-", failure.reason)
+```
+
+两类失败发生在不同的步骤：文件不在路径上时 `open` 抛 `FileNotFoundError`；文件存在但其中的字节不能按 `encoding` 解码时，读的时候抛 `UnicodeDecodeError`。相对路径按进程的工作目录解析，脚本被从别处调用时数据文件应按调用方传入，或与调用方约定路径。

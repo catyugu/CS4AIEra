@@ -2,16 +2,16 @@
 id: python.modules-basics
 slug: /python/modules-basics
 order: 100
-title: 模块、导入与文件
+title: 模块与导入
 status: published
 objectives:
   - 说明 import 语句把什么绑定到了哪个名字，以及模块体在什么条件下重新执行
   - 用 __name__ 判断一个文件是被导入还是作为程序运行，并写出脚本入口
-  - 读写一个文本文件，并说明为什么用 with 打开
-  - 区分模块找不到、属性不存在、文件不存在这三类错误各自报出什么
+  - 说明模块是一个独立命名空间，以及按名字缓存带来的后果
+  - 区分模块找不到与属性不存在两类错误各自报出什么
 ---
 
-一段能跑通的程序需要被另一个文件复用时，把其中可复用的部分移进单独的 `.py` 文件，再用 `import` 取回，是 Python 组织代码的第一种办法。`import` 在当前文件绑定一个名字，被导入文件顶层的语句在导入时执行一次；同一个文件作为程序启动时执行的是另一套逻辑，两种角色用 `__name__` 区分。程序还要把字节解码成字符串，读写文本文件要处理路径、编码与关闭。
+一段能跑通的程序需要被另一个文件复用时，把其中可复用的部分移进单独的 `.py` 文件，再用 `import` 取回，是 Python 组织代码的第一种办法。`import` 在当前文件绑定一个名字，被导入文件顶层的语句在导入时执行一次；同一个文件作为程序启动时执行的是另一套逻辑，两种角色用 `__name__` 区分。
 
 ## 导入一个模块
 
@@ -70,31 +70,11 @@ print("3 + 4 =", calculator.add(3, 4))
 
 `__name__` 是每个模块都有的属性：被导入时它的值是模块名，作为程序启动的那个文件取 `"__main__"`。守卫 `if __name__ == "__main__":` 把只应在直接运行时执行的代码——命令行入口、示例调用——与可复用的定义分开，导入时不执行入口。
 
-模块是一个独立命名空间：`calculator.py` 里定义的名字属于 `calculator`，`main.py` 里定义的名字属于 `main.py`，两边通过 `calculator.名字` 或参数互相访问。Python 按模块名缓存已导入的模块，同一个程序里再次 `import calculator` 拿到的是第一次留下的模块对象，顶层语句不再执行；模块体只在第一次导入时运行一次。
-
-## 读写一个文本文件
-
-`open(path, "r", encoding="utf-8")` 在字节之上加一层解码，读出来是 `str`；写进去的 `str` 按同一编码编成字节。文件对象用完要关闭，`with` 在块结束时关闭它：
-
-```python run id="py.files.text"
-text = "first line\nsecond line\n"
-
-with open("notes.txt", "w", encoding="utf-8") as handle:
-    written = handle.write(text)
-
-with open("notes.txt", "r", encoding="utf-8") as handle:
-    content = handle.read()
-
-print("write returned the number of characters:", written)
-print("closed after the block:", handle.closed)
-print("read back:", repr(content))
-```
-
-`write` 返回写入的字符数；文本模式读出的是 `str`，内容与写入的字符串一致，`repr` 让换行在输出里可见。`with` 在块结束时关闭文件，块内抛出异常时同样关闭；文件与编码的完整模型见 <CrossRef id="python.text-and-bytes" />，`with` 的进入与退出协议见 <CrossRef id="python.context-managers" />。`read()` 不带参数会读入整个文件，大文件按行迭代或分批读。
+模块是一个独立命名空间：`calculator.py` 里定义的名字属于 `calculator`，`main.py` 里定义的名字属于 `main.py`，两边通过 `calculator.名字` 或参数互相访问。Python 按模块名缓存已导入的模块，同一个程序里再次 `import calculator` 拿到的是第一次留下的模块对象，顶层语句不再执行；模块体只在第一次导入时运行一次。搜索路径、包与 `__init__.py`、相对导入与循环导入的规则，以及让模块体重新执行的方式见 <CrossRef id="python.modules-and-imports" />。
 
 ## 失败情形
 
-三类失败各自报一个异常类型与一条消息：
+两类失败各自报一个异常类型与一条消息：
 
 ```python run id="py.mod.failures"
 try:
@@ -108,15 +88,6 @@ try:
     math.no_such_function
 except AttributeError as failure:
     print("missing attribute:", type(failure).__name__, "-", failure)
-
-try:
-    open("missing-file.txt", "r", encoding="utf-8")
-except FileNotFoundError as failure:
-    print("missing file:", type(failure).__name__, "-", failure)
 ```
 
-三类错误指向三个不同的原因：模块不在搜索路径上、模块里没有这个名字、文件不在这个路径上。前两类在导入或取属性时抛出，第三类在打开文件时抛出。
-
-## 实现边界
-
-相对路径按进程的工作目录解析，脚本被从别处调用时数据文件应按调用方传入或与调用方约定路径。导入按模块名缓存，重复导入不重新执行模块体；模块搜索路径、包与 `__init__.py`、相对导入与循环导入，以及让模块体重新执行的方式见 <CrossRef id="python.modules-and-imports" />。
+两类错误指向两个不同的原因：模块不在搜索路径上、模块里没有这个名字。第一类在导入时抛出，第二类在取属性时抛出。
