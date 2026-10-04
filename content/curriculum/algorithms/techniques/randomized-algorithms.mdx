@@ -5,47 +5,34 @@ order: 50
 title: 随机化算法
 status: published
 objectives:
-  - 把固定输入上的运行时间与错误概率写成随机化算法的契约
-  - 区分 Las Vegas 与 Monte Carlo 两类契约，并说明两类各自保证什么
-  - 用一个 Monte Carlo 判定说明单侧错误：正确结果永不被拒，错误只出在接受错误答案的方向
-  - 用独立重复把单侧错误概率压到指数小，并说明独立性为什么是前提
+  - 说出随机化算法的契约和确定性算法的不同
+  - 给出用随机向量抽查矩阵乘积时一次误判概率的上界，并说明正确结果为什么不会被拒
+  - 用独立重复，以计算成本代价把单侧错误概率压低
+  - 说明拉斯维加斯算法的运行时间为什么是随机变量，以及它的期望时间从哪里得到
 ---
 
-快速排序把待排区间按一个主元（pivot）分成两段，主元最终停在区间里的哪个位置，两段就各有多少元素。把主元从末元素改成从区间里随机挑一个，同一份输入上两次运行的划分不再相同：一次分得均匀，递归深度是 $\Theta(\log n)$；一次每次都只切下一个元素，递归塌成一条 $\Theta(n)$ 的链。算法内部一旦有随机位，同一份输入上每次运行的路径就可能不同（随机选择主元的快速排序的期望分析在 <CrossRef id="algorithms.quicksort" />）。
+一个整数候选 $C$ 被声称等于两个 $n \times n$ 矩阵的乘积 $AB$。最直接的验算是把 $AB$ 重算一遍再与 $C$ 逐项比较，代价 $\Theta(n^3)$ 次标量运算；而一次矩阵向量乘法的代价只有 $\Theta(n^2)$。
 
-路径随随机位变化之后，契约比确定性版本多出两个问题。答案还保证正确吗——同一份输入两次运行的路径不同，输出会不会也跟着不同？运行时间又该怎么描述，它不再是输入的函数，两次运行给出两个数。对这两个问题的不同回答，给出两类契约。
+我们希望用几次随机的矩阵向量乘法检验换掉重算，代价是答案带上一点出错的可能，这就是一种简单的随机化算法。
 
-随机性改变了选择坏输入的那一方：确定性算法的最坏情形由输入方构造，算法拥有随机位之后，对手挑不出一份使每次运行都落入坏路径的输入。随机性还给出另一种交换，用少得多的计算换取一个有上界的出错概率。
+## 一次抽查有多可靠
 
-## 两类契约：Las Vegas 与 Monte Carlo
+$C = AB$ 时，$A(Bx) = (AB)x = Cx$ 对每个 $x$ 都成立，抽查一定通过。$C \ne AB$ 时，差 $D = AB - C$ 不是零矩阵，取它一行非零的行 $d$。把 $x$ 除某个 $d_j \ne 0$ 的分量以外的分量都固定下来：$d \cdot x = 0$ 是关于 $x_j$ 的一次方程，$d_j \ne 0$ 时最多有一个解，而 $x_j$ 只取 $0$ 与 $1$，所以这批固定取值下最多一半的 $x$ 让差为零。$Dx = 0$ 蕴含 $d \cdot x = 0$，一次抽查放过一个错误乘积的概率因此不超过 $1/2$。
 
-随机主元的快速排序对这两个问题的回答是：无论主元落在哪里，递归结束时数组总是排好序的，随机性只改变到达排序所用的比较次数；运行时间因此是随机变量，契约写成它的期望或高概率界。另一些算法把随机性用在答案上：运行时间有确定上界，代价是答案可能出错，契约报出错误概率。两类契约并排写出来：
+这一次抽查的契约是：运行时间确定（三次矩阵向量乘法，代价 $\Theta(n^2)$），答案可能出错，而且出错只出在「接受错误乘积」这一侧——正确的乘积在任何一次抽查里都不会被拒。把随机性用在答案上、运行时间有确定上界的一类算法，称为**蒙特卡洛算法**（Monte Carlo algorithm）。
 
-| | 输出 | 时间 | 保证 |
-| --- | --- | --- | --- |
-| Las Vegas | 总是正确 | 随机变量 | 期望时间，或高概率时间 |
-| Monte Carlo | 可能出错 | 确定，或有界 | 错误概率的上界 |
+## 重复到错误概率任意小
 
-量词落在算法随机位 $R$ 上：输入 $x$ 固定，只在算法可读的随机位上取概率（把输入与随机位分开处理的角度见 <CrossRef id="algorithms.average-and-randomized" />）。Las Vegas 的「总是正确」按这条量词写，就是对每个固定输入、每次抽样的 $R$，返回的结果都正确；它的运行时间 $T(x, R)$ 随 $R$ 取值，有限期望还推出算法以概率 $1$ 终止。
+一次 $1/2$ 的上界太松。把 $k$ 轮独立抽查按「每一轮都通过才算通过」组合起来：接受一个错误乘积要求 $k$ 轮同时出错，概率上界随 $k$ 按 $2^{-k}$ 下降；正确的乘积在任何一轮都不会被拒，这条规则只压低「接受错误乘积」这一侧。
 
-## 独立重复
-
-Monte Carlo 的单侧错误给出一个可以直接放大的上界。设一次运行的错误概率不超过 $p$，且错误只出在「接受错答案」这一侧：把 $k$ 次独立重复按「每一次都接受才算接受」组合，接受一个错答案要求 $k$ 次判定同时出错，概率上界按 $p^k$ 下降；正确结果在任何一次都不会被拒绝，这条规则只压低接受错答案的概率，不引入新的错误方向。
-
-独立性是这条推导的前提。各次重复共用同一批随机位时，所有轮次同时成功或同时失败，概率不再相乘，重复不再降低错误概率。
-
-## 深入案例：Freivalds 算法
-
-给定 $n \times n$ 矩阵 $A$、$B$ 与候选乘积 $C$，要判断 $C = AB$ 是否成立。直接重新计算 $AB$ 再与 $C$ 比较需要 $\Theta(n^3)$ 次标量运算；随机位换来的检查更快。本例只用到两个成本事实：$n \times n$ 矩阵乘向量需要 $\Theta(n^2)$ 次标量运算，直接计算 $AB$ 需要 $\Theta(n^3)$ 次。抽一个均匀随机的 $0/1$ 向量 $x$，比较 $A(Bx)$ 与 $Cx$：$C = AB$ 时两者对每个 $x$ 都相等；$C \neq AB$ 时 $D = AB - C$ 非零，取它的一行非零 $d$。固定 $x$ 除某个 $d_j \neq 0$ 的分量外的所有取值，只有一个 $x_j$ 的取值能让 $d \cdot x = 0$，于是 $d \cdot x = 0$ 的 $x$ 不超过全部 $0/1$ 向量的一半；$Dx = 0$ 蕴含 $d \cdot x = 0$，一次检查误判的概率因此不超过 $1/2$。运行时间是确定的（一次矩阵向量乘法），代价是可能接受一个错的乘积——错误只出在「接受」这一侧，正确结果在任何一轮都不会被拒绝。
+组合规则的两个前提都直接写在规则里。「每一轮都通过」要求错误是单侧的：错误如果也可能出在把正确结果拒掉的一侧，这条规则会把正确结果一起拒掉，错误概率不再按 $p^k$ 下降。「概率相乘」要求各轮的随机位相互独立。
 
 ```python run id="alg.rand.amplify"
 import random
 
 
 def verify_product(a, b, c, rng):
-    """Freivalds' check: multiply by a random 0/1 vector on the right.
-    A correct product is never rejected; a wrong one is rejected with
-    probability at least 1/2 per vector."""
+    """Freivalds' check: multiply by a random 0/1 vector on the right."""
     n = len(a)
     x = [rng.randint(0, 1) for _ in range(n)]
     bx = [sum(b[i][j] * x[j] for j in range(n)) for i in range(n)]
@@ -55,22 +42,66 @@ def verify_product(a, b, c, rng):
 
 
 def verify_repeated(a, b, c, rng, rounds):
-    """Accept only when every round accepts: the one-sided amplification."""
+    """Accept only when every round accepts."""
     return all(verify_product(a, b, c, rng) for _ in range(rounds))
 
 
 rng = random.Random(20260603)
-n = 12
+n = 8
 a = [[rng.randint(0, 9) for _ in range(n)] for _ in range(n)]
 b = [[rng.randint(0, 9) for _ in range(n)] for _ in range(n)]
 product = [[sum(a[i][t] * b[t][j] for t in range(n)) for j in range(n)] for i in range(n)]
 wrong = [row[:] for row in product]
-wrong[n // 2][n // 2] += 1
+row = n // 2
+wrong[row][row] += 1
+wrong[row][row + 1] += 1
 
-trials = 200
+trials = 500
 print("correct product accepted:", verify_repeated(a, b, product, rng, 5))
-for rounds in (1, 3, 5):
+for rounds in (1, 2, 4):
     accepted = sum(1 for _ in range(trials) if verify_repeated(a, b, wrong, rng, rounds))
-    print(f"  rounds = {rounds:>2}: false accept rate {accepted / trials:.4f} "
-          f"(bound 2^-k = {2 ** -rounds:.5f})")
+    print(f"k={rounds}: false accept {accepted / trials:.4f} | bound 2^-k = {2 ** -rounds:.5f}")
 ```
+
+## 答案永远正确，代价随随机位变化
+
+另一类用法把随机性花在时间上。给一个有 12 个变量的可满足实例：5 条子句要求 $x_1, \dots, x_5$ 全为真，其余 7 个变量不出现在任何子句里。抽一个随机赋值、检查它是否满足全部子句，不满足就再抽一个。
+
+循环只在赋值满足全部子句时返回，返回的答案因此一定正确；随机的是要抽多少次。一个随机赋值满足这 5 条子句的概率是 $2^{-5}$，成功之前的试验次数服从参数 $p = 2^{-5}$ 的几何分布，期望是 $1/p = 32$。
+
+```python run id="alg.rand.restart-search"
+import random
+
+clauses = [1, 2, 3, 4, 5]        # x1..x5 must all be true; the other variables are free
+variables = 12
+rng = random.Random(20260605)
+
+
+def restart_search(rng):
+    """Draw assignments until one satisfies every clause; return how many draws it took."""
+    draws = 0
+    while True:
+        draws += 1
+        assignment = [rng.randint(0, 1) for _ in range(variables)]
+        if all(assignment[i - 1] == 1 for i in clauses):
+            return draws
+
+
+runs = [restart_search(rng) for _ in range(200)]
+print("mean draws:", sum(runs) / len(runs))
+print("most draws in one run:", max(runs))
+print("1 / p =", 2 ** len(clauses))
+```
+
+期望值只保证平均：单次运行可以抽很久，$p$ 很小时平均值本身也可以大到指数级，抽样换不来最坏情形上的保证。
+
+答案一定正确、运行时间是随机变量的一类算法，称为**拉斯维加斯算法**（Las Vegas algorithm）：它的契约写成期望时间，或某个高概率下成立的时间上界。上面的期望值来自成功概率 $p$ 的下界——$p$ 未知时，只能报出「若 $p$ 至少是多少，期望时间不超过多少」。
+
+随机主元的快速排序是这一类契约的另一个实例：无论主元落在哪里，输出都是排好序的数组，随机性只改变比较次数，期望比较次数是 $\Theta(n \log n)$（<CrossRef id="algorithms.quicksort" />）。
+
+## 两类契约的对比
+
+| 契约 | 输出 | 运行时间 | 报出的量 |
+| --- | --- | --- | --- |
+| 蒙特卡洛 | 可能出错 | 确定上界 | 错误概率的上界 |
+| 拉斯维加斯 | 总是正确 | 随机变量 | 期望时间，或高概率时间界 |
