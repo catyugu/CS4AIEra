@@ -221,5 +221,3 @@ print("every MRO ends at object:", D.__mro__[-1].__name__, issubclass(D, object)
 ```
 
 `isinstance(D(), C)` 为真，尽管 `C` 不是 `D` 的直接基类：对普通类，`isinstance(x, T)` 沿 `type(x).__mro__` 判断，`T` 在其中即为真。`type(x) is A` 只比较实际类型，需要按能力分支时用 `isinstance`，需要精确类型时才用 `type(...) is ...`。
-
-`isinstance` 沿 MRO 判断是默认实现的结果，`T` 可以定义 `__instancecheck__` 覆盖它。`abc.ABCMeta` 用 `__instancecheck__` 实现注册与结构检查，`SomeABC.register(SomeClass)` 让 `isinstance(SomeClass(), SomeABC)` 为真，而 `SomeABC` 并不出现在 `SomeClass.__mro__` 中，也不带来任何方法。`isinstance` 调用的是 `type(T).__instancecheck__`，默认实现才回到 `__mro__`。`collections.abc` 的结构性检查见 <CrossRef id="python.dunder-protocols" />。自定义异常继承 `Exception`，`except` 的匹配沿类型层次上溯，匹配规则见 <CrossRef id="python.exceptions" />。
