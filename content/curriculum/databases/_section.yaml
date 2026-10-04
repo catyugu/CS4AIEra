@@ -1,5 +1,0 @@
-id: databases
-label: 数据库
-order: 50
-summary: 关系模型、SQL 语义、约束、索引、事务与查询计划。
-status: active
