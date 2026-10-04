@@ -16,6 +16,14 @@ objectives:
 
 取一张具体的图 $G$：顶点 `a`、`b`、`c`，两条无向边 $a$-$b$ 与 $a$-$c$，记 $|V| = 3$、$|E| = 2$。同一对集合——顶点集合与边集合——可以同时写成三种形式：
 
+```text
+    b       c
+     \     /
+      \   /
+       \ /
+        a
+```
+
 ```python
 adjacency = {"a": ["b", "c"], "b": ["a"], "c": ["a"]}   # vertex -> neighbour list
 matrix = [[0, 1, 1], [1, 0, 0], [1, 0, 0]]               # |V| by |V|, rows and columns indexed a, b, c
