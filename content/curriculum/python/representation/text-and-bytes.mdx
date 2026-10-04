@@ -8,10 +8,10 @@ objectives:
   - 区分码位、字节与字素簇，并预测一段文本的三种长度
   - 解释两个渲染相同但码位不同的字符串为什么比较不等，并给出归一化判据
   - 判断一次编码或解码失败发生在边界的哪一侧，并定位出错位置
-  - 在长度限制、排序与标识符比较场景中选择正确的度量单位
+  - 在长度限制这类场景中选择正确的度量单位
 ---
 
-同一段文本，用不同单位数出来的长度不一样。`"café"` 是 4 个 Unicode 码位、UTF-8 下 5 个字节；在这个例子里它也恰好是 4 个字素簇。
+同一段文本，用不同单位数出来的长度不一样。`"café"` 是 4 个 Unicode 码位，UTF-8 下是 5 个字节。
 
 ```python run id="py.text.measure"
 label = "café"
@@ -20,30 +20,7 @@ print("characters:", len(label), "| bytes:", len(raw))
 print("bytes:", raw)
 ```
 
-`str` 是 Unicode <Term id="code-point">码位</Term>序列，码位是抽象字符的编号，`len()` 数的是码位个数；`bytes` 是 0 到 255 的整数序列，`b[i]` 得到 `int`。同一段文本由此有四种不同的长度：码位数、编码后的字节数、字素簇数与显示宽度。字素簇（grapheme cluster）由一个或多个码位组成，近似于用户感知的一个字符；显示宽度由字形与排版系统决定。协议头、存储字段与界面各按其中一种计数，单位选错就出现静默截断、乱码，或者「看起来一样却不相等」的值。
-
-## 码位、字节与字素簇
-
-```python run id="py.text.code-points"
-import unicodedata
-
-composed = "\u00e9"
-decomposed = "e\u0301"
-
-print("code points:", len(composed), len(decomposed))
-print("equal:", composed == decomposed)
-print("utf-8:", composed.encode("utf-8"), decomposed.encode("utf-8"))
-print("NFC:", unicodedata.normalize("NFC", decomposed) == composed)
-print("NFD:", unicodedata.normalize("NFD", composed) == decomposed)
-print("names:", [unicodedata.name(c) for c in decomposed])
-
-family = "\U0001F468\u200D\U0001F469\u200D\U0001F467"
-print("family code points:", len(family), "| bytes:", len(family.encode("utf-8")))
-```
-
-`"\u00e9"` 是一个码位，`"e\u0301"` 是两个码位（字母 e 加组合尖音符）。两者渲染结果相同，比较却是假，UTF-8 字节也不同：`b'\xc3\xa9'` 与 `b'e\xcc\x81'`。<Term id="unicode-normalization">Unicode 规范化</Term>把等价的码位序列映射到同一个规范形式（NFC、NFD、NFKC、NFKD），只有落在同一形式下，规范等价的两种写法才比较相等、字节相同。`unicodedata.name` 给出码位名称，用来确认一个字符到底是什么。
-
-家庭表情由三个码位和两个零宽连接符组成，`len()` 是 5，UTF-8 是 18 字节，渲染为一个字素簇。同一个可见字符的码位数、字节数与字素簇数可以两两不同。
+`str` 是 Unicode <Term id="code-point">码位</Term>序列；码位是抽象字符的编号，`len()` 数的是码位个数。`bytes` 是 0 到 255 的整数序列，不可变，`b[i]` 得到 `int`，可变的对应类型是 `bytearray`。编码把码位序列映射成字节序列，解码反向，同一段文本的码位数与字节数因此由编码决定。协议头、存储字段与界面各按其中一种计数，单位选错就出现静默截断、乱码，或者「看起来一样却不相等」的值。
 
 ## 编码与解码
 
@@ -67,11 +44,13 @@ except UnicodeEncodeError as exc:
     print("encode:", type(exc).__name__, "|", repr(exc.object[exc.start:exc.end]), "at", exc.start)
 ```
 
-编码把码位序列映射成字节序列，解码反向：`s.encode(enc)` 与 `b.decode(enc)`。编码名称决定映射关系，同一段字节在不同编码下得到不同文本：`b'na\xc3\xafve'` 按 UTF-8 解码得到 `naïve`，按 latin-1 解码得到 `naÃ¯ve`。latin-1 把每个字节映射到一个码位，任何字节序列都能成功解码，所以解码「成功」不说明编码选对了。<Term id="utf-8">UTF-8</Term> 是变长编码：ASCII 占 1 字节，多数常用字符占 2 到 3 字节，其余平面占 4 字节。
+编码名称决定映射关系，同一段字节在不同编码下得到不同文本：`b'na\xc3\xafve'` 按 UTF-8 解码得到 `naïve`，按 latin-1 解码得到 `naÃ¯ve`。latin-1 把每个字节映射到一个码位，任何字节序列都能成功解码，所以解码「成功」不说明编码选对了。<Term id="utf-8">UTF-8</Term> 是变长编码：ASCII 占 1 字节，多数常用字符占 2 到 3 字节，其余平面占 4 字节。
 
 `ascii` 遇到大于 127 的字节抛 `UnicodeDecodeError`，异常带出错区间的起止位置。解码失败报的是字节位置，编码失败报的是字符位置，这是定位问题的第一条线索。
 
 `errors` 参数决定失败行为：`strict` 抛异常，`replace` 用替换字符代替，`ignore` 丢弃。三者都丢掉了原始的字节或字符，适用于展示层，不适用于存储与传输路径。
+
+不指定编码时，`bytes.decode()` 与 `str.encode()` 按 UTF-8。文本模式 `open()` 的默认编码取运行环境的 locale，随平台与区域设置变化，读写文件、解析协议与调用子进程时应显式写出编码名。
 
 ## 截断与边界
 
@@ -87,56 +66,30 @@ except UnicodeDecodeError as exc:
 
 print("byte slice complete on a boundary:", raw[:3].decode("utf-8"))
 print("code point slice:", text[:2])
-
-grapheme = "e\u0301"
-print("grapheme:", grapheme, "| first code point:", repr(grapheme[:1]))
 ```
 
-三个码位编码成九个字节。按字节截断到 4 字节切断了第三个码位的序列，解码失败并报告数据在结尾处不完整；截断到 3 字节恰好落在码位边界上，解码成功。按码位切片在解码侧安全，却仍会切在字素簇内部：`"e\u0301"[:1]` 只剩基字符，重音被丢掉，渲染出的字符与原意不同。
+三个码位编码成九个字节。按字节截断到 4 字节切断了第三个码位的序列，解码失败并报告数据在结尾处不完整；截断到 3 字节恰好落在码位边界上，解码成功。按码位切片在解码侧安全，因为每个切片都落在码位边界上。
 
 限制长度时先确定下游以什么为单位。按一种单位设限拦不住另一种单位：按码位数预分配缓冲会低估字节数，按码位校验的字段也可能超出下游的字节上限。
 
-## 比较、排序与大小写
+## 文本并不等于视觉字符
 
-```python run id="py.text.ordering"
-print(sorted(["Zoe", "apple", "\u00c1lvaro", "\u65e5\u672c"]))
-print("'apple' < 'Zoe':", "apple" < "Zoe")
-print("'B' < 'a':", "B" < "a")
-print("lower:", "stra\u00dfe".lower(), "| casefold:", "stra\u00dfe".casefold())
-print("casefold matches:", "stra\u00dfe".casefold() == "STRASSE".casefold())
-print("dotted I folds to:", repr("\u0130".casefold()), len("\u0130".casefold()))
+```python run id="py.text.code-points"
+import unicodedata
+
+composed = "\u00e9"
+decomposed = "e\u0301"
+
+print("code points:", len(composed), len(decomposed))
+print("equal:", composed == decomposed)
+print("utf-8:", composed.encode("utf-8"), decomposed.encode("utf-8"))
+print("NFC:", unicodedata.normalize("NFC", decomposed) == composed)
+print("NFD:", unicodedata.normalize("NFD", composed) == decomposed)
+
+family = "\U0001F468\u200D\U0001F469\u200D\U0001F467"
+print("family code points:", len(family), "| bytes:", len(family.encode("utf-8")))
 ```
 
-`str` 的比较按码位进行：大写字母排在小写字母之前，非 ASCII 字符排在 ASCII 之后。这个顺序与语言的排序习惯不一致，直接用它排序得不到符合语言习惯的结果。
+`"\u00e9"` 是一个码位，`"e\u0301"` 是两个码位（字母 e 加组合尖音符）。两者渲染结果相同，比较却是假，UTF-8 字节也不同：`b'\xc3\xa9'` 与 `b'e\xcc\x81'`。<Term id="unicode-normalization">Unicode 规范化</Term>把等价的码位序列映射到同一个规范形式（NFC、NFD、NFKC、NFKD），只有落在同一形式下，规范等价的两种写法才比较相等、字节相同。
 
-`casefold()` 实现 Unicode 的大小写折叠，覆盖 `lower()` 处理不了的规则：德语 `ß` 折叠为 `ss`，土耳其语点号大写 I 折叠后是两个码位。大小写不敏感的比较要用折叠后的形式。
-
-## 字节不是文本
-
-```python run id="py.text.bytes-are-not-text"
-data = b"\x00\xff"
-print("bytes:", data, "| length:", len(data))
-print("index gives an int:", data[0], data[1], list(data))
-
-try:
-    data[0] = 1
-except TypeError as exc:
-    print("bytes is immutable:", type(exc).__name__)
-
-buffer = bytearray(b"\x00\xff")
-buffer[0] = 7
-print("bytearray:", buffer)
-print("bytes == bytearray:", bytes(buffer) == b"\x07\xff")
-```
-
-`bytes` 不可变，可变的对应类型是 `bytearray`。索引取到的是 `int`，所以按字节处理二进制数据时不会意外产生文本。`bytes` 与 `bytearray` 按字节内容比较，与 `str` 比较要先解码。
-
-## 实现边界
-
-`bytes.decode()` 与 `str.encode()` 不指定编码时按 UTF-8，这是文档写明的默认值；文本模式 [open](https://docs.python.org/3/library/functions.html#open) 的默认编码取运行环境的 locale（`locale.getencoding()`），随平台与区域设置变化，读写文件、解析协议与调用子进程时应显式写出编码名。带字节顺序标记的文件用 `utf-8-sig` 读取会去掉标记，用 `utf-8` 读取会把它变成文本开头的 U+FEFF 码位。
-
-文件名与路径的规范化由文件系统决定，应用层不能假定它一致：部分文件系统写入时自动归一化、读取时不还原，跨系统搬运文件会改变字符串。下游对长度的单位各不相同：HTTP 头与 TLS 记录按字节，数据库的字符类型按字符数（具体定义随引擎），终端与界面按显示宽度。
-
-语言相关排序由 `locale`、数据库排序规则或专门的库提供。用于认证或去重的标识符，折叠方式必须与存储侧完全一致，否则同一个账号名可以注册两次；不同码位的字符可能渲染得几乎一样，在标识符与域名上产生冒名问题；零宽空格、零宽连接符与双向控制符不占显示宽度，双向覆盖字符能让渲染顺序与实际解析顺序不同，审查源码时应把它们显示出来。
-
-二进制协议、哈希摘要与压缩数据全程用 `bytes`；`re` 在 `str` 模式按 Unicode 类别匹配字符类，处理二进制数据要用 `bytes` 模式。
+字素簇（grapheme cluster）由一个或多个码位组成，近似于用户感知的一个字符。家庭表情由三个码位和两个零宽连接符组成，`len()` 是 5，UTF-8 是 18 字节，渲染为一个字素簇。同一个可见字符的码位数、字节数与字素簇数可以两两不同。

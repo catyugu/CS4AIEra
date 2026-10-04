@@ -8,7 +8,6 @@ objectives:
   - 区分类型标注的静态检查与运行时对实际输入的数据校验
   - 说明 Any 与 object 对静态推理的不同影响
   - 用分支收窄 union，处理可空值与 object
-  - 了解泛型、方差与 Protocol 表达更强的静态关系，运行时不受标注约束
 ---
 
 `def resize(width: int, height: int) -> int` 声明参数与返回值都是 `int`。给 `width` 传入 `"abc"`，类型检查器会拒绝这次调用：`str` 与 `int` 不一致；解释器不读标注，照常把 `"abc"` 绑定到 `width` 并返回一个字符串。
@@ -94,23 +93,6 @@ for raw in ("12", "abc", "0"):
 
 三个输入都满足 `str` 契约，只有一个满足 `1..100` 的业务约束。解析检查表示是否有效，范围检查建立领域不变量。静态检查回答「依据声明，这段代码的类型使用是否一致」；运行时校验回答「这次实际输入是否满足前提」。跨越不可信数据边界时，需要后者的证据。
 
-## 更进一步的静态关系（可选）
+## 注记
 
-标注还能表达更强的静态关系：泛型（generic）把参数的输入类型与返回值的类型关联起来，方差（variance）规定可变容器的元素类型不能仅凭子类型关系互相赋值，Protocol 按成员与签名判断兼容性而不要求继承。这些标注服务的仍是检查器；运行时同样不读取它们，容器元素被写入之后发生什么，由真实的别名与数据决定。完整定义见 [类型规范：泛型与方差](https://typing.python.org/en/latest/spec/generics.html) 与 [typing 模块](https://docs.python.org/3.14/library/typing.html)。
-
-## 实现边界
-
-标注本身是可以被运行时工具读取的数据，例如库据此生成字段或接口，但读取不等于在调用时强制。标注表达式的求值时机属于版本敏感行为：Python 3.14 默认延迟求值，需要内省时用官方 API `annotationlib.get_annotations()`（见 [annotationlib](https://docs.python.org/3.14/library/annotationlib.html) 与 [标注最佳实践](https://docs.python.org/3.14/howto/annotations.html)）。
-
-```python run id="py.typing.introspection"
-from annotationlib import get_annotations
-
-
-def parse(text: str) -> list[int]:
-    return [int(part) for part in text.split()]
-
-
-print(get_annotations(parse))
-```
-
-本例使用 Python 3.14 的 API。读取并求值标注不等于校验一次调用；维护其他版本的内省工具时按该版本文档选择读取方式。
+标注本身是可以被运行时工具读取的数据，例如库据此生成字段或接口；读取不等于在调用时强制。
