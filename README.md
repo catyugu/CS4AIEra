@@ -124,3 +124,7 @@ doc/                架构、课程地图与写作规范
 - Pyodide
 - Vitest
 - Cloudflare Workers Static Assets
+
+## 许可证
+
+本项目以 MIT 许可证开源，许可证全文见 [LICENSE](LICENSE)。
