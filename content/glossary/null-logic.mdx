@@ -5,33 +5,14 @@ english: three-valued logic
 aliases:
   - NULL semantics
   - 三值逻辑
-short: SQL 的布尔表达式取值 TRUE、FALSE、UNKNOWN；NULL 表示未知，任何与它的比较都得到 UNKNOWN。
+short: SQL 的布尔表达式取值 TRUE、FALSE、UNKNOWN；NULL 表示未知，它与 =、<> 等比较都得到 UNKNOWN，存在性判定要用 IS NULL。
 related: []
 ---
 
-## 定义
+SQL 的布尔表达式有三个真值：`TRUE`、`FALSE`、`UNKNOWN`。NULL 表示值未知或不存在，与空字符串或零不同，因此 `NULL = NULL` 与 `NULL = 1` 都求值为 `UNKNOWN`，任何与 NULL 的等值或大小比较都得到 `UNKNOWN`。`WHERE` 子句只保留求值为 `TRUE` 的行，`FALSE` 与 `UNKNOWN` 都被丢弃；判断值是否存在要用 `IS NULL` / `IS NOT NULL`，它们对 NULL 给出确定结果，且两者互补覆盖全部行。
 
-SQL 的布尔表达式有三个真值：`TRUE`、`FALSE`、`UNKNOWN`。NULL 表示值未知或不存在，与空字符串或零不同。因此 `NULL = NULL` 与 `NULL = 1` 都求值为 `UNKNOWN`。
+未知会按三值逻辑传播：`NOT UNKNOWN` 为 `UNKNOWN`，`TRUE OR UNKNOWN` 为 `TRUE`，`FALSE OR UNKNOWN` 为 `UNKNOWN`。这带来两类静默错误：`col = 'x'` 与 `col <> 'x'` 的并集不包含 `col` 为 NULL 的行，完备的过滤条件要补上 `IS NULL`；`x NOT IN (a, b, NULL)` 在 `x` 不等于任何非 NULL 元素时为 `UNKNOWN`，整条查询可能返回空集，表达「不存在」应使用 `NOT EXISTS`。
 
-`WHERE` 子句只保留求值为 `TRUE` 的行，`FALSE` 与 `UNKNOWN` 都被丢弃。
+聚合与分组对 NULL 的处理与比较不同：`COUNT(column)` 只计非 NULL 行、`AVG` 的分母是非 NULL 行数，而 `GROUP BY` 使用等价关系，把所有 NULL 归入同一组；`ORDER BY` 中 NULL 的位置由引擎决定（SQLite 视为最小值），属于方言。
 
-## 适用范围
-
-- 该语义属于 SQL 标准，主流关系引擎一致。可执行基线为 SQLite。
-- 部分引擎提供把 NULL 当作普通值比较的运算符（如 `IS DISTINCT FROM`），SQLite 没有。
-- SQLite 的动态类型系统与类型亲和性属于实现行为，不能由 SQLite 推断其他引擎的列类型强制方式。
-
-## 关键推论
-
-- **UNKNOWN 传播**：`NOT UNKNOWN` 为 `UNKNOWN`；`TRUE OR UNKNOWN` 为 `TRUE`；`FALSE OR UNKNOWN` 为 `UNKNOWN`。
-- **比较不覆盖 NULL**：`col = 'x'` 与 `col <> 'x'` 的并集不包含 `col` 为 NULL 的行，需要 `IS NULL` 补齐。
-- **`NOT IN` 陷阱**：`x NOT IN (a, b, NULL)` 在 `x` 不等于任何非 NULL 元素时为 `UNKNOWN`，整条查询可能返回空集。表达"不存在"应使用 `NOT EXISTS`。
-- **聚合忽略 NULL**：`COUNT(column)` 只计非 NULL 行；`AVG` 的分母是非 NULL 行数。
-- **分组把 NULL 视为同组**：`GROUP BY` 使用等价关系，因此所有 NULL 落入同一组。
-- **约束范围收窄**：`CHECK` 只在结果为 `FALSE` 时被违反，因此不禁止 NULL；`UNIQUE` 允许任意多行 NULL；外键列上的 NULL 不触发引用检查。
-
-## 常见误用
-
-- 用空字符串或 0 表示缺失，使"未知"与"空值"在存储层无法区分。
-- 用 `NOT IN (SELECT ...)` 表达排除，在子查询产生 NULL 时静默返回空结果。
-- 把"查询返回空集"直接解释为"没有这样的数据"，而不检查谓词是否为 UNKNOWN。
+约束对 NULL 的保证范围也要看清：`CHECK` 只在结果为 `FALSE` 时被违反，因此不禁止 NULL；`UNIQUE` 允许任意多行 NULL；外键列上的 NULL 不触发引用检查。用空字符串或 0 表示缺失，会让「未知」与「空值」在存储层无法区分。
