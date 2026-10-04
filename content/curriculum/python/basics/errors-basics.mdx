@@ -1,7 +1,7 @@
 ---
 id: python.errors-basics
 slug: /python/errors-basics
-order: 100
+order: 90
 title: 错误与异常处理
 status: published
 objectives:
@@ -106,7 +106,7 @@ for text in ("8080", "70000", "not-a-number"):
         print(f"{text!r} -> invalid value: {failure}")
 ```
 
-函数在发现不合法状态时抛错，比返回特殊值更明确：`InvalidRange` 与 `ValueError` 在调用侧是两个不同的分支，调用方据此决定是提示用户改输入还是回退默认端口。错误类型属于接口的一部分，写进文档才有意义。`ValueError` 表示参数内容不合法；业务规则的失败用自定义类型，否则调用方只能看到一个笼统的 `ValueError` 而无法按类型分支。
+函数在发现不合法状态时抛错，比返回特殊值更明确：`InvalidRange` 与 `ValueError` 在调用侧是两个不同的分支，调用方据此决定是提示用户改输入还是回退默认端口。错误类型属于接口的一部分，写进文档才有意义。`ValueError` 表示参数内容不合法；当调用方需要按错误类别采取不同处理时，自定义异常类型才开始有价值，只有一个笼统的 `ValueError` 够用时不必为它造类型。
 
 ## 捕获范围要窄
 
@@ -135,5 +135,5 @@ except AttributeError as failure:
 print("both handle the expected failure:", parse_wide("12"), parse_narrow("12"))
 ```
 
-两段代码对 `"abc"` 的处理相同，差别在 `None`：`text.strip()` 在这里是编程错误，而裸 `except` 把它伪装成「输入不合法」，返回 `None` 让错误继续往下传播到更远的地方。捕获具体类型，让不属于预期的失败照常抛出。捕获之后不要静默丢弃：转换、记录或重新抛出，吞掉异常会让失败在更远处以更奇怪的形式出现。异常留给真正的失败，能直接判断的状态直接判断，不要用异常做控制流。
+两段代码对 `"abc"` 的处理相同，差别在 `None`：`text.strip()` 在这里是编程错误，而裸 `except` 把它伪装成「输入不合法」，返回 `None` 让错误继续往下传播到更远的地方。捕获具体类型，让不属于预期的失败照常抛出。捕获之后不要静默丢弃：转换、记录或重新抛出，吞掉异常会让失败在更远处以更奇怪的形式出现。异常留给真正的失败：能直接判断的状态直接判断，不要用宽泛的捕获代替本可以清楚写出的普通分支，只捕获自己准备处理的异常。
 

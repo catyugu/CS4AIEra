@@ -11,50 +11,41 @@ objectives:
   - 预测重新赋值后各名称指向的值，并解释赋值为什么不复制对象
 ---
 
-Python 程序由语句组成，语句中的表达式求值得到对象，赋值语句可以把名称绑定到对象。后续表达式通过名称取得对象，再进行运算。第一套可复用的模型是：
+一段 Python 程序是一串语句，解释器从第一行往下执行。下面四行用两个量算出一个总数，并打印出来：
 
-1. 源码中的表达式求值，得到对象（具有值与类型）；
-2. 赋值把名称绑定到该对象；
-3. 后续表达式读取名称，取得该对象。
-
-## 表达式与语句
-
-**表达式**（expression）是求值后得到对象的代码片段，如 `2 + 3`、`"a" + "b"`、`len("hello")`。**语句**（statement）规定执行动作，如赋值、条件、循环与函数定义。函数调用也是表达式：调用有返回值，并且可以产生副作用。
-
-```python run id="py.basics.expression-vs-text"
-print(2 + 3)
-print("2 + 3")
-result = print("output")
-print("return value:", result)
+```python run id="py.basics.first-program"
+price = 20
+count = 3
+total = price * count
+print(total)
 ```
 
-第一行先求值 `2 + 3` 得到整数 5，再打印；第二行打印字符串里的字符。第三行产生输出并返回 `None`，赋值把 `result` 绑定到这个返回值。打印输出与表达式结果是两个不同的可观察量，不能从「打印了什么」推断「返回了什么」。
+`price = 20` 把名称 `price` 绑定到对象 `20`。`price * count` 是一个表达式，它读取 `price` 与 `count` 当前绑定的对象，相乘，求值得到新对象 `60`。`total = price * count` 是赋值语句，把名称 `total` 绑定到刚求出的 `60`。`print(total)` 读取 `total` 的绑定，把 `60` 写到输出。运行这四行，输出是 `60`。
 
-顺序执行的语句从上到下运行，条件、循环与调用会改变执行路径。缩进规定代码块结构，多余或缺失的缩进可能抛 `IndentationError`；`#` 引入行内注释，注释不参与求值。
+三个词各自指一件事。**表达式**（expression）是求值后得到一个对象的代码片段，例如 `price * count`、`20`、`total`。**语句**（statement）规定一个执行动作，例如 `price = 20` 是赋值语句。**名称绑定**（name binding）让名称指向一个对象。
 
 ## 对象的值与类型
 
-每个对象有类型，类型决定可用的运算以及运算的含义。这里先用值与类型预测运算；对象身份、别名与可变性的后果由 <CrossRef id="python.names-and-objects" /> 展开。
+求值的结果是对象，每个对象有值也有类型。类型决定它参与哪些运算，以及同一个符号在不同类型上的含义。`type` 返回一个对象的类型：
 
 ```python run id="py.types.overview"
 print(type(1), type(1.5), type("text"), type(True), type(None))
 print(1 + 1, "1" + "1", 1 + 1.5)
-print(isinstance(True, int), True + True)
 ```
 
-`int` 表示整数，`float` 表示浮点数，`str` 表示字符串，`bool` 的值是 `True` 与 `False`。`None` 也是对象，是 `NoneType` 的唯一实例，用来表示没有结果或状态缺失；它与 `0`、空字符串、`False` 都不相等，判定「没有值」要用 `is None`（见 <CrossRef id="python.conditionals" />）。`bool` 是 `int` 的子类型，因此 `isinstance(True, int)` 为真，相加得到 2。
+`int` 是整数，`float` 是小数，`str` 是字符串，`bool` 取 `True` 与 `False`。`None` 是 `NoneType` 的唯一实例，表示没有结果或状态缺失；它与 `0`、空字符串、`False` 都不相等，判断「没有值」用 `is None`（<CrossRef id="python.conditionals" />）。
 
-`+` 对整数做加法，对字符串做拼接，整数与浮点数相加得到浮点数。字符串与整数之间没有这种加法定义：
+`+` 对两个整数求和，对两个字符串拼接；整数与小数相加得到小数。字符串与整数之间没有这种加法定义：
 
 ```python run id="py.types.mismatch"
 print("abc" + 1)
 ```
 
-这一行抛 `TypeError`。修法取决于意图：`str(1)` 得到文本，`int("1")` 得到整数。转换也可能失败：`int("abc")` 抛 `ValueError`，说明参数类型可接受但值不合法。详细的数字与字符串规则分别见后两课。
+这一行抛 `TypeError`。修法取决于意图：`str(1)` 得到文本 `"1"`，`int("1")` 得到整数 `1`。转换也可能失败：`int("abc")` 抛 `ValueError`，说明参数类型可接受而值不合法。数值与字符串的完整规则见 <CrossRef id="python.numbers-and-arithmetic" /> 与 <CrossRef id="python.strings" />。
 
 ## 赋值与重新绑定
 
-`name = expression` 分两步：先求值右侧表达式，再把左侧名称绑定到结果对象。名称是读取绑定的入口，类型属于对象；同一名称可以先后绑定到不同类型的对象。
+`price = 20` 与 `total = price * count` 是同一形式：右侧表达式先求值，左侧名称再绑到结果对象。同一个名称可以先后指向不同类型的对象。
 
 ```python run id="py.names.reassignment"
 x = 10
@@ -69,11 +60,11 @@ x = "fifteen"
 print(x, type(x))
 ```
 
-`x = x + 5` 先读取旧绑定，算出 15，再更新 `x`。`a = b = 0` 将两个名称绑定到同一个整数对象；`a = a + 1` 将 `a` 重新绑定到 1，`b` 仍绑定到 0。赋值不复制对象，详细的共享状态实验见 <CrossRef id="python.names-and-objects" />。
+`x = x + 5` 先读取 `x` 的旧绑定算出 `15`，再把 `x` 重新绑到 `15`。`a = b = 0` 把两个名称绑到同一个整数对象；`a = a + 1` 把 `a` 重新绑到 `1`，`b` 仍是 `0`。赋值绑定名称，不复制对象：多个名称指向同一个对象时，通过一个名称修改对象会被其余名称读到，这由 <CrossRef id="python.names-and-objects" /> 展开。
 
-对本例的整数，`x += 1` 得到的值与 `x = x + 1` 相同。增强赋值一般不能简单替换为普通赋值：可变对象可能原地更新，目标的求值规则也有区别（<CrossRef id="python.mutability-and-copy" />）。
+`x += 1` 与 `x = x + 1` 对整数结果相同；对可变对象，`+=` 可能原地更新（<CrossRef id="python.mutability-and-copy" />）。名称区分大小写，`Width` 与 `width` 不同，且不能以数字开头或使用关键字。函数中绑定的名称通常是局部名称，作用域规则由 <CrossRef id="python.scope-and-closure" /> 处理。
 
-名称区分大小写，`Width` 与 `width` 不同；名称不能以数字开头，也不能使用关键字。函数中绑定的名称通常是局部名称，作用域规则由 <CrossRef id="python.scope-and-closure" /> 处理。
+读到没有绑定过的名称会失败：
 
 ```python run id="py.basics.name-error"
 print("before")
@@ -81,11 +72,11 @@ print(missing_name)
 print("after")
 ```
 
-第二行无法找到名称绑定，抛 `NameError`，执行在这里停止。已打印的 `before` 保留，第三行不运行。异常类型、消息与出错位置提供定位失败的证据。
+`missing_name` 没有绑定，第二行抛 `NameError`，执行在此停止。已经打印的 `before` 保留，第三行不运行；异常类型与出错行是定位失败的证据。
 
-## 单元格结果与输出表示
+## 单元格显示最后结果
 
-本课程的单元格执行全部语句，并显示末尾表达式的结果。这是交互式单元格的规则；普通 Python 脚本不会自动显示末尾表达式的值。表达式仍会被求值，也可能产生副作用或抛异常。
+本课程的单元格执行全部语句，并单独显示末行表达式的结果。这是单元格的显示规则，普通脚本不会自动显示末行表达式的值。
 
 ```python run id="py.basics.trailing-expression"
 width = 3
@@ -93,7 +84,7 @@ height = 4
 width * height
 ```
 
-两条赋值语句建立绑定，最后的表达式读取绑定并求值为 12，单元格单独显示这个结果。把末行改为 `print(width * height)`，则得到打印输出，调用的返回值为 `None`。
+两条赋值建立绑定，末行 `width * height` 求值为 `12`，单元格把它单独显示为一个结果。末行换成 `print(width * height)` 时，乘积以打印输出的形式出现，单元格不再显示额外结果。
 
 ```python run id="py.basics.repr"
 total = 42
@@ -103,6 +94,4 @@ print(repr("two\nlines"))
 print(repr("  padded  "))
 ```
 
-`print` 接受多个参数，默认用空格分隔并将值转为文本；用字符串 `+` 拼接时，需要显式转换数字。`repr` 给出便于检查的表示：换行显示为 `\n`，边界空格保留在引号内。
-
-静态工具可以依据类型推断与标注提前发现部分不一致（<CrossRef id="python.typing" />），运行时则在实际执行到操作时检查。环境变量的值是文本，JSON 解析结果还可能是数字、列表或其他对象；进入业务计算前仍需按实际数据解析与校验。
+`print` 接受多个参数，默认用空格分隔，并把每个值转成文本；用 `+` 拼接字符串与数字时，要先用 `str()` 转换数字。`repr` 给出便于检查的表示：换行写作 `\n`，首尾空格保留在引号内。

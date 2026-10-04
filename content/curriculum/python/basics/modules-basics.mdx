@@ -1,7 +1,7 @@
 ---
 id: python.modules-basics
 slug: /python/modules-basics
-order: 90
+order: 100
 title: 模块、导入与文件
 status: published
 objectives:
@@ -11,11 +11,24 @@ objectives:
   - 区分模块找不到、属性不存在、文件不存在这三类错误各自报出什么
 ---
 
-把一个能跑通的程序拆进另一个 `.py` 文件，`import` 它时它的顶层语句立即执行一次；同一个文件被当作程序运行时 `__name__` 取 `"__main__"`，写在守卫里的入口代码执行，导入时不执行。程序还要把字节解码成字符串。代码跨文件与文件读写是这一课的两条边界。
+一段能跑通的程序需要被另一个文件复用时，把其中可复用的部分移进单独的 `.py` 文件，再用 `import` 取回，是 Python 组织代码的第一种办法。`import` 在当前文件绑定一个名字，被导入文件顶层的语句在导入时执行一次；同一个文件作为程序启动时执行的是另一套逻辑，两种角色用 `__name__` 区分。程序还要把字节解码成字符串，读写文本文件要处理路径、编码与关闭。
 
 ## 导入一个模块
 
-导入一个模块做三件事：找到文件、执行它的顶层语句、把执行完留下的命名空间绑定到当前文件里的一个名字。三种常见写法绑定的名字不同：
+`import math` 在当前文件新增一个名字 `math`，它指向 math 模块对象；`from math import sqrt` 把模块里的一个属性直接绑到当前名字上：
+
+```python run id="py.mod.import-forms"
+import math
+import math as shorthand
+from math import sqrt
+
+print("module object:", math)
+print("two names, one object:", shorthand is math)
+print("attribute access:", math.pi, round(math.pi, 3))
+print("imported directly:", sqrt(9))
+```
+
+三种写法的区别只在绑定了哪个名字：
 
 | 写法 | 绑定的名字 | 值 |
 | --- | --- | --- |
@@ -23,120 +36,67 @@ objectives:
 | `import math as m` | `m` | 同一个模块对象 |
 | `from math import sqrt` | `sqrt` | 模块里的一个属性 |
 
-```python run id="py.mod.import-forms"
-import math
-
-from math import sqrt
-
-import math as shorthand
-
-print("module object:", math)
-print("the same object under two names:", shorthand is math)
-print("attribute access:", math.pi, round(math.pi, 3))
-print("imported directly:", sqrt(9))
-```
-
-`import math` 之后 `math` 这个名字指向模块对象，`math.pi` 从它上面取属性；`shorthand is math` 为真，两个名字指向同一个对象。`from ... import` 省掉前缀，代价是读代码时看不出 `sqrt` 来自哪个模块。导入失败会在这一句终止程序，因此导入语句的位置是一种依赖声明。
+`shorthand is math` 为真：`import math as shorthand` 没有复制模块，两个名字指向同一个对象，`math.pi` 与 `shorthand.pi` 取出同样的值。`from ... import` 省掉前缀，读代码时就看不出 `sqrt` 来自哪个模块。导入失败会让程序停在导入这一句，导入语句的位置也声明了这个文件对另一个文件的依赖。
 
 ## 把代码拆到另一个文件
 
-把一个辅助值移进 `demo_module.py`，在本文件里 `import demo_module`：模块的顶层语句执行一次，之后用 `demo_module.value` 从它的命名空间取值。模块是一个独立命名空间，`demo_module.value` 与当前文件里的 `value` 是两个不同的名字。
-
-```python run id="py.mod.body-runs-once"
-import importlib
-import os
-import sys
-
-path = os.path.join(os.getcwd(), "demo_module.py")
-with open(path, "w", encoding="utf-8") as handle:
-    handle.write('print("demo_module body runs")\nvalue = "loaded"\n')
-importlib.invalidate_caches()
-sys.modules.pop("demo_module", None)  # reset so this cell can run again
-
-import demo_module
-import demo_module
-
-print("value:", demo_module.value)
-print("the second import returned the same object:", sys.modules["demo_module"] is demo_module)
-
-os.remove(path)
-```
-
-`demo_module body runs` 只打印一次：第二次 `import` 复用第一次留下的那个模块对象，不重新读文件。模块顶层的语句是导入时的副作用，重活放到函数里、在入口调用。
-
-## 同一个文件的两种角色
-
-`__name__` 是每个模块都有的属性：被导入时它的值是模块名，作为程序启动的那个文件取 `"__main__"`。脚本入口据此写成守卫：
+把 `add` 移进 `calculator.py`；`main()` 与末尾的守卫让这个文件也能直接运行。`main.py` 只 `import` 它：
 
 ```python
+# calculator.py
+print("calculator loaded")
+
+
+def add(left, right):
+    return left + right
+
+
+def main():
+    print("2 + 3 =", add(2, 3))
+
+
 if __name__ == "__main__":
     main()
 ```
 
-同一个文件先当模块导入、再当程序执行，比较两次的 `__name__` 和入口是否运行：
+```python
+# main.py
+import calculator
 
-```python run id="py.mod.script-vs-module"
-import importlib
-import os
-import runpy
-import sys
-
-path = os.path.join(os.getcwd(), "entry_module.py")
-with open(path, "w", encoding="utf-8") as handle:
-    handle.write(
-        'label = __name__\n'
-        'ran_as_entry = False\n'
-        'print("body runs, __name__ =", __name__)\n'
-        'if __name__ == "__main__":\n'
-        '    ran_as_entry = True\n'
-        '    print("entry point runs")\n'
-    )
-importlib.invalidate_caches()
-
-sys.modules.pop("entry_module", None)
-import entry_module
-
-print("imported: __name__ =", entry_module.__name__, "| entry point ran:", entry_module.ran_as_entry)
-
-result = runpy.run_path(path, run_name="__main__")
-print("run as a program: __name__ =", result["label"], "| entry point ran:", result["ran_as_entry"])
-
-os.remove(path)
+print("3 + 4 =", calculator.add(3, 4))
 ```
 
-`runpy.run_path(path, run_name="__main__")` 按「这个文件就是程序」执行一次，守卫里的代码运行；用 `import` 导入同一个文件时 `__name__` 是模块名，守卫不运行。把初始化与命令行入口写进守卫，文件既能作为库导入，也能作为程序运行。
+运行 `python main.py` 打印 `calculator loaded` 与 `3 + 4 = 7`：`import calculator` 找到文件、执行它的顶层语句、把产生的模块对象绑到名字 `calculator`；`calculator loaded` 来自顶层语句里的 `print`，在 `3 + 4 = 7` 之前出现。运行 `python calculator.py` 打印 `calculator loaded` 与 `2 + 3 = 5`：这个文件是程序本身，末尾的守卫成立，`main()` 执行。
+
+`__name__` 是每个模块都有的属性：被导入时它的值是模块名，作为程序启动的那个文件取 `"__main__"`。守卫 `if __name__ == "__main__":` 把只应在直接运行时执行的代码——命令行入口、示例调用——与可复用的定义分开，导入时不执行入口。
+
+模块是一个独立命名空间：`calculator.py` 里定义的名字属于 `calculator`，`main.py` 里定义的名字属于 `main.py`，两边通过 `calculator.名字` 或参数互相访问。Python 按模块名缓存已导入的模块，同一个程序里再次 `import calculator` 拿到的是第一次留下的模块对象，顶层语句不再执行；模块体只在第一次导入时运行一次。
 
 ## 读写一个文本文件
 
-本课程的可执行环境运行在 WebAssembly 上，文件写在内存里的文件系统：路径用法与真实机器一致，内容不落磁盘，页面刷新后不再存在。`open(path, "r", encoding="utf-8")` 在字节之上加一层解码，读出来是 `str`；`with` 在块结束时关闭文件。
+`open(path, "r", encoding="utf-8")` 在字节之上加一层解码，读出来是 `str`；写进去的 `str` 按同一编码编成字节。文件对象用完要关闭，`with` 在块结束时关闭它：
 
 ```python run id="py.files.text"
-import os
-
-path = os.path.join(os.getcwd(), "notes.txt")
 text = "first line\nsecond line\n"
 
-with open(path, "w", encoding="utf-8") as handle:
+with open("notes.txt", "w", encoding="utf-8") as handle:
     written = handle.write(text)
 
-with open(path, "r", encoding="utf-8") as handle:
-    read_back = handle.read()
-    closed_inside = handle.closed
+with open("notes.txt", "r", encoding="utf-8") as handle:
+    content = handle.read()
 
 print("write returned the number of characters:", written)
-print("closed inside the block:", closed_inside, "| closed after it:", handle.closed)
-print("read back:", repr(read_back))
-
-os.remove(path)
+print("closed after the block:", handle.closed)
+print("read back:", repr(content))
 ```
 
-`write` 返回写入的字符数；文本模式读出 `str`。`with` 在块结束时关闭文件，块内抛出异常时同样关闭——这条保证的完整模型（`__enter__`/`__exit__`、异常路径、资源生命周期）见 <CrossRef id="python.context-managers" />，编码与字节的模型见 <CrossRef id="python.text-and-bytes" />。文件用 `with` 打开；`read()` 不带参数会读入整个文件，大文件要按行迭代或分批读。
+`write` 返回写入的字符数；文本模式读出的是 `str`，内容与写入的字符串一致，`repr` 让换行在输出里可见。`with` 在块结束时关闭文件，块内抛出异常时同样关闭；文件与编码的完整模型见 <CrossRef id="python.text-and-bytes" />，`with` 的进入与退出协议见 <CrossRef id="python.context-managers" />。`read()` 不带参数会读入整个文件，大文件按行迭代或分批读。
 
 ## 失败情形
 
-```python run id="py.mod.failures"
-import os
+三类失败各自报一个异常类型与一条消息：
 
+```python run id="py.mod.failures"
 try:
     import module_that_does_not_exist
 except ModuleNotFoundError as failure:
@@ -150,14 +110,13 @@ except AttributeError as failure:
     print("missing attribute:", type(failure).__name__, "-", failure)
 
 try:
-    with open(os.path.join(os.getcwd(), "missing-file.txt"), "r", encoding="utf-8") as handle:
-        handle.read()
+    open("missing-file.txt", "r", encoding="utf-8")
 except FileNotFoundError as failure:
     print("missing file:", type(failure).__name__, "-", failure)
 ```
 
-三类错误指向三个不同的原因：模块不在搜索路径上、模块里没有这个名字、文件不在这个路径上。
+三类错误指向三个不同的原因：模块不在搜索路径上、模块里没有这个名字、文件不在这个路径上。前两类在导入或取属性时抛出，第三类在打开文件时抛出。
 
 ## 实现边界
 
-相对路径按进程的工作目录解析；浏览器运行时的工作目录是 `/home/pyodide`，脚本被从别处调用时数据文件应按调用方传入或与调用方约定路径。导入缓存按模块名索引：重复导入不重新执行模块体，`importlib.reload` 只重新执行模块体，已有对象仍指向旧定义。模块搜索路径 `sys.path` 的来源、包与 `__init__.py`、相对导入与循环导入的失败方式见 <CrossRef id="python.modules-and-imports" />。
+相对路径按进程的工作目录解析，脚本被从别处调用时数据文件应按调用方传入或与调用方约定路径。导入按模块名缓存，重复导入不重新执行模块体；模块搜索路径、包与 `__init__.py`、相对导入与循环导入，以及让模块体重新执行的方式见 <CrossRef id="python.modules-and-imports" />。

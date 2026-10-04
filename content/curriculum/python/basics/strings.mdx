@@ -6,73 +6,65 @@ title: 字符串
 status: published
 objectives:
   - 用索引与切片取出字符串的一部分，并预测越界时的行为
-  - 说明拼接、重复与比较在字符串上的规则
-  - 用 f-string 把值插入文本，用 `!r` 与格式说明符控制插入的表示，并说明它与拼接的差别
+  - 说明拼接与重复在字符串上的规则
+  - 用 f-string 把值插入文本，并用转换标志与格式说明符控制插入内容的表示
 ---
 
-字符串是文本在程序里的表示形式。它是序列，可以按位置取值；它不可变，所有「修改」都产生新字符串。
+文本在程序里写作带引号的一段字符，比如 `name = "python"`。程序需要按位置取出其中的一部分，或者知道它有多长。
 
-## 字符串是序列
+## 索引与切片
 
-- `len(s)` 给出字符串的码位数；字节数、字位丛数与显示宽度是另外的度量，按它们施加约束的场景见 <CrossRef id="python.text-and-bytes" />。
-- `s[i]` 按位置取值，位置从 0 开始；负下标从末尾倒数，`s[-1]` 是最后一个字符。
-- `s[start:stop]` 是切片：取 `start` 到 `stop` 之前的部分，不含 `stop`。
-- 下标越界抛 `IndexError`；切片越界不报错，返回能取到的部分，完全越界时是空字符串。
-- 字符串不可变，`s[0] = "x"` 抛 `TypeError`，改变内容只能构造新字符串。
-- 比较按码位逐个进行：`"Z" < "a"` 为真，因为大写字母的码位小于小写字母；语言相关的排序需要专门的排序规则。
-- 单引号与双引号等价，`'a'` 与 `"a"` 是同一个值；文本里含引号时换用另一种引号，或写成转义序列。
-- 换行与制表符用转义序列（`\n`、`\t`）表示，反斜杠本身写两次（`\\`）；用 `repr` 看清真实内容。
+位置从 0 开始编号，`name[0]` 是第一个字符，`len(name)` 给出字符个数：
 
 ```python run id="py.strings.indexing"
-word = "python"
-print(len(word))
-print(word[0], word[1], word[-1])
-print(word[0:3], word[:3], word[3:], word[:])
+name = "python"
+print(len(name))
+print(name[0], name[1], name[-1])
+print(name[0:3], name[:3], name[3:], name[:])
 ```
 
-`word[0:3]` 是 `pyt`，`word[:3]` 等价，`word[3:]` 取到末尾，`word[:]` 复制整个字符串。
+`len(name)` 是 6，`name[0]` 是 `p`，`name[-1]` 是最后一个字符 `n`，负下标从末尾倒数。切片 `name[start:stop]` 取 `start` 到 `stop` 之前的部分，不含 `stop`：`name[0:3]` 是 `pyt`，`name[:3]` 与它等价，`name[3:]` 取到末尾，`name[:]` 得到整个字符串。
 
-引号与转义是同一层内容的不同写法，`repr` 显示转义形式，`ord` 与 `chr` 在码位与单字符之间转换：
+下标越界抛 `IndexError`；切片越界不报错，返回能取到的部分，完全越界时是空字符串。字符串不可变，`name[0] = "x"` 抛 `TypeError`，改动内容只能构造新字符串。
 
-```python run id="py.strings.escapes"
-print(repr("two\nlines"))
-print(repr("tab\there"))
-print(chr(65), ord("A"))
-```
+文本用单引号或双引号括起，两者等价，`'a'` 与 `"a"` 是同一个值；文本里含引号时换用另一种引号，或写成转义序列：`\n` 是换行，`\t` 是制表符，反斜杠本身写两次。`repr` 把这些转义显示出来，见 <CrossRef id="python.programs-and-expressions" />。
 
-## 拼接、重复与成员判断
+## 拼接与重复
 
 ```python run id="py.strings.operators"
+name = "python"
 print("py" + "thon")
-print("ab" * 3)
-print("th" in "python", "z" in "python")
+print(name * 2)
+print("th" in name, "z" in name)
 print("5" + "3")
 ```
 
-`+` 拼接，`*` 重复，`in` 判断子串。`"5" + "3"` 得到 `"53"`，这是文本拼接，不是加法。
+`+` 把两个字符串首尾相接，`*` 把字符串重复若干次，`in` 判断子串是否出现。`"5" + "3"` 得到 `"53"`：字符串的 `+` 把两段文本接起来，不做数值加法。
 
 ## 常用方法
 
 ```python run id="py.strings.methods"
-word = "python"
-print(word.upper(), word.replace("p", "P"))
+name = "python"
+print(name.upper(), name.replace("p", "P"))
 print("  padded  ".strip())
 print("a,b,c".split(","))
 print("-".join(["a", "b", "c"]))
 ```
 
-方法不修改原字符串，而是返回新字符串。`split` 把字符串切成列表，`join` 把列表拼成字符串，分隔符由调用方给出。
+方法返回新字符串，不改动原字符串。`upper` 转成大写，`replace` 替换子串，`strip` 去掉首尾的空白，`split` 按分隔符把字符串切成列表，`join` 把列表拼成一个字符串，分隔符由调用方给出。
 
 ## 把值插入文本
 
 ```python run id="py.strings.formatting"
-word = "python"
+name = "python"
 count = 6
 padded = "  padded  "
-print(f"{word} has {count} letters")
+print(f"{name} has {count} letters")
 print(f"{padded!r} inserts the repr, so the spaces stay visible")
 print("total: " + str(12))
 print("value is", 42)
 ```
 
-f-string 在引号前加 `f`，用 `{}` 插入表达式，插入的值自动转成文本。`{}` 里还能写转换标志与格式说明符：`{值!r}` 插入该值的 `repr` 结果，用于显示边界空格、引号与转义（`repr` 见 <CrossRef id="python.programs-and-expressions" />）；`{值:20s}` 一类说明符控制宽度、对齐与类型，本课程用它对齐表格输出。`print` 接受多个参数并用空格分隔，是最省事的输出方式。
+f-string 在引号前加 `f`，用 `{}` 插入表达式，插入的值自动转成文本。`{}` 里还能写转换标志与格式说明符：`{值!r}` 插入该值的 `repr` 结果，把首尾空白、引号与转义显示出来；`{值:20s}` 一类说明符控制宽度、对齐与类型。`print` 接受多个参数并用空格分隔，是最省事的输出方式。
+
+这里的字符个数在 Unicode 中还有更精确的区分，计数与比较由 <CrossRef id="python.text-and-bytes" /> 处理。
