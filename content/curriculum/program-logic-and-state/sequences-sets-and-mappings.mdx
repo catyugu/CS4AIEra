@@ -1,0 +1,79 @@
+---
+id: program-logic-and-state.sequences-sets-and-mappings
+slug: /program-logic-and-state/sequences-sets-and-mappings
+order: 40
+title: 序列、集合与映射
+status: published
+objectives:
+  - 读懂列表、元组、集合与字典的常用操作
+  - 说明转换容器时哪些次序、重复或对应关系被保留
+  - 预测修改容器后得到的内容与访问不存在元素时的结果
+---
+
+同样的几个值，可以保存成列表，也可以保存成集合。用哪种容器，决定了我们还能区分哪些信息。
+
+## 序列保存次序和重复
+
+列表 `[4, 7, 4]` 有三项，两个 4 出现在不同位置。下标从 0 开始，`values[1]` 读取第二项，`len(values)` 返回元素数。列表属于序列：元素有确定的先后次序，允许重复。
+
+列表可以修改：`values[1] = 8` 替换第二项，`values.append(9)` 在末尾追加。这些操作改变原列表，所有指向它的名字都会看到修改。
+
+切片 `values[:2]` 取得前两项，`values[1:]` 取得从下标 1 到末尾的部分，返回新列表。切片末尾不包括在内；超出实际长度时，取到已有的那部分即可。
+
+元组也属于序列，适合把几个相关值放在一起，例如坐标 `(3, 5)`。它的元素位置固定，创建后不能替换。`x, y = (3, 5)` 将两项分别赋给两个名字，称为解包；这里的名字数要与元素数一致。
+
+## 集合保存不同的值
+
+集合只保留互不相同的元素。`set(values)` 将列表转换成集合，`4 in unique` 判断 4 是否在集合里。观察转换后还剩哪些信息：
+
+```python
+values = [4, 7, 4]
+unique = set(values)
+print("list length:", len(values))
+print("set size:", len(unique))
+print("contains 4:", 4 in unique)
+print("list first:", values[0])
+```
+
+列表长度为 3，集合大小为 2。集合仍能回答“有没有 4”，但两个 4 变成一项，已经无法恢复原来的次数与位置。集合没有第一个、第二个这样的下标，也不保证按加入顺序遍历。
+
+`{4, 7}` 可以直接创建集合，`set()` 创建空集合。空的 `{}` 则表示字典。
+
+## 映射保存键值对应
+
+映射按键找到对应值。Python 的字典 `dict` 就是一种映射：
+
+```python
+prices = {"apple": 4, "pear": 7}
+print("apple:", prices["apple"])
+prices["apple"] = 5
+print("updated:", prices["apple"])
+print("key count:", len(prices))
+```
+
+`"apple"` 是键，4 是原来的值。对同一键再次赋值，替换它对应的值，不增加一个同名键。一个键只对应一个值；若要保留多次报价，可以把报价列表作为这个值。
+
+`"apple" in prices` 检查键是否存在。直接读取没有保存的键会抛出 `KeyError`，如 `prices["banana"]`。键标识的是所查项目，不是它在容器中的第几个位置。
+
+[Python 字典](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)保持键的插入顺序，更新值不改变这个顺序。这是 Python 的语言保证，抽象的映射只要求键值对应，不必要求插入顺序。
+
+## 哪些信息必须保留
+
+| 需要保留的信息 | 合适的基本容器 |
+| --- | --- |
+| 每项的顺序和重复次数 | 序列，例如列表 |
+| 某个值是否出现 | 集合 |
+| 一个键对应什么值 | 映射，例如字典 |
+
+如果原始数据是三次测量 `[4, 7, 4]`，转换为集合后就不能再计算同一份数据的平均值：少了一次 4。容器转换会改变可回答的问题。
+
+## 练习
+
+一天三次报价是 `[4, 7, 4]`。有人建议只保存集合，再用集合的元素算平均报价。用原列表与转换后的集合各算一次，比较结果，并说明丢失了什么信息。`sum` 返回数值之和。
+
+```python run id="program-logic-and-state.sequences-sets-and-mappings.exercise"
+quotes = [4, 7, 4]
+unique = set(quotes)
+print("original mean:", sum(quotes) / len(quotes))
+print("set mean:", sum(unique) / len(unique))
+```

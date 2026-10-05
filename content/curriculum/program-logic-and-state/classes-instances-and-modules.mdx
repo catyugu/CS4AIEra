@@ -1,0 +1,96 @@
+---
+id: program-logic-and-state.classes-instances-and-modules
+slug: /program-logic-and-state/classes-instances-and-modules
+order: 70
+title: 类、实例与模块
+status: published
+objectives:
+  - 说明实例、属性与方法之间的关系
+  - 区分每个实例各自的状态与类上共享的状态
+  - 读懂模块对象、模块命名空间与导入后的名字
+---
+
+一份笔记本保存名称和若干条笔记。把这些状态与添加笔记的操作写在一起，就可以用一个对象表示一本笔记本。类定义这种对象有哪些状态、怎样操作；根据类创建的具体对象称为实例。
+
+## 一个类可以创建多个实例
+
+```python run id="program-logic-and-state.classes-instances-and-modules.instance-state"
+class Notebook:
+    def __init__(self, name):
+        self.name = name
+        self.notes = []
+
+    def add(self, text):
+        self.notes.append(text)
+
+
+first = Notebook("draft")
+second = Notebook("release")
+first.add("first idea")
+second.add("another idea")
+print(first.name, first.notes)
+print(second.name, second.notes)
+print("same list:", first.notes is second.notes)
+```
+
+`class Notebook:` 创建一个类对象，绑定到 `Notebook`。`Notebook("draft")` 创建这个类的一个实例，并调用 `__init__` 初始化它。`self` 接收到这个新实例，`name` 接收到字符串 `"draft"`。
+
+`self.name = name` 在实例上建立属性 `name`，`self.notes = []` 建立属性 `notes`。每次初始化都新建列表，因此两个笔记本各有自己的笔记列表，最后一行打印 `False`。用点号访问属性，例如 `first.notes`，就能取得实例保存的对象。
+
+## 方法接收到哪个实例
+
+`add` 是定义在类里的函数，作为实例的方法调用。`first.add("first idea")` 把 `first` 作为第一个参数传入，函数体中的 `self.notes` 因而访问第一个笔记本。`Notebook.add(first, "first idea")` 也能表达这个调用。
+
+`self` 是约定的参数名，不是一个特殊的全局对象。对第二个笔记本调用方法时，这次调用中的 `self` 就是 `second`。
+
+## 类上的列表可能被多个实例共用
+
+把 `notes = []` 移到类体，含义会变：
+
+```python run id="program-logic-and-state.classes-instances-and-modules.class-body-state"
+class Notebook:
+    notes = []
+
+    def __init__(self, name):
+        self.name = name
+
+    def add(self, text):
+        self.notes.append(text)
+
+
+first = Notebook("draft")
+second = Notebook("release")
+first.add("first idea")
+print("first:", first.notes)
+print("second:", second.notes)
+print("same list:", first.notes is second.notes)
+```
+
+类体中的 `notes = []` 在创建类时执行一次，列表保存在类对象上，这叫<Term id="class-attribute">类属性</Term>。两个实例都没有自己的 `notes` 属性，读取时就找到类上的同一个列表。一次追加使两个笔记本都看到 `first idea`。
+
+如果笔记列表属于各个笔记本，就在 `__init__` 中为每个实例新建列表；如果所有笔记本确实要共同维护一份笔记列表，才使用共享对象。判断依据是笔记列表应该由谁保存和修改。
+
+## 模块对象与命名空间
+
+类把一个对象的状态和操作组织在一起。程序变大以后，还需要组织多组类、函数与常量，让不同文件能使用这些定义；模块处理的是这些名字放在哪里、怎样找到它们。
+
+模块把一组相关定义放在一起。Python 文件作为模块加载时，顶层名字保存在模块的命名空间中。命名空间是一组名字到对象的对应。其他模块可以通过导入访问这些名字。
+
+`math` 是 Python 提供的数学模块。它的 `ceil` 函数向上取整：`5 / 2` 是 2.5，向上取整得到 3。例如每页放两项，五项需要三页。
+
+```python
+import math
+from math import ceil
+
+pages = math.ceil(5 / 2)
+print("pages:", pages)
+print("same function:", math.ceil is ceil)
+```
+
+`import math` 在当前命名空间建立名字 `math`，指向模块对象；`math.ceil` 访问该模块的 `ceil` 属性。`from math import ceil` 则在当前命名空间直接建立名字 `ceil`，绑定到同一个函数。导入不复制函数，也不会让模块里的所有名字自动成为本地名字。
+
+自己的文件也是如此。例如 `notebook.py` 顶层定义了 `Notebook`，其他文件使用 `import notebook` 后便可以调用 `notebook.Notebook("draft")`。模块命名空间避免不同文件的顶层名字直接混在一起，但不表示这些名字无法被外部访问。导入规则见 [Python 教程：模块](https://docs.python.org/3/tutorial/modules.html)。
+
+## 练习
+
+给第一个版本的 `Notebook` 增加 `count()` 方法，返回笔记数。创建两个实例，只给第一个加笔记，先预测两次调用的结果，再运行。然后把笔记列表移到类体，确认哪些结果改变，并说明原因。

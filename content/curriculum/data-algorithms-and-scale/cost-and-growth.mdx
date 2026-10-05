@@ -1,7 +1,7 @@
 ---
-id: data-algorithms-and-scale.cost-shape
-slug: /data-algorithms-and-scale/cost-shape
-order: 40
+id: data-algorithms-and-scale.cost-and-growth
+slug: /data-algorithms-and-scale/cost-and-growth
+order: 30
 title: 计算成本与规模增长
 status: published
 objectives:
@@ -23,7 +23,7 @@ objectives:
 
 下面两个函数分别计算总和、找出值相等的元素对。返回的计数帮助我们观察实际执行了多少次加法或比较。
 
-```python run id="data-algorithms-and-scale.cost-shape.three-shapes"
+```python run id="data-algorithms-and-scale.cost-and-growth.sum-and-pairs"
 def total(values):
     answer = 0
     additions = 0
@@ -73,7 +73,7 @@ $$ (n-1)+(n-2)+\dots+1=\frac{n(n-1)}{2} $$
 
 在有序列表里找一个值，可以比较中间元素，再把可能位置缩到一半。原来有 16 个可能位置，缩成 8、4、2、1，只需四次减半；原来有 32 个，则需要五次。
 
-把 $n$ 连续除以 2，直到剩下 1，需要约 $\log_2 n$ 次。这里的对数回答的是“2 的几次方等于 $n$”。元素数翻倍，所需减半次数只多一次，所以二分查找的最坏比较次数是对数增长。具体定位方式见 <CrossRef id="data-algorithms-and-scale.preprocessing-and-indexes" />。
+把 $n$ 连续除以 2，直到剩下 1，需要约 $\log_2 n$ 次。这里的对数回答的是“2 的几次方等于 $n$”。元素数翻倍，所需减半次数只多一次，所以二分查找的最坏比较次数是对数增长。具体定位方式见 <CrossRef id="data-algorithms-and-scale.representation-preprocessing-and-indexes" />。
 
 如果一种计算有约 $\log_2 n$ 层，每层处理全部 $n$ 个元素，总工作就约为 $n\log_2 n$。例如把序列不断一分为二，再合并有序的两半：每个合并层处理全部元素，层数随 $\log_2 n$ 增长。这解释了常见比较排序的线性对数成本，不要求亲手实现排序。
 
@@ -99,7 +99,7 @@ $$c g(n)\le T(n)\le C g(n).$$
 | $\Theta(n^2)$ | 检查所有元素对 |
 | $\Theta(2^n)$ | 对每个子集各做固定数量的工作 |
 
-最后一行来自每个元素“选或不选”的二选一：每多一个元素，子集数翻倍。候选数的估算与方案取舍见 <CrossRef id="data-algorithms-and-scale.search-space-and-pruning" />。
+最后一行来自每个元素“选或不选”的二选一：每多一个元素，子集数翻倍。候选数的估算与方案取舍见 <CrossRef id="data-algorithms-and-scale.search-pruning-and-branch-and-bound" />。
 
 ## 增长阶不能确定实际运行时间
 

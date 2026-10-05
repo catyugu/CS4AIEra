@@ -1,23 +1,22 @@
 ---
-id: program-semantics.names-objects-and-state
-slug: /program-semantics/names-objects-and-state
+id: program-logic-and-state.names-objects-and-state
+slug: /program-logic-and-state/names-objects-and-state
 order: 20
 title: 名字、对象与可变状态
 status: published
 objectives:
-  - 说明赋值之后名字与对象的关系，以及对象的身份、类型与可变性各自是什么
-  - 指出两个名字指向同一个可变对象的情形
-  - 预测一次就地修改之后另一个名字看到什么
-  - 说明共享状态在什么情况下成为缺陷
+  - 区分名字的重新赋值与对象的原地修改
+  - 追踪共享对象与浅拷贝中的修改，指出哪些使用方会看到变化
+  - 判断共享状态是否符合各使用方的要求
 ---
 
 一个名字可以指向一个列表，两个名字也可以指向同一个列表。这个区别决定了修改会影响谁。
 
 ## 列表与点号调用
 
-`[10, 20]` 创建一个列表，里面有两个元素。列表可以追加元素：`samples.append(30)` 中的点号表示使用 `samples` 这个对象提供的操作，`append` 是追加操作的名字，括号里是要追加的值。这种属于对象的函数叫方法（method）。
+`[10, 20]` 创建一个列表，里面有两个元素。列表可以追加元素：`samples.append(30)` 中的点号表示使用 `samples` 这个对象提供的操作，`append` 是追加操作的名字，括号里是要追加的值。通过对象调用的这类函数称为方法（method）。
 
-```python run id="program-semantics.names-objects-and-state.alias"
+```python run id="program-logic-and-state.names-objects-and-state.alias"
 samples = [10, 20]
 view = samples
 view.append(30)
@@ -39,11 +38,11 @@ print("same object:", samples is view)
 
 ## 对象可以变，名字也可以换指向
 
-Python 中的值都是对象。对象有身份（identity）、类型（type）和内容：身份区分它与其他对象，在其存活期间不变；类型规定允许哪些操作；内容是我们读取和运算的值。
+Python 中的值都是对象。每个对象都有身份（identity）、类型（type）和值：身份区分它与其他对象，在其存活期间不变；类型规定允许哪些操作；可变对象的值可以随操作改变。
 
 列表是可变对象，可以通过 `append` 等操作修改内容。整数、浮点数和字符串是不可变对象，不能就地改写自己的值。
 
-```python run id="program-semantics.names-objects-and-state.immutable"
+```python run id="program-logic-and-state.names-objects-and-state.immutable"
 number = 10
 kept = number
 number = number + 1
@@ -59,18 +58,15 @@ print("kept:", kept)
 
 `list(samples)` 创建一个新列表。给新列表追加元素，不会给原列表追加：
 
-```python run id="program-semantics.names-objects-and-state.copy"
+```python
 samples = [10, 20]
 working = list(samples)
 working.append(30)
-print("samples:", samples)
-print("working:", working)
-print("same object:", samples is working)
 ```
 
 但复制外层列表，并没有复制里面的对象。这叫<Term id="shallow-copy">浅拷贝</Term>。列表可以包含其他列表；`batches[0]` 读取第一个元素，下标从 0 开始。
 
-```python run id="program-semantics.names-objects-and-state.copy-levels"
+```python run id="program-logic-and-state.names-objects-and-state.copy-levels"
 batches = [[10, 20], [30, 40]]
 working = list(batches)
 working[0].append(50)
@@ -84,15 +80,15 @@ print("same first list:", batches[0] is working[0])
 
 ## 共享是否符合要求
 
-共享本身可以是有意的。例如两处代码都要看到同一份待处理任务，追加任务就应该在两处可见。如果一处要求保留原记录，另一处却把它当工作清单修改，共享就违反了这个要求。
+共享本身可以是有意的。例如两处代码都要看到同一份记录，追加记录就应该在两处可见。如果一处要求保留原记录，另一处却把它当工作清单修改，共享就违反了这个要求。
 
-判断一次修改会影响谁，要找到哪些名字和容器元素仍指向这个对象，再检查那些使用方是否允许看到修改后的内容。
+判断一次修改会影响谁，沿着名字和容器元素找到共享这个对象的使用方。
 
 ## 练习
 
 预测三个名字的内容，以及哪些名字指向同一个列表，再运行验证：
 
-```python run id="program-semantics.names-objects-and-state.exercise-append-then-rebind"
+```python run id="program-logic-and-state.names-objects-and-state.exercise-append-then-rebind"
 samples = [10]
 view = samples
 spare = list(samples)

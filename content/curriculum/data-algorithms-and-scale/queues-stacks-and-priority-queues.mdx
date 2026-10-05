@@ -1,7 +1,7 @@
 ---
-id: data-algorithms-and-scale.order-and-priority
-slug: /data-algorithms-and-scale/order-and-priority
-order: 60
+id: data-algorithms-and-scale.queues-stacks-and-priority-queues
+slug: /data-algorithms-and-scale/queues-stacks-and-priority-queues
+order: 50
 title: 队列、栈与优先队列
 status: published
 objectives:
@@ -16,7 +16,7 @@ objectives:
 
 队列在一端加入，从另一端取出，称为先进先出（FIFO）。Python 的 `collections.deque` 提供两端追加与取出的操作，适合表达队列。
 
-```python run id="data-algorithms-and-scale.order-and-priority.queue"
+```python run id="data-algorithms-and-scale.queues-stacks-and-priority-queues.queue"
 from collections import deque
 
 queue = deque(["parse", "render", "review"])
@@ -35,7 +35,7 @@ FIFO 保证到达次序，不自动保证一般意义上的调度公平。一个
 
 栈在同一端加入和取出，称为后进先出（LIFO）。列表末尾的 `append` 与 `pop` 可以用来实现栈。
 
-```python run id="data-algorithms-and-scale.order-and-priority.stack"
+```python run id="data-algorithms-and-scale.queues-stacks-and-priority-queues.stack"
 changes = []
 changes.append("create draft")
 changes.append("edit title")
@@ -44,13 +44,13 @@ while changes:
     print("undo:", changes.pop())
 ```
 
-最后添加的链接最先撤销，再撤销标题修改，最后撤销草稿创建。`pop()` 默认取走末尾元素，不需要移动剩余元素。末尾 `append` 通常也只做固定工作，但偶尔需要扩充列表存储，单次可能做线性工作；连续追加很多项时，总工作仍与项数成正比。把整个操作序列的总成本分摊到每次操作，称为摊还分析：追加的摊还成本是常数，不保证每一次追加都一样快。
+最后添加的链接最先撤销，再撤销标题修改，最后撤销草稿创建。`pop()` 默认取走末尾元素，不需要移动剩余元素。列表末尾追加的摊还成本为常数级，即连续追加很多项时，分摊到每项的成本为常数；单次追加仍可能需要扩充存储。
 
 ## 优先队列取当前优先级最高的一项
 
 <Term id="priority-queue">优先队列</Term>提供加入元素和取当前最值的操作。它不要求按到达次序取出。
 
-```python run id="data-algorithms-and-scale.order-and-priority.priority"
+```python run id="data-algorithms-and-scale.queues-stacks-and-priority-queues.priority"
 import heapq
 
 pending = []

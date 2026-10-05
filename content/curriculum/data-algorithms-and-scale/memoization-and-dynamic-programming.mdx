@@ -1,0 +1,154 @@
+---
+id: data-algorithms-and-scale.memoization-and-dynamic-programming
+slug: /data-algorithms-and-scale/memoization-and-dynamic-programming
+order: 70
+title: 重复子问题、记忆化与动态规划
+status: published
+objectives:
+  - 说明递归例子中哪些子问题被重复计算，以及记忆化省掉了什么
+  - 用改变答案的最小输入检查缓存键是否完整
+  - 根据不同状态的数量估算复用后的计算与存储成本
+---
+
+研究一个最小的计数问题：每次跨 1 格或 2 格，恰好跨过 4 格有五种走法：`1+1+1+1`、`1+1+2`、`1+2+1`、`2+1+1` 和 `2+2`。
+
+输入允许剩余距离为非负整数，步长固定为 1 或 2。怎样计算更远的终点有多少种走法？先跨 1 格，剩下的距离少 1；先跨 2 格，剩下的距离少 2。两种开头互不重叠，把后续走法数相加即可。
+
+## 递归会重复计算同一个问题
+
+`ways(remaining)` 表示还剩 `remaining` 格时的走法数。函数调用自己称为递归（recursion）。它仍然遵守普通函数调用的规则：每次调用有自己的参数和局部名字，调用方等待返回值，再继续执行。这里每次算一个更小的问题，剩余距离为 0 或 1 时直接返回，这两个情形是递归的终止条件。
+
+```python run id="data-algorithms-and-scale.memoization-and-dynamic-programming.repeated-solves"
+computed = []
+
+
+def ways(remaining):
+    computed.append(remaining)
+    if remaining == 0 or remaining == 1:
+        return 1
+    return ways(remaining - 1) + ways(remaining - 2)
+
+
+print("ways:", ways(4))
+print("computed distances:", computed)
+print("times distance 2 was computed:", computed.count(2))
+```
+
+剩余 0 格时，有一种走法：不再迈步。剩余 1 格时，只能迈一步。调用 `ways(4)` 时，`ways(3)` 和 `ways(2)` 分别求出 3 和 2，相加得到 5。一次调用得到返回值后，调用方才继续相加；不是两次调用同时执行。
+
+先单独追踪 `ways(2)`，看“调用自己”怎样返回：
+
+| 执行位置 | 动作 | 尚未完成的计算 |
+| --- | --- | --- |
+| ways(2) | 调用 ways(1) | 等待左边的返回值 |
+| ways(1) | 命中终止条件，返回 1 | ways(2) 继续，左边已有 1 |
+| ways(2) | 调用 ways(0) | 等待右边的返回值 |
+| ways(0) | 命中终止条件，返回 1 | ways(2) 可以相加 |
+| ways(2) | 返回 1 + 1，即 2 | 这次调用结束 |
+
+外层的 `remaining` 一直是 2，内层的参数分别是 1 与 0；它们没有改掉外层参数。递归让一次调用暂停去解决较小的问题，返回后继续余下计算。如果较小的问题没有走向终止条件，递归就无法按预期结束。
+
+其中 `ways(2)` 被计算了两遍：`ways(4)` 直接调用一次，`ways(3)` 又调用一次。`computed` 记录函数进入时的距离，`count(2)` 数出 2 出现的次数。
+
+```text
+ways(4)
+├── ways(3)
+│   ├── ways(2)
+│   │   ├── ways(1)
+│   │   └── ways(0)
+│   └── ways(1)
+└── ways(2)
+    ├── ways(1)
+    └── ways(0)
+```
+
+两个 `ways(2)` 的输入和规则完全相同，返回值都是 2。终点越远，同样的子问题重复出现得越多。
+
+## 把结果存起来
+
+用字典保存“剩余距离 → 走法数”。再次遇到算过的距离，直接返回已有结果，这叫<Term id="memoization">记忆化</Term>。
+
+```python run id="data-algorithms-and-scale.memoization-and-dynamic-programming.memoized-solves"
+memo = {}
+computed = []
+
+
+def ways(remaining):
+    if remaining in memo:
+        return memo[remaining]
+    computed.append(remaining)
+    if remaining == 0 or remaining == 1:
+        answer = 1
+    else:
+        answer = ways(remaining - 1) + ways(remaining - 2)
+    memo[remaining] = answer
+    return answer
+
+
+print("ways:", ways(4))
+print("computed distances:", computed)
+print("saved answers:", memo)
+```
+
+结果仍是 5。第一次求 `ways(2)` 时，先求出 1 和 0 的结果，再把答案 2 存进 `memo[2]`。外层再次请求 `ways(2)` 时，键已经存在，直接返回 2，不再调用下面的两个子问题。
+
+函数仍可能被调用多次，`computed` 只记录真正重新求解的距离，因此 0 到 4 各出现一次。这就是自顶向下的记忆化：从原问题递归到较小子问题，算出后保存结果。
+
+动态规划（dynamic programming）将问题分解成相互关联的子问题，用已求出的子问题结果计算其他结果。这里子问题重叠，记忆化避免重复求解，是动态规划的一种常见实现方式。也可以先计算小问题，再逐步计算大问题，称为自底向上的计算。
+
+对于距离 $n$，至多保存 $n+1$ 个结果。若把字典访问和整数加法按固定成本计，每个距离只需固定数量的操作，总工作与 $n$ 成正比。代价是多用一张表，而且递归调用仍有深度；终点非常远时，Python 的递归深度限制也需要考虑。
+
+## 字典的键必须足以决定答案
+
+现在改一条规则：不能连续跨两次 2 格。还剩 2 格时，如果上一步跨了 1 格，可以选 `1+1` 或 `2`；如果上一步跨了 2 格，只能选 `1+1`。剩余距离相同，答案却不同。
+
+这里的状态指决定接下来如何计算的信息。旧规则下，只知道剩余距离就足够；新规则下，同样的剩余距离，因上一步不同而有不同的合法走法。
+
+下面故意仍只用距离作键。先求“上一步跨了 2 格”的情况，再求“上一步跨了 1 格”的情况，预测第二次会发生什么：
+
+```python run id="data-algorithms-and-scale.memoization-and-dynamic-programming.incomplete-key"
+memo = {}
+
+
+def ways(remaining, last_step):
+    key = remaining
+    if key in memo:
+        return memo[key]
+    if remaining == 0:
+        answer = 1
+    else:
+        answer = ways(remaining - 1, 1)
+        if remaining >= 2 and last_step != 2:
+            answer += ways(remaining - 2, 2)
+    memo[key] = answer
+    return answer
+
+
+print("after step 2:", ways(2, 2))
+print("after step 1:", ways(2, 1))
+```
+
+两次都返回 1。第二次本来有两种走法，却复用了第一次存下的 `memo[2]`，根本没有进入判断步长的代码。
+
+把键改成 `key = (remaining, last_step)` 后，再从空表开始运行，两次结果分别是 1 和 2。这两个整数组成的元组可以作为字典键，区分答案不同的子问题。交换两次调用的顺序，也应该得到各自正确的答案。
+
+完整状态不等于记录全部历史，只需要保存会影响未来选择或答案的部分。这里前面走过的完整路线不必保存，上一步的步长却不能省略。
+
+保存结果时还要留意规则是否变化。若步长或限制发生变化，旧表里的结果不能直接沿用；规则需要固定，或也成为键的一部分。
+
+## 不同状态太多，复用也未必够用
+
+有些问题的状态要记录“已经选了哪些元素”。$n$ 个元素可能组成 $2^n$ 个子集。即使每个子集只计算一次，也可能有这么多不同状态需要处理。
+
+| 元素数 | 可能的子集数 |
+| --- | ---: |
+| 10 | 1024 |
+| 20 | 1048576 |
+| 30 | 1073741824 |
+
+复用减少的是重复计算，不能保证不同状态的数量很少。能否完成，还要估算每个状态的处理成本和存储成本；候选过多时的取舍见 <CrossRef id="data-algorithms-and-scale.search-pruning-and-branch-and-bound" />。
+
+
+## 练习
+
+一份仿真计算用 `score(parameters, model_version)` 返回确定的指标值，两次使用相同参数和模型版本时结果相同。缓存只以 `parameters` 为键是否足够？构造模型版本不同、结果也不同的情况，说明键要包含什么。若模型改变却没有改变版本号，这份缓存还能可靠吗？

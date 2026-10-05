@@ -1,0 +1,114 @@
+---
+id: program-logic-and-state.functions-and-side-effects
+slug: /program-logic-and-state/functions-and-side-effects
+order: 50
+title: 函数：参数、返回值与副作用
+status: published
+objectives:
+  - 追踪一次调用如何绑定参数、执行函数体和返回结果
+  - 区分参数名的重新绑定与传入对象的修改
+  - 根据输入要求、返回值和副作用判断怎样使用一个函数
+---
+
+计算几个矩形的面积，每次都需要长乘以宽。可以把这个计算写成一个函数，再用不同的参数调用它。
+
+## 定义函数，再调用它
+
+```python run id="program-logic-and-state.functions-and-side-effects.return"
+def area(width, height):
+    return width * height
+
+
+small = area(3, 2)
+large = area(5, 4)
+print(small, large)
+```
+
+`def area(width, height):` 定义函数，下面缩进的语句是函数体。执行到定义时，Python 创建函数并绑定到名字 `area`，还没有执行里面的乘法。
+
+执行 `area(3, 2)` 才开始一次调用：将 3 绑定到参数名 `width`，2 绑定到 `height`，执行函数体。`return` 后的表达式算出 6，将它返回调用处，再赋给 `small`。
+
+执行 `area(5, 4)` 时，新的一次调用有自己的参数绑定，返回 20。函数体中的这些局部名字只用于这次调用，不会变成调用方的名字。
+
+定义中的参数名也称为形参，调用时交给函数的值称为实参。也可以按参数名传值：`area(height=2, width=3)` 与第一个调用结果相同。
+
+## return 结束当前调用
+
+函数可以根据条件提前返回。下面找出列表中第一个超过上限的数：
+
+```python run id="program-logic-and-state.functions-and-side-effects.find"
+def first_above(numbers, limit):
+    for number in numbers:
+        if number > limit:
+            return number
+    return None
+
+
+print(first_above([3, 8, 12], 5))
+print(first_above([3, 8, 12], 20))
+print(first_above([], 5))
+```
+
+找到 8 时，`return` 结束整个调用，12 不再检查。没有找到时返回 `None`，这是 Python 表示没有结果或缺失的特殊值。
+
+返回值和输出不同。`area(3, 2)` 返回 6，但自己不打印；`print(6)` 写出文字，它的返回值则是 `None`。函数执行到末尾而没有 `return`，也会返回 `None`。因此看见输出，不能据此判断函数返回了什么。
+
+## 修改参数对象会影响调用方
+
+调用时绑定参数名，并不复制参数对象。下面将一句笔记加入列表：
+
+```python run id="program-logic-and-state.functions-and-side-effects.binding"
+def add_note(notes, text):
+    notes.append(text)
+
+
+notes = ["first idea"]
+returned = add_note(notes, "another idea")
+print("notes:", notes)
+print("returned:", returned)
+```
+
+函数里的 `notes` 与调用方的 `notes` 指向同一个列表，`append` 修改了它。这个函数没有 `return`，所以调用结果为 `None`。
+
+如果函数体改成 `notes = [text]`，则只改变局部参数名的绑定，不会改调用方的列表。修改与重新赋值的区别见 <CrossRef id="program-logic-and-state.names-objects-and-state" />。
+
+## 返回新列表，还是修改原列表
+
+另一种做法是保留输入，返回加上新笔记的列表：
+
+```python
+def with_note(notes, text):
+    result = list(notes)
+    result.append(text)
+    return result
+
+
+notes = ["first idea"]
+updated = with_note(notes, "another idea")
+print("original:", notes)
+print("updated:", updated)
+```
+
+两个函数都能添加内容，但调用方式不同：`add_note` 修改原列表，调用方直接使用原来的名字；`with_note` 保留原列表，调用方需要接住返回的新列表。
+
+修改传入对象、写入输出、改变外部共享数据，这些对函数外部的影响叫副作用（side effect）。函数返回什么、产生什么副作用，要分别读清楚。
+
+函数的<Term id="specification">规约</Term>写出允许什么输入、返回什么，以及会修改什么。例如 `with_note` 接收字符串列表与一个字符串，返回追加后的新列表，不修改输入。调用前输入必须满足的要求称为<Term id="precondition">前置条件</Term>。
+
+## 练习
+
+下面函数将列表中的每个数增加 `amount`。先判断调用后的两个输出。再把函数改成“返回调整后的新列表，保留原列表”，调用方应怎样接收结果？不要只修改打印语句。
+
+`range(len(numbers))` 依次提供有效下标 0、1、2，`numbers[i] += amount` 更新该位置的值。
+
+```python run id="program-logic-and-state.functions-and-side-effects.exercise-increase"
+def increase(numbers, amount):
+    for i in range(len(numbers)):
+        numbers[i] += amount
+
+
+numbers = [10, 20, 30]
+returned = increase(numbers, 5)
+print("numbers:", numbers)
+print("returned:", returned)
+```

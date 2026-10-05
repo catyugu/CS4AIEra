@@ -1,4 +1,4 @@
-id: program-semantics
+id: program-logic-and-state
 label: 程序逻辑与状态
 order: 10
 summary: 用短小的 Python 程序理解执行顺序、名字与对象、状态变化、条件与循环、容器操作、函数、异常、类与模块，并通过运行核对自己的判断。

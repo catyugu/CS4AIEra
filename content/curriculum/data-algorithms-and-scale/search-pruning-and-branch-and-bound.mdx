@@ -1,8 +1,8 @@
 ---
-id: data-algorithms-and-scale.search-space-and-pruning
-slug: /data-algorithms-and-scale/search-space-and-pruning
-order: 90
-title: 组合爆炸与剪枝
+id: data-algorithms-and-scale.search-pruning-and-branch-and-bound
+slug: /data-algorithms-and-scale/search-pruning-and-branch-and-bound
+order: 80
+title: 组合爆炸、剪枝与分支定界
 status: published
 objectives:
   - 按决策数量估算候选数，并与单次评估成本和时间预算一起判断
@@ -18,18 +18,16 @@ objectives:
 
 每项任务有“选”和“不选”两个决定。每增加一项，原有每个组合都产生两种选择，所以 $n$ 项任务有 $2^n$ 个子集。如果每一步都有 $b$ 种独立选择、共作 $d$ 步决定，则候选数为 $b^d$。选择受到约束时，要按实际可行选择计数；独立选择的乘积可以先用作粗略上限。
 
-```python run id="data-algorithms-and-scale.search-space-and-pruning.budget"
-evaluation_seconds = 0.001
-budget_seconds = 60
-for tasks in (10, 20, 30, 40):
-    candidates = 2 ** tasks
-    estimated_seconds = candidates * evaluation_seconds
-    print("tasks:", tasks, "candidates:", candidates,
-          "seconds:", estimated_seconds,
-          "within budget:", estimated_seconds <= budget_seconds)
-```
+总时间估计为候选数乘以单次评估时间。假设每组评估用 1 毫秒：
 
-这里假设每组评估用 1 毫秒，且没有其他开销；二十项已经要约 1049 秒。改变单次评估成本和预算，结论也会改变。候选评估可能只需几次比较，也可能要做一次耗时仿真。判断能否完成，应始终比较“候选数 × 单次评估成本”与预算，没有脱离硬件、语言与需求的固定不可行阈值。
+| 任务数 | 候选数 | 评估总时间约为 |
+| --- | ---: | ---: |
+| 10 | 1024 | 1 秒 |
+| 20 | 1048576 | 17.5 分钟 |
+| 30 | 1073741824 | 12.4 天 |
+| 40 | 1099511627776 | 34.9 年 |
+
+这个估计尚未计入生成组合等开销。40 项是否做得完，取决于单次评估成本和时间预算。把单次时间缩短一千倍，表中总时间也缩短一千倍；候选数仍然随任务数指数增长。
 
 ## 通过约束排除一批候选
 
@@ -42,6 +40,8 @@ for tasks in (10, 20, 30, 40):
 现在已有一个可行组合，收益为 22。某个分支已经得到收益 7，还没决定的任务收益分别为 5、4、3，均为非负。即使把剩下的全部选中，总收益也只有 19。这是该分支的收益上界；由于上界不超过已找到的最大收益 22，可以跳过整个分支。
 
 这个上界忽略时间限制，所以可能过高，但不会低于分支内任何组合的收益。若为了多剪枝而把上界任意压低，就可能误删真正更优的组合。这里的目标是找一个最优组合；如果要列出所有同样最优的组合，上界等于已找到的最大收益时也不能直接跳过。
+
+不断扩展部分选择、保存已找到的最好可行解，再用分支的上界排除不可能改进它的候选，这就是分支定界（branch and bound）的核心框架。
 
 较紧的合法上界通常能排除更多组合，计算它本身却也要时间。实际评估要把计算上界的成本算进去。一次样例剪掉很多候选，不保证其他输入也如此；最坏情况下仍可能要检查指数数量的候选。
 

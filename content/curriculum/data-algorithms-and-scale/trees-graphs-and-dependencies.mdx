@@ -1,12 +1,12 @@
 ---
-id: data-algorithms-and-scale.hierarchy-relations-and-dependencies
-slug: /data-algorithms-and-scale/hierarchy-relations-and-dependencies
-order: 70
+id: data-algorithms-and-scale.trees-graphs-and-dependencies
+slug: /data-algorithms-and-scale/trees-graphs-and-dependencies
+order: 60
 title: 树、图与依赖关系
 status: published
 objectives:
   - 说明唯一根、唯一上级与从根可达三者合起来才形成树，以及一般图比树多表达了哪些关系
-  - 说明一次操作要经过多少层由什么决定
+  - 根据树的深度估算沿父节点查找所需的步数
   - 沿有向边判断哪些任务可达
   - 说明依赖被用来定义一个必须先后完成的执行顺序时，环意味着什么
 ---
@@ -26,7 +26,7 @@ project
 
 节点是结构中的一个元素，连接父子节点的是边。这棵树里，`main.py` 的上级是 `source`，`source` 的上级是 `project`。沿上级追溯，不会绕回自己，而会停在根。
 
-```python run id="data-algorithms-and-scale.hierarchy-relations-and-dependencies.layers"
+```python run id="data-algorithms-and-scale.trees-graphs-and-dependencies.layers"
 parent = {"project": None, "source": "project",
           "main.py": "source", "tests": "project"}
 node = "main.py"
@@ -54,7 +54,7 @@ config ───┘
 
 从一个节点沿有向边连续前进，能到达另一个节点，就称后者从前者可达。依赖图中，修改 `fetch` 的结果可能影响 `build`，再影响 `test`。下面把每个节点直接指向的后续节点保存成列表，用队列逐项检查：
 
-```python run id="data-algorithms-and-scale.hierarchy-relations-and-dependencies.reachable"
+```python run id="data-algorithms-and-scale.trees-graphs-and-dependencies.reachable"
 from collections import deque
 
 after = {"fetch": ["build"], "config": ["build"],
@@ -70,7 +70,7 @@ while pending:
 print("reachable, including start:", sorted(seen))
 ```
 
-`seen` 记录已经发现的节点，避免同一个节点重复加入队列。输出包括起点本身。即使图里有环，也不会因重复入队而一直循环；每个节点最多入队一次。
+这种使用先进先出队列、逐层发现可达节点的过程，是广度优先遍历（breadth-first traversal，BFS）的基本形态。`seen` 记录已经发现的节点，避免同一个节点重复加入队列。输出包括起点本身。即使图里有环，也不会因重复入队而一直循环；每个节点最多入队一次。
 
 ## 依赖环与执行顺序
 
@@ -78,36 +78,22 @@ print("reachable, including start:", sorted(seen))
 
 如果再加入 `test → build`，`build` 等 `test`，`test` 又等 `build`，形成<Term id="cycle">环</Term>。在“全部前置完成后才能开始”的规则下，谁都不能先完成，因而不存在满足全部依赖的顺序。
 
-简单的排法是反复挑一个前置都已排好的任务。下面按任务名选择第一个就绪项，因此相同输入给出固定输出。字典里的列表保存**前置**，与上面保存后续的 `after` 方向相反；所有前置都必须是字典中的任务。
+可以维护每个任务尚未完成的前置数量，将数量为 0 的任务放入队列。每取出一个任务，就把它的后续任务的未完成前置数量减 1；某个后续任务变成 0 时，加入队列。这是 Kahn 拓扑排序的思路。
 
-```python run id="data-algorithms-and-scale.hierarchy-relations-and-dependencies.order"
-requires = {"fetch": [], "config": [],
-            "build": ["fetch", "config"], "test": ["build"]}
-order = []
-left = sorted(requires)
-while left:
-    ready = None
-    for task in left:
-        waiting = False
-        for prereq in requires[task]:
-            if prereq not in order:
-                waiting = True
-                break
-        if not waiting:
-            ready = task
-            break
-    if ready is None:
-        break
-    order.append(ready)
-    left.remove(ready)
-print("order:", order)
-print("not scheduled:", left)
-```
+对上面的图，过程如下：
 
-`remove` 从列表中删除指定值。每轮排出一项，或因没有就绪项而退出。若还剩任务却没有任何就绪项，在前置都有效、没有遗漏节点的假设下，就存在依赖环。剩余任务既可能在环中，也可能只是等待环中的任务，不能把它们全都称为环上的节点。
+| 时刻 | 可执行任务 | 等待中的任务 |
+| --- | --- | --- |
+| 开始 | fetch、config | build 等两个前置，test 等 build |
+| fetch 完成 | config | build 还等 config |
+| config 完成 | build | test 还等 build |
+| build 完成 | test | 无 |
+| test 完成 | 无 | 无 |
 
-这个实现方便观察“找就绪项”的规则，反复扫描的成本可能很高。大图上可以维护每个节点尚未完成的前置数量，配合队列避免重复扫描。
+如果加入 `test → build`，完成前两个任务后，`build` 还等 `test`，`test` 还等 `build`，队列为空，但任务没有完成。在所有前置都有效、节点都已列出的假设下，这表示存在依赖环。
+
+未完成任务不一定全在环上：以 `test` 为前置的 `publish` 也会被阻塞，却不在 `build → test → build` 这个环中。
 
 ## 练习
 
-给 `build` 增加前置 `test`，再增加一个以 `test` 为前置的 `publish` 任务。预测排出的顺序和剩余任务，再运行。哪些任务真正位于环中，哪些只是受环阻塞？如果只删除一个依赖，怎样恢复可执行顺序？
+在 `fetch → build → test` 与 `config → build` 的图中，再加入 `test → config`。画出有向边，按上面的就绪规则追踪执行。哪些任务最先就绪，之后在哪里停住？找出一个环，并判断删除哪一条边可以恢复完整执行顺序。

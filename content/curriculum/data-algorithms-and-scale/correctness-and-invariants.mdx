@@ -1,0 +1,110 @@
+---
+id: data-algorithms-and-scale.correctness-and-invariants
+slug: /data-algorithms-and-scale/correctness-and-invariants
+order: 20
+title: 正确性：规约与不变量
+status: published
+objectives:
+  - 写清一份方案允许什么输入，以及它声称保证什么结果
+  - 写出一个循环每一步都保持的性质
+  - 说明一个循环为什么一定会结束
+---
+
+一串检查结果用 `True` 表示成功，`False` 表示失败。我们想知道其中最长的连续成功段有多长。
+
+例如 `[True, True, False, True, True, True]` 有两段成功，长度分别为 2 和 3，答案是 3。总成功次数是 5，那是另一个问题。“连续”要求成功项之间不能隔着失败。
+
+## 把要求写成规约
+
+<Term id="specification">规约</Term>说明允许什么输入、输出必须满足什么要求。这里约定：输入是一个有限的布尔值列表；输出是其中最长连续 `True` 段的长度，没有成功项时返回 0。
+
+这个约定同时覆盖空列表、全部成功和全部失败。输入是否够长、失败是否出现在末尾，都不应该改变计算规则。
+
+输入满足要求时，算法是否总能给出规定的答案，就是要判断的正确性。算法是完成一项计算的方法；程序是把这个方法写成可执行的代码。
+
+## 一个反例能排除一种做法
+
+如果有人提议“直接数成功项”，可以比较这两个输入：
+
+| 输入 | 成功项总数 | 最长连续成功段 |
+| --- | ---: | ---: |
+| `[True, True, False]` | 2 | 2 |
+| `[True, False, True]` | 2 | 1 |
+
+总数相同，要求的答案却不同。只记总数就丢失了连续关系，无法完成这项计算。第二个输入也是“成功总数总等于最长成功段”这一主张的反例。
+
+反例必须满足输入要求，再使输出违反保证。一个反例足以推翻“所有允许输入都正确”；测试通过则只说明那些输入上没有发现问题。
+
+## 逐项计算时要保存什么
+
+处理到某一项时，需要记住两个数：
+
+- `current`：刚刚处理的这一项结尾，连续成功了多少次；
+- `longest`：到目前为止，见过的最长成功段有多长。
+
+遇到成功，`current` 增加 1；遇到失败，连续段中断，`current` 变成 0。每处理一项，都用 `current` 更新 `longest`。
+
+```python run id="data-algorithms-and-scale.correctness-and-invariants.longest-streak"
+def longest_streak(results):
+    current = 0
+    longest = 0
+    for success in results:
+        if success:
+            current += 1
+        else:
+            current = 0
+        if current > longest:
+            longest = current
+    return longest
+
+
+results = [True, True, False, True, True, True]
+print(longest_streak(results))
+```
+
+计算过程可以逐项写出来，不需要另写一个检查程序：
+
+| 刚处理的项 | current | longest |
+| --- | ---: | ---: |
+| 第 1 项 True | 1 | 1 |
+| 第 2 项 True | 2 | 2 |
+| 第 3 项 False | 0 | 2 |
+| 第 4 项 True | 1 | 2 |
+| 第 5 项 True | 2 | 2 |
+| 第 6 项 True | 3 | 3 |
+
+`current` 可以下降，`longest` 却不会因为一次失败而丢掉之前的最长段。
+
+## 不变量解释为什么一般情况也成立
+
+上面的表只展示了一个输入。要解释任意允许输入，检查每轮结束时是否都有这样的性质：**`current` 是已处理部分末尾的连续成功数，`longest` 是已处理部分的最长连续成功数。** 这个在固定位置一直成立的性质叫<Term id="invariant">循环不变量</Term>。
+
+开始时还没处理任何项，两个数都为 0，符合空输入的约定。
+
+如果这个性质在处理前成立，读到下一项时只有两种情况。成功会把末尾连续段延长一项；失败会使末尾连续段长度变成 0。更早结束的各段没有改变，因此新的最长段只可能是旧的 `longest`，或者新得到的 `current`。比较二者并保留较大值，性质继续成立。
+
+循环结束时，已处理部分就是完整输入，所以 `longest` 正是所求答案。开始、保持、结束三个步骤，将一个样例上的状态表推进成了对一般情况的解释。
+
+还需要说明程序会结束。输入有限，循环每次取下一个元素，不在循环中追加元素，取完就结束。不变量说明结果的含义，有限遍历说明能走到返回语句。
+
+## 练习
+
+另一份实现只在遇到失败时记录刚结束的连续段。下面的输入上它会返回什么？找到尽量短的输入，让它违反同一份规约，再修正。用空输入和两种全相同的输入检查修改后的实现。
+
+```python run id="data-algorithms-and-scale.correctness-and-invariants.exercise-streak"
+def longest_streak(results):
+    current = 0
+    longest = 0
+    for success in results:
+        if success:
+            current += 1
+        else:
+            if current > longest:
+                longest = current
+            current = 0
+    return longest
+
+
+results = [True, True, False, True]
+print(longest_streak(results))
+```

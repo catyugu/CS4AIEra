@@ -1,0 +1,106 @@
+---
+id: data-algorithms-and-scale.representation-preprocessing-and-indexes
+slug: /data-algorithms-and-scale/representation-preprocessing-and-indexes
+order: 40
+title: 表示、预处理与索引
+status: published
+objectives:
+  - 根据查询次数比较扫描、排序和按键索引的总成本
+  - 说明索引保留什么信息，以及更新数据时要维护什么
+  - 区分映射的抽象保证与哈希表实现的性能
+---
+
+一本书的记录已经保存成列表，按编号找一本时，可以逐条比对。如果这个查找每天发生很多次，值得考虑先整理数据。我们要比较的是一次构建、反复查询与后续更新的总工作。
+
+<Term id="workload">工作负载</Term>描述实际发生哪些操作、各有多少次，以及数据的规模与分布。记录数相同，每天查一次与每天查几万次，可能适合不同的结构。
+
+## 先确定要保留什么
+
+列表可以保留全部记录和原有次序。以编号为键的字典，每个编号只有一个对应值。如果编号重复，后写的记录会覆盖先写的记录。先确定编号是否唯一、旧版本是否需要保留，再决定这种表示是否合适。
+
+下面分别比较扫描、排序后查找、按键索引，假定记录编号唯一，查询要求返回该编号对应的记录。数据在查询期间保持不变。
+
+## 排序让一次比较排除一半候选
+
+编号 `[8, 2, 11, 5, 1]` 排序后是 `[1, 2, 5, 8, 11]`。找 8 时，比较中间的 5，便知道目标如果存在，只能在右半边。反复取中间位置并缩小范围，这叫二分查找。
+
+排序只是建立有序性；查询程序还要利用它，才会减少比较。下面输出每次检查的位置：
+
+```python run id="data-algorithms-and-scale.representation-preprocessing-and-indexes.binary-search"
+values = [1, 2, 5, 8, 11]
+wanted = 8
+left = 0
+right = len(values) - 1
+found = None
+while left <= right:
+    middle = (left + right) // 2
+    print("range:", left, right, "checked:", values[middle])
+    if values[middle] == wanted:
+        found = middle
+        break
+    if values[middle] < wanted:
+        left = middle + 1
+    else:
+        right = middle - 1
+print("found at:", found)
+```
+
+`//` 做整除，这里用来取得中间下标。`left` 与 `right` 是尚未排除范围的两个端点。每次排除已比较的位置及不可能的那一半；范围变空就结束，没有命中时 `found` 仍为 `None`。标准库也提供二分定位工具，见 [Python bisect](https://docs.python.org/3/library/bisect.html)。
+
+设有 $n$ 条记录、$q$ 次查询，每次比较按固定成本计算：
+
+| 方案 | 一次准备 | 单次查询的最坏成本 | 全部查询的成本上界 |
+| --- | --- | --- | --- |
+| 直接扫描 | 无 | $O(n)$ | $O(qn)$ |
+| 先排序，再二分查找 | $O(n\log n)$ | $O(\log n)$ | $O(n\log n+q\log n)$ |
+
+查询越多，越容易收回准备成本。只查一次时，排序通常没有优势；实际交叉点需要结合数据与实现测量。后续追加和修改也要计入成本，例如往有序列表末尾追加，可能破坏有序性。
+
+## 按键索引避免反复扫描
+
+索引保存从查询条件到记录的定位信息。主列表保留记录，额外字典保存“编号 → 记录”；如果查询按分类进行，还可以保存“分类 → 这一类的记录列表”。
+
+```python run id="data-algorithms-and-scale.representation-preprocessing-and-indexes.index-update"
+books = [
+    {"id": "b1", "category": "science", "price": 30},
+    {"id": "b2", "category": "history", "price": 40},
+    {"id": "b3", "category": "science", "price": 50},
+]
+by_id = {}
+by_category = {}
+for book in books:
+    by_id[book["id"]] = book
+    category = book["category"]
+    if category not in by_category:
+        by_category[category] = []
+    by_category[category].append(book)
+
+book = by_id["b1"]
+book["price"] = 35
+print("price through index:", by_category["science"][0]["price"])
+book["category"] = "history"
+print("science entries:", by_category["science"])
+print("history entries:", by_category["history"])
+```
+
+改变价格后，索引读取到新价格，因为保存的还是同一个记录对象。改变分类后，记录却没有自动从 `science` 移到 `history`。**共享记录与维护分组是两件事。** 修改分类时，还要从旧列表移除这条记录，并加入新列表。
+
+按编号查询可以用 `by_id["b1"]`；允许编号不存在时，`by_id.get("missing")` 返回 `None`。`get` 的第二个参数可以指定默认值，例如 `by_category.get("art", [])` 在没有该类时返回空列表。直接遍历字典取得的是键。
+
+## 抽象保证与实现性能
+
+<Term id="abstract-data-type">抽象数据类型</Term>规定允许的操作及其结果。例如映射提供按键取值，却不要求用某种存储方式实现。
+
+本课程运行环境中的 Python `dict` 采用哈希表实现：从键计算哈希值，用它缩小要检查的位置范围，再比较键。在通常的哈希分布、固定成本的键处理假设下，按键查找的平均成本为 $O(1)$；最坏情况可能为 $O(n)$。这是实现及成本模型的结论，不能从“映射”这个抽象名称直接推出。实现说明见 [Python FAQ：字典如何实现](https://docs.python.org/3/faq/design.html#how-are-dictionaries-implemented-in-cpython)。
+
+按分类索引后，一次查询只检查目标分类的 $k$ 条记录。它不能直接按价格筛选或排名；这些操作仍要检查分类内的记录，或者维护另一个适合价格查询的结构。
+
+## 查询节省的工作由空间和更新来换
+
+额外字典及分组列表占空间，建索引要读一遍数据，写入和分类修改要同步维护。查询频繁、单次能排除很多记录时，这些代价可能值得；目标分类包含大部分记录时，节省就有限。
+
+选择时先确认信息保留与结果要求，再比较准备、查询、更新和空间成本。两个索引都能“加速查询”，加速的可能是不同操作。
+
+## 练习
+
+修复分类修改后的索引，使按分类查到的记录重新符合数据。然后考虑：如果经常改分类、很少按分类查询，还值得维护 `by_category` 吗？如果每个编号的历史价格都要保留，`by_id` 当前的值还够用吗？分别指出需要重新确认的需求与新增代价。

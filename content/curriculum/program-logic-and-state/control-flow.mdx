@@ -1,0 +1,123 @@
+---
+id: program-logic-and-state.control-flow
+slug: /program-logic-and-state/control-flow
+order: 30
+title: 条件、循环与控制流
+status: published
+objectives:
+  - 根据输入追踪条件分支与循环实际执行的语句
+  - 说明循环为什么结束，并找出没有推进处理进度的写法
+  - 用临界输入区分两个相似的条件
+---
+
+计算一个列表中所有非负数的和，需要逐项读取，并根据每个数的正负决定是否加入总和。条件和循环让程序选择要执行的步骤，以及重复多少次。
+
+## 条件选择要执行的语句
+
+`>=` 比较是否大于或等于，比较结果是布尔值：`True` 表示真，`False` 表示假。执行 `if` 时先判断条件；条件为真，执行其下面缩进的语句，否则执行 `else` 下的语句。
+
+```python run id="program-logic-and-state.control-flow.condition"
+number = -2
+if number >= 0:
+    print("nonnegative")
+else:
+    print("negative")
+print("checked")
+```
+
+缩进决定哪些语句属于分支。最后一行没有缩进，两种情况都会执行它。这里先输出 `negative`，再输出 `checked`。将 `number` 改成 0，第一个分支会执行。
+
+比较还可以使用 `>`、`<`、`<=`、`==`、`!=`，分别表示大于、小于、小于或等于、相等、不相等。多个情况可以用 `elif` 依次判断，第一个成立的分支执行，后面的分支不再判断。
+
+## for 逐项处理列表
+
+`for number in numbers:` 每轮从列表取下一个元素，赋给 `number`，再执行缩进的循环体。
+
+```python run id="program-logic-and-state.control-flow.trace"
+numbers = [3, -2, 8]
+total = 0
+for number in numbers:
+    if number >= 0:
+        total += number
+    print("number:", number, "total:", total)
+print("sum:", total)
+```
+
+`total += number` 在这里相当于 `total = total + number`。三轮依次处理 3、-2、8，只有两次加法，总和是 11。循环内的打印每轮执行，循环后的打印只执行一次。
+
+列表为空时，循环体一次也不执行，`total` 仍为 0。`for` 的结束条件是元素已经取完。
+
+## while 每轮重新检查条件
+
+如果不是按一份现成列表逐项执行，而是要一直重复到条件不成立，可以用 `while`。例如把一个数不断减半，直到它不大于 1：
+
+```python run id="program-logic-and-state.control-flow.halving"
+number = 20
+while number > 1:
+    number = number / 2
+    print(number)
+print("stopped at:", number)
+```
+
+每轮开始前都判断 `number > 1`。最后一次减半得到 0.625，再次判断条件为假，便执行循环之后的语句。改成 `number >= 1`，从 16 开始时会多执行一次；相等时是否继续，要由需要完成的计算决定。
+
+如果删除修改 `number` 的那行，条件一直为真，程序就无法结束。运行这种程序时可以点“停止”，但那只是中止执行，没有让算法完成计算。
+
+## and 与 or 不一定计算两边
+
+组合条件时，`and` 要求两边都为真，`or` 要求至少一边为真，`not` 则将真假反转。更关键的是计算顺序：Python 从左往右判断，已经能确定结果，就跳过右边。这叫短路求值，规则见 [Python 语言参考：布尔运算](https://docs.python.org/3/reference/expressions.html#boolean-operations)。
+
+假设只在列表非空、第一项大于 10 时输出它。`len(numbers)` 返回元素数，`numbers[0]` 读取第一项；空列表没有第一项。
+
+```python run id="program-logic-and-state.control-flow.short-circuit"
+numbers = []
+if len(numbers) > 0 and numbers[0] > 10:
+    print("first:", numbers[0])
+else:
+    print("condition not met")
+```
+
+| numbers | 左边 len(numbers) > 0 | 右边会不会执行 | 整个条件 |
+| --- | --- | --- | --- |
+| `[]` | False | 不执行 | False |
+| `[5]` | True | 执行，得到 False | False |
+| `[20]` | True | 执行，得到 True | True |
+
+空列表上，左边已经为假，整个 `and` 条件必然为假，所以不会访问不存在的第一项。若交换两边，程序先执行 `numbers[0]`，在长度检查之前就会出错。
+
+`or` 则在左边为真时跳过右边。例如 `number == 0 or 10 / number > 2`：当 `number` 为 0 时，第一项已经为真，不会做除零运算。条件的先后顺序会影响哪些操作真正发生。这里两边都使用比较，得到的是布尔值。
+
+## break 与 continue
+
+`continue` 跳过本轮剩余语句，开始下一轮；`break` 立即结束当前循环。下面只收集前两个非负数：
+
+```python
+numbers = [-2, 3, -1, 8, 12]
+selected = []
+for number in numbers:
+    if number < 0:
+        continue
+    selected.append(number)
+    if len(selected) == 2:
+        break
+print(selected)
+```
+
+负数不加入结果，收集到 3 和 8 后就离开循环，12 不再处理。把 `continue` 换成 `break`，遇到第一个负数就会结束，这两个关键字不能互换。
+
+## 练习
+
+把收集数量改成变量 `limit`，让程序返回前 `limit` 个非负数，数量不足时返回全部符合条件的数。下面的写法在 `limit = 2` 时正常；分别检查 0、1，以及大于符合条件项数的值，判断它是否都满足要求。再尝试移动一次数量检查，使这些输入使用同一套规则处理。
+
+```python run id="program-logic-and-state.control-flow.exercise-limit"
+numbers = [-2, 3, -1, 8, 12]
+limit = 2
+selected = []
+for number in numbers:
+    if number < 0:
+        continue
+    selected.append(number)
+    if len(selected) == limit:
+        break
+print(selected)
+```

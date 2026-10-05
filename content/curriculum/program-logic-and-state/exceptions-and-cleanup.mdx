@@ -1,6 +1,6 @@
 ---
-id: program-semantics.failure-is-behavior
-slug: /program-semantics/failure-is-behavior
+id: program-logic-and-state.exceptions-and-cleanup
+slug: /program-logic-and-state/exceptions-and-cleanup
 order: 60
 title: 异常：传播、捕获与清理
 status: published
@@ -11,13 +11,13 @@ objectives:
   - 指出清理动作在失败路径上是否一定执行
 ---
 
-把字符串 `"12"` 转成整数可以得到 12；把 `"fast"` 转成整数则会失败。异常（exception）表示执行遇到了无法按当前方式继续的情况。它带有类型和消息，程序可以根据类型选择怎样处理。
+把字符串 `"12"` 转成整数可以得到 12；把 `"fast"` 转成整数则会失败。某一步无法正常完成时，Python 会抛出异常（exception）；异常携带类型和错误信息，供程序选择怎样处理。
 
 ## try 与 except
 
 `int(text)` 尝试把字符串解析成整数。无法转换时，它抛出 `ValueError`。`try` 标出可能失败的代码，`except ValueError` 处理这类异常：
 
-```python run id="program-semantics.failure-is-behavior.catch"
+```python run id="program-logic-and-state.exceptions-and-cleanup.catch"
 text = "fast"
 try:
     seconds = int(text)
@@ -33,7 +33,7 @@ print("finished checking")
 
 如果当前函数没有处理异常，它就不能正常返回。异常沿调用关系传播，由调用方继续寻找匹配的处理代码：
 
-```python run id="program-semantics.failure-is-behavior.path"
+```python run id="program-logic-and-state.exceptions-and-cleanup.path"
 def parse_seconds(text):
     return int(text)
 
@@ -45,7 +45,7 @@ def process(name, text):
 
 
 try:
-    process("parse", "fast")
+    process("entry 1", "fast")
     print("batch complete")
 except ValueError as failure:
     print("stopped:", failure)
@@ -59,17 +59,17 @@ except ValueError as failure:
 
 如果要求“坏记录单独报告，其余记录继续处理”，就把捕获放在逐项处理的循环里：
 
-```python run id="program-semantics.failure-is-behavior.positions"
-tasks = [("parse", "12"), ("render", "fast"), ("review", "5")]
+```python run id="program-logic-and-state.exceptions-and-cleanup.positions"
+entries = [("entry 1", "12"), ("entry 2", "fast"), ("entry 3", "5")]
 total = 0
-for name, text in tasks:
+for name, text in entries:
     try:
         seconds = int(text)
     except ValueError:
         print("skipped:", name)
         continue
     total += seconds
-print("total for valid tasks:", total)
+print("total for valid entries:", total)
 ```
 
 这里报告的是**有效记录的总和**，失败记录另有输出。如果要求所有记录都有效才给出总和，就应让异常离开循环，由调用方报告整批失败。把未知耗时悄悄替换成 0，会让调用方误以为得到了完整总和。
@@ -80,7 +80,7 @@ print("total for valid tasks:", total)
 
 `except Exception` 会捕获许多不同类型的异常。下面的函数把参数名 `text` 写成了 `txt`，这是实现错误，即使传入合法的 `"12"` 也会出现 `NameError`：
 
-```python run id="program-semantics.failure-is-behavior.scope"
+```python run id="program-logic-and-state.exceptions-and-cleanup.scope"
 def seconds_from(text):
     return int(txt)
 
@@ -111,7 +111,7 @@ print("narrow:", narrow("12"))
 
 无论转换成功还是失败，都想记录处理结束，就把记录放进 `finally`：
 
-```python run id="program-semantics.failure-is-behavior.finally"
+```python run id="program-logic-and-state.exceptions-and-cleanup.finally"
 log = []
 
 
@@ -137,4 +137,4 @@ print("log:", log)
 
 ## 练习
 
-把最后一格的 `finally` 中加入 `return 0`。分别传入 `"12"` 与 `"fast"`，预测返回值、异常和日志，再运行。根据结果，判断为什么清理代码通常不应该自行返回一个值。
+要求改成“只要一条记录的耗时无效，就报告失败，不给出总和”。在逐项处理的例子中，将 `try` 放到循环外，怎样改变失败后的执行？先预测有效记录在错误项前面与后面时的输出，再修改代码核对。此前已产生的输出能否自动撤回？
