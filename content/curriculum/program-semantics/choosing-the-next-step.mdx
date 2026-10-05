@@ -11,6 +11,115 @@ objectives:
   - 说明一个循环在什么条件下会停下来
 ---
 
-{/* 骨架段（作者备注）：正式扩写时用一个具体情境、反常输出或必须作出的选择替换本段，不保留本段句式。 */}
+三份任务交给一个批次 worker：`make-thumbnail` 与 `rebuild-index` 的状态是 `pending`，`send-notice` 的状态是 `blocked`。程序从头走一遍列表，对每一项测试它的状态：`pending` 的把任务名追加进 `done`，其余跳过。这次运行结束，`done` 里有两项。让这个结果可解释的，是几个更小的事实：每一项走过了哪几句、绕开了哪一句，循环一共转了几圈，第几圈之后不再继续。
 
-同一段代码在不同输入下会走不同的路径：条件让一部分语句被跳过，循环让一部分语句被重复。结束一段执行并把结果交出去（`return`）随函数一起在函数边界那一课建立。要判断的是一件具体的事——给定输入，这段代码实际走过哪些语句，循环什么时候停下来，哪一个分支永远不会被执行。
+## 条件决定一段语句是否执行
+
+执行到 `if` 时先求值它后面的条件，得到一个真值：真就执行它下面缩进的那一段语句，假就整段跳过，转去看下一个 `elif`；`elif` 依次不成立时才执行 `else` 那一段。缩进决定每一段的边界，缩进相同且相邻的语句落在同一段里。分支按书写顺序从上往下判断，第一个为真的分支执行，它之后的条件不再求值。两个条件可以在同一个输入上同时为真时，书写顺序决定哪一个生效。
+
+程序对每一项任务做一次这样的判断：条件为真，`done.append(task["name"])` 执行；条件为假，这一句跳过，控制从 `if` 那一段直接落到循环体的下一步。
+
+## 循环重复一段，条件不再成立时停止
+
+`while condition:` 在每次进入循环体之前求值条件：为真就执行缩进的那一段，执行完回到 `while` 这一行再求值一次；为假就离开循环，继续执行循环体之后的语句。循环体重复几次由条件在每次求值时的取值决定。
+
+这段程序的条件是 `i < len(tasks)`，它读 `i` 与 `len(tasks)` 两个量。`len(tasks)` 求值后就是固定的列表长度；`i` 在循环之前赋过一次值，此后由循环体里的 `i += 1` 每次增加 1。`i` 增加到等于列表长度时，`i < len(tasks)` 变成假，循环结束。循环能停下来，因为循环体里有一条语句让 `i` 每次迭代朝 `len(tasks)` 靠近一步；改动循环体，就可能让条件失去变成假的时刻。
+
+把同一段遍历写成 `for task in tasks:`，循环变量由语言在每次进入循环体前绑定到下一个元素，元素取完循环结束，递增语句不需要自己写。需要看清哪个量在推动条件走向假时，用带下标的 `while`。
+
+任务列表为空时，`len(tasks)` 是 0，条件在第一次求值时就为假，循环体一次也不执行，`done` 仍然是空列表。
+
+## 在一个输入下追踪实际路径
+
+把三项任务和这段循环放进一段可运行的代码，每次迭代先打印下标、任务名与状态：
+
+```python run id="program-semantics.choosing-the-next-step.trace"
+tasks = [
+    {"name": "make-thumbnail", "status": "pending"},
+    {"name": "send-notice",    "status": "blocked"},
+    {"name": "rebuild-index",  "status": "pending"},
+]
+done = []
+i = 0
+while i < len(tasks):
+    task = tasks[i]
+    print(i, task["name"], task["status"])
+    if task["status"] == "pending":
+        done.append(task["name"])
+    i += 1
+print("done:", done)
+```
+
+输出是 3 行迭代记录。第 0 行是 `make-thumbnail`、`pending`，条件为真，`append` 执行；第 1 行是 `send-notice`、`blocked`，条件为假，`append` 在这一项上被跳过；第 2 行是 `rebuild-index`、`pending`，`append` 执行。条件被求值 4 次，前 3 次为真，第 4 次 `i` 是 3、`3 < 3` 为假，循环在这一步结束。整段运行共 3 次迭代，`append` 执行 2 次，`done` 是 `['make-thumbnail', 'rebuild-index']`。
+
+同一段代码换一份输入，走过的语句跟着换，这里只把 `send-notice` 的状态改成 `pending`：
+
+```python run id="program-semantics.choosing-the-next-step.other-input"
+tasks = [
+    {"name": "make-thumbnail", "status": "pending"},
+    {"name": "send-notice",    "status": "pending"},
+    {"name": "rebuild-index",  "status": "pending"},
+]
+done = []
+i = 0
+while i < len(tasks):
+    task = tasks[i]
+    if task["status"] == "pending":
+        done.append(task["name"])
+    i += 1
+print(len(done), done)
+```
+
+迭代次数仍是 3，走过 `append` 的迭代从 2 次变成 3 次，`done` 是 `['make-thumbnail', 'send-notice', 'rebuild-index']`。迭代次数由列表长度决定，哪几次迭代执行 `append` 由每一项的状态决定。
+
+## 条件写错以后
+
+条件里的比较写错，改变的是哪些迭代走哪条路径，结果可以在复现里看出来。
+
+把测试的取值写成一个在任务里不出现的字符串，例如用 `== "Pending"` 测试，而列表里存的是 `pending`：条件在每一项上求值为假，`append` 一次也没有执行，`done` 保持为空。列表里换进 `"Pending"` 这种取值以后这一条才会成立，因此错误在输入改变之前看不出来。
+
+同一个 `if` 链里重复测试一个取值时，写在前面、先把该取值拦下的那条条件先成立，写在它后面的同一条测试在该输入上一次也不成立，是一段永远不会执行的语句。
+
+判断一个分支会不会被执行，把它前面的条件在该输入上依次求值，看是否有一条更早的条件已经为真。
+
+## 练习
+
+下面这段程序用 `!= "pending"` 做判断，对上面那三份任务，`done` 最后是什么，与想要留下的清单是什么关系？
+
+```python
+tasks = [
+    {"name": "make-thumbnail", "status": "pending"},
+    {"name": "send-notice",    "status": "blocked"},
+    {"name": "rebuild-index",  "status": "pending"},
+]
+done = []
+i = 0
+while i < len(tasks):
+    task = tasks[i]
+    if task["status"] != "pending":
+        done.append(task["name"])
+    i += 1
+print(done)
+```
+
+裁定：`!= "pending"` 在 `blocked` 上为真、在两项 `pending` 上为假，只有 `send-notice` 走过 `append`，运行结果是 `done` 等于 `['send-notice']`，正好是想要清单的补集。
+
+下面这段把 `i += 1` 放进了 `if` 为真的那一支，哪一项输入会让循环一直不结束？
+
+```python
+tasks = [
+    {"name": "make-thumbnail", "status": "pending"},
+    {"name": "send-notice",    "status": "blocked"},
+    {"name": "rebuild-index",  "status": "pending"},
+]
+done = []
+i = 0
+while i < len(tasks):
+    task = tasks[i]
+    if task["status"] == "pending":
+        done.append(task["name"])
+        i += 1
+print(done)
+```
+
+裁定：`i += 1` 写在 `if` 为真的那一支里。`tasks[i]` 的状态不是 `pending` 时，`append` 与 `i += 1` 一起被跳过，`i` 停在原位，`i < len(tasks)` 保持为真，条件与循环体就这样反复执行。上面这份列表在 `i` 等于 1 时碰到 `send-notice`（`blocked`），循环从这一步起不再前进。

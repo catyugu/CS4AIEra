@@ -11,6 +11,104 @@ objectives:
   - 预测一段短程序结束后每个名字指向什么值，并指出输入改变时哪些结果跟着变
 ---
 
-{/* 骨架段（作者备注）：正式扩写时用一个具体情境、反常输出或必须作出的选择替换本段，不保留本段句式。 */}
+一张订单上有三件商品，价格分别是 12、8、5，另有一个 0.25 的折扣。程序要算出应付金额：
 
-一段程序从输入走到输出，中间发生的是三类事情：值怎样被算出来、名字怎样得到这些值、写下来的语句按什么顺序被执行。一小段「算出应付金额并打印」的程序就够问清楚：哪些是值，哪些是计算，赋值与计算的区别在哪里，以及屏幕上出现的内容与一个表达式自身的值分别是什么。值带有类型，类型决定一项值能参与哪些运算：`1 + 2` 与 `1 + "2"` 的差别不在写法的细心程度，而在值的类型不同。`print(...)` 与 `round(...)` 这类写法是对已有函数的调用，调用会得到一个值或产生一次可见的行为；函数本身要到函数边界那一课才建立。
+```python run id="program-semantics.programs-and-execution.order"
+price_a = 12
+price_b = 8
+price_c = 5
+discount = 0.25
+subtotal = price_a + price_b + price_c
+total = subtotal * (1 - discount)
+print(total)
+```
+
+运行一遍，输出里只有一行，那个数是应付金额。这段程序里同时有三类东西：被读到的数值（12、8、5、0.25），规定这些数值怎样组合的规则（`+`、`*`），以及把结果写到输出里的那一步。要追踪一次执行，先把这三类分开，再看它们按什么顺序发生。
+
+## 语句按顺序执行，各自完成一个动作
+
+程序是一串语句，从第一行开始逐条执行。这一串里出现三种写法：
+
+- 表达式（expression）：求值后得到一个值，例如 `12`、`price_a`、`price_a + price_b + price_c`；
+- 赋值语句（assignment）：规定一个动作——先求值等号右边的表达式，再把左边的名字绑定到得到的结果值；
+- 名字绑定（binding）：让一个名字关联到一个值；读一个名字，取回它当前绑定到的值。
+
+`subtotal = price_a + price_b + price_c` 执行时，右边的和式先求值：读 `price_a`、`price_b`、`price_c` 当前各自绑定到的值，把 `+` 作用于它们，得到一个值 `25`；然后把 `subtotal` 绑定到这个值。这一步不改动原来三个名字指向的值，只新增一个名字。`total = subtotal * (1 - discount)` 随后读取 `subtotal` 与 `discount`，算出 `18.75`，再把 `total` 绑定到它。
+
+把一次执行里的东西按角色分开：名字绑定到的数值是数据，既包括写下来的 12、8、5、0.25，也包括执行中算出的 `subtotal` 与 `total`；表达式里的运算符（`+`、`*`）以及它们接受哪些类型是计算的规则；语句按什么顺序被逐条执行、以及调用造成的可见效果，是执行过程本身。
+
+## 值带有类型，类型决定它能参与哪些运算
+
+每个值都有一个类型。`12` 的类型是 `int`，`0.25` 与 `1 - discount` 的类型是 `float`，`"8"` 的类型是 `str`。`type(...)` 返回一个值的类型。类型决定这个值能参与哪些运算：`+` 对两个整数求它们的和，对两个浮点数求它们的和，对一个整数和一个浮点数也求和（结果是浮点数），对两个字符串把它们首尾拼接。整数与字符串之间没有定义这种加法。
+
+```python run id="program-semantics.programs-and-execution.types"
+price_a = 12
+discount = 0.25
+subtotal = price_a + 8 + 5
+total = subtotal * (1 - discount)
+
+print(type(price_a), type(discount), type(total))
+print(2 + 3, 2 + 3.0, "2" + "3")
+print(type(2 + 3), type(2 + 3.0), type("2" + "3"))
+print(1 + "2")
+```
+
+前三行打印出各值的类型、三类和运算各自的结果，以及这些结果的类型。`"2" + "3"` 得到 `"23"`，两个操作数都是字符串，`+` 对它们有定义。最后一行 `1 + "2"` 要求把整数与字符串相加，`+` 上没有这条规则，求值失败。
+
+## 调用已有的函数
+
+`print(total)` 里的 `print` 是一个名字，它绑定到一个已有的函数；`print(total)` 是对这个函数的调用（call）。调用先求值括号里的表达式，把得到的值交给函数。`round(...)` 同样是调用。
+
+一次调用得到一个值，或产生一次可见的行为。`round(total)` 算出与 `18.75` 最接近的整数并把它返回，作为这次调用的结果；`print(total)` 把值转成文本写到输出里。
+
+```python run id="program-semantics.programs-and-execution.calls"
+total = 18.75
+rounded = round(total)
+shown = print(total)
+print(rounded, type(rounded))
+print(shown, type(shown))
+```
+
+`round(total)` 得到 `19`，类型是 `int`，这个值可以绑定到名字，也可以继续参与运算。`print(total)` 先把 `18.75` 写到输出，它这次调用得到的值是 `None`（类型 `NoneType`）：`print` 的作用是把内容写到输出，`None` 不携带计算结果。`subtotal = ...` 与 `print(total)` 的区别也在这里：前者只算出值并交给名字，输出里看不到任何东西；这一段程序里，外部可观察的输出由 `print` 这样的调用产生，计算本身不写任何东西到输出。
+
+## 运算不适用时出错，执行在那一行停下
+
+回到订单。把 `price_b = 8` 写成带引号的 `price_b = "8"`，其余不变：
+
+```python
+price_a = 12
+price_b = "8"
+price_c = 5
+discount = 0.25
+subtotal = price_a + price_b + price_c
+total = subtotal * (1 - discount)
+print(total)
+```
+
+前四行都是正常的赋值：`price_b` 被绑定到字符串 `"8"`，这一步没有出错。执行到 `subtotal = price_a + price_b + price_c`，右边的和式要求把 `12` 与 `"8"` 相加，`+` 上没有这条规则，求值在这里失败，抛出一个 `TypeError`。执行停在这一行：后面的 `total = ...` 与 `print(total)` 都不再运行，输出里不会出现应付金额。
+
+类型不匹配的暴露发生在运行时第一次把这个值用于不支持的运算的位置；赋值只把值绑定到名字，不检查它以后会参与什么运算。`price_b = "8"` 绑定到名字上的是字符串，`price_b = 8` 绑定到的是整数，这个类型差别决定后面哪一行能用 `+`。执行到失败为止已经完成的部分保留下来：打印类型的那段程序里，失败行之前的几条 `print` 已经写入了输出，失败行之后的语句不再执行。
+
+## 练习
+
+一段与订单同形的程序，`price_b` 目前是整数：
+
+```python
+price_a = 12
+price_b = 8
+price_c = 5
+discount = 0.25
+subtotal = price_a + price_b + price_c
+total = subtotal * (1 - discount)
+print(subtotal, total)
+```
+
+分别回答，并说明判断依据：
+
+1. 把 `price_b = 8` 改成 `price_b = 10`（仍是整数），与原来相比，哪些打印结果改变、哪些不变？执行结束时 `subtotal` 与 `total` 分别绑定到哪个值？
+2. 把 `price_b = 8` 改成 `price_b = "8"`（带引号的文本），哪一行最先失败，失败之前输出里有没有内容，哪些行根本没有执行？
+
+裁定依据是每一步的值与类型：
+
+- 第 1 问：`subtotal` 是 `price_a + price_b + price_c` 的值，`total` 是 `subtotal * (1 - discount)` 的值，两者都随 `price_b` 改变，因此 `print(subtotal, total)` 打印的两项都变；`price_a`、`price_c`、`discount` 绑定的值不变。改动后 `subtotal` 是 27（12+10+5），`total` 是 20.25（27×0.75）。
+- 第 2 问：`price_b` 绑定到字符串 `"8"` 后，`subtotal = price_a + price_b + price_c` 这一行首先求值 `price_a + price_b`，把整数 `12` 与字符串 `"8"` 相加，`+` 在 `int` 与 `str` 之间没有定义，该行抛 `TypeError`；`print` 在这一行之后，所以输出里没有任何内容，`total = ...` 与 `print(...)` 两行没有执行。

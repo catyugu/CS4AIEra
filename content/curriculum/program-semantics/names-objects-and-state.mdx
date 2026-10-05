@@ -11,6 +11,134 @@ objectives:
   - 说明共享状态在什么情况下成为缺陷
 ---
 
-{/* 骨架段（作者备注）：正式扩写时用一个具体情境、反常输出或必须作出的选择替换本段，不保留本段句式。 */}
+项目看板把同一批待办放在两处显示。看板这样开始：`pending = ["parse", "render"]`，工作台要显示同一批待办，于是写下 `board = pending`。当天往 `board` 追加一项 `"review"`，再打印 `pending`，得到 `['parse', 'render', 'review']`。只对 `board` 做了一次追加，`pending` 的内容也跟着变了。
 
-赋值让名字指向一个对象，而对象有自己的身份与类型；有些对象的内部状态可以被改变，有些对象一旦创建，它的值就不会被原地改变。两个名字指向同一个列表时，通过其中一个追加元素，另一个看到的内容也跟着变——这一步没有复制任何东西。要判断的是这类共享关系在什么时候出现、在什么时候成为缺陷。
+两句赋值看起来都在给一个列表取名。只有第一句创建了列表，第二句把另一个名字接到一个已经存在的对象上。要解释后来的追加为什么同时出现在两个名字下，先分开两件事：一条赋值语句改变的是名字的指向，一次追加改的是对象自身。
+
+## 赋值改变名字的指向
+
+`name = expr` 分两步执行：先求值 `expr`，得到一个对象；再把当前命名空间中的 `name` 绑定到这个对象。执行前后没有任何对象被改写。读取一个名字，取回它当前指向的那个对象。
+
+对象有三个彼此独立的属性。身份（identity）在对象的整个存活期内不变，两个同时存活的对象身份不同，`id(x)` 给出与身份对应的整数；类型（type）决定这个对象支持哪些操作；值是这些操作读到和写入的内容。可变性落在值这一侧：一个对象是否提供改写自身内容的操作，决定了它创建之后能否被就地修改。
+
+`pending = ["parse", "render"]` 求值右边的字面量，创建出一个列表对象，再把 `pending` 绑定到它。`board = pending` 只把 `board` 绑定到同一个对象，没有创建第二个列表；两个名字指向同一个对象，互为<Term id="alias">别名</Term>。
+
+按操作落在名字上还是对象上，涉及名字的语句分成两类：
+
+| 操作 | 形式 | 效果 |
+| --- | --- | --- |
+| 修改对象 | `x.append(v)`、`x.sort()`、`x[k] = v` | 指向该对象的所有名字看到的内容都改变 |
+| 重绑定名字 | `x = expr` | 只有被重新绑定的那个名字改变指向 |
+
+`board.append("review")` 落在对象上，`pending` 与 `board` 同时看到这次追加。`board = ["translate"]` 落在名字上：右边求值创建一个新列表，`board` 换指它，`pending` 仍指向原列表。
+
+```python run id="program-semantics.names-objects-and-state.alias"
+pending = ["parse", "render"]
+board = pending
+board.append("review")
+print("pending:", pending)
+print("board:", board)
+print("pending is board:", pending is board)
+print("id(pending) == id(board):", id(pending) == id(board))
+
+board = ["translate"]
+print("pending:", pending)
+print("board:", board)
+print("pending is board:", pending is board)
+print("type(pending):", type(pending).__name__)
+```
+
+`board = pending` 之后，`board.append("review")` 修改的正是 `pending` 指向的那个列表，两个名字读到同一个 `['parse', 'render', 'review']`；`pending is board` 与 `id(pending) == id(board)` 都打印 `True`，说明它们是同一个对象。`board = ["translate"]` 之后 `board` 指向一个新列表，`pending` 不变，`pending is board` 变为 `False`。名字本身不携带类型；`type(pending)` 给出 `list`，对象的类型决定能对它做哪些操作。
+
+## 有些对象可以被就地修改，有些不能
+
+`int`、`float`、`str`、`tuple` 不提供改写自身内容的操作。看起来在修改它们的语句，都先算出一个值，再把这个值绑定回名字；原来的对象内容没有变化。`task_id = "t-01"` 之后执行 `task_id = task_id + "-b"`：`"t-01" + "-b"` 求值得到另一个字符串对象，`task_id` 换指它，原来的 `"t-01"` 没有被改写。
+
+```python run id="program-semantics.names-objects-and-state.immutable"
+task_id = "t-01"
+kept = task_id
+task_id = task_id + "-b"
+print("task_id:", task_id)
+print("kept:", kept)
+print("task_id is kept:", task_id is kept)
+```
+
+`kept` 仍读出 `t-01`：`task_id + "-b"` 创建了新对象，`task_id` 换指新对象，`kept` 的绑定没有改变，`task_id is kept` 打印 `False`。不可变对象没有「修改对象」这条路径；改变的是名字的指向，不是对象的内容。`+=` 把这个区别摆在同一处：`x += y` 在列表上调用修改自身的操作，`x` 指向的仍是同一个对象；在字符串和数字上，它先算出新对象，再把 `x` 重绑定过去。
+
+列表、字典、集合提供修改自身的操作，对同一个列表的追加、删除、排序都改写这个对象，不产生新容器。
+
+## 共享从构造里产生
+
+显式写下的 `board = pending` 是别名的一个来源。把一个对象放进多个位置，这些位置也互为别名：任务板用同一个列表填两个栏位，两个栏位就是同一个对象。
+
+```python run id="program-semantics.names-objects-and-state.columns-shared"
+task = ["draft"]
+columns = {"todo": task, "doing": task}
+columns["doing"].append("review")
+print("task:", task)
+print("columns['todo']:", columns["todo"])
+print("columns['doing']:", columns["doing"])
+print("todo is doing:", columns["todo"] is columns["doing"])
+```
+
+两个栏位指向同一个列表，对「进行中」追加一项，`task` 与「待办」栏都跟着变，`todo is doing` 打印 `True`。
+
+要让两个栏位各自演进，需要让它们指向不同的容器。`list(task)` 是<Term id="shallow-copy">浅拷贝</Term>：新建一个外层列表，逐元素复制元素位置上的引用，两个栏位从此指向不同的列表。
+
+```python run id="program-semantics.names-objects-and-state.columns-split"
+task = ["draft"]
+columns = {"todo": list(task), "doing": list(task)}
+columns["doing"].append("review")
+print("task:", task)
+print("columns['todo']:", columns["todo"])
+print("columns['doing']:", columns["doing"])
+print("todo is doing:", columns["todo"] is columns["doing"])
+```
+
+`list(task)` 为每个栏位各建了一个新列表，对「进行中」的追加不再出现在「待办」里，`todo is doing` 打印 `False`。改动会落到更内层的元素时，外层容器的复制不够，需要<Term id="deep-copy">深拷贝</Term>递归复制可达的子对象；复制停在哪一层，由改动会落在哪一层决定。
+
+## 共享在什么时候成为缺陷
+
+共享一个对象本身不是缺陷：缓存让多个调用者读到同一份结果，队列让写入方和读取方看到同一串元素，一处写入本来就该被别处看到。
+
+缺陷出现的条件，是一处代码假定这个对象只由自己修改，而它实际上被多处共享：任务板两栏本该各自演进，代码却让它们指向同一个列表，一次追加同时落到两栏，写入方对「待办」的预期被「进行中」的写入打破。判断共享是否安全，看修改方是否假定对象只由自己改写。写入只应由一处负责时，让每处构造自己的容器；写入需要所有使用方共同看到时，共享同一个对象，并把允许在这上面进行的操作写清楚。一个对象被多处引用时，每次修改都会同时改变所有引用它的位置看到的内容。
+
+## 练习
+
+下面两段程序都以同一批任务名开头。执行结束时，每个名字指向哪个对象、内容是什么，哪些名字互为别名？
+
+第一段：
+
+```python
+todo = ["parse"]
+doing = todo
+backlog = list(todo)
+doing.append("render")
+backlog.append("review")
+todo = doing
+```
+
+第二段：
+
+```python
+todo = ["parse"]
+doing = todo
+doing = doing + ["render"]
+doing.append("review")
+```
+
+判据是逐行套用「修改对象还是重绑定名字」。
+
+第一段：`todo = ["parse"]` 创建列表，`todo` 指向它；`doing = todo` 重绑定名字，`doing` 指向同一个列表；`backlog = list(todo)` 是浅拷贝，创建出另一个列表，与第一个不同；`doing.append("render")` 修改第一个列表，`todo` 与 `doing` 都看到；`backlog.append("review")` 修改第二个列表；`todo = doing` 重绑定名字，`todo` 仍指向第一个列表。结束时 `todo` 与 `doing` 指向同一个对象，内容 `['parse', 'render']`，互为别名；`backlog` 指向独立的对象，内容 `['parse', 'review']`，与两者都不是别名。
+
+第二段：`todo = ["parse"]` 创建列表，`todo` 指向它；`doing = todo` 重绑定名字，`doing` 指向同一个列表；`doing = doing + ["render"]` 求值 `doing + ["render"]` 创建新列表，`doing` 重绑定到它，`todo` 仍指向原列表；`doing.append("review")` 修改新列表。结束时 `todo` 指向原列表，内容 `['parse']`；`doing` 指向新列表，内容 `['parse', 'render', 'review']`；两者不是别名。
+
+两段的差别只在 `doing` 是否被重绑定：第一段用 `append` 接着改原对象，第二段先用 `+` 换到新对象，再改新对象。把每个名字的 `repr` 与 `todo is doing` 打印出来：
+
+| 名字 | 第一段结束 | 第二段结束 |
+| --- | --- | --- |
+| `todo` | `['parse', 'render']` | `['parse']` |
+| `doing` | `['parse', 'render']` | `['parse', 'render', 'review']` |
+| `backlog` | `['parse', 'review']` | 未定义 |
+
+第一段的 `todo is doing` 与 `todo is backlog` 分别打印 `True` 与 `False`；第二段的 `todo is doing` 打印 `False`。

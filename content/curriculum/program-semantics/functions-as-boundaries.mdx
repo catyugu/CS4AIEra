@@ -10,7 +10,162 @@ objectives:
   - 指出一个函数在什么输入下会失败，以及失败以什么形式出现
   - 写出一条可以在函数入口检查的前置条件
 ---
+一个 Agent 交来一个订单处理函数，说明写着 `order_total(lines)` 返回一单的应付总额。这个 Agent 连续跑了两单：第一单有一条单价 10.0 的两件、一条单价 5.0 的一件，返回 25.0；第二单只有一条单价 20.0 的一项，返回的却是 45.0。两次调用传入的是两个互不相干的列表，签名里也只有 `lines` 一个参数，第二单的结果里却含进了第一单的金额。
 
-{/* 骨架段（作者备注）：正式扩写时用一个具体情境、反常输出或必须作出的选择替换本段，不保留本段句式。 */}
+```python
+def order_total(lines, seen=[]):
+    seen.extend(lines)
+    total = 0.0
+    for price, quantity in seen:
+        total += price * quantity
+    return total
+```
 
-一个函数把一段行为收进一个有名字的边界，边界上要交代清楚四件事：要求什么输入、返回什么、会不会修改传入对象或其他调用者可观察的状态、失败时怎么办。把一个列表传给函数，它与调用方看到的是同一个对象，函数通过它做的就地修改调用方也会看到；函数自己局部名字的重新绑定则不会离开这次调用。面对陌生函数，先读出这四件事，再决定要不要用它。
+缺陷不在这段加法。`seen` 的默认值是一个列表，它不属于任何一次调用；两次调用在同一个列表上累积，第二次读到的是第一次留下的商品。签名只列出 `lines`，行为却从这个签名看不出的对象上读写数据。
+
+要在一个陌生函数上作出判断，边界上有四件事要读出来：它要求什么输入、返回什么、会不会修改传入对象或其他调用者可观察的状态、失败时怎么办。这四件事合起来是函数的规约（<Term id="specification">规约</Term>）。`order_total` 同时是 `def` 与 `return` 的第一个样本，读它需要先弄清这两者各做什么。
+
+## 定义、调用与返回值
+
+`def order_total(lines, seen=[])` 执行时建立一个函数对象，并把它绑定到名字 `order_total`，函数体由缩进界定。调用 `order_total(first)` 时，实参表达式先求值得到对象，再按位置绑定到形参名；函数体执行到 `return total`，这个表达式的值成为整个调用表达式的值。`return` 同时结束这次调用，它之后的语句不再执行；函数体走到末尾仍没有 `return` 时，调用得到 `None`。
+
+```python run id="program-semantics.functions-as-boundaries.return"
+def line_total(lines, index):
+    if index >= len(lines):
+        return 0.0
+    price, quantity = lines[index]
+    return price * quantity
+
+
+lines = [(10.0, 2), (5.0, 1)]
+print(line_total(lines, 0))
+print(line_total(lines, 1))
+print(line_total(lines, 5))
+print(line_total(lines, index=0))
+```
+
+`line_total(lines, 5)` 走 `if` 里的 `return 0.0`，函数在那里结束，后面两行不再执行。实参可以按位置给出，也可以写成 `index=0` 按参数名给出，两种写法把同一个对象绑定到同一个形参。
+
+## 形参是实参对象的另一个名字
+
+绑定不给对象做副本：形参是实参对象的别名（<Term id="alias">别名</Term>），与赋值语句的语义一致（<CrossRef id="program-semantics.names-objects-and-state" />）。一次调用里，函数体对形参名做两种不同的操作，效果落在不同的地方。对形参指向的对象做原地修改，改的是调用方手里的同一个对象；把形参名重新绑定到一个新对象，只改变这次调用内部的名字。
+
+```python run id="program-semantics.functions-as-boundaries.binding"
+def sort_lines(lines, ascending=True):
+    lines.sort()
+    ascending = not ascending
+    print("inside, ascending =", ascending)
+    return lines
+
+
+lines = [(10.0, 2), (5.0, 1)]
+original = lines
+ascending = True
+sort_lines(lines)
+print("caller sees:", lines)
+print("same object:", lines is original)
+print("caller's ascending =", ascending)
+```
+
+`lines.sort()` 按每对的第一个元素（单价）原地重排，调用方的 `lines` 与 `original` 都观察到新的顺序，`lines is original` 仍为真。`ascending = not ascending` 只把这次调用的形参名绑到新值 `False`，函数返回后调用方的 `ascending` 仍是 `True`。一次调用有它自己的局部名字：函数体里对名字赋值建立的就是这种名字，它随这次调用结束而消失，调用方看不到。一次调用会不会改动调用方手里的对象，取决于函数体对那个对象做了什么；签名正面列出的参数只是一个起点。
+
+## 默认值在定义时建立
+
+`seen=[]` 里的 `[]` 在 `def` 语句执行时求值一次，结果存进函数对象；此后每次省略 `seen` 的调用都绑定到这同一个列表。省略实参的调用之间因此共享它，第一次写入的内容会流入第二次。
+
+```python run id="program-semantics.functions-as-boundaries.default"
+def order_total(lines, seen=[]):
+    seen.extend(lines)
+    total = 0.0
+    for price, quantity in seen:
+        total += price * quantity
+    return total
+
+
+print(order_total([(10.0, 2), (5.0, 1)]))
+print(order_total([(20.0, 1)]))
+print(order_total([(1.0, 1)]))
+print("stored default:", order_total.__defaults__)
+```
+
+三次调用返回 25.0、45.0、46.0，因为每次都在同一个列表上 `extend`；`order_total.__defaults__` 直接显示保存在函数对象上的那个列表，末尾已经累积了三次调用的全部商品。要让默认参数不跨调用共享，用 `None` 作为「未提供」的标记，在函数体内新建容器：
+
+```python
+def order_total(lines, seen=None):
+    if seen is None:
+        seen = []
+    seen.extend(lines)
+    total = 0.0
+    for price, quantity in seen:
+        total += price * quantity
+    return total
+```
+
+默认值 `None` 是不可变对象，每次省略实参都在这次调用里新建一个列表；跨调用共享只发生在调用方自己传入同一个列表的时候。回到开头那个函数，`seen` 从未出现在任何一次调用的实参里，跨调用保留商品，正是默认值属于函数对象这一条的直接结果。
+
+## 非法输入从哪里暴露
+
+规约要说明哪些输入被允许；非法输入下发生什么，属于接口约定的一部分。Python 不按注解做调用时的类型检查，非法输入通常不会在入口停下，而是在函数体第一次把它当合法值使用的位置抛出一个异常，落点由实现决定。
+
+```python run id="program-semantics.functions-as-boundaries.failure"
+def order_total(lines, discount=0.0):
+    total = 0.0
+    for price, quantity in lines:
+        total += price * quantity
+    return total * (1 - discount)
+
+
+print(order_total([], 0.0))
+print(order_total([(10.0, 2)], 1.5))
+print(order_total([(10.0, "two")], 0.0))
+```
+
+最后一行会失败，这正是这一段要展示的落点：前两次调用正常结束，第三次在函数体内部停下。
+
+`order_total([], 0.0)` 返回 `0.0`，空列表是合法输入。`order_total([(10.0, 2)], 1.5)` 返回 `-10.0`，一个不报错、也没有意义的负数：`discount` 的取值范围是一条前置条件（<Term id="precondition">前置条件</Term>），这个实现没有约束它。`order_total([(10.0, "two")], 0.0)` 在 `price * quantity` 这一步抛出 `TypeError`，浮点数不能与 `"two"` 相乘；这条输入违反「元素可以相乘求和」。
+
+把前置条件写进函数入口，实现就能主动拒绝非法输入，给出带类型与消息的失败：
+
+```python
+def order_total_checked(lines, discount=0.0):
+    if not lines:
+        raise ValueError("order_total requires at least one line")
+    if not 0.0 <= discount <= 1.0:
+        raise ValueError("discount must be between 0 and 1")
+    total = 0.0
+    for price, quantity in lines:
+        total += price * quantity
+    return total * (1 - discount)
+```
+
+空列表与超出 $[0, 1]$ 的折扣在入口被拒绝，失败带上说明它要求什么的消息；元素不能相乘这一类仍然在 `price * quantity` 处抛出 `TypeError`，入口检查只覆盖写下来的那几个条件。要让入口拒绝每一类非法输入，检查就要覆盖规约里不接受的每一类输入。
+
+## 订单函数边界上的四件事
+
+开头那个 `order_total` 的四件事可以逐项读出。
+
+- 要求的输入：`lines` 是可迭代的 `(price, quantity)` 对，`price * quantity` 可以相加求和。
+- 返回什么：说明写成「一单的总额」，实际返回的是累积到当前调用为止全部商品的总额，第二次调用把上一次的商品一起算了进去。
+- 会不会修改其他调用者可观察的状态：会。它 `extend` 的是函数对象上的 `seen` 列表，读取 `order_total.__defaults__` 就能看到这次写入，而签名里没有 `seen`。
+- 失败时怎么办：`lines` 为空时返回当前累积值，不会失败；元素不能相乘时在 `price * quantity` 处抛出 `TypeError`。
+
+把这四处读出来，才能决定要不要用这个函数：返回值的含义与说明写的不一致，一次调用会改动下一次调用读到的状态，非法输入下既不拒绝也不给出可辨认的错误。
+
+## 练习
+
+以下函数取自一个订单模块，签名看不出它的全部行为：
+
+```python
+lookups = []
+
+
+def cheapest(items, limit=3, seen=[]):
+    lookups.append(limit)
+    seen.append(len(items))
+    ranked = sorted(items)
+    return ranked[:limit]
+```
+
+诊断它，逐项写出：它要求 `items` 是什么输入、一次调用会不会修改它边界之外的状态（会的话，通过哪几条路径）、在什么输入下失败、失败以什么形式出现。
+
+裁定依据可以自己跑出来。第一条是默认参数的求值时机与模块层的名字：连续调用两次之后，`cheapest.__defaults__` 与 `lookups` 都变长——`seen` 是定义时建立、由函数对象持有、被多次调用共用的列表，`lookups` 是模块层的名字，签名同样没有提到它。第二条是 `items` 的要求：`sorted(items)` 要求元素是二元组、每对的第一个元素两两可比，据此对 `None` 与 `[(10.0, "book"), ("cheap", "pen")]` 各判断一次失败的类型与落点——前者在 `len(items)` 处抛出 `TypeError`，后者在比较浮点数与字符串时抛出 `TypeError`。

@@ -10,7 +10,93 @@ objectives:
   - 说明一批数据放进另一种形状以后，哪些事实表达不出来或在转换中丢掉
   - 指出按键取值、按下标取值与成员判断各自在什么情况下失败
 ---
+一批任务按提交顺序进入任务系统，每个任务带一个标识和一句标题。同一批任务上要做三件事：按提交顺序列出来，去掉重复提交的，按标识取出某一个。这三件事问的是同一批数据：一件要按位置读全部元素，一件要让每个标识只留一份，一件要直接按标识定位到元素。
 
-{/* 骨架段（作者备注）：正式扩写时用一个具体情境、反常输出或必须作出的选择替换本段，不保留本段句式。 */}
+程序里的数据可以取四种基本形状：单个值、一串有次序的值、一组不重复的值、从键到值的对应。后三种是<Term id="abstract-data-type">抽象数据类型</Term>的例子：它只规定能表达哪些查询、每类查询给出什么结果，内部怎么存由具体实现决定。列表与元组是「一串有次序的值」的两种实现，元组的元素在创建之后不再改动；集合实现「一组不重复的值」；字典实现「从键到值的对应」。
 
-现实中的信息有不同的形状：一个值、一串有次序的值、一组不允许重复的值、一批「按名字就能找到」的条目。映射最重要的语义是从唯一的键定位对应的值；一个具体的映射实现是否还保留别的信息，要看它的契约——Python 的 `dict` 保留插入顺序，这件事是该实现给出的额外保证，不是映射这个抽象本身必然拥有的性质。这一课只读懂这些形状各自表达什么，代价与选择留给后面的模块。
+| 形状 | 能表达的查询 | 表达不了的查询 |
+| --- | --- | --- |
+| 单个值 | 这个值本身 | 一批值里的某一项 |
+| 有次序的一串值 | 第几个是什么；按顺序全部列出 | 按标识取出对应的项 |
+| 一组不重复的值 | 某个值在不在其中；有哪些不同的值 | 第几个是什么 |
+| 从键到值的对应 | 某个键对应的值；有哪些键 | 由值取出唯一的键 |
+
+把同一批 `(id, title)` 放进序列、集合与字典，能写成什么样的问题就分开了。对每一种形状提出同一组问题：按下标取一项、按键取一项、判断一个标识在不在其中。
+
+```python run id="program-semantics.organizing-data.shapes"
+tasks = [
+    ("build-index", "Rebuild search index"),
+    ("send-digest", "Send weekly digest"),
+    ("resize-covers", "Resize cover images"),
+    ("build-index", "Rebuild search index"),
+]
+
+by_position = []
+for task_id, title in tasks:
+    by_position.append(task_id)
+
+distinct_ids = set(by_position)
+by_id = dict(tasks)
+
+print("ordered", by_position)
+print("sizes", len(by_position), len(distinct_ids), len(by_id))
+print("keys", list(by_id))
+print("position", by_position[1])
+print("key", by_id["send-digest"])
+print("default", by_id.get("archive-logs", "unassigned"))
+print("key membership", "send-digest" in by_id)
+print("title membership", "Send weekly digest" in by_id)
+print("title in values", "Send weekly digest" in by_id.values())
+```
+
+同一批标识放进集合之后，按下标取一项会失败：集合没有位置这一层。
+
+```python run id="program-semantics.organizing-data.position-on-set"
+ids = ["build-index", "send-digest", "resize-covers", "build-index"]
+distinct_ids = set(ids)
+
+print(distinct_ids[1])
+```
+
+`by_position` 保留提交顺序，也保留重复：四个标识里有三个不同，重复的 `build-index` 出现两次；按下标取第二项得到 `send-digest`。
+
+`distinct_ids` 只留下不同的值，长度为 3，两个 `build-index` 合成一个。集合没有位置，`distinct_ids[1]` 抛 `TypeError: 'set' object is not subscriptable`。
+
+`by_id` 由 `(id, title)` 构成，键是标识、值是标题；重复的标识在字典里只留一份，`list(by_id)` 给出三个键。按键取值 `by_id["send-digest"]` 得到 `Send weekly digest`。列表没有键这一层，`by_position["send-digest"]` 抛 `TypeError: list indices must be integers or slices, not str`，下标位置的类型必须是整数。
+
+按键取值在键不存在时失败：`by_id["archive-logs"]` 抛 `KeyError: 'archive-logs'`。字典的 `get` 把键不存在变成一次默认值返回，`by_id.get("archive-logs", "unassigned")` 得到 `unassigned`。
+
+成员判断在序列与集合上比较元素本身，在字典上比较键：`"send-digest" in by_id` 为真，`"Send weekly digest" in by_id` 为假，标题是值，要用 `by_id.values()` 才查得到。
+
+按下标取值还有一个失败条件：位置超出当前元素个数，空序列上取 `[0]` 抛 `IndexError: list index out of range`。
+
+## 同一批任务需要哪种形状
+
+按提交顺序列出要求形状保留位置与先后，序列保留，集合不保留。去掉重复要求每个标识只出现一次，集合与字典的键各留一份，序列不合并。按标识取出要求从标识直接定位到任务，字典按键定位，序列只能按下标取出后由程序比较标识。
+
+字典同时满足三件事：键是标识，键不重复，`list(by_id)` 按提交顺序给出全部键。序列同时满足顺序、位置与取出第几个，但它没有标识到元素的对应，也不合并重复。集合满足去重与成员判断，但没有位置，也不保留先后。
+
+从键定位值只要求每个键最多对应一个值，不要求保存键的先后。Python 的字典额外保留键的插入顺序（见 [映射类型 dict](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)），这是该实现给出的保证；按键定位值属于映射这一形状的规定，插入顺序不属于它。同一批数据换形状时，丢掉的是新形状没有表达的那一类事实：从序列进集合丢掉位置与重复，从字典只取出键就丢掉值一侧的对应。
+
+## 练习
+
+一个脚本把任务批次换成了集合，之后按位置取第一项，又按标识取标题：
+
+```python
+tasks = [
+    ("build-index", "Rebuild search index"),
+    ("send-digest", "Send weekly digest"),
+    ("resize-covers", "Resize cover images"),
+]
+
+ids = set()
+for task_id, title in tasks:
+    ids.add(task_id)
+
+first = ids[0]
+title = tasks["send-digest"]
+```
+
+指出哪一行会失败、失败的是哪一种取法，并说明这种取法要求什么样的形状。
+
+裁定依据：`ids[0]` 失败，集合是一组不重复的值，没有位置，抛 `TypeError: 'set' object is not subscriptable`；按位置取要求有次序的一串值，`tasks[0]` 取到第一项的标识。`tasks["send-digest"]` 失败，列表的下标必须是整数，抛 `TypeError: list indices must be integers or slices, not str`；按标识取要求从键到值的对应，把批次构成以标识为键的字典后，`by_id["send-digest"]` 才取到标题。
