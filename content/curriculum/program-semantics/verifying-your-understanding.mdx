@@ -103,32 +103,6 @@ def last_orders(orders, count):
 print(last_orders(["a", "b", "c"], 3))
 ```
 
-## 依赖的是哪一层性质
-
-一条断言检查的性质，只有在某处对它有保证时才有意义。按出处，性质分成三层，可依赖的程度递减：
-
-| 层次 | 出处 | 判据 |
-| --- | --- | --- |
-| 语言保证 | 语言参考与数据模型 | 换一个实现、换一个版本仍然成立 |
-| 标准库契约 | 标准库文档 | 标准库为这个特性作出的承诺，随该库版本移动 |
-| 实现行为 | 具体实现的源码与发布说明 | 只在该实现、该构建上成立，发布说明可以改掉它 |
-
-字典保持插入顺序写进了语言规范（见 [映射类型 dict](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)），换一个解释器仍成立；两个相等的整数是不是同一个对象，则由实现决定。
-
-```python run id="program-semantics.verifying-your-understanding.properties"
-small_a = int("256")
-small_b = int("256")
-large_a = int("257")
-large_b = int("257")
-print("256", small_a is small_b)
-print("257", large_a is large_b)
-
-mapping = {"b": 1, "a": 2, "c": 3}
-print("dict", list(mapping))
-```
-
-256 与 257 只差一格，`is` 的结果从 `True` 变成 `False`：<Term id="cpython">CPython</Term> 缓存一小段整数对象，256 在其中，257 不在。把 `small_a is small_b` 写成一条断言，它在当前这一份构建上通过，换一个构建可能失败，而源码一个字没改。检查一条性质之前先确认它属于哪一层：语言保证可以依赖，标准库契约在它承诺的范围内可以依赖，实现行为只能作为当前观测，写下来时标上版本。可执行单元格运行在一份编译为 WebAssembly 的 CPython 构建上，发行版固定在仓库里，同一个观测在该版本内可复现。
-
 ## 审查不熟悉的代码
 
 一次实验要么推翻一句话，要么没有碰到它依赖的假设。通过一排输入，说明的是这批输入没让假设生效，不等于假设成立。不是自己写的代码，尤其是 Agent 生成、没有看着它长起来的那一类，在提交之前逐行走一遍，要问四件事。
