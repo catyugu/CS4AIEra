@@ -10,100 +10,103 @@ objectives:
   - 说出一种表示提供了哪些抽象保证，例如按唯一的键定位对应的值
   - 指出换一种表示以后哪一类操作变贵
 ---
+一批参数扫描的候选结果写成一个列表：每次运行得到一条 `(run_id, score)`，同一个 `run_id` 在重跑后带一个新的 score 再次出现。要在这批结果上满足四件事：按完成顺序把结果列出来，按 `run_id` 取回一条，让每个 `run_id` 只保留一条记录，按 `score` 取出最高的几项。四件事读的是这批数据的不同侧面：列出来要点名每一次运行的位置，取一条要从 `run_id` 得到对应的 score，只留一条要处理同一个 `run_id` 的两次写入，取最高的几项要在条目之间按 `score` 排出次序。
 
-五条提交先后进入任务系统：`build-index`、`send-digest`、`resize-covers`、`build-index`、`sync-crm`，每条带一个标识和一个大小。`build-index` 被提交了两次。同一批任务上要满足四件事：按提交顺序把任务列出来，按标识取回一项，把重复提交的标识合成一份，按大小取出最大的几项。四件事要求这批数据保留不同的事实：列出要点名每一次提交的位置，取一项要从标识直接定位到对应的记录，去重要把相同的标识合并，取最大的几项要在条目之间按大小排出次序。
+同一批结果可以取几种形状。一条序列按位置保存元素，重跑的 `run_id` 各占一个位置。一个集合保存互不相同的元素，集合里没有位置。一个映射保存键到值的对应，每个键最多一条记录。这三种形状是<Term id="abstract-data-type">抽象数据类型</Term>：它们规定能回答哪些查询、每个查询给出什么结果，内部怎么存由具体实现决定。映射规定的是操作语义：给出一个键，得到一个与之对应的值，每个键最多对应一个值。取一个键对应的值要花多少时间，由用来实现映射的结构决定，hash table 和有序树给出不同的成本，属于实现的成本。Python 的 `dict` 保留键的插入顺序，这是[映射类型](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)这一具体类型在语言层面的保证，换一个解释器同样成立；映射这一抽象只要求键到值的对应，不要求任何顺序。
 
-同一批数据可以取几种形状。一条序列按位置保存元素，重复的标识各占一个位置。一个集合保存互不相同的元素，集合里没有位置。一个映射保存键到值的对应，每个键最多一条记录，按键一步定位。这三种形状是<Term id="abstract-data-type">抽象数据类型</Term>：它们规定能回答哪些查询、每个查询给出什么结果，内部怎么存由具体实现决定。Python 的 `dict` 实现映射，并保留键的插入顺序：插入顺序由[映射类型](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)在语言层面保证，换一个解释器同样成立；而「按唯一的键定位对应的值」是映射这一形状本身规定的保证，与用哪种语言、哪种实现无关。
-
-把同一批任务摆成序列和映射：
+把同一批结果摆成序列和映射：
 
 ```text
-submissions   build-index  send-digest  resize-covers  build-index  sync-crm
-positions     0            1            2              3            4
+results       run-101  run-102  run-103  run-101  run-104
+scores        0.81     0.42     0.67     0.79     0.55
+positions     0        1        2        3        4
 
-by id         build-index -> 7     send-digest -> 3
-              resize-covers -> 5   sync-crm -> 9
+by run id     run-101 -> 0.79    run-102 -> 0.42
+              run-103 -> 0.67    run-104 -> 0.55
 ```
 
-序列的五个位置对应五次提交，`build-index` 在其中占两个位置；映射的四条记录对应四个不同的标识，每个标识只有一条。按提交顺序列出由序列的位置直接给出，映射按插入顺序列出键得到同一个次序；按标识取回一项由映射直接给出，序列从头逐个比对标识；把重复的标识合成一份由映射的键给出，集合同样去重，序列保留重复的每一次；按大小取出最大的几项要在这批数据之外另做一次比较。
+序列的五个位置对应五次运行，`run-101` 在其中占两个位置；映射的四条记录对应四个不同的 `run_id`，每个 `run_id` 只有一条，第二次写入 `run-101` 时改掉了它对应的 score。按完成顺序列出由序列的位置直接给出，映射按插入顺序列出键得到同一个次序；按 `run_id` 取回一条由映射直接给出，序列从头逐个比对 `run_id`；同一个 `run_id` 只留一条由映射的键给出，集合同样只留一条，序列保留重跑的两次；按 `score` 取出最高的几项要在这批数据之外另做一次比较。
 
-## 按标识取一项要比较多少条目
+## 按 run_id 取一条要比较多少条目
 
-<Term id="workload">工作负载</Term>是同一批数据上一段使用里发生的操作及各自的次数。同一批任务在两种形状下回答同一串按标识取项的查询。序列每检查一个条目做一次标识比较，一次标识比较计一次工作；按键取项的那段代码把标识交给字典一次，字典内部为定位做了多少工作由映射的实现决定，不在这一格的计数里。
+<Term id="workload">工作负载</Term>是同一批数据上一段使用里发生的操作及各自的次数。同一批结果在两种形状下回答同一串按 `run_id` 取一条的查询。序列每检查一个条目做一次 `run_id` 比较，比较次数由数据本身和查询位置决定，可以数出来；字典那一侧，代码把每个 `run_id` 交给 `dict` 一次，`dict` 内部为定位做了多少工作由映射的实现决定，这里不给出这个数。两边计的不是同一个量：一边是代码里显式发生的键比较，另一边是代码发出的按键访问次数。
 
 ```python run id="data-and-computation.representation-and-workload.lookup-cost"
-tasks = [
-    ("build-index", 7),
-    ("send-digest", 3),
-    ("resize-covers", 5),
-    ("build-index", 7),
-    ("sync-crm", 9),
+runs = [
+    ("run-101", 0.81),
+    ("run-102", 0.42),
+    ("run-103", 0.67),
+    ("run-101", 0.79),
+    ("run-104", 0.55),
 ]
 
 
 def find_in_list(entries, wanted):
     compared = 0
-    for task_id, size in entries:
+    for run_id, score in entries:
         compared += 1
-        if task_id == wanted:
-            return size, compared
+        if run_id == wanted:
+            return score, compared
     return None, compared
 
 
-as_list = list(tasks)
-queries = ["resize-covers", "archive-logs", "build-index", "sync-crm"]
+as_list = list(runs)
+queries = ["run-103", "run-999", "run-101", "run-104"]
 total = 0
 for wanted in queries:
-    size, compared = find_in_list(as_list, wanted)
+    score, compared = find_in_list(as_list, wanted)
     total += compared
-    print("list", wanted, size, compared)
+    print("list", wanted, score, compared)
 print("list comparisons", total, "entries", len(as_list))
 
 by_id = {}
-for task_id, size in tasks:
-    by_id[task_id] = size
+for run_id, score in runs:
+    by_id[run_id] = score
 
+accesses = 0
 for wanted in queries:
+    accesses += 1
     print("dict", wanted, by_id.get(wanted))
-print("dict lookups", len(queries), "entries", len(by_id))
+print("dict accesses", accesses, "keys", len(by_id))
 ```
 
-序列为四次查询各比较了 3、5、1、5 个条目，合计 14 次标识比较：命中的查询停在命中项所在的位置，`archive-logs` 不在批次里，序列扫完五个条目才判定没有。字典对同一串查询各做一次按键访问，缺失的标识由 `get` 返回 `None`。同一个标识写第二次时，序列追加一个新位置，字典改掉已有键对应的值：五条提交在序列里是五个条目，在字典里是四个键。
+序列为四次查询各比较了 3、5、1、5 个条目，合计 14 次 `run_id` 比较：命中的查询停在命中项所在的位置，`run-999` 不在批次里，序列扫完五个条目才判定没有。字典对同一串查询各发出一次按键访问，缺失的 `run_id` 由 `get` 返回 `None`。同一个 `run_id` 写第二次时，序列追加一个新位置，字典改掉这个键对应的值：五次运行在序列里是五个条目，在字典里是四个键。两条记录里留下哪一条（第一条、最后一条，还是把两次合并）由这批结果要回答的问题决定，字典本身不替你选。
 
-写进这批数据的方式也参与选择。每次到达都追加一条、很少按标识取时，序列保留每一次到达；反复按标识取时，映射把取项变成一次按键定位。插入与读取各自发生的次数，连同要不要保留次序与唯一性，一起决定用哪种形状。
+写进这批数据的方式也参与选择。每次运行完成都追加一条、很少按 `run_id` 取时，序列保留每一次运行；反复按 `run_id` 取时，映射把取一条变成一个按键访问。写入与访问各自发生的次数，连同要不要保留次序与唯一性，一起决定用哪种形状。
 
 ## 换一种形状以后哪类操作变贵
 
-把序列换成以标识为键的映射，按位置取第几个元素不再就手：映射没有位置这一层，取出第几个键要先由键的序列得到它，再按键取回值；保留每一次到达也一并失去，重复标识的那次提交不再单独存在。把映射换成序列，按标识取一项退化为逐个比对。
+把序列换成以 `run_id` 为键的映射，按位置取第几个元素不再就手：映射不保存位置，取出第几个键要先由键的序列得到它，再按键取回值；保留每一次运行也一并失去，重跑的 `run_id` 不再单独存在。把映射换成序列，按 `run_id` 取一条退化为逐个比对。
 
-按大小取出最大的几项对两种形状都不是现成的操作。字典按标识组织，不按大小；序列按到达次序排列，也不按大小。要得到按大小排在最前的几项，需要把条目按大小相互比较，或者另外维护一份按大小排好的次序；维护这样一份次序要花的时间与空间、以及数据变化时对它的同步，属于在主数据之外再维护结构的问题（<CrossRef id="data-and-computation.preprocessing-and-indexes" />）。
+按 `score` 取出最高的几项对两种形状都不是现成的操作。字典按 `run_id` 组织，不按 `score`；序列按完成次序排列，也不按 `score`。要得到按 `score` 排在最前的几项，需要把条目按 `score` 相互比较，或者另外维护一份按 `score` 排好的次序；维护这样一份次序要花的时间与空间、以及数据变化时对它的同步，属于在主数据之外再维护结构的问题（<CrossRef id="data-and-computation.preprocessing-and-indexes" />）。
 
-以下这段把一批任务按键存成字典，再从字典里取出前两项当作大小最大的两项。它取出的是哪两项，各自的大小是多少？
-
-判断标准：看取出的两项是不是这批任务里大小最大的两项。
+以下这段把一批结果按 `run_id` 存成字典，从字典里取出头两项当作 `score` 最高的两项。它取出的两项是这批结果里 score 最高的两项吗，两个 `run_id` 各自的 score 是多少？
 
 ```python run id="data-and-computation.representation-and-workload.largest"
-tasks = [
-    ("build-index", 7),
-    ("send-digest", 3),
-    ("resize-covers", 5),
-    ("build-index", 7),
-    ("sync-crm", 9),
+runs = [
+    ("run-101", 0.81),
+    ("run-102", 0.42),
+    ("run-103", 0.67),
+    ("run-101", 0.79),
+    ("run-104", 0.55),
 ]
 
 by_id = {}
-for task_id, size in tasks:
-    by_id[task_id] = size
+for run_id, score in runs:
+    by_id[run_id] = score
 
 first_two = []
-for key in list(by_id)[:2]:
+count = 0
+for key in by_id:
+    if count == 2:
+        break
     first_two.append((key, by_id[key]))
+    count += 1
 
-print("entries", len(by_id))
+print("keys", len(by_id))
 print("first two", first_two)
 ```
 
-## 这批任务用哪种形状
+## 这批结果用哪种形状
 
-四件事由不同的形状承担，哪一件在负载里发生得最多，决定这个批次用哪一种：反复按标识取、反复判断一个标识在不在时用映射；按到达顺序不断追加、结尾列一遍时用序列。按大小取最大的几项两种形状都不直接提供，要在这批数据之外另排一次次序。
-
+四件事由不同的形状承担，哪一件在负载里发生得最多，决定这个批次用哪一种：反复按 `run_id` 取、反复判断一个 `run_id` 在不在时用映射；按完成顺序不断追加、结尾列一遍时用序列。按 `score` 取最高的几项两种形状都不直接提供，要在这批数据之外另排一次次序。

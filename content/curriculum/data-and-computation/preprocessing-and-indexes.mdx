@@ -11,160 +11,126 @@ objectives:
   - 说出为什么现实中通常直接用成熟库排序或建索引，而不是自己实现
 ---
 
-一份候选目录有 256 条记录，每条由一个标识和一段内容组成，程序按标识取出对应的内容。同一个目录在一天里被按标识查 200 次。
+一次参数扫描跑出 256 条结果记录，每条由一个运行标识与一段结果内容组成，程序按运行标识取出对应内容。同一个批次在一天里被按标识取用 200 次。
 
-一个版本每次查询都从第一条看起，逐条比较标识，命中就停。另一个版本在查询开始之前先按标识把整批记录排一次序，之后每次查询只落在目标标识应当出现的那段边界附近，不再逐条走过。两个版本在一天里各查看了多少条记录？
-
-排序要走过整批记录并做大量两两比较，这笔支出在第一次查询之前就付掉了；查询次数不够多时，它换回来的省下工作覆盖不了自己的成本。一份预先维护的结构值不值得建，取决于后续查询有多少次、每次原本要查看多少条记录，以及数据变化时这份结构还要付出什么。
+一个版本每次取用都从第一条看起，逐条比对标识，命中就停。另一个版本在第一次取用之前先按标识把整批记录排一次序，此后每次取用只在目标标识应当出现的那段边界附近找。排序要走过整批记录并做大量两两比较，这笔支出在第一次取用之前就付掉了；取用次数不够多时，它省下的工作盖不住自己的成本。值不值得先排序、或者另建一份按标识定位的结构，取决于取用的次数、每次原本要走过多少条记录，以及数据变化时这份结构还要付出什么。
 
 ## 有序把查找变成定位边界
 
-没有次序的候选集合里，一次查询没有可以先排除的位置：除了逐条比较标识，程序拿不到「这一段不可能命中」的依据。目标落在最后一条或根本不存在时，全部记录都要看一遍。
+没有次序的一批记录里，一次取用没有可以先排除的位置：除了逐条比对标识，程序拿不到「这一段不可能命中」的依据。目标排在最后一条、或者根本不在批次里时，全部记录都要走过一遍。
 
-记录一旦按标识排好，某一条记录的标识就给出了一条分界：排在它前面的标识不超过它，排在它后面的标识不小于它。查询因此从逐条找相等变成定位边界——找出目标标识在次序里的位置。每次比较都能排除掉整段区间，查询只看边界附近的少数几条记录；目标不存在时结果同样是次序中的一个位置，落在两条相邻标识之间。
+记录一旦按标识排好，每一条记录的标识就给出了一条分界：排在它前面的标识不超过它，排在它后面的标识不小于它。取用因此从逐条找相等变成定位边界——找出目标标识在次序里的位置。每次比对都能把可能的位置砍掉一半，取用只看边界附近的少数几条记录；目标不在批次里时，定位同样给出一个位置，它夹在两条相邻标识之间。
 
-次序本身不省查看。记录排好却仍然从头逐条比较时，每次查询要看的条数没有变化；省下查看的是利用次序定位边界这一步。
+次序本身不减少查看。记录排好却仍然从头逐条比对时，每次取用要看的条数没有变化；省下查看的是用次序定位边界这一步。
+
+同一条标识出现多次时（同一次运行被记了两行），定位给出的是一段区间，取用方要在这段区间里决定取哪一条。标识不在批次里时，逐条扫描必须走到最后一条才能判定缺失，边界定位仍然返回一个位置，调用方据此报告缺失。
 
 ## 一次排序换取多次查询
 
-先排序再定位把成本分成两段：排序那一次走过整批记录并做大量两两比较，此后每次查询只做一次边界定位。批记录 $n$ 条、查询 $q$ 次时，线性扫描的查看总数随 $n$ 与 $q$ 相乘增长；先排序一边是排序那一次的比较次数，加上 $q$ 次定位各自的比较次数。
+批记录 $n$ 条、取用 $q$ 次时，逐条扫描一边的总查看次数约是 $O(qn)$：每次取用各走一遍整批记录，$q$ 与 $n$ 相乘。先排序一边分成两段：排序那一次约 $O(n\log n)$，此后每次定位约 $O(\log n)$，$q$ 次合计约 $O(n\log n + q\log n)$。
 
-两次完整扫描并不等于一次排序：比较排序通常比把记录过一遍更贵。这里真正要比较的是「一次预处理加很多次较便宜的查询」与「每次查询都重新扫过全部数据」，排序那一次的成本靠后续查询的次数摊开。查询次数不够多时，先排序这一边比线性扫描更贵；次数够多之后，它才落到线性扫描之下。
+排序一次比把记录完整过一遍贵得多：比较排序要把记录过好几层。要比较的是「一次排序加很多次较便宜的定位」与「每次取用都重新扫过全部记录」，排序那一次的成本靠后续取用的次数摊开。取用次数少时，先排序一边更贵；多过某个交叉点以后，它才低于逐条扫描。交叉点由 $n$ 与 $q$ 的关系决定：$n$ 条记录排序一次约花 $n\log n$，每次定位省下约 $n/2$ 次比对，两者相等时 $q$ 大致是 $\log n$ 的一个常数倍。$n$ 翻倍，排序只多一层、定位只多一次比对，所需的取用次数只挪动常数条，不与记录条数同比例增长。
 
-在同一批 256 条记录上给两种做法计数。计数单位是键之间的比较：线性扫描每比较一条记录记一次，排序与边界定位按实际发生的比较次数记。查询的标识从一个固定列表里循环取用，既有存在的标识，也有不存在的。
+在同一批 256 条记录上把两边的查看次数并排打印。逐条扫描一边的计数是实测的：每读一条记录记一次，命中之前或走到末尾之前都算。先排序一边的计数由两样相加：排序那一次按比较排序的量级 $n\log_2 n$ 记（$n$ 条记录要分 $\log_2 n$ 层，每层把记录过一遍），定位部分把每次比对写出来计数，标准库的 `bisect` 做的正是这次定位。取用的标识从一个固定列表里循环取用，既有存在的标识，也有不存在的。
 
 ```python run id="data-and-computation.preprocessing-and-indexes.counts"
-import bisect
+def make_batch(size):
+    batch = []
+    for index in range(size):
+        batch.append(("run-" + str((index * 97) % size), index))
+    return batch
 
 
-class Key:
-    """A key that counts every ordering comparison it takes part in."""
-    comparisons = 0
-
-    def __init__(self, value):
-        self.value = value
-
-    def __lt__(self, other):
-        Key.comparisons += 1
-        return self.value < other.value
-
-
-order = []
-for index in range(256):
-    order.append((index * 97) % 256)
-
-batch = []
-for value in order:
-    batch.append(Key(value))
-
-lookups = [255, 0, 128, 100, 200, 99, 250, 300]
-
-
-def scan_total(targets):
-    """Every lookup walks the batch from the front until the key is met."""
-    Key.comparisons = 0
+def scan_reads(batch, targets):
+    reads = 0
     for target in targets:
-        for key in batch:
-            Key.comparisons += 1
-            if key.value == target:
+        for record in batch:
+            reads += 1
+            if record[0] == target:
                 break
-    return Key.comparisons
+    return reads
 
 
-def lookup(ordered, target):
-    """Locates the boundary, then compares the key sitting there."""
-    position = bisect.bisect_left(ordered, Key(target))
-    if position < len(ordered):
-        Key.comparisons += 1
-        if ordered[position].value == target:
-            return ordered[position].value
-    return None
-
-
-def locate_total(targets):
-    """Sorts the batch once, then locates every boundary in it."""
-    Key.comparisons = 0
-    ordered = sorted(batch)
+def locate_reads(ordered, targets):
+    reads = 0
     for target in targets:
-        lookup(ordered, target)
-    return Key.comparisons
+        low = 0
+        high = len(ordered)
+        while low < high:
+            middle = (low + high) // 2
+            reads += 1
+            if ordered[middle][0] < target:
+                low = middle + 1
+            else:
+                high = middle
+    return reads
 
 
-sort_once = locate_total([])
-locate_one = locate_total(lookups[:1]) - sort_once
-print("sort once", sort_once, "locate one key", locate_one)
-print("queries", "scan", "sort+locate")
+batch = make_batch(256)
+ordered = sorted(batch)
+
+rounds = 0
+width = 1
+while width < len(batch):
+    width = width * 2
+    rounds += 1
+sort_once = len(batch) * rounds
+
+queries = ["run-255", "run-0", "run-128", "run-100", "run-200", "run-99", "run-250", "run-300"]
+
+print("queries rescan sorted")
 for count in (1, 2, 4, 8, 16, 32, 64, 128, 200):
-    targets = (lookups * 32)[:count]
-    print(count, scan_total(targets), locate_total(targets))
+    targets = []
+    for index in range(count):
+        targets.append(queries[index % len(queries)])
+    print(count, scan_reads(batch, targets), sort_once + locate_reads(ordered, targets))
 ```
 
-排序一次用了 1701 次比较，定位一个标识用 9 次。查询 2 次时，线性扫描累计 97 次，先排序一边累计 1720 次，排序的成本还没摊开；查询 8 次时两边是 1039 与 1773，查询 16 次时变成 2078 与 1845，交叉落在八到十六次查询之间。查询 200 次时，线性扫描累计 25975 次，先排序一边累计 3501 次，约为其七分之一。线性扫描每多一次查询就多走一遍整批记录，先排序一边只多一次定位。
+先排序一边的排序成本按 $n\log_2 n$ 记：256 条记录分八层，每层把记录过一遍，约两千次查看；此后一次边界定位只比对八次左右，记录翻一倍也只是多切一刀。取用两次时，逐条扫描累计不到一百次，先排序一边停在两千次上下，排序的成本远没有摊开。取用涨到二十次上下，两边相等；再往上，逐条扫描一边每多一次取用就多走一遍整批记录，先排序一边只多一次定位。取用两百次时，逐条扫描累计约两万五千次，先排序一边约三千七百次，约为其七分之一。交叉点由记录条数与取用次数的关系决定：记录翻倍只让排序多一层、定位多一次比对，所需的取用次数只挪动常数条。
 
 ## 建索引：读更快，写更贵
 
-按标识取内容还可以靠一份专门的索引：一张按标识直接给出位置或内容的表。建立它要读一遍整批记录、把每条登记进去，之后一次查询就是一次定位，不再走到边界附近。这类结构由成熟实现提供：`sorted` 给出有序序列，`bisect` 在有序序列上定位边界，`dict` 直接把标识映到内容。从零实现一遍没有收益——成熟实现已经承担了边界取法、键的比较规则与性能细节，不同写法在重复键与缺失键上的行为也已经固定。
+按标识取内容还可以靠一份专门的索引：一张按标识直接给出位置或内容的表。建立它要读一遍整批记录、把每条登记进去，之后一次取用就是一次定位，不必走到边界附近。这类结构由成熟实现提供：`sorted` 给出有序序列，`bisect` 在有序序列上定位边界，`dict` 直接把标识映到内容。成熟实现已经处理了边界取法、键的比较规则与性能细节，不同写法在重复键与缺失键上的行为也已经固定，从零实现一遍没有收益。
 
-建立的代价只是一半。数据发生变化时索引必须跟着变：把一条记录插进排好的序列，它的位置未必在末尾，插入点之后的记录要逐条挪开；删掉一条，后面的记录同样要挪回来。改用按标识直接定位的表，按标识插入只是登记一条，但数据更新时仍要同步写进去，这张表本身也占额外空间。读一侧因此变快，代价落在写一侧与空间上；写多读少时，维护索引的开销可以超过它省下的查询次数。
+建立的代价只在写的一侧。数据发生变化时索引必须跟着变：把一条记录插进排好的序列，它的位置未必在末尾，插入点之后的记录要逐条挪开；删掉一条，后面的记录同样要挪回来。改用按标识直接定位的表，插入只是登记一条，但数据更新时仍要同步写进去，这张表本身也占额外空间。读一侧因此变快，代价在写一侧与空间上；写多读少时，维护索引的开销可以超过它省下的取用次数。
 
-边界出现在这些位置上。同一标识出现多条记录时，边界给出的是一段区间而不是一条记录，重复值把「定位一个位置」变成「定位一段」。查询的标识不存在时，线性扫描必须看完整个批次，边界定位仍然返回一个位置，调用方据此报告缺失。排序与查询要用同一套标识次序；两处用了不同的比较规则，定位出的边界就落不到正确的记录上。索引是主数据之外的一份额外结构，主数据本身用序列、集合还是映射来组织，是另一件事（见 <CrossRef id="data-and-computation.representation-and-workload" />）。
+排序与取用必须用同一套标识次序。两处用了不同的比较规则，定位出的位置就不是目标标识应在的位置，取用会拿到相邻的一条记录，或者把一条在批次里的记录报成缺失。主数据本身用序列、集合还是映射来组织，与是否需要这份额外索引是两件事（见 <CrossRef id="data-and-computation.representation-and-workload" />）。
 
 ## 练习
 
-把排序放进查询循环里，看起来也在利用有序。下面两种写法对同一批记录、同一组查询计数。
-
-以键比较总数为标准，比较两种写法的总数。
+先排序再定位也可以写成每次取用之前重排一次，看起来同样利用了有序。两种写法都在同一批记录上做同一串定位：一种只排序一次，另一种每定位一次就重排一次。
 
 ```python run id="data-and-computation.preprocessing-and-indexes.exercise"
 import bisect
 
 
-class Key:
-    """A key that counts every ordering comparison it takes part in."""
-    comparisons = 0
-
-    def __init__(self, value):
-        self.value = value
-
-    def __lt__(self, other):
-        Key.comparisons += 1
-        return self.value < other.value
+def make_batch(size):
+    batch = []
+    for index in range(size):
+        batch.append(("run-" + str((index * 97) % size), index))
+    return batch
 
 
-order = []
-for index in range(256):
-    order.append((index * 97) % 256)
-
-batch = []
-for value in order:
-    batch.append(Key(value))
-
-lookups = [255, 0, 128, 100, 200, 99, 250, 300]
-
-
-def sort_once_then_locate(targets):
-    """Sorts the batch once, then locates each boundary."""
-    Key.comparisons = 0
+def sort_once_then_locate(batch, targets):
     ordered = sorted(batch)
+    sorts = 1
     for target in targets:
-        bisect.bisect_left(ordered, Key(target))
-    return Key.comparisons
+        bisect.bisect_left(ordered, (target,))
+    return sorts
 
 
-def sort_before_each_lookup(targets):
-    """Sorts the batch again before every lookup."""
-    Key.comparisons = 0
+def sort_before_each_lookup(batch, targets):
+    sorts = 0
     for target in targets:
         ordered = sorted(batch)
-        bisect.bisect_left(ordered, Key(target))
-    return Key.comparisons
+        sorts += 1
+        bisect.bisect_left(ordered, (target,))
+    return sorts
 
 
-print("sort once, then locate:  ", sort_once_then_locate(lookups))
-print("sort before each lookup: ", sort_before_each_lookup(lookups))
+batch = make_batch(64)
+targets = ["run-5", "run-40", "run-63", "run-0", "run-300", "run-17"]
+
+print("sort once, then locate:  ", sort_once_then_locate(batch, targets))
+print("sort before each lookup: ", sort_before_each_lookup(batch, targets))
 ```
-
-## 回到那份候选目录
-
-回到开头那份 256 条记录、一天 200 次查询的目录。先按标识排一次序，排序走完整批 1701 次比较；此后每次查询只做一次边界定位，约 9 次比较。一天 200 次查询下，先排序一边累计 3501 次，线性扫描累计 25975 次，差距来自线性扫描每轮都要重走整批记录。把一天的查询次数降到 2 次，两边的总数分别是 1720 与 97，线性扫描更低，排序的 1701 次比较还没被足够多的查询摊开。
-
