@@ -57,7 +57,7 @@ for task in sorted(parent):
 
 依赖关系说的是先后：某个任务只有在另外的任务完成之后才能开始。它写出来是一列有向边，每条边从一个前置任务指向等待它的任务。归属关系里 `code` 只有一个上级 `build`；依赖关系里 `tests` 却有好几个前置——`code` 和 `assets`。一个任务只有一个上级，却可以有多个前置，这是依赖关系比树多出来的第一件事；它多出来的第二件事，是允许两个在归属上没有祖辈关系的任务直接相连——`assets` 属于 `build`，`tests` 属于 `verify`，它们之间照样有一条依赖。默认把依赖记成有向<Term id="simple-graph">简单图</Term>：没有从一个任务指向它自己的边，也没有端点相同的重复边。
 
-从依赖的边能问「可达」：从一个任务出发，沿边的方向一连串走下去，能到达的任务就是它可达的任务。可达只沿边的方向成立——`tests` 能到达 `assets`，反过来不成立。
+从依赖的边能问「可达」：从一个任务出发，沿边的方向一连串走下去，能到达的任务就是它可达的任务。可达只沿边的方向成立——`mockups` 是 `assets` 的前置，从 `mockups` 沿边走到得了 `assets`，反过来不成立。
 
 ```python run id="data-and-computation.hierarchy-relations-and-dependencies.reachable"
 requires = {
@@ -112,7 +112,7 @@ for name, route in routes.items():
 
 ## 依赖排不出顺序时
 
-要把依赖关系变成一份能照着做的顺序，可以反复挑一个「前置都已经排在前面」的任务放到末尾。给 `assets` 与 `tests` 各写一条指向对方的依赖之后，这个过程会停住。
+要把依赖关系变成一份能照着做的顺序，可以反复挑一个「前置都已经排在前面」的任务放到末尾。这组依赖里 `assets` 与 `tests` 互相等待，这个过程会停在半路。
 
 ```python run id="data-and-computation.hierarchy-relations-and-dependencies.order"
 requires = {
