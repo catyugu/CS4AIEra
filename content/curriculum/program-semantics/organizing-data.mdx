@@ -80,9 +80,9 @@ print(distinct_ids[1])
 
 ## 练习
 
-一个脚本把任务批次换成了集合，之后按位置取第一项，又按标识取标题：
+一个脚本把任务批次换成了集合，之后按位置取第一项，又按标识取标题。指出哪一行会失败、失败的是哪一种取法，并说明这种取法要求什么样的形状；要核对第二种取法，就把已经失败的那一行删掉再运行一次。
 
-```python
+```python run id="program-semantics.organizing-data.exercise-shape-mismatch"
 tasks = [
     ("build-index", "Rebuild search index"),
     ("send-digest", "Send weekly digest"),
@@ -96,7 +96,3 @@ for task_id, title in tasks:
 first = ids[0]
 title = tasks["send-digest"]
 ```
-
-指出哪一行会失败、失败的是哪一种取法，并说明这种取法要求什么样的形状。
-
-裁定依据：`ids[0]` 失败，集合是一组不重复的值，没有位置，抛 `TypeError: 'set' object is not subscriptable`；按位置取要求有次序的一串值，`tasks[0]` 取到第一项的标识。`tasks["send-digest"]` 失败，列表的下标必须是整数，抛 `TypeError: list indices must be integers or slices, not str`；按标识取要求从键到值的对应，把批次构成以标识为键的字典后，`by_id["send-digest"]` 才取到标题。

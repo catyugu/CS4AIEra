@@ -84,9 +84,9 @@ print(len(done), done)
 
 ## 练习
 
-下面这段程序用 `!= "pending"` 做判断，对上面那三份任务，`done` 最后是什么，与想要留下的清单是什么关系？
+两段程序都在遍历同一批三份任务，第二段的 `i += 1` 挪进了 `if` 成立的那一支。第一段结束时 `done` 是什么、`while` 转了几圈？第二段的步数上限为什么会被用满、是哪一项造成的？
 
-```python
+```python run id="program-semantics.choosing-the-next-step.exercise-increment-outside"
 tasks = [
     {"name": "make-thumbnail", "status": "pending"},
     {"name": "send-notice",    "status": "blocked"},
@@ -99,14 +99,10 @@ while i < len(tasks):
     if task["status"] != "pending":
         done.append(task["name"])
     i += 1
-print(done)
+print("done", done, "i", i)
 ```
 
-裁定：`!= "pending"` 在 `blocked` 上为真、在两项 `pending` 上为假，只有 `send-notice` 走过 `append`，运行结果是 `done` 等于 `['send-notice']`，正好是想要清单的补集。
-
-下面这段把 `i += 1` 放进了 `if` 为真的那一支，哪一项输入会让循环一直不结束？
-
-```python
+```python run id="program-semantics.choosing-the-next-step.exercise-increment-inside"
 tasks = [
     {"name": "make-thumbnail", "status": "pending"},
     {"name": "send-notice",    "status": "blocked"},
@@ -114,12 +110,12 @@ tasks = [
 ]
 done = []
 i = 0
-while i < len(tasks):
+steps = 0
+while i < len(tasks) and steps < 6:
     task = tasks[i]
     if task["status"] == "pending":
         done.append(task["name"])
         i += 1
-print(done)
+    steps += 1
+print("done", done, "i", i, "steps", steps)
 ```
-
-裁定：`i += 1` 写在 `if` 为真的那一支里。`tasks[i]` 的状态不是 `pending` 时，`append` 与 `i += 1` 一起被跳过，`i` 停在原位，`i < len(tasks)` 保持为真，条件与循环体就这样反复执行。上面这份列表在 `i` 等于 1 时碰到 `send-notice`（`blocked`），循环从这一步起不再前进。

@@ -11,6 +11,134 @@ objectives:
   - 列出审查 Agent 给出的代码时先检查的几件事
 ---
 
-{/* 骨架段（作者备注）：正式扩写时用一个具体情境、反常输出或必须作出的选择替换本段，不保留本段句式。 */}
+一个 Agent 交来一个订单函数，附的说明是：`order_total(lines, threshold)` 返回整单总额，单条数量达到 `threshold` 的商品按九折结算，`threshold` 至少为 1。它已经测过了，几单典型订单都符合说明。代码也逐行读得通：把每条的 `price * quantity` 累加起来，够条件的乘 `0.9`；再读一遍，得到同一个结论。
 
-读一段程序时形成的判断可能是错的，而更仔细地重读通常既耗时又不会改变结论。能改变结论的是构造一个可能推翻它的实验：挑一个边界输入、把一条前置条件写成可检查的断言、跑一次最小复现。同一件事还有另一半——一份代码在提交之前，哪几处必须先检查。
+```python run id="program-semantics.verifying-your-understanding.boundary"
+def order_total(lines, threshold):
+    total = 0.0
+    for price, quantity in lines:
+        line = price * quantity
+        if quantity > threshold:
+            line = line * 0.9
+        total += line
+    return total
+
+
+print("3 units ", order_total([(10.0, 3), (5.0, 4)], 10))
+print("12 units", order_total([(10.0, 12)], 10))
+print("20 units", order_total([(10.0, 20)], 10))
+print("10 units", order_total([(10.0, 10)], 10))
+print("empty   ", order_total([], 10))
+```
+
+12 件与 20 件的两行与说明相符，10 件的那一行不符：数量 10 满足「达到阈值 10」，这一条按九折结算，总额应是 90.0，返回的却是 100.0。空订单返回 `0.0`，没有让任何隐藏的假设生效。缺陷落在 `quantity > threshold` 的比较上：数量正好等于阈值时走不到打折那一支，而这一格从未进入过任何一次运行，再读一遍代码也不会碰到它。
+
+## 边界输入
+
+Agent 跑的那几单里，数量都明显落在阈值的一侧，走的是同一条路径。判断在「数量等于阈值」这一格上没有依据，因为没有任何输入把「够条件」与「不够条件」之间的那条线压到相等的值上。让一条没写下来就能成立的假设开始起作用的输入，是边界输入。
+
+按它作用的假设，边界输入分成几类，每一类值得单独跑一次：
+
+- 空输入。`order_total([], 10)` 返回 `0.0`。它检验「至少有一条商品」「结果非空」这类假设；这个函数没有这类假设，空输入不改变结论。
+- 单个元素。这时第一条就是最后一条，累加与判定各走一遍，检验「两条以上才会出现」的假设。
+- 重复值。同一批 `(price, quantity)` 出现两次，检验「每个键只出现一次」「元素两两不同」这类假设；按值去重、却按位置索引的实现会在这里与说明分开。
+- 比较的边界。数量与阈值正好相等，金额正好落在折扣门槛上。`>`、`>=`、`<`、`<=` 在两边相等时给出不同结果，`order_total` 的缺陷就在 `quantity == threshold` 这一格。
+- 类型不符与极值。`order_total([(10.0, "10")], 10)` 在 `price * quantity` 处抛出 `TypeError: can't multiply sequence by non-int of type 'float'`；数量取到超出浮点数范围的整数时，同一处抛出 `OverflowError: int too large to convert to float`，整数本身不溢出。
+
+挑哪一类，取决于代码在哪一条没写下来的假设上做了结论。比较的两边取到相等，是最常被漏掉的一格。
+
+## 把假设写成能检查的形式
+
+`assert` 把一句条件写成运行时检查的形式：条件为真时不产生任何效果，为假时以 `AssertionError` 停下，并把消息原样带回来。写在函数入口、检查调用方必须满足的输入条件，是<Term id="precondition">前置条件</Term>；写在返回处、检查结果的，是后置条件（<CrossRef id="program-semantics.functions-as-boundaries" />）。
+
+`order_total` 依赖的要求可以逐句写成断言：入口处 `threshold` 至少为 1，返回的总额对「数量达到阈值」的商品按九折结算。运行它们，失败的报错文本会指出哪一句要求没有被满足。
+
+```python run id="program-semantics.verifying-your-understanding.assert"
+def order_total(lines, threshold):
+    assert threshold >= 1, "threshold must be at least one unit"
+    total = 0.0
+    for price, quantity in lines:
+        line = price * quantity
+        if quantity > threshold:
+            line = line * 0.9
+        total += line
+    return total
+
+
+assert order_total([(10.0, 12)], 10) == 108.0
+assert order_total([(10.0, 3)], 10) == 30.0
+assert order_total([(10.0, 10)], 10) == 90.0, "a line of exactly 10 units is discounted"
+```
+
+前两条断言通过，第三条停在 `AssertionError: a line of exactly 10 units is discounted`：返回的 100.0 与要求的 90.0 在这一行分开，报错文本写清了缺的是哪一句。入口处的 `assert threshold >= 1` 是那条前置条件，三次调用都满足它，它没有声音。`assert` 语句在解释器以 `-O` 运行时整条被删除，它检查的是开发与调试路径上的假设；要让非法输入在交付后的每次调用上都被拒绝，把拒绝写进规约、抛一个真正的异常。
+
+## 最小复现
+
+失败的输入可以继续缩小。把 10 件那一行单独拿出来，`order_total([(10.0, 10)], 10)` 返回 100.0，仍然失败；价格换成 1.0，`order_total([(1.0, 10)], 10)` 返回 10.0，要求是 9.0。缺陷只需要一条数量正好等于阈值的商品，与订单里其它行的价格和数量无关。最小的失败输入是 `[(1.0, 10)]` 与 `threshold = 10`，返回 `10.0`，要求 `9.0`。
+
+输入越小，牵连的东西越少：五行的订单留下「哪些行有关」这个待定问题，一行把它回答掉——这一格只关乎阈值与数量的比较。缩小的过程同时给假设命了名：比较的两边可以相等。名字有了，才好决定它该写进前置条件、还是把代码改成 `>=`：
+
+```python
+def order_total(lines, threshold):
+    total = 0.0
+    for price, quantity in lines:
+        line = price * quantity
+        if quantity >= threshold:
+            line = line * 0.9
+        total += line
+    return total
+```
+
+改成 `>=` 之后，`order_total([(10.0, 10)], 10)` 返回 90.0，12 件那一行仍是 108.0。
+
+## 练习
+
+一个订单模块里有下面这个函数，说明写着「返回最近 `count` 单」。挑出最小的 `orders` 与 `count` 组合，使返回值与这句话不符；写出返回的是什么、按说明应当是什么。
+
+```python run id="program-semantics.verifying-your-understanding.exercise-last-orders"
+def last_orders(orders, count):
+    return orders[-count:]
+
+
+print(last_orders(["a", "b", "c"], 3))
+```
+
+## 依赖的是哪一层性质
+
+一条断言检查的性质，只有在某处对它有保证时才有意义。按出处，性质分成三层，可依赖的程度递减：
+
+| 层次 | 出处 | 判据 |
+| --- | --- | --- |
+| 语言保证 | 语言参考与数据模型 | 换一个实现、换一个版本仍然成立 |
+| 标准库契约 | 标准库文档 | 标准库为这个特性作出的承诺，随该库版本移动 |
+| 实现行为 | 具体实现的源码与发布说明 | 只在该实现、该构建上成立，发布说明可以改掉它 |
+
+字典保持插入顺序写进了语言规范（见 [映射类型 dict](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)），换一个解释器仍成立；两个相等的整数是不是同一个对象，则由实现决定。
+
+```python run id="program-semantics.verifying-your-understanding.properties"
+small_a = int("256")
+small_b = int("256")
+large_a = int("257")
+large_b = int("257")
+print("256", small_a is small_b)
+print("257", large_a is large_b)
+
+mapping = {"b": 1, "a": 2, "c": 3}
+print("dict", list(mapping))
+```
+
+256 与 257 只差一格，`is` 的结果从 `True` 变成 `False`：<Term id="cpython">CPython</Term> 缓存一小段整数对象，256 在其中，257 不在。把 `small_a is small_b` 写成一条断言，它在当前这一份构建上通过，换一个构建可能失败，而源码一个字没改。检查一条性质之前先确认它属于哪一层：语言保证可以依赖，标准库契约在它承诺的范围内可以依赖，实现行为只能作为当前观测，写下来时标上版本。可执行单元格运行在一份编译为 WebAssembly 的 CPython 构建上，发行版固定在仓库里，同一个观测在该版本内可复现。
+
+## 审查不熟悉的代码
+
+一次实验要么推翻一句话，要么没有碰到它依赖的假设。通过一排输入，说明的是这批输入没让假设生效，不等于假设成立。不是自己写的代码，尤其是 Agent 生成、没有看着它长起来的那一类，在提交之前逐行走一遍，要问四件事。
+
+**它假设输入是什么。** 说明里承诺、代码却没有为它写走法的输入，就是假设所在。`order_total` 没有为「数量正好等于 `threshold`」写走法，这一格落在「大于」里。走法分得越粗，落在同一条假设下的输入越多。
+
+**它修改了谁的状态。** 函数只读取参数、返回新值，还是改动了传入的对象、模块里的名字或某个对象的属性？`order_total` 用 `price * quantity` 与局部累加，不触碰 `lines`；把 `lines.sort()` 或 `lines.append(...)` 写进函数体，调用方的列表会在调用之后变样。修改落到参数或共享对象上时，调用方是否知道这件事，决定它还能不能继续依赖手里的数据（<CrossRef id="program-semantics.names-objects-and-state" />）。
+
+**失败路径去哪里。** 假设被违反时，代码抛异常、返回一个记号，还是给出一个看起来合理的值？没有断言的 `order_total` 对数量 10 返回 `100.0`：失败没有停在发生的位置，一个错误的结果继续往下走。抛异常的路径在调用栈上留下位置，返回记号值要求调用方每次都检查，变成结果的那条路径要到很久之后的一次计算里才露面。
+
+**边界上会发生什么。** 空输入、单个元素、重复值、比较的两边相等、类型不符，用最小的那个输入就能判定：返回的是值还是失败？`order_total([], 10)` 返回一个值，说明里没有这个情形，返回值就是缺口；数量 10 返回 `100.0` 也是同一个缺口。
+
+四件事读的都是代码依赖的假设。回到开头那个函数：说明承诺「数量达到阈值就打折」，代码只在数量严格大于阈值时打折；它依赖的假设是「没有一条数量正好等于阈值」，这句话不在说明里，也没有任何一次运行碰到过。把假设写成断言，运行会在那条输入上停下；在代码里改掉它，改的是同一处比较。

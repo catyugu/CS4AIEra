@@ -153,9 +153,9 @@ def order_total_checked(lines, discount=0.0):
 
 ## 练习
 
-以下函数取自一个订单模块，签名看不出它的全部行为：
+一个订单模块里有下面这个函数，签名看不出它的全部行为。逐项说出：它要求 `items` 是什么输入、一次调用会不会修改签名之外的状态（会的话，通过哪几条路径）、在什么输入下失败、失败以什么形式出现；换输入就在这一格里改。
 
-```python
+```python run id="program-semantics.functions-as-boundaries.exercise-cheapest"
 lookups = []
 
 
@@ -164,8 +164,12 @@ def cheapest(items, limit=3, seen=[]):
     seen.append(len(items))
     ranked = sorted(items)
     return ranked[:limit]
+
+
+print(cheapest([(10.0, "book"), (5.0, "pen")]))
+print(cheapest([(20.0, "bag")]))
+print("stored default", cheapest.__defaults__)
+print("lookups", lookups)
 ```
 
-诊断它，逐项写出：它要求 `items` 是什么输入、一次调用会不会修改它边界之外的状态（会的话，通过哪几条路径）、在什么输入下失败、失败以什么形式出现。
-
-裁定依据可以自己跑出来。第一条是默认参数的求值时机与模块层的名字：连续调用两次之后，`cheapest.__defaults__` 与 `lookups` 都变长——`seen` 是定义时建立、由函数对象持有、被多次调用共用的列表，`lookups` 是模块层的名字，签名同样没有提到它。第二条是 `items` 的要求：`sorted(items)` 要求元素是二元组、每对的第一个元素两两可比，据此对 `None` 与 `[(10.0, "book"), ("cheap", "pen")]` 各判断一次失败的类型与落点——前者在 `len(items)` 处抛出 `TypeError`，后者在比较浮点数与字符串时抛出 `TypeError`。
+判据是「这次调用有没有改动签名之外的东西」，以及「哪一类输入第一次被当成合法值使用」。

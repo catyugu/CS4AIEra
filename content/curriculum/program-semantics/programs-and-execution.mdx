@@ -91,9 +91,14 @@ print(total)
 
 ## 练习
 
-一段与订单同形的程序，`price_b` 目前是整数：
+下面这段程序与开头那单同形。先说清两件事，再改这一格里的代码运行核对：
 
-```python
+1. 把 `price_b = 8` 改成 `price_b = 10`（仍是整数）：哪些打印结果变、哪些不变，执行结束时 `subtotal` 与 `total` 各绑定到哪个值？
+2. 把 `price_b = 8` 改成 `price_b = "8"`（带引号的文本）：哪一行最先失败，失败之前输出里有没有内容，哪些行没有执行？
+
+判据是每一步绑定到的值与它的类型。
+
+```python run id="program-semantics.programs-and-execution.exercise"
 price_a = 12
 price_b = 8
 price_c = 5
@@ -102,13 +107,3 @@ subtotal = price_a + price_b + price_c
 total = subtotal * (1 - discount)
 print(subtotal, total)
 ```
-
-分别回答，并说明判断依据：
-
-1. 把 `price_b = 8` 改成 `price_b = 10`（仍是整数），与原来相比，哪些打印结果改变、哪些不变？执行结束时 `subtotal` 与 `total` 分别绑定到哪个值？
-2. 把 `price_b = 8` 改成 `price_b = "8"`（带引号的文本），哪一行最先失败，失败之前输出里有没有内容，哪些行根本没有执行？
-
-裁定依据是每一步的值与类型：
-
-- 第 1 问：`subtotal` 是 `price_a + price_b + price_c` 的值，`total` 是 `subtotal * (1 - discount)` 的值，两者都随 `price_b` 改变，因此 `print(subtotal, total)` 打印的两项都变；`price_a`、`price_c`、`discount` 绑定的值不变。改动后 `subtotal` 是 27（12+10+5），`total` 是 20.25（27×0.75）。
-- 第 2 问：`price_b` 绑定到字符串 `"8"` 后，`subtotal = price_a + price_b + price_c` 这一行首先求值 `price_a + price_b`，把整数 `12` 与字符串 `"8"` 相加，`+` 在 `int` 与 `str` 之间没有定义，该行抛 `TypeError`；`print` 在这一行之后，所以输出里没有任何内容，`total = ...` 与 `print(...)` 两行没有执行。
