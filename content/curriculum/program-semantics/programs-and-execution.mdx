@@ -2,7 +2,7 @@
 id: program-semantics.programs-and-execution
 slug: /program-semantics/programs-and-execution
 order: 10
-title: 一段程序执行时发生了什么
+title: 程序怎样逐步执行
 status: published
 objectives:
   - 区分表达式求值、赋值、函数调用与输出，并追踪它们发生的顺序
@@ -83,13 +83,13 @@ corrected = mean - offset
 print(corrected)
 ```
 
-前四行都是正常的赋值：`reading_b` 被绑定到字符串 `"11.8"`，这一步没有出错。执行到 `mean = (reading_a + reading_b + reading_c) / 3`，右边的和式要求把 `12.5` 与 `"11.5"` 相加，`+` 上没有这条规则，求值在这里失败，抛出一个 `TypeError`。执行停在这一行：后面的 `corrected = ...` 与 `print(corrected)` 都不再运行，输出里不会出现校正后的读数。
+前四行都是正常的赋值：`reading_b` 被绑定到字符串 `"11.5"`，这一步没有出错。执行到 `mean = (reading_a + reading_b + reading_c) / 3`，右边的和式要求把 `12.5` 与 `"11.5"` 相加，`+` 上没有这条规则，求值在这里失败，抛出一个 `TypeError`。执行停在这一行：后面的 `corrected = ...` 与 `print(corrected)` 都不再运行，输出里不会出现校正后的读数。
 
 类型错误通常在程序第一次对这个值执行不受支持的操作时出现；赋值只把值绑定到名字，不检查它以后会参与什么运算。`reading_b = "11.5"` 绑定到名字上的是字符串，`reading_b = 11.5` 绑定到的是浮点数，这个类型差别决定后面哪一行能用 `+`。执行到失败为止已经完成的部分保留下来：打印类型的那段程序里，失败行之前的几条 `print` 已经写入了输出，失败行之后的语句不再执行。
 
 ## 练习
 
-下面这段程序与开头那段读三个读数、减去零点偏移的程序同形。
+下面这段程序与开头那段读三个读数、减去零点偏移的程序做相同的计算。
 
 1. 把 `reading_b = 11.5` 改成 `reading_b = 14.5`（仍是浮点数）：哪些打印结果变、哪些不变，执行结束时 `mean` 与 `corrected` 各绑定到哪个值？
 2. 把 `reading_b = 11.5` 改成 `reading_b = "11.5"`（带引号的文本）：哪一行最先失败，失败之前输出里有没有内容，哪些行没有执行？

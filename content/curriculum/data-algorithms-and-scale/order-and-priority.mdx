@@ -1,0 +1,74 @@
+---
+id: data-algorithms-and-scale.order-and-priority
+slug: /data-algorithms-and-scale/order-and-priority
+order: 60
+title: 队列、栈与优先队列
+status: published
+objectives:
+  - 根据处理次序选择队列、栈或优先队列
+  - 说明具体实现的插入和取出操作有什么成本
+  - 判断相同优先级是否需要额外的次序规则
+---
+
+任务按提交次序处理，撤销按修改的倒序进行，紧急任务按优先级处理。这三种需求都要“取下一项”，但决定下一项的规则不同。
+
+## 队列按到达顺序取出
+
+队列在一端加入，从另一端取出，称为先进先出（FIFO）。Python 的 `collections.deque` 提供两端追加与取出的操作，适合表达队列。
+
+```python run id="data-algorithms-and-scale.order-and-priority.queue"
+from collections import deque
+
+queue = deque(["parse", "render", "review"])
+queue.append("publish")
+while queue:
+    print(queue.popleft())
+```
+
+`popleft()` 取走最左边的元素，输出按加入次序排列。空队列不能再取元素，这里的 `while queue` 先检查是否非空。
+
+[deque 文档](https://docs.python.org/3/library/collections.html#collections.deque)规定两端追加和取出的性能约为 $O(1)$。列表的 `pop(0)` 需要移动后面的元素，成本为 $O(n)$，连续取完一批元素会累积成二次工作。
+
+FIFO 保证到达次序，不自动保证一般意义上的调度公平。一个任务执行很久，后面的任务依然要等；是否有时间片、是否允许插队、任务是否最终能完成，都是另外的规则。
+
+## 栈按加入的倒序取出
+
+栈在同一端加入和取出，称为后进先出（LIFO）。列表末尾的 `append` 与 `pop` 可以用来实现栈。
+
+```python run id="data-algorithms-and-scale.order-and-priority.stack"
+changes = []
+changes.append("create draft")
+changes.append("edit title")
+changes.append("add link")
+while changes:
+    print("undo:", changes.pop())
+```
+
+最后添加的链接最先撤销，再撤销标题修改，最后撤销草稿创建。`pop()` 默认取走末尾元素，不需要移动剩余元素。
+
+失败重试要不要优先处理最近的失败，取决于重试策略。它可以重新排到队尾、按下次尝试时间安排，也可以采用其他规则，不能只凭“重试”二字决定使用栈。
+
+## 优先队列取当前优先级最高的一项
+
+<Term id="priority-queue">优先队列</Term>提供加入元素和取当前最值的操作。它不要求按到达次序取出。
+
+```python run id="data-algorithms-and-scale.order-and-priority.priority"
+import heapq
+
+pending = []
+heapq.heappush(pending, (3, "review"))
+heapq.heappush(pending, (1, "parse"))
+heapq.heappush(pending, (2, "render"))
+while pending:
+    print(heapq.heappop(pending))
+```
+
+[heapq](https://docs.python.org/3/library/heapq.html)默认取最小值，本例约定数字越小越紧急，因此先取 `parse`。元组先比较第一项，第一项相同时再比较第二项。
+
+反复扫描列表找最值，每次要看当时剩余的全部项；取完 $n$ 项会累积为 $\Theta(n^2)$ 次查看。二叉堆的高度随元素数对数增长，单次插入或取出最多需要调整 $O(\log n)$ 层。这种结构省掉反复扫描，仍要维护堆，不是每次取出都没有成本。
+
+抽象优先队列不规定同优先级元素的次序。本例的元组比较会按任务名排序；如果需求要求同优先级按到达次序处理，应把递增的提交编号作为第二项，任务名放在第三项。这样的次序需要明确设计。
+
+## 练习
+
+把两个任务的优先级改成相同，预测当前代码会先取哪一项。再改成 `(优先级, 提交编号, 任务名)`，检查同优先级时是否按提交顺序取出。说明任务名不能相互比较时，为什么这个编号也有帮助。

@@ -2,16 +2,50 @@
 id: program-semantics.boundaries-for-state-and-behavior
 slug: /program-semantics/boundaries-for-state-and-behavior
 order: 70
-title: 怎样给状态和行为划边界
+title: 类、实例与模块
 status: published
 objectives:
-  - 说明函数、模块与对象各自把什么收进一个边界
-  - 读出一次 import 之后哪些名字来自别处、哪些属于本文件
-  - 判断一段状态保存在实例里、保存在模块里，还是意外地变成了所有实例共享
-  - 区分调用方可以依赖的接口与实现内部，并说明内部细节被依赖之后改动会产生什么成本
+  - 说明实例、属性与方法之间的关系
+  - 区分每个实例各自的状态与类上共享的状态
+  - 读懂模块对象、模块命名空间与导入后的名字
 ---
 
-Agent 给任务看板写了一个类：看板名写进 `__init__`，任务清单 `tasks` 写在类体里。程序创建两个看板 `first` 与 `second`，只对 `first` 加两项任务，然后打印两者的名字与清单：
+两个任务看板都需要保存名称和任务清单。只用两份列表也能做到；把名称、清单和添加任务的操作写在一起，可以用一个对象表示一个看板。
+
+## 一个类可以创建多个实例
+
+```python run id="program-semantics.boundaries-for-state-and-behavior.instance-state"
+class Board:
+    def __init__(self, name):
+        self.name = name
+        self.tasks = []
+
+    def add(self, title):
+        self.tasks.append(title)
+
+
+first = Board("draft")
+second = Board("release")
+first.add("parse")
+second.add("review")
+print(first.name, first.tasks)
+print(second.name, second.tasks)
+print("same list:", first.tasks is second.tasks)
+```
+
+`class Board:` 创建一个类对象，绑定到 `Board`。`Board("draft")` 创建这个类的一个实例，并调用 `__init__` 初始化它。`self` 接收到这个新实例，`name` 接收到字符串 `"draft"`。
+
+`self.name = name` 在实例上建立属性 `name`，`self.tasks = []` 建立属性 `tasks`。每次初始化都新建列表，因此两个看板各有自己的清单，最后一行打印 `False`。用点号访问属性，例如 `first.tasks`，就能取得实例保存的对象。
+
+## 方法接收到哪个实例
+
+`add` 是定义在类里的函数，作为实例的方法调用。`first.add("parse")` 把 `first` 作为第一个参数传入，函数体中的 `self.tasks` 因而访问第一个看板。`Board.add(first, "parse")` 也能表达这个调用。
+
+`self` 是约定的参数名，不是一个特殊的全局对象。对第二个看板调用方法时，这次调用中的 `self` 就是 `second`。
+
+## 类上的列表可能被多个实例共用
+
+把 `tasks = []` 移到类体，含义会变：
 
 ```python run id="program-semantics.boundaries-for-state-and-behavior.class-body-state"
 class Board:
@@ -23,121 +57,36 @@ class Board:
     def add(self, title):
         self.tasks.append(title)
 
-    def pending(self):
-        return self.tasks
 
-
-first = Board("first")
-second = Board("second")
+first = Board("draft")
+second = Board("release")
 first.add("parse")
-first.add("render")
-print(first.name, second.name)
-print(first.pending())
-print(second.pending())
-print(first.tasks is second.tasks)
+print("first:", first.tasks)
+print("second:", second.tasks)
+print("same list:", first.tasks is second.tasks)
 ```
 
-`first.name` 与 `second.name` 分别是 `first`、`second`，两个看板的名字互不影响。`second` 一次 `add` 都没有调用过，`second.pending()` 却返回 `['parse', 'render']`，与 `first` 的清单相同，`first.tasks is second.tasks` 打印 `True`。一个类体里的两处赋值落在了不同的对象上；把这个结果判断清楚，先要读出每个名字写在哪个对象上。
+类体中的 `tasks = []` 在创建类时执行一次，列表保存在类对象上，这叫<Term id="class-attribute">类属性</Term>。两个实例都没有自己的 `tasks` 属性，读取时就找到类上的同一个列表。一次追加使两个看板都看到 `parse`。
 
-## 状态写在实例上还是类上
+如果任务清单属于各个看板，就在 `__init__` 中为每个实例新建列表；如果所有看板确实要共同维护一份清单，才使用共享对象。判断依据是清单应该由谁保存和修改。
 
-`self.name = name` 在 `__init__` 里，每创建一个实例执行一次，给这个实例建立名为 `name` 的属性。`first` 与 `second` 各执行过一次，各自持有一份 `name`。
+## 模块对象与命名空间
 
-`tasks = []` 写在类体里，是 `class Board:` 这条语句执行时求值的一次：它创建出一个列表，绑定到类对象上。创建实例不执行这一行，`first` 与 `second` 都没有自己的 `tasks`，`self.tasks` 取到的是类对象上的那一个列表。写在这一层的属性是<Term id="class-attribute">类属性</Term>，所有实例读到同一个，直到某个实例建立了自己的同名属性。两次 `self.tasks.append(title)` 追加进的是同一个列表，两个看板读到互为<Term id="alias">别名</Term>的对象。
-
-两处写入的后果不同。`self.name = name` 是赋值，它在这个实例上建立属性 `name`；`self.x += 1` 这种读回、计算、写回同样以赋值结束，它先读出 `self.x`、加一，再把结果写回 `self.x`，第一次执行以后该实例就有了一份自己的 `x`。`self.tasks.append(title)` 是就地修改，它没有在实例上建立属性，改的是沿 `self.tasks` 取到的那个列表，所有还没有自己 `tasks` 的实例看到的是同一个列表，一起变。一个操作会不会让两个实例的状态合流，取决于它是给实例赋值，还是对一个共享对象就地修改。
-
-## 方法就是第一个参数为实例的函数
-
-`add`、`pending` 是定义在类体里的普通函数，所有实例共用同一份。`first.add("parse")` 把 `first` 作为第一个位置实参传给 `add`，函数第一个形参（写作 `self`）接住它，函数体里对 `self.tasks`、`self.name` 的读写因此落在 `first` 上。`self` 只是这个形参的名字，换成另一个标识符，实例仍按位置传入；`Board.add(first, "parse")` 与 `first.add("parse")` 调用的是同一段函数。
-
-需要每个实例各自一份的可变状态放进 `__init__`：
-
-```python run id="program-semantics.boundaries-for-state-and-behavior.instance-state"
-class Board:
-    def __init__(self, name):
-        self.name = name
-        self.tasks = []
-
-    def add(self, title):
-        self.tasks.append(title)
-
-    def pending(self):
-        return self.tasks
-
-
-first = Board("first")
-second = Board("second")
-first.add("parse")
-first.add("render")
-Board.add(second, "review")
-print(first.pending())
-print(second.pending())
-print(first.tasks is second.tasks)
-```
-
-`__init__` 每创建一个实例执行一次，`first` 与 `second` 各得到一个新建的列表，`first.tasks is second.tasks` 打印 `False`。`Board.add(second, "review")` 与 `second.add("review")` 是同一次调用，`review` 只进 `second` 的清单。
-
-## 一个文件的名字是它自己的命名空间
-
-代码写在一个文件里时，顶层出现的名字属于这个文件，别的文件看不到。把一段要复用的代码移进单独的模块，再用 `import` 取回：`import board` 在当前文件新增名字 `board`，指向那个模块对象；`from board import add_task` 直接给模块里的一个名字建一个本地名字。两种写法都不复制对象：`import math` 与 `from math import ceil` 之后，`math.ceil is ceil` 为真，两个名字指向数学模块持有的同一个函数。
+Python 文件作为模块加载时，顶层名字保存在模块的命名空间中。命名空间是一组名字到对象的对应。其他模块可以通过导入访问这些名字。
 
 ```python run id="program-semantics.boundaries-for-state-and-behavior.module-names"
 import math
 from math import ceil
 
-PER_PAGE = 2
-tasks = []
-
-def add_task(title):
-    tasks.append(title)
-
-def page_count():
-    return ceil(len(tasks) / PER_PAGE)
-
-add_task("parse")
-add_task("render")
-add_task("review")
-print(math.ceil(2.5), ceil(2.5), math.ceil is ceil)
-print(tasks)
-print(page_count())
+pages = math.ceil(5 / 2)
+print("pages:", pages)
+print("same function:", math.ceil is ceil)
 ```
 
-`math` 与 `ceil` 来自数学模块；`PER_PAGE`、`tasks`、`add_task`、`page_count` 属于本文件。`tasks` 是本文件顶层的一个名字：`add_task` 往它里面追加，`page_count` 读它的长度，两处操作的是同一个列表，导入这个文件的每个使用方也读到同一个。模块顶层的 `tasks = []` 与类体里的 `tasks = []` 是同一种写法，一条语句求值一次，绑到一个对象上，此后被所有读到这个名字的代码共用。
+`import math` 在当前命名空间建立名字 `math`，指向模块对象；`math.ceil` 访问该模块的 `ceil` 属性。`from math import ceil` 则在当前命名空间直接建立名字 `ceil`，绑定到同一个函数。导入不复制函数，也不会让模块里的所有名字自动成为本地名字。
 
-函数边界收进的是它的输入与返回值。一次调用里建立的名字随调用结束消失，不在调用之间保留状态；要跨调用保留的状态放在调用之外，由调用方作为实参传入，或者保存在模块顶层、实例上。`page_count` 每次调用都从 `tasks` 重新算出页数，自身不留任何东西。
-
-## 调用方可以依赖什么
-
-`import board` 之后，调用方能用的只有模块里的名字。`add_task`、`page_count` 这两个名字、它们接收什么、返回什么，是调用方可以依赖的部分；`tasks` 此刻是列表还是别的结构、`page_count` 内部用 `ceil` 还是别的方式算出页数，属于实现内部。对象在同一处划分：`Board(name)` 这个构造方式，`add`、`pending` 这些方法名，是调用方可以依赖的部分；实例内部把清单存在哪个属性、用什么结构，属于实现内部。
-
-代价出现在调用方依赖实现内部之后。模块这边，调用方写 `board.tasks.append(title)`、绕过 `add_task`，依赖的是「模块顶层有一个叫 `tasks` 的列表」；对象那边，调用方写 `first.tasks.append(title)`、绕过 `add`，依赖的是「实例上有一个叫 `tasks` 的列表」。这两处细节不动，代码照常运行；一旦把 `tasks` 改名，或把它从列表换成别的结构，这些调用方一起坏掉：取名字的写法抛 `AttributeError`，就地修改的写法落在换过的结构上、行为不对。只调用 `add_task`、`page_count`、`add`、`pending` 的代码不受影响。改动的代价等于有多少使用方依赖了被改的那处内部细节。
-
-## 回到开头那个看板
-
-开头那个 `Board` 把状态分在两层：`name` 在实例上，`tasks` 在类对象上。两个看板的任务合流出在 `tasks` 这一层，它写在类体里，一次追加对每个还没有自己 `tasks` 的实例都可见。
-
-`Board(name)` 这个构造方式、`add` 与 `pending` 这两个方法名，是调用方可以依赖的部分；`tasks` 这个名字、以及它此刻是一个列表，属于实现内部。修合流只要把 `tasks` 挪进 `__init__`，名字没有变，直接写 `first.tasks.append(...)` 的调用方不受影响；若之后要把 `tasks` 改名、或把清单换成别的结构，这些调用方才开始付代价。判断一段状态该收进哪一层，读的是它实际保存在哪个对象上、还有谁能改它、改动落到哪些调用方。
+自己的文件也是如此。例如 `board.py` 顶层定义了 `Board`，其他文件使用 `import board` 后便可以调用 `board.Board("draft")`。模块命名空间避免不同文件的顶层名字直接混在一起，但不表示这些名字无法被外部访问。导入规则见 [Python 教程：模块](https://docs.python.org/3/tutorial/modules.html)。
 
 ## 练习
 
-Agent 交来一个会话类，说明写着「每个会话各自记录访问次数和标签」。指出哪一行会让不同会话的状态合流，并判断 Agent 的说法对哪一部分成立、对哪一部分不成立。
-
-```python run id="program-semantics.boundaries-for-state-and-behavior.exercise-session"
-class Session:
-    views = 0
-    tags = []
-
-    def visit(self, tag):
-        self.views += 1
-        self.tags.append(tag)
-
-
-first = Session()
-second = Session()
-first.visit("draft")
-second.visit("review")
-print("views", first.views, second.views)
-print("tags", first.tags, second.tags)
-print("same list", first.tags is second.tags)
-```
+给第一个版本的 `Board` 增加 `pending()` 方法，返回任务数。创建两个实例，只给第一个加任务，先预测两次调用的结果，再运行。然后把清单移到类体，确认哪些结果改变，并说明原因。

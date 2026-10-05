@@ -1,4 +1,6 @@
-# CS4AIEra：AI 时代开发者必需的最小计算机科学基础知识
+# CS4AIEra：AI 时代的计算机科学基础
+
+面向 AI 辅助开发的最小计算机科学知识体系
 
 [![CI](https://github.com/catyugu/CS4AIEra/actions/workflows/ci.yml/badge.svg)](https://github.com/catyugu/CS4AIEra/actions/workflows/ci.yml)
 

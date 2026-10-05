@@ -1,8 +1,8 @@
 ---
-id: data-and-computation.correctness-and-counterexamples
-slug: /data-and-computation/correctness-and-counterexamples
+id: data-algorithms-and-scale.correctness-and-counterexamples
+slug: /data-algorithms-and-scale/correctness-and-counterexamples
 order: 20
-title: 什么证据说明方案是对的
+title: 正确性：规约、反例与不变量
 status: published
 objectives:
   - 写清一份方案允许什么输入，以及它声称保证什么结果
@@ -13,9 +13,9 @@ objectives:
 
 一批任务按提交顺序进入任务系统，同一次提交会因重试而出现两次：`resize-covers` 在第一项和第三项各出现一次，第三项的标题多了 `, retry`。一段脚本要按标识去重，每个标识只留下第一次提交的那一项，其余按提交顺序排好。
 
-Agent 交回的版本把每项任务的标识与标题放进一个字典，遍历结束后按键列出：
+下面的版本把每项任务的标识与标题放进一个字典，遍历结束后按键列出：
 
-```python run id="data-and-computation.correctness-and-counterexamples.dedupe-keys"
+```python run id="data-algorithms-and-scale.correctness-and-counterexamples.dedupe-keys"
 tasks = [
     ("resize-covers", "Resize cover images"),
     ("send-digest",   "Send weekly digest"),
@@ -51,7 +51,7 @@ print(dedupe(tasks))
 
 写下这三句，就写下这段脚本的<Term id="specification">规约</Term>：规约规定允许哪些输入、必须产生哪些结果，不规定用哪种写法实现。同一批任务用字典、用集合加列表、用两遍遍历都能实现，只要输出满足这三句，这些写法都满足规约。
 
-三个边界由规约自己覆盖。输入为空时没有标识，输出是空列表。同一个标识重复提交而标题相同，输出里仍只有一项。同一个标识重复提交而标题不同，输出留第一次的那一句——第二句在这里起作用；规约若漏掉第二句，只留下「每个标识各一项、按首次出现排序」，两种留下方式都满足前一句与第三句，`resize-covers` 留哪一句就成了没有规定的选择。
+三个边界由规约自己覆盖。输入为空时没有标识，输出是空列表。同一个标识重复提交而标题相同，输出里仍只有一项。同一个标识重复提交而标题不同，输出留第一次的那一句——第二句在这里起作用；规约若漏掉标题的要求，只留下「每个标识各一项、按首次出现排序」，两种留下方式都满足剩下的要求，`resize-covers` 留哪一句就成了没有规定的选择。
 
 ## 一个反例推翻整条保证
 
@@ -65,7 +65,7 @@ print(dedupe(tasks))
 
 先看循环每一轮开始时的状态。把每一轮开头的下标与字典打印出来：
 
-```python run id="data-and-computation.correctness-and-counterexamples.loop-state"
+```python run id="data-algorithms-and-scale.correctness-and-counterexamples.loop-state"
 tasks = [
     ("resize-covers", "Resize cover images"),
     ("send-digest",   "Send weekly digest"),
@@ -105,17 +105,12 @@ print(dedupe(tasks))
 
 终止依赖循环体里那一句推进。`i += 1` 若被漏掉，`len(tasks) - i` 不再下降，`i < len(tasks)` 一直为真，循环不再结束。不变量在每一轮开头仍然成立，终止的主张却不成立。
 
-## 回到那批任务
-
-开头那段脚本对每个输入的保证是：每个标识留一项、留第一次提交的标题、按首次出现的顺序排列。开头那批任务里，`resize-covers` 第三次提交带着 `Resize cover images, retry`，脚本返回的正是这一句，第二句在这个输入上为假，它不满足规约；这一项就是推翻整条保证的反例。
-
-把写入放进「标识不在字典里」这一判断，只有该标识第一次出现时才写，同一批任务这一次返回 `Resize cover images`。改动只有这一处：从每项都写入，变成只在该标识第一次出现时写入。循环的不变量从此说的是「已经处理过的任务里每个标识对应到它第一次出现的标题」，下标每轮加一，终止的理由没有变。
 
 ## 练习
 
 两份实现都按标识去重，同一份规约是：每个标识恰好留一项，标题取该标识第一次出现时的那一句，各项按首次出现的顺序排列。哪一份在什么输入上违反规约？给出那个输入，以及同一输入下两份输出各自的内容。
 
-```python run id="data-and-computation.correctness-and-counterexamples.exercise-dedupe"
+```python run id="data-algorithms-and-scale.correctness-and-counterexamples.exercise-dedupe"
 def dedupe_a(tasks):
     seen = set()
     result = []

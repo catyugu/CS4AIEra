@@ -1,6 +1,6 @@
 ---
-id: data-and-computation.from-problem-to-computation
-slug: /data-and-computation/from-problem-to-computation
+id: data-algorithms-and-scale.from-problem-to-computation
+slug: /data-algorithms-and-scale/from-problem-to-computation
 order: 10
 title: 先把需求变成计算问题
 status: published
@@ -33,7 +33,7 @@ objectives:
 
 两类操作的代价随它们各自发生多少次累积。筛选发生一次，就把每条记录看一遍。按标识从头查找，找列表里靠后的记录要先看过它前面的每一条——把每条记录各打开一次，定位的查看次数就是各条所在位置之和。同一批记录，筛选做一次和定位做很多次，得到的工作量完全不同。把这两类操作在同一批记录上各数一遍，再把记录换成更大的一批，查看次数分别变成多少？
 
-```python run id="data-and-computation.from-problem-to-computation.work-counts"
+```python run id="data-algorithms-and-scale.from-problem-to-computation.work-counts"
 base = [
     ("m-101", "2024-05-02", "gain 2", True,  0.012),
     ("m-102", "2024-05-02", "gain 4", True,  0.008),
@@ -98,7 +98,7 @@ for label, records in (("records", base), ("records with 6 more", base + more)):
 
 这段话对要求做了哪些没被确认的假设？逐条指出，并说明要求要补上什么，才能判断这个方案是否成立。下面一段代码把方案里的两类操作各数了一遍。
 
-```python run id="data-and-computation.from-problem-to-computation.exercise-scan-count"
+```python run id="data-algorithms-and-scale.from-problem-to-computation.exercise-scan-count"
 records = []
 for index in range(50):
     records.append((index, "gain 2" if index % 5 else "gain 4"))

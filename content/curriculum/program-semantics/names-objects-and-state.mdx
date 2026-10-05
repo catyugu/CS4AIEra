@@ -2,7 +2,7 @@
 id: program-semantics.names-objects-and-state
 slug: /program-semantics/names-objects-and-state
 order: 20
-title: 名字、对象与状态
+title: 名字、对象与可变状态
 status: published
 objectives:
   - 说明赋值之后名字与对象的关系，以及对象的身份、类型与可变性各自是什么
@@ -76,7 +76,7 @@ print("batches is working:", batches is working)
 print("batches[0] is working[0]:", batches[0] is working[0])
 ```
 
-`list(batches)` 建出一个新的外层列表，`batches is working` 打印 `False`；元素位置上的引用被原样复制，`batches[0] is working[0]` 打印 `True`，两个位置的第一个批次是同一个列表。给 `working[0]` 追加读到的 `0.97` 同时出现在 `batches[0]` 里：这次复制隔离的只有外层容器。改动发生在批次内部的元素上时，浅拷贝不够；要隔离到那一层，需要<Term id="deep-copy">深拷贝</Term>：递归复制可达的子对象，让副本持有自己的那一份。
+`list(batches)` 建出一个新的外层列表，`batches is working` 打印 `False`；元素位置上的引用被原样复制，`batches[0] is working[0]` 打印 `True`，两个位置的第一个批次是同一个列表。给 `working[0]` 追加读到的 `0.97` 同时出现在 `batches[0]` 里：这次复制隔离的只有外层容器。如果需要独立修改第一个批次，还要为这个批次新建列表。只复制外层列表不会隔离内部列表的修改。需要递归复制时可查阅<Term id="deep-copy">深拷贝</Term>词条。
 
 ## 共享在什么时候成为缺陷
 

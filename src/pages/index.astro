@@ -23,16 +23,15 @@ function lessonCount(node: CourseTreeNode): number {
 
 <CourseLayout
   title="CS4AIEra"
-  description="AI 时代开发者必需的最小计算机科学基础知识：面向没有系统计算机科学背景的技术自学者。"
+  description="面向 AI 辅助开发的最小计算机科学知识体系，面向没有系统计算机科学背景的技术自学者。"
 >
   <article class="prose course-index">
-    <h1>AI 时代开发者必需的最小计算机科学基础知识</h1>
+    <h1>CS4AIEra：AI 时代的计算机科学基础</h1>
+    <p>面向 AI 辅助开发的最小计算机科学知识体系</p>
     <p>
       一门面向没有系统计算机科学背景的技术自学者的计算机科学课程。课程假定读者具备专业级的技术推理能力，
       但不假定有正式的 CS 背景或者前置知识。
     </p>
-    {first && <p class="start"><a href={`${first.slug}/`}>开始阅读：{first.title}</a></p>}
-
     <ul class="module-list">
       {
         modules.map((node) => {

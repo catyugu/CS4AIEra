@@ -1,20 +1,20 @@
 ---
-id: data-and-computation.hierarchy-relations-and-dependencies
-slug: /data-and-computation/hierarchy-relations-and-dependencies
+id: data-algorithms-and-scale.hierarchy-relations-and-dependencies
+slug: /data-algorithms-and-scale/hierarchy-relations-and-dependencies
 order: 70
-title: 层次、关系与依赖怎样表示
+title: 树、图与依赖关系
 status: published
 objectives:
   - 说明唯一根、唯一上级与从根可达三者合起来才形成树，以及一般图比树多表达了哪些关系
   - 说明一次操作要经过多少层由什么决定
-  - 判断两个位置是否可达，并区分「经过的位置最少」与「总代价最低」两个不同的问题
+  - 沿有向边判断哪些任务可达
   - 说明依赖被用来定义一个必须先后完成的执行顺序时，环意味着什么
 ---
-一个发布项目把九个任务按「谁属于谁」组织起来：顶层是 `project`，它下面有 `design`、`build`、`verify` 三个子任务，`design` 下面又有 `mockups` 与 `spec`，其余同理。这九个任务之间还写着第二种关系——某个任务只能在另一个任务完成之后才能开始。按这些先后关系整理一份完成顺序时，清单停在了半路：参与依赖的五个任务里只排出 `mockups`、`spec`、`code`，`assets` 与 `tests` 一直没被排出，这份依赖没有一份能满足全部约束的完整顺序。同一批任务上的两种关系，形状并不一样；排出顺序失败另有原因，与任务数量无关。
+一个发布项目把九个任务按「谁属于谁」组织起来：顶层是 `project`，它下面有 `design`、`build`、`verify` 三个子任务，`design` 下面又有 `mockups` 与 `spec`，其余同理。这九个任务之间还写着第二种关系——某个任务只能在另一个任务完成之后才能开始。按这些先后关系整理一份完成顺序时，清单停在了半路：参与依赖的五个任务里只排出 `mockups`、`spec`、`code`，`assets` 与 `tests` 一直没被排出，这份依赖没有一份能满足全部约束的完整顺序。同一批任务上的两种关系表达的含义不同；排出顺序失败另有原因，与任务数量无关。
 
 ## 归属关系是一棵树
 
-除顶层的 `project` 之外，每个任务都属于恰好一个上级，这就是归属关系。这样的关系排出来是一棵树：一个没有上级的根，其余每个节点恰好一个上级，从根沿归属方向能走到每个节点，并且沿着走不会绕回自己。这样的关系要同时满足三件事才排成一棵树：有一个没有上级的根，其余每个节点恰好一个上级，从根沿归属方向能走到每个节点。唯一上级这一条只保证每个节点至多一个上级——两个任务互相把对方记成上级，各自也都只有一个上级——要靠「唯一根 + 从根可达」补上，沿上级往上走才一定停在根上，绕不回自己。
+这里的树是有根的层次结构：根没有上级，其余每个节点恰好有一个上级，从根沿父子关系能到达全部节点。这些条件共同保证沿上级追溯会停在根，不会绕回自己。只有“每个节点至多一个上级”还不够，两个节点互为上级也满足这一个条件，却形成了环。
 
 ```text
 project
@@ -30,7 +30,7 @@ project
 
 把每个任务的上级记下来，再沿上级往上走到顶层：
 
-```python run id="data-and-computation.hierarchy-relations-and-dependencies.layers"
+```python run id="data-algorithms-and-scale.hierarchy-relations-and-dependencies.layers"
 parent = {
     "project": None,
     "design": "project",
@@ -59,7 +59,7 @@ for task in sorted(parent):
 
 从依赖的边能问「可达」：从一个任务出发，沿边的方向一连串走下去，能到达的任务就是它可达的任务。可达只沿边的方向成立——`mockups` 是 `assets` 的前置，从 `mockups` 沿边走到得了 `assets`，反过来不成立。
 
-```python run id="data-and-computation.hierarchy-relations-and-dependencies.reachable"
+```python run id="data-algorithms-and-scale.hierarchy-relations-and-dependencies.reachable"
 requires = {
     "mockups": [],
     "spec": ["mockups"],
@@ -91,30 +91,12 @@ for start in ("mockups", "code", "tests"):
 
 从 `mockups` 出发能沿依赖走到全部五个任务；从 `code` 出发只到得了 `code`、`tests`、`assets`；从 `tests` 出发只到得了 `tests` 与 `assets`。方向决定可达的范围：`tests` 与 `assets` 互相可达，两者却都到不了 `mockups`。
 
-## 经过的位置最少与总代价最低
-
-两个任务之间常常不止一条依赖链。给每个任务记一个天数，同一对任务的两条链会给出两个不同问题的答案。
-
-```python run id="data-and-computation.hierarchy-relations-and-dependencies.route-cost"
-days = {"mockups": 1, "spec": 1, "code": 1, "assets": 9, "tests": 1}
-routes = {
-    "mockups spec code tests": ["mockups", "spec", "code", "tests"],
-    "mockups assets tests": ["mockups", "assets", "tests"],
-}
-for name, route in routes.items():
-    total = 0
-    for task in route:
-        total += days[task]
-    print(name, "positions:", len(route), "total days:", total)
-```
-
-`mockups` 到 `tests` 有两条链：`mockups`、`spec`、`code`、`tests` 经过 4 个任务、共 4 天；`mockups`、`assets`、`tests` 经过 3 个任务、共 11 天。经过的位置最少的是后者（3 个），总代价最低的是前者（4 天）。「经过的位置最少」与「总代价最低」是两个不同的问题，答案可以落在两条不同的链上：一条链短，不等于它沿途的花费少。
 
 ## 依赖排不出顺序时
 
 要把依赖关系变成一份能照着做的顺序，可以反复挑一个「前置都已经排在前面」的任务放到末尾。这组依赖里 `assets` 与 `tests` 互相等待，这个过程会停在半路。
 
-```python run id="data-and-computation.hierarchy-relations-and-dependencies.order"
+```python run id="data-algorithms-and-scale.hierarchy-relations-and-dependencies.order"
 requires = {
     "mockups": [],
     "spec": ["mockups"],
@@ -155,15 +137,12 @@ print("one dependency removed:", order, "left over:", left)
 
 按给定的依赖排，只排出 `mockups`、`spec`、`code`，留下 `assets` 与 `tests`：`assets` 等 `tests`，`tests` 又等 `assets`，两条边互相等待，谁都不能先排。这组依赖含一个<Term id="cycle">环</Term>，所以一份满足全部依赖的完整顺序不存在；这与任务数量无关。去掉 `assets` 等 `tests` 这一条依赖，同样的挑法排完全部五个任务，得到 `mockups`、`assets`、`spec`、`code`、`tests`。这样挑出的顺序就是一个<Term id="topological-order">拓扑序</Term>：每个任务都排在它的全部前置之后。
 
-## 回到这份数据
-
-开头那九个任务上压着两种关系。归属关系是一棵树：唯一上级、唯一根，且从根沿归属方向能走到每个节点，因此它连成一片也绕不回自己；任何两个任务都能沿上级走到共同的顶层，一次「找到所属顶层任务」的操作经过的层数等于深度。依赖关系是一张有向图：一个任务能有多个前置，能与归属上无关的任务相连，能互相到达，也能出现树里不可能出现的环。开头清单排不完，原因就是那个环——`assets` 与 `tests` 互相等待，一整份顺序无法存在。两种关系不能互相代替：树上的父子不表示先后，依赖上的先后也不表示归属。
 
 ## 练习
 
 一份阶段计划把它排不出完整完成顺序解释为「需要处理的阶段太多」。下面这一格把它的前置关系排一遍。判断标准：停滞时逐个看剩下的阶段，它的未完成前置是否都落在剩下的阶段里。
 
-```python run id="data-and-computation.hierarchy-relations-and-dependencies.exercise-cycle"
+```python run id="data-algorithms-and-scale.hierarchy-relations-and-dependencies.exercise-cycle"
 requires = {
     "build": ["fetch"],
     "config": [],
