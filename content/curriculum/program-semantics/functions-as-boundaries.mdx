@@ -10,166 +10,202 @@ objectives:
   - 指出一个函数在什么输入下会失败，以及失败以什么形式出现
   - 写出一条可以在函数入口检查的前置条件
 ---
-一个 Agent 交来一个订单处理函数，说明写着 `order_total(lines)` 返回一单的应付总额。这个 Agent 连续跑了两单：第一单有一条单价 10.0 的两件、一条单价 5.0 的一件，返回 25.0；第二单只有一条单价 20.0 的一项，返回的却是 45.0。两次调用传入的是两个互不相干的列表，签名里也只有 `lines` 一个参数，第二单的结果里却含进了第一单的金额。
+一份实验记录里有一串读数 `[12.5, 8.0, 15.5]`。校准要把每个读数减掉一个固定偏移，再按最大读数缩放，使最大的那条变成 1.0。同一个文件里写了两个函数做这件事：`normalize_in_place(readings)` 直接改写传进来的列表，`normalized(readings)` 返回一份新列表。同一串读数先交给前者，再交给后者，第二次调用读到的已经不是原来的数。
 
-```python
-def order_total(lines, seen=[]):
-    seen.extend(lines)
-    total = 0.0
-    for price, quantity in seen:
-        total += price * quantity
-    return total
-```
-
-缺陷不在这段加法。`seen` 的默认值是一个列表，它不属于任何一次调用；两次调用在同一个列表上累积，第二次读到的是第一次留下的商品。签名只列出 `lines`，行为却从这个签名看不出的对象上读写数据。
-
-要在一个陌生函数上作出判断，边界上有四件事要读出来：它要求什么输入、返回什么、会不会修改传入对象或其他调用者可观察的状态、失败时怎么办。这四件事合起来是函数的规约（<Term id="specification">规约</Term>）。`order_total` 同时是 `def` 与 `return` 的第一个样本，读它需要先弄清这两者各做什么。
+要决定用哪一个，先读出函数边界上的几件事：它要求什么输入、返回什么、会不会修改传入对象或其他调用者可观察的状态、会不会读取签名之外的量、失败时怎么办。这些合起来是函数的规约（<Term id="specification">规约</Term>）。`normalize_in_place` 与 `normalized` 也是 `def` 与 `return` 的样本，读它们先要弄清这两者各做什么。
 
 ## 定义、调用与返回值
 
-`def order_total(lines, seen=[])` 执行时建立一个函数对象，并把它绑定到名字 `order_total`，函数体由缩进界定。调用 `order_total(first)` 时，实参表达式先求值得到对象，再按位置绑定到形参名；函数体执行到 `return total`，这个表达式的值成为整个调用表达式的值。`return` 同时结束这次调用，它之后的语句不再执行；函数体走到末尾仍没有 `return` 时，调用得到 `None`。
+`def reading_at(readings, index)` 执行时建立一个函数对象，并把它绑定到名字 `reading_at`，函数体由缩进界定。调用 `reading_at(record, 0)` 时，实参表达式先求值得到对象，再按位置绑定到形参名；函数体执行到 `return readings[index]`，这个表达式的值成为整个调用表达式的值。`return` 同时结束这次调用，它之后的语句不再执行；函数体走到末尾仍没有 `return` 时，调用得到 `None`。
 
 ```python run id="program-semantics.functions-as-boundaries.return"
-def line_total(lines, index):
-    if index >= len(lines):
-        return 0.0
-    price, quantity = lines[index]
-    return price * quantity
+def reading_at(readings, index):
+    if index >= len(readings):
+        return None
+    return readings[index]
 
 
-lines = [(10.0, 2), (5.0, 1)]
-print(line_total(lines, 0))
-print(line_total(lines, 1))
-print(line_total(lines, 5))
-print(line_total(lines, index=0))
+record = [12.5, 8.0, 15.5]
+print(reading_at(record, 0))
+print(reading_at(record, 1))
+print(reading_at(record, 5))
+print(reading_at(record, index=0))
 ```
 
-`line_total(lines, 5)` 走 `if` 里的 `return 0.0`，函数在那里结束，后面两行不再执行。实参可以按位置给出，也可以写成 `index=0` 按参数名给出，两种写法把同一个对象绑定到同一个形参。
+`reading_at(record, 5)` 走 `if` 里的 `return None`，函数在那里结束，后面一行不再执行，这次调用得到 `None`。实参可以按位置给出，也可以写成 `index=0` 按参数名给出，两种写法把同一个对象绑定到同一个形参。
 
 ## 形参是实参对象的另一个名字
 
-绑定不给对象做副本：形参是实参对象的别名（<Term id="alias">别名</Term>），与赋值语句的语义一致（<CrossRef id="program-semantics.names-objects-and-state" />）。一次调用里，函数体对形参名做两种不同的操作，效果落在不同的地方。对形参指向的对象做原地修改，改的是调用方手里的同一个对象；把形参名重新绑定到一个新对象，只改变这次调用内部的名字。
+绑定不给对象做副本：形参是实参对象的别名（<Term id="alias">别名</Term>），与赋值语句的语义一致（<CrossRef id="program-semantics.names-objects-and-state" />）。一次调用里，函数体对形参名做两种不同的操作，改动的对象不同：对形参指向的对象做原地修改，改的是调用方手里的同一个对象；把形参名重新绑定到一个新对象，只改变这次调用内部的名字。
 
 ```python run id="program-semantics.functions-as-boundaries.binding"
-def sort_lines(lines, ascending=True):
-    lines.sort()
-    ascending = not ascending
-    print("inside, ascending =", ascending)
-    return lines
+def sort_readings(readings, descending=False):
+    readings.sort()
+    descending = not descending
+    print("inside, descending =", descending)
+    return readings
 
 
-lines = [(10.0, 2), (5.0, 1)]
-original = lines
-ascending = True
-sort_lines(lines)
-print("caller sees:", lines)
-print("same object:", lines is original)
-print("caller's ascending =", ascending)
+record = [12.5, 8.0, 15.5]
+original = record
+descending = False
+sort_readings(record)
+print("caller sees:", record)
+print("same object:", record is original)
+print("caller's descending =", descending)
 ```
 
-`lines.sort()` 按每对的第一个元素（单价）原地重排，调用方的 `lines` 与 `original` 都观察到新的顺序，`lines is original` 仍为真。`ascending = not ascending` 只把这次调用的形参名绑到新值 `False`，函数返回后调用方的 `ascending` 仍是 `True`。一次调用有它自己的局部名字：函数体里对名字赋值建立的就是这种名字，它随这次调用结束而消失，调用方看不到。一次调用会不会改动调用方手里的对象，取决于函数体对那个对象做了什么；签名正面列出的参数只是一个起点。
+`readings.sort()` 按大小原地重排，调用方的 `record` 与 `original` 都观察到新的顺序，`record is original` 仍为真。`descending = not descending` 只把这次调用的形参名绑到新值 `True`；函数返回后调用方的 `descending` 仍是 `False`。一次调用有它自己的局部名字：函数体里对名字赋值建立的就是这种名字，它随这次调用结束而消失，调用方看不到。一次调用会不会改动调用方手里的对象，取决于函数体对那个对象做了什么；签名正面列出的参数只是一个起点。
 
-## 默认值在定义时建立
+## 改写列表，还是返回新列表
 
-`seen=[]` 里的 `[]` 在 `def` 语句执行时求值一次，结果存进函数对象；此后每次省略 `seen` 的调用都绑定到这同一个列表。省略实参的调用之间因此共享它，第一次写入的内容会流入第二次。
+`normalize_in_place` 与 `normalized` 对同一串读数得到同一个结果，边界上的差别决定调用方拿到什么。两个函数都读模块顶层的 `CALIBRATION_OFFSET`，它不在任何一个签名里，改变它会同时改变两个函数的输出。
 
-```python run id="program-semantics.functions-as-boundaries.default"
-def order_total(lines, seen=[]):
-    seen.extend(lines)
-    total = 0.0
-    for price, quantity in seen:
-        total += price * quantity
-    return total
+```python run id="program-semantics.functions-as-boundaries.normalize"
+CALIBRATION_OFFSET = 0.5
 
 
-print(order_total([(10.0, 2), (5.0, 1)]))
-print(order_total([(20.0, 1)]))
-print(order_total([(1.0, 1)]))
-print("stored default:", order_total.__defaults__)
+def normalize_in_place(readings):
+    largest = 0.0
+    index = 0
+    while index < len(readings):
+        readings[index] = readings[index] - CALIBRATION_OFFSET
+        if readings[index] > largest:
+            largest = readings[index]
+        index += 1
+    index = 0
+    while index < len(readings):
+        readings[index] = readings[index] / largest
+        index += 1
+
+
+def normalized(readings):
+    corrected = []
+    largest = 0.0
+    for reading in readings:
+        value = reading - CALIBRATION_OFFSET
+        corrected.append(value)
+        if value > largest:
+            largest = value
+    scaled = []
+    for value in corrected:
+        scaled.append(value / largest)
+    return scaled
+
+
+raw = [12.5, 8.0, 15.5]
+kept = list(raw)
+print(normalize_in_place(raw))
+print(raw)
+print(normalized(kept))
+print(kept)
 ```
 
-三次调用返回 25.0、45.0、46.0，因为每次都在同一个列表上 `extend`；`order_total.__defaults__` 直接显示保存在函数对象上的那个列表，末尾已经累积了三次调用的全部商品。要让默认参数不跨调用共享，用 `None` 作为「未提供」的标记，在函数体内新建容器：
+`normalize_in_place(raw)` 在这次调用里改写 `raw` 本身，调用表达式得到的值是 `None`；`raw` 打印出来已经是缩放后的三个数。`normalized(kept)` 返回一份新列表，打印出同样的三个数，`kept` 保持 `[12.5, 8.0, 15.5]`：调用方手里那个列表的内容没有改变。
 
-```python
-def order_total(lines, seen=None):
-    if seen is None:
-        seen = []
-    seen.extend(lines)
-    total = 0.0
-    for price, quantity in seen:
-        total += price * quantity
-    return total
-```
+对于同样的业务，两个函数给出不同的答案：
 
-默认值 `None` 是不可变对象，每次省略实参都在这次调用里新建一个列表；跨调用共享只发生在调用方自己传入同一个列表的时候。回到开头那个函数，`seen` 从未出现在任何一次调用的实参里，跨调用保留商品，正是默认值属于函数对象这一条的直接结果。
+- 要求的输入：一串数值读数，且至少有一条高于 `CALIBRATION_OFFSET`，否则没有可用的缩放比值。
+- 返回什么：`normalize_in_place` 没有 `return`，这次调用得到 `None`；`normalized` 返回一份新列表，缩放后的比值都在里面。
+- 会不会修改传入对象：`normalize_in_place` 会，调用之后调用方的列表本身就是缩放后的数；`normalized` 不会。
+- 依赖签名之外的量：两个都读 `CALIBRATION_OFFSET`，它不出现在签名里，改它两个函数一起变。
+- 失败时怎么办：非数值读数在函数体第一次被当成合法值使用时抛出异常，入口不做检查。
 
-## 非法输入从哪里暴露
+## 非法输入在哪里失败
 
-规约要说明哪些输入被允许；非法输入下发生什么，属于接口约定的一部分。Python 不按注解做调用时的类型检查，非法输入通常不会在入口停下，而是在函数体第一次把它当合法值使用的位置抛出一个异常，落点由实现决定。
+规约说明哪些输入被允许；非法输入下发生什么，属于接口约定的一部分。Python 不按注解做调用时的类型检查，非法输入通常不会在函数入口停下：函数体第一次把它当合法值使用时抛出异常，具体在哪一步停下由实现决定。
 
 ```python run id="program-semantics.functions-as-boundaries.failure"
-def order_total(lines, discount=0.0):
-    total = 0.0
-    for price, quantity in lines:
-        total += price * quantity
-    return total * (1 - discount)
+CALIBRATION_OFFSET = 0.5
 
 
-print(order_total([], 0.0))
-print(order_total([(10.0, 2)], 1.5))
-print(order_total([(10.0, "two")], 0.0))
+def normalized(readings):
+    corrected = []
+    largest = 0.0
+    for reading in readings:
+        value = reading - CALIBRATION_OFFSET
+        corrected.append(value)
+        if value > largest:
+            largest = value
+    scaled = []
+    for value in corrected:
+        scaled.append(value / largest)
+    return scaled
+
+
+print(normalized([12.5, 8.0, 15.5]))
+print(normalized([12.5, "8.0"]))
 ```
 
-最后一行会失败，这正是这一段要展示的落点：前两次调用正常结束，第三次在函数体内部停下。
+第一次调用正常结束。第二次在 `value = reading - CALIBRATION_OFFSET` 这一步抛出 `TypeError`，字符串与浮点数不能相减；这条输入违反「每个读数是数值」。异常在函数体内部抛出：签名上只有 `readings`，看不出失败会发生在哪一步。
 
-`order_total([], 0.0)` 返回 `0.0`，空列表是合法输入。`order_total([(10.0, 2)], 1.5)` 返回 `-10.0`，一个不报错、也没有意义的负数：`discount` 的取值范围是一条前置条件（<Term id="precondition">前置条件</Term>），这个实现没有约束它。`order_total([(10.0, "two")], 0.0)` 在 `price * quantity` 这一步抛出 `TypeError`，浮点数不能与 `"two"` 相乘；这条输入违反「元素可以相乘求和」。
-
-把前置条件写进函数入口，实现就能主动拒绝非法输入，给出带类型与消息的失败：
+「至少一条读数高于 `CALIBRATION_OFFSET`」是可以在入口检查的前置条件（<Term id="precondition">前置条件</Term>）。把它写进函数入口，实现就能在读到数据之前拒绝这一类输入，给出带类型与消息的失败：
 
 ```python
-def order_total_checked(lines, discount=0.0):
-    if not lines:
-        raise ValueError("order_total requires at least one line")
-    if not 0.0 <= discount <= 1.0:
-        raise ValueError("discount must be between 0 and 1")
-    total = 0.0
-    for price, quantity in lines:
-        total += price * quantity
-    return total * (1 - discount)
+CALIBRATION_OFFSET = 0.5
+
+
+def normalized_checked(readings):
+    scale = 0.0
+    for reading in readings:
+        value = reading - CALIBRATION_OFFSET
+        if value > scale:
+            scale = value
+    if scale <= 0.0:
+        raise ValueError("normalized needs a reading above CALIBRATION_OFFSET")
+    result = []
+    for reading in readings:
+        result.append((reading - CALIBRATION_OFFSET) / scale)
+    return result
 ```
 
-空列表与超出 $[0, 1]$ 的折扣在入口被拒绝，失败带上说明它要求什么的消息；元素不能相乘这一类仍然在 `price * quantity` 处抛出 `TypeError`，入口检查只覆盖写下来的那几个条件。要让入口拒绝每一类非法输入，检查就要覆盖规约里不接受的每一类输入。
+`normalized_checked` 在入口先扫一遍求出缩放比值；读数全不高于 `CALIBRATION_OFFSET` 时，比值停在 `0.0`，这次调用在 `raise` 处停下，失败带一条说明它要求什么的消息。空列表落进同一类：没有读数高于偏移，函数还没读数据就被拒绝。入口检查只覆盖写下来的那几类输入，元素不是数值这一类仍在 `value = reading - CALIBRATION_OFFSET` 处抛 `TypeError`。
 
-## 订单函数边界上的四件事
+## 藏在默认值里的共享状态
 
-开头那个 `order_total` 的四件事可以逐项读出。
+签名之外的共享状态还有一种写得更隐蔽：形参的默认值是一个可变对象。`history=[]` 里的 `[]` 在 `def` 语句执行时求值一次，结果存进函数对象；此后每次省略 `history` 的调用都绑定到这同一个列表，前一次写入的内容流入后一次。
 
-- 要求的输入：`lines` 是可迭代的 `(price, quantity)` 对，`price * quantity` 可以相加求和。
-- 返回什么：说明写成「一单的总额」，实际返回的是累积到当前调用为止全部商品的总额，第二次调用把上一次的商品一起算了进去。
-- 会不会修改其他调用者可观察的状态：会。它 `extend` 的是函数对象上的 `seen` 列表，读取 `order_total.__defaults__` 就能看到这次写入，而签名里没有 `seen`。
-- 失败时怎么办：`lines` 为空时返回当前累积值，不会失败；元素不能相乘时在 `price * quantity` 处抛出 `TypeError`。
+```python run id="program-semantics.functions-as-boundaries.default"
+CALIBRATION_OFFSET = 0.5
 
-把这四处读出来，才能决定要不要用这个函数：返回值的含义与说明写的不一致，一次调用会改动下一次调用读到的状态，非法输入下既不拒绝也不给出可辨认的错误。
+
+def running_total(reading, history=[]):
+    history.append(reading - CALIBRATION_OFFSET)
+    total = 0.0
+    for value in history:
+        total += value
+    return total
+
+
+print(running_total(12.5))
+print(running_total(8.0))
+print(running_total(15.5))
+```
+
+第二次调用返回 19.5，把第一次的 12.0 一起算了进去；第三次返回 34.5。`history` 属于函数对象，不属于任何一次调用，签名上的 `history=[]` 看不出这一点。要让每次调用拿到各自的列表，用 `None` 作为「未提供」的标记，在函数体内新建列表。
 
 ## 练习
 
-一个订单模块里有下面这个函数，签名看不出它的全部行为。逐项说出：它要求 `items` 是什么输入、一次调用会不会修改签名之外的状态（会的话，通过哪几条路径）、在什么输入下失败、失败以什么形式出现；换输入就在这一格里改。
+下面这个函数来自同一份实验记录，签名看不出它的全部行为。逐项说出：它要求 `readings` 是什么输入、一次调用会不会修改签名之外的状态（会的话，通过哪几条路径）、在什么输入下失败、失败以什么形式出现。
 
-```python run id="program-semantics.functions-as-boundaries.exercise-cheapest"
-lookups = []
-
-
-def cheapest(items, limit=3, seen=[]):
-    lookups.append(limit)
-    seen.append(len(items))
-    ranked = sorted(items)
-    return ranked[:limit]
+```python run id="program-semantics.functions-as-boundaries.exercise-clipped"
+audit = []
 
 
-print(cheapest([(10.0, "book"), (5.0, "pen")]))
-print(cheapest([(20.0, "bag")]))
-print("stored default", cheapest.__defaults__)
-print("lookups", lookups)
+def clipped(readings, upper=20.0, seen=[]):
+    audit.append(len(readings))
+    seen.append(upper)
+    result = []
+    for reading in readings:
+        if reading > upper:
+            result.append(upper)
+        else:
+            result.append(reading)
+    return result
+
+
+print(clipped([12.5, 8.0, 15.5]))
+print(clipped([25.0]))
+print("audit", audit)
 ```
 
-判据是「这次调用有没有改动签名之外的东西」，以及「哪一类输入第一次被当成合法值使用」。

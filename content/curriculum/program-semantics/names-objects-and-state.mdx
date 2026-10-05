@@ -10,127 +10,106 @@ objectives:
   - 预测一次就地修改之后另一个名字看到什么
   - 说明共享状态在什么情况下成为缺陷
 ---
+一批测量样本存成一串：`samples = [0.91, 1.03]`。分析要在同一串样本上补一个复核值，于是写下 `analysis_view = samples`，接着 `analysis_view.append(0.97)`，再打印 `samples`，读到的是 `[0.91, 1.03, 0.97]`。只对 `analysis_view` 做了一次追加，`samples` 的内容跟着变了。
 
-项目看板把同一批待办放在两处显示。看板这样开始：`pending = ["parse", "render"]`，工作台要显示同一批待办，于是写下 `board = pending`。当天往 `board` 追加一项 `"review"`，再打印 `pending`，得到 `['parse', 'render', 'review']`。只对 `board` 做了一次追加，`pending` 的内容也跟着变了。
-
-两句赋值看起来都在给一个列表取名。只有第一句创建了列表，第二句把另一个名字接到一个已经存在的对象上。要解释后来的追加为什么同时出现在两个名字下，先分开两件事：一条赋值语句改变的是名字的指向，一次追加改的是对象自身。
+两句赋值看起来都在给一串样本取名。第一句求值右边的列表字面量，创建出一个列表对象，把 `samples` 绑定到它；第二句只把 `analysis_view` 绑定到同一个对象，没有创建第二个列表。要说明那次追加为什么同时出现在两个名字下，先把两件事分开：一次赋值改变名字指向哪个对象，一次追加改变对象自身。
 
 ## 赋值改变名字的指向
 
 `name = expr` 分两步执行：先求值 `expr`，得到一个对象；再把当前命名空间中的 `name` 绑定到这个对象。执行前后没有任何对象被改写。读取一个名字，取回它当前指向的那个对象。
 
-对象有三个彼此独立的属性。身份（identity）在对象的整个存活期内不变，两个同时存活的对象身份不同，`id(x)` 给出与身份对应的整数；类型（type）决定这个对象支持哪些操作；值是这些操作读到和写入的内容。可变性落在值这一侧：一个对象是否提供改写自身内容的操作，决定了它创建之后能否被就地修改。
+对象有三个彼此独立的属性。身份（identity）在对象的整个存活期内不变，`is` 判断两个名字是否指向同一个对象；类型（type）决定这个对象提供哪些操作；值是这些操作读到和写入的内容。可变性由类型决定：类型里有没有改写自身内容的操作，决定一个对象创建之后能不能被就地修改。
 
-`pending = ["parse", "render"]` 求值右边的字面量，创建出一个列表对象，再把 `pending` 绑定到它。`board = pending` 只把 `board` 绑定到同一个对象，没有创建第二个列表；两个名字指向同一个对象，互为<Term id="alias">别名</Term>。
-
-按操作落在名字上还是对象上，涉及名字的语句分成两类：
+`analysis_view = samples` 把两个名字绑到同一个对象，它们互为<Term id="alias">别名</Term>。涉及名字的语句分成两类：
 
 | 操作 | 形式 | 效果 |
 | --- | --- | --- |
 | 修改对象 | `x.append(v)`、`x.sort()`、`x[k] = v` | 指向该对象的所有名字看到的内容都改变 |
 | 重绑定名字 | `x = expr` | 只有被重新绑定的那个名字改变指向 |
 
-`board.append("review")` 落在对象上，`pending` 与 `board` 同时看到这次追加。`board = ["translate"]` 落在名字上：右边求值创建一个新列表，`board` 换指它，`pending` 仍指向原列表。
+`analysis_view.append(0.97)` 修改对象，`samples` 与 `analysis_view` 同时看到这次追加。`analysis_view = [0.87]` 重绑定名字：右边求值创建一个新列表，`analysis_view` 换指它，`samples` 仍指向原列表。
 
 ```python run id="program-semantics.names-objects-and-state.alias"
-pending = ["parse", "render"]
-board = pending
-board.append("review")
-print("pending:", pending)
-print("board:", board)
-print("pending is board:", pending is board)
-print("id(pending) == id(board):", id(pending) == id(board))
+samples = [0.91, 1.03]
+analysis_view = samples
+analysis_view.append(0.97)
+print("samples:", samples)
+print("analysis_view:", analysis_view)
+print("samples is analysis_view:", samples is analysis_view)
 
-board = ["translate"]
-print("pending:", pending)
-print("board:", board)
-print("pending is board:", pending is board)
-print("type(pending):", type(pending).__name__)
+analysis_view = [0.87]
+print("samples:", samples)
+print("analysis_view:", analysis_view)
+print("samples is analysis_view:", samples is analysis_view)
 ```
 
-`board = pending` 之后，`board.append("review")` 修改的正是 `pending` 指向的那个列表，两个名字读到同一个 `['parse', 'render', 'review']`；`pending is board` 与 `id(pending) == id(board)` 都打印 `True`，说明它们是同一个对象。`board = ["translate"]` 之后 `board` 指向一个新列表，`pending` 不变，`pending is board` 变为 `False`。名字本身不携带类型；`type(pending)` 给出 `list`，对象的类型决定能对它做哪些操作。
+`analysis_view = samples` 之后，`analysis_view.append(0.97)` 追加的正是 `samples` 指向的那个列表，两个名字读到同一个 `[0.91, 1.03, 0.97]`；`samples is analysis_view` 打印 `True`。`analysis_view = [0.87]` 之后 `analysis_view` 指向一个新列表，`samples` 仍是 `[0.91, 1.03, 0.97]`，`samples is analysis_view` 变为 `False`。
 
 ## 有些对象可以被就地修改，有些不能
 
-`int`、`float`、`str`、`tuple` 不提供改写自身内容的操作。看起来在修改它们的语句，都先算出一个值，再把这个值绑定回名字；原来的对象内容没有变化。`task_id = "t-01"` 之后执行 `task_id = task_id + "-b"`：`"t-01" + "-b"` 求值得到另一个字符串对象，`task_id` 换指它，原来的 `"t-01"` 没有被改写。
+`int`、`float`、`str`、`tuple` 的类型里没有改写自身内容的操作。看起来在修改它们的语句，都先算出一个新值，再把这个值绑定回名字，原来的对象内容没有变化。给一条读数加 0.2 的偏移，写成 `reading = reading + 0.2`：`12.5 + 0.2` 求值得到另一个浮点数对象，`reading` 换指它，原来的 `12.5` 没有被改写。
 
 ```python run id="program-semantics.names-objects-and-state.immutable"
-task_id = "t-01"
-kept = task_id
-task_id = task_id + "-b"
-print("task_id:", task_id)
+reading = 12.5
+kept = reading
+reading = reading + 0.2
+print("reading:", reading)
 print("kept:", kept)
-print("task_id is kept:", task_id is kept)
+print("reading is kept:", reading is kept)
 ```
 
-`kept` 仍读出 `t-01`：`task_id + "-b"` 创建了新对象，`task_id` 换指新对象，`kept` 的绑定没有改变，`task_id is kept` 打印 `False`。不可变对象没有「修改对象」这条路径；改变的是名字的指向，不是对象的内容。`+=` 把这个区别摆在同一处：`x += y` 在列表上调用修改自身的操作，`x` 指向的仍是同一个对象；在字符串和数字上，它先算出新对象，再把 `x` 重绑定过去。
+`kept` 仍读出 `12.5`：`reading + 0.2` 创建了新对象，`reading` 换指新对象，`kept` 的绑定没有改变，`reading is kept` 打印 `False`。不可变对象没有修改自身内容的操作，改变的是名字的指向，不是对象的内容。
 
-列表、字典、集合提供修改自身的操作，对同一个列表的追加、删除、排序都改写这个对象，不产生新容器。
+列表、字典、集合提供修改自身的操作：对同一个列表的追加、删除、排序都改写这个对象，不产生新容器。
 
-## 共享从构造里产生
+## 浅拷贝只隔离外层容器
 
-显式写下的 `board = pending` 是别名的一个来源。把一个对象放进多个位置，这些位置也互为别名：任务板用同一个列表填两个栏位，两个栏位就是同一个对象。
+到达一个对象不止靠名字：把一个列表放进另一个容器的一个位置上，那个位置也指向同一个对象，对它的修改从两处都能看到。要让两处各自演进，需要让它们指向不同的外层容器；`list(x)` 就是新建外层容器的操作，它是<Term id="shallow-copy">浅拷贝</Term>，新建一个外层列表，逐个复制元素位置上的引用。
 
-```python run id="program-semantics.names-objects-and-state.columns-shared"
-task = ["draft"]
-columns = {"todo": task, "doing": task}
-columns["doing"].append("review")
-print("task:", task)
-print("columns['todo']:", columns["todo"])
-print("columns['doing']:", columns["doing"])
-print("todo is doing:", columns["todo"] is columns["doing"])
+```python run id="program-semantics.names-objects-and-state.copy-levels"
+batches = [[0.91, 1.03], [0.87, 0.95]]
+working = list(batches)
+working[0].append(0.97)
+print("batches:", batches)
+print("working:", working)
+print("batches is working:", batches is working)
+print("batches[0] is working[0]:", batches[0] is working[0])
 ```
 
-两个栏位指向同一个列表，对「进行中」追加一项，`task` 与「待办」栏都跟着变，`todo is doing` 打印 `True`。
-
-要让两个栏位各自演进，需要让它们指向不同的容器。`list(task)` 是<Term id="shallow-copy">浅拷贝</Term>：新建一个外层列表，逐元素复制元素位置上的引用，两个栏位从此指向不同的列表。
-
-```python run id="program-semantics.names-objects-and-state.columns-split"
-task = ["draft"]
-columns = {"todo": list(task), "doing": list(task)}
-columns["doing"].append("review")
-print("task:", task)
-print("columns['todo']:", columns["todo"])
-print("columns['doing']:", columns["doing"])
-print("todo is doing:", columns["todo"] is columns["doing"])
-```
-
-`list(task)` 为每个栏位各建了一个新列表，对「进行中」的追加不再出现在「待办」里，`todo is doing` 打印 `False`。改动会落到更内层的元素时，外层容器的复制不够，需要<Term id="deep-copy">深拷贝</Term>递归复制可达的子对象；复制停在哪一层，由改动会落在哪一层决定。
+`list(batches)` 建出一个新的外层列表，`batches is working` 打印 `False`；元素位置上的引用被原样复制，`batches[0] is working[0]` 打印 `True`，两个位置的第一个批次是同一个列表。给 `working[0]` 追加读到的 `0.97` 同时出现在 `batches[0]` 里：这次复制隔离的只有外层容器。改动发生在批次内部的元素上时，需要<Term id="deep-copy">深拷贝</Term>递归复制可达的子对象，标准库的 `copy.deepcopy` 提供这个操作。
 
 ## 共享在什么时候成为缺陷
 
-共享一个对象本身不是缺陷：缓存让多个调用者读到同一份结果，队列让写入方和读取方看到同一串元素，一处写入本来就该被别处看到。
+共享一个对象本身不是缺陷：两处都要读同一批样本时，一处写入本来就该在另一处看到。缺陷出现在一处代码假定这个列表只由自己追加，而另一个持有者也在追加它的时候：采集步骤本应只把新读数写进自己的列表，分析步骤却把同一个列表当成输出就地追加，采集侧的记录被改写。
 
-缺陷出现的条件，是一处代码假定这个对象只由自己修改，而它实际上被多处共享：任务板两栏本该各自演进，代码却让它们指向同一个列表，一次追加同时落到两栏，写入方对「待办」的预期被「进行中」的写入打破。判断共享是否安全，看修改方是否假定对象只由自己改写。写入只应由一处负责时，让每处构造自己的容器；写入需要所有使用方共同看到时，共享同一个对象，并把允许在这上面进行的操作写清楚。一个对象被多处引用时，每次修改都会同时改变所有引用它的位置看到的内容。
+判断共享是否安全，看修改方是否假定对象只由自己改写。写入只应由一处负责时，每处构造自己的容器；写入需要所有使用方共同看到时，共享同一个对象，并把允许在这上面进行的操作写清楚。一个对象被多处引用时，每次修改都会同时改变所有引用它的位置看到的内容。
 
 ## 练习
 
-下面两段程序都以同一批任务名开头。先说出执行结束时每个名字指向哪个对象、内容是什么、哪些名字互为别名，再运行核对。
+下面两段程序都从同一串样本开始，一段对同一个列表追加，一段把名字重绑定到一个新列表。执行结束时每个名字指向哪个对象、内容是什么、哪些名字互为别名？
 
 第一段：
 
 ```python run id="program-semantics.names-objects-and-state.exercise-append-then-rebind"
-todo = ["parse"]
-doing = todo
-backlog = list(todo)
-doing.append("render")
-backlog.append("review")
-todo = doing
+samples = [0.91]
+view = samples
+spare = list(samples)
+view.append(1.03)
+spare.append(0.97)
+samples = view
 
-print("todo", todo, "doing", doing, "backlog", backlog)
-print("todo is doing", todo is doing, "todo is backlog", todo is backlog)
+print("samples", samples, "view", view, "spare", spare)
+print("samples is view", samples is view, "samples is spare", samples is spare)
 ```
 
 第二段：
 
 ```python run id="program-semantics.names-objects-and-state.exercise-rebind-then-append"
-todo = ["parse"]
-doing = todo
-doing = doing + ["render"]
-doing.append("review")
+samples = [0.91]
+view = samples
+view = view + [1.03]
+view.append(0.97)
 
-print("todo", todo, "doing", doing)
-print("todo is doing", todo is doing)
+print("samples", samples, "view", view)
+print("samples is view", samples is view)
 ```
-
-判据是逐行套用「修改对象还是重新绑定名字」。

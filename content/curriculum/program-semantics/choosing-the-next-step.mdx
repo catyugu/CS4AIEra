@@ -10,73 +10,75 @@ objectives:
   - 指出分支条件写错之后会出现什么结果
   - 说明一个循环在什么条件下会停下来
 ---
-
-三份任务交给一个批次 worker：`make-thumbnail` 与 `rebuild-index` 的状态是 `pending`，`send-notice` 的状态是 `blocked`。程序从头走一遍列表，对每一项测试它的状态：`pending` 的把任务名追加进 `done`，其余跳过。这次运行结束，`done` 里有两项。让这个结果可解释的，是几个更小的事实：每一项走过了哪几句、绕开了哪一句，循环一共转了几圈，第几圈之后不再继续。
+三次仿真跑完，结果装在一个列表里：`r1` 与 `r3` 的状态是 `converged`，`r2` 的状态是 `failed`。程序从头走一遍这个列表，对每一条测试它的状态：如果状态是 `converged`，就把 `run_id` 追加进 `finished`，否则跳过。这次运行结束，`finished` 里有两个 id。我们希望用程序化的语言描述这个流程。
 
 ## 条件决定一段语句是否执行
 
-执行到 `if` 时先求值它后面的条件，得到一个真值：真就执行它下面缩进的那一段语句，假就整段跳过，转去看下一个 `elif`；`elif` 依次不成立时才执行 `else` 那一段。缩进决定每一段的边界，缩进相同且相邻的语句落在同一段里。分支按书写顺序从上往下判断，第一个为真的分支执行，它之后的条件不再求值。两个条件可以在同一个输入上同时为真时，书写顺序决定哪一个生效。
+执行到 `if` 时先求值它后面的条件，得到一个真值：真就执行它下面缩进的那一段语句，假就整段跳过，转去看下一个 `elif`；`elif` 的条件依次不成立时才执行 `else` 那一段。缩进决定每一段的边界，缩进相同且相邻的语句在同一段里。分支按书写顺序从上往下判断，第一个为真的分支执行，它之后的条件不再求值。两个条件可以在同一条记录上同时为真时，书写顺序决定哪一个生效。
 
-程序对每一项任务做一次这样的判断：条件为真，`done.append(task["name"])` 执行；条件为假，这一句跳过，控制从 `if` 那一段直接落到循环体的下一步。
+程序对每一条记录做一次这样的判断：条件为真，`finished.append(run["run_id"])` 执行；条件为假，这一句跳过，程序从 `if` 那一段直接转到循环体的下一步。
 
-## 循环重复一段，条件不再成立时停止
+## 遍历一批数据
 
-`while condition:` 在每次进入循环体之前求值条件：为真就执行缩进的那一段，执行完回到 `while` 这一行再求值一次；为假就离开循环，继续执行循环体之后的语句。循环体重复几次由条件在每次求值时的取值决定。
-
-这段程序的条件是 `i < len(tasks)`，它读 `i` 与 `len(tasks)` 两个量。`len(tasks)` 求值后就是固定的列表长度；`i` 在循环之前赋过一次值，此后由循环体里的 `i += 1` 每次增加 1。`i` 增加到等于列表长度时，`i < len(tasks)` 变成假，循环结束。循环能停下来，因为循环体里有一条语句让 `i` 每次迭代朝 `len(tasks)` 靠近一步；改动循环体，就可能让条件失去变成假的时刻。
-
-把同一段遍历写成 `for task in tasks:`，循环变量由语言在每次进入循环体前绑定到下一个元素，元素取完循环结束，递增语句不需要自己写。需要看清哪个量在推动条件走向假时，用带下标的 `while`。
-
-任务列表为空时，`len(tasks)` 是 0，条件在第一次求值时就为假，循环体一次也不执行，`done` 仍然是空列表。
-
-## 在一个输入下追踪实际路径
-
-把三项任务和这段循环放进一段可运行的代码，每次迭代先打印下标、任务名与状态：
+遍历一批记录，`for` 把这件事直接写出来：
 
 ```python run id="program-semantics.choosing-the-next-step.trace"
-tasks = [
-    {"name": "make-thumbnail", "status": "pending"},
-    {"name": "send-notice",    "status": "blocked"},
-    {"name": "rebuild-index",  "status": "pending"},
+runs = [
+    {"run_id": "r1", "status": "converged"},
+    {"run_id": "r2", "status": "failed"},
+    {"run_id": "r3", "status": "converged"},
 ]
-done = []
-i = 0
-while i < len(tasks):
-    task = tasks[i]
-    print(i, task["name"], task["status"])
-    if task["status"] == "pending":
-        done.append(task["name"])
-    i += 1
-print("done:", done)
+finished = []
+for run in runs:
+    print(run["run_id"], run["status"])
+    if run["status"] == "converged":
+        finished.append(run["run_id"])
+print("finished:", finished)
 ```
 
-输出是 3 行迭代记录。第 0 行是 `make-thumbnail`、`pending`，条件为真，`append` 执行；第 1 行是 `send-notice`、`blocked`，条件为假，`append` 在这一项上被跳过；第 2 行是 `rebuild-index`、`pending`，`append` 执行。条件被求值 4 次，前 3 次为真，第 4 次 `i` 是 3、`3 < 3` 为假，循环在这一步结束。整段运行共 3 次迭代，`append` 执行 2 次，`done` 是 `['make-thumbnail', 'rebuild-index']`。
+`for X in 序列:` 在每次进入循环体之前把 `X` 绑定到序列里的下一个元素，然后执行下面缩进的那一段；元素取完，循环结束。递增下标、判断是否越界、在什么时刻停止，都由这条语句处理，循环体里不出现这些。
 
-同一段代码换一份输入，走过的语句跟着换，这里只把 `send-notice` 的状态改成 `pending`：
+输出是 3 行迭代记录，加一行结果。第 1 行 `r1`、`converged`，条件为真，`append` 执行；第 2 行 `r2`、`failed`，条件为假，`append` 在这一条上被跳过；第 3 行 `r3`、`converged`，`append` 执行。循环转 3 圈，等于列表长度，`append` 执行 2 次，`finished` 是 `['r1', 'r3']`。哪几条记录进入 `if` 的那一支，由每一条 `status` 的取值决定。
 
-```python run id="program-semantics.choosing-the-next-step.other-input"
-tasks = [
-    {"name": "make-thumbnail", "status": "pending"},
-    {"name": "send-notice",    "status": "pending"},
-    {"name": "rebuild-index",  "status": "pending"},
-]
-done = []
-i = 0
-while i < len(tasks):
-    task = tasks[i]
-    if task["status"] == "pending":
-        done.append(task["name"])
-    i += 1
-print(len(done), done)
+## 收敛循环：残差与步数上限
+
+有一类重复，转几圈事前不知道。仿真把一个残差一步步压小，压到容差以内就停；压多少步才够，取决于每一步把残差改了多少。这类重复用 `while condition:`：进入循环体之前求值条件，为真就执行缩进的那一段，执行完再在 `while` 这一行求值一次；为假就离开循环，继续执行循环体之后的语句。循环体重复几次由条件在每次求值时的取值决定。
+
+```python run id="program-semantics.choosing-the-next-step.converge"
+tolerance = 0.001
+max_iterations = 20
+residual = 1.0
+iterations = 0
+while residual > tolerance and iterations < max_iterations:
+    residual = residual / 4
+    iterations += 1
+print(iterations, residual, residual <= tolerance)
 ```
 
-迭代次数仍是 3，走过 `append` 的迭代从 2 次变成 3 次，`done` 是 `['make-thumbnail', 'send-notice', 'rebuild-index']`。迭代次数由列表长度决定，哪几次迭代执行 `append` 由每一项的状态决定。
+条件里的两个比较用 `and` 连起来，两个都为真时整体为真，任一个为假就离开循环。条件读 `residual` 与 `iterations` 两个量；`tolerance` 和 `max_iterations` 在循环之前定好，循环里不再变。`residual` 每圈除以 4，朝 `tolerance` 靠近；`iterations` 每圈加 1，朝上限靠近，两个量都在动，条件有变假的机会。输出的 `iterations` 是 5、`residual` 是 `0.0009765625`、`residual <= tolerance` 是 `True`：条件被求值 6 次，前 5 次为真，循环体执行 5 次，第 6 次 `residual > tolerance` 已经是假，循环在这一步结束。
+
+循环体里若没有一条语句让 `residual` 变小，`residual > tolerance` 就一直为真，条件永远等不到由它变假。把每一步的缩小幅度改小，`residual` 每圈只乘 0.9：
+
+```python run id="program-semantics.choosing-the-next-step.stall"
+tolerance = 0.001
+max_iterations = 20
+residual = 1.0
+iterations = 0
+while residual > tolerance and iterations < max_iterations:
+    residual = residual * 0.9
+    iterations += 1
+print(iterations, residual <= tolerance)
+```
+
+输出的 `iterations` 是 20、`residual <= tolerance` 是 `False`：20 圈之后残差仍在容差之上，循环由 `iterations < max_iterations` 这一半条件停下，这一次运行没有收敛。收敛循环通常同时写两半条件：一半是收敛判据 `residual > tolerance`，一半是步数上限 `iterations < max_iterations`。上限在残差正常下降时不影响结果，它保证即使残差不再下降，程序也在有限步内停下，并把这次运行记为未收敛；列表里 `r2` 的 `failed`，就是这类在步数上限内没压到容差以内的运行。
+
+遍历一批元素用 `for`，圈数由序列长度决定，循环体里没有推动某个量变化的语句。重复次数由循环体里算出的量决定时用 `while`，条件里至少有一个量在每圈朝使它变假的方向移动。
 
 ## 条件写错以后
 
-条件里的比较写错，改变的是哪些迭代走哪条路径，结果可以在复现里看出来。
+条件里的比较写错，改变的是哪些记录进入哪一支。
 
-把测试的取值写成一个在任务里不出现的字符串，例如用 `== "Pending"` 测试，而列表里存的是 `pending`：条件在每一项上求值为假，`append` 一次也没有执行，`done` 保持为空。列表里换进 `"Pending"` 这种取值以后这一条才会成立，因此错误在输入改变之前看不出来。
+把测试的取值写成一个在记录里不出现的字符串，例如用 `== "Converged"` 测试，而列表里存的是 `converged`：条件在每一条上求值为假，`append` 一次也没有执行，`finished` 保持为空。记录里换进 `"Converged"` 这种取值以后这一条才会成立，因此错误在输入改变之前看不出来。
 
 同一个 `if` 链里重复测试一个取值时，写在前面、先把该取值拦下的那条条件先成立，写在它后面的同一条测试在该输入上一次也不成立，是一段永远不会执行的语句。
 
@@ -84,38 +86,38 @@ print(len(done), done)
 
 ## 练习
 
-两段程序都在遍历同一批三份任务，第二段的 `i += 1` 挪进了 `if` 成立的那一支。第一段结束时 `done` 是什么、`while` 转了几圈？第二段的步数上限为什么会被用满、是哪一项造成的？
+两段程序都在遍历同一批三次仿真记录，第二段把 `i += 1` 挪进了条件成立的那一支。第一段结束时 `failed` 是什么、`while` 循环体运行了几次？第二段的步数上限为什么会被用满、是哪一条记录造成的？
 
 ```python run id="program-semantics.choosing-the-next-step.exercise-increment-outside"
-tasks = [
-    {"name": "make-thumbnail", "status": "pending"},
-    {"name": "send-notice",    "status": "blocked"},
-    {"name": "rebuild-index",  "status": "pending"},
+runs = [
+    {"run_id": "r1", "status": "converged"},
+    {"run_id": "r2", "status": "failed"},
+    {"run_id": "r3", "status": "converged"},
 ]
-done = []
+failed = []
 i = 0
-while i < len(tasks):
-    task = tasks[i]
-    if task["status"] != "pending":
-        done.append(task["name"])
+while i < len(runs):
+    run = runs[i]
+    if run["status"] != "converged":
+        failed.append(run["run_id"])
     i += 1
-print("done", done, "i", i)
+print("failed", failed, "i", i)
 ```
 
 ```python run id="program-semantics.choosing-the-next-step.exercise-increment-inside"
-tasks = [
-    {"name": "make-thumbnail", "status": "pending"},
-    {"name": "send-notice",    "status": "blocked"},
-    {"name": "rebuild-index",  "status": "pending"},
+runs = [
+    {"run_id": "r1", "status": "converged"},
+    {"run_id": "r2", "status": "failed"},
+    {"run_id": "r3", "status": "converged"},
 ]
-done = []
+failed = []
 i = 0
 steps = 0
-while i < len(tasks) and steps < 6:
-    task = tasks[i]
-    if task["status"] == "pending":
-        done.append(task["name"])
+while i < len(runs) and steps < 6:
+    run = runs[i]
+    if run["status"] != "converged":
+        failed.append(run["run_id"])
         i += 1
     steps += 1
-print("done", done, "i", i, "steps", steps)
+print("failed", failed, "i", i, "steps", steps)
 ```
