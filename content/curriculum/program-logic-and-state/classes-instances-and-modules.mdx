@@ -69,7 +69,9 @@ print("second:", second.notes)
 print("same list:", first.notes is second.notes)
 ```
 
-类体中的 `notes = []` 在创建类时执行一次，列表保存在类对象上，这叫<Term id="class-attribute">类属性</Term>。两个实例都没有自己的 `notes` 属性，读取时就找到类上的同一个列表。一次追加使两个笔记本都看到 `first idea`。
+类体中的 `notes = []` 在创建类时执行一次，列表保存在类对象上，这叫类属性。两个实例都没有自己的 `notes` 属性，读取时就找到类上的同一个列表。一次追加使两个笔记本都看到 `first idea`。
+
+如果再执行 `first.notes = []`，会在 `first` 上建立自己的同名属性。此后 `first.notes` 读到这个新列表，`second.notes` 仍读到类上的列表；这次赋值没有修改类属性。
 
 如果笔记列表属于各个笔记本，就在 `__init__` 中为每个实例新建列表；如果所有笔记本确实要共同维护一份笔记列表，才使用共享对象。判断依据是笔记列表应该由谁保存和修改。
 

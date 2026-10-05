@@ -49,9 +49,11 @@ print(first_above([3, 8, 12], 20))
 print(first_above([], 5))
 ```
 
-找到 8 时，`return` 结束整个调用，12 不再检查。没有找到时返回<Term id="none">None</Term>，这是 Python 表示没有结果或缺失的特殊值；它与数值 0 和空列表不同。`return None` 和 `return number` 使用相同的返回机制，只是返回的值不同。
+找到 8 时，`return` 结束整个调用，12 不再检查。没有找到时返回 `None`，这是 Python 表示没有结果或缺失的特殊值；它与数值 0 和空列表不同。`return None` 和 `return number` 使用相同的返回机制，只是返回的值不同。
 
 返回值和输出不同。`area(3, 2)` 返回 6，但自己不打印；`print(6)` 写出文字，它的返回值则是 `None`。函数执行到末尾而没有 `return`，也会返回 `None`。因此看见输出，不能据此判断函数返回了什么。
+
+不带值的 `return` 也返回 `None`。检查结果是否为这个值，通常写作 `result is None`；`result is not None` 则检查它不是 `None`。
 
 ## 修改参数对象会影响调用方
 
