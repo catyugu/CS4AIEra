@@ -10,186 +10,116 @@ objectives:
   - 指出 Agent 给出的方案在规模、表示与失败条件下的薄弱处
   - 说明方案假设是否被满足
 ---
-一个结果库服务上线前，Agent 交回一份方案：
 
-> 仿真运行的结果用一个以 `run_id` 为键的字典保存；建库时按 `run_id` 写入，每条运行的一条完整记录——参数组、指标、状态、写入时间——是它的值。用户提交筛选条件（指标达到门槛、只看状态为 `converged`、目标参数组）时，程序取出字典里的全部记录逐条比对，把命中的运行按指标排好返回。点开某条运行时，用它的 `run_id` 直接从字典取出详情。方案末尾附了一句：按键查找已经是常数时间，结果库已经按 `run_id` 去重，按 `run_id` 取这一项优化过了。
->
-> 数据规模按建库时的一次快照定：库保持现在的量级，之后只做查询。
+一个仿真结果库上线前，Agent 提交了这样的方案：
 
-结果库的运营方给出这份服务的<Term id="workload">工作负载</Term>：
+> 用以 `run_id` 为键的字典保存每次运行。打开详情时按键读取。按参数组、成功状态和指标门槛筛选时，遍历全部值，再把命中的记录按指标排序。字典查找很快，所以查询性能已经优化好了。数据规模按建库时的快照考虑。
 
-| 项目 | 数值 |
+需求却是保留全部运行结果，库还会继续增长。运营方给出的<Term id="workload">工作负载</Term>如下：
+
+| 项目 | 规模或频率 |
 | --- | --- |
-| run 记录数 | 现在 50000 条，每月增长约 5% |
-| 参数筛选请求 | 每天约 20000 次 |
+| 当前记录数 | 50000 条，每月增长约 5% |
+| 按条件筛选 | 每天约 20000 次 |
 | 按 run_id 打开详情 | 每天约 2000 次 |
-| 追加运行、更新状态 | 每天约 200 次 |
-| 参数组取值个数 | 20 |
-| 读（筛选与详情）与写的比例 | 约 110 : 1 |
+| 追加记录、更新状态 | 每天约 200 次 |
+| 参数组 | 20 个，数量分布尚未统计 |
 
-方案里那两句声明——按键查找已经优化、库保持现在的量级——都要对到这份负载上逐条核对。
+审查要回答的是：方案是否保留所需数据，哪类操作消耗最多，以及增长和写入是否会破坏它的假设。
 
-## 方案对上的是哪一类操作
+## 字典加速了哪种查询
 
-以 `run_id` 为键的映射，把「按 `run_id` 取一条」和「按 `run_id` 写一条」变成对单条记录的定位。这份负载用到它的操作有两类：按 `run_id` 打开详情，每天约 2000 次；按 `run_id` 追加运行、更新状态，每天约 200 次。两类都走映射。方案说的去重也由它承担：同一个 `run_id` 再次写入时覆盖同一条记录（见 <CrossRef id="data-algorithms-and-scale.representation-and-workload" />）。
+按 `run_id` 取详情，确实可以利用字典的键。筛选按参数组、状态和指标进行，这些字段存在值里，字典并没有按它们组织记录，因此仍要逐条检查。
 
-负载里次数最多的操作是筛选，每天约 20000 次。一次筛选要取出指标、状态、参数组三项都满足的一组记录，它不按 `run_id` 定位单条。映射的键是 `run_id`，值里虽然存着指标与参数组，映射本身不按这些字段组织；从映射里取出满足三项条件的全部记录，只能把每一条值都过一遍。这个字典只能按 `run_id` 查找，不能加速按参数组、状态和指标的筛选。筛选仍然要逐条检查全部记录。
-
-选定表示之前要看的是：负载里反复发生的是哪几类操作，候选表示让哪一类变便宜。方案把 2000 次的那一类变便宜了，20000 次的那一类留在原地。
-
-## 把频率乘以操作成本
-
-哪一项主导，用一条计数规则把三类操作折到同一单位上：一次按键取一条记一次记录查看，一次按键写一条记一次记录查看，一次筛选把整份库逐条看一遍、记记录数次。把每类操作的频率乘以各自的单次查看量，再求和。
-
-计数规则把一次按键定位记作一次查看。以 `run_id` 为键时，常见实现（哈希表）给出的一次定位，平均行为接近一次查看：速度取决于键的分布与具体实现，定位本身也不是可以忽略的成本。
+假设每次筛选必须检查全部 $n$ 条记录，当前每天检查的记录条次是 $20000n$。可以直接计算这个量，无须用一个只做计数的循环模拟扫描：
 
 ```python run id="data-algorithms-and-scale.design-review.daily-cost"
 records = 50000
 filters_per_day = 20000
-details_per_day = 2000
-writes_per_day = 200
-
-filter_term = filters_per_day * records
-detail_term = details_per_day * 1
-write_term = writes_per_day * 1
-total = filter_term + detail_term + write_term
-
-print("filter", filter_term)
-print("detail", detail_term)
-print("write", write_term)
-print("total", total)
-print("filter share percent", round(100.0 * filter_term / total, 4))
-
-grown = records
-for month in range(12):
-    grown = grown * 105 // 100
-print("size after 12 months", grown)
-print("filter term after growth", filters_per_day * grown)
+print("daily record checks:", records * filters_per_day)
+grown_records = round(records * 1.05 ** 12)
+print("records after a year:", grown_records)
+print("daily checks after growth:", grown_records * filters_per_day)
 ```
 
-筛选一天要查看 1000000000 条次记录，详情合计 2000 条次，写入合计 200 条次，三项合计 1000002200 条次，筛选占 99.9998%。被方案点名优化过的按键定位，合计是全部工作里万分之一都不到的一项。
+当前每天十亿条次检查，只是工作量估计，不能直接断言耗时或不可行。还要结合每条检查的成本和时间预算。按每月 5% 增长，一年后记录数约为现在的 1.8 倍；如果查询次数不变，扫描工作也相应增长。
 
-库按每月 5% 增长，12 个月后是 89788 条，筛选项随之涨到 1795760000 条次，其余两项不变。这份负载里会随规模放大的是筛选项，它是一天的筛选次数乘上库的记录数；筛选次数是给定的常数，随规模上涨的只有记录数这一个因子。
+这还没有计算命中结果的排序。一次命中 $r$ 条记录，比较排序通常需要 $O(r\log r)$ 的工作，返回结果本身也有成本。详情查找、写入与记录扫描不是相同的基本操作，不能仅按调用数量算出各自占总耗时的百分比。
 
-## 哪些候选当场淘汰
+## 减少每次筛选的范围
 
-需要动手的只有筛选。给筛选列几个候选，按「一次筛选要碰多少条记录」排开；这个数不低于整份遍历的候选，不必再算频率。
+可以比较三种候选：
 
-| 候选做法 | 一次筛选碰到的记录数 | 一天合计（20000 次筛选） |
+| 方案 | 每次查询的工作 | 其他代价 |
 | --- | --- | --- |
-| 方案现用：取出映射的全部值逐条比对 | 整份库，$n$ | $20000n$，当前 1000000000 条次 |
-| 每次筛选之前把库按参数组重排一遍，再取一段 | 至少整份库，重排还要额外的比较与搬移 | 比方案更高：每次筛选都重做一遍整表工作 |
-| 每条记录对照全部参数组各打一个标记，筛选时按标记取 | $n$ 乘以参数组数 | 再乘上 20 个参数组，约为方案的 20 倍 |
-| 主数据之外维护一份按参数组组织的记录，筛选只碰目标参数组 | 约为 $n$ 除以参数组数 | 减少单次查看量的候选 |
+| 扫描全部记录 | 检查 $n$ 条，再排序命中项 | 无额外分组结构 |
+| 每次查询先按参数组排序 | 对全库排序，再定位组内记录 | 每次都重做排序，很可能比直接扫描更贵 |
+| 维护按参数组组织的索引 | 只检查目标组的 $k$ 条，再排序命中项 | 额外空间、构建和更新成本 |
 
-主数据之外另有一份结构的做法，机制与两侧代价已有完整说明（见 <CrossRef id="data-algorithms-and-scale.preprocessing-and-indexes" />）；这里是同一种东西换了分组字段。
+按组索引的做法见 <CrossRef id="data-algorithms-and-scale.preprocessing-and-indexes" />。这里实际比较全库扫描与组内扫描，排序需求暂保持相同：
 
-除最后一行以外的候选，光看它们一次筛选碰的记录数，被每天 20000 次的频率一乘就比现方案更差，当场排除。能被保留的只有最后一行：把一次筛选要碰的集合从整份库缩到目标参数组那一段。
-
-最后一行那个「$n$ 除以参数组数」是假设各参数组的记录数在取值上大致均匀才成立的估计；真实数据常常高度偏斜，某个参数组的记录数可能远高于或远低于这个平均值，偏斜时按这个估计得出的单次量就会偏离实际。保留这一行，便宜由写入承担：库每追加一条或改一次状态，分组记录要跟着改一条。它值不值得建，要看目标参数组实际包含多少条记录以及维护成本、内存占用与延迟目标，读写比例只是其中一项。
-
-## 方案依赖哪几条前提
-
-方案的可用性依赖几项关于数据和操作的假设。每一条都要在工作负载里找到依据；找不到依据时，要说清哪一类操作会先出问题。
-
-第一条是数据规模与增长方向。方案自己写「库保持现在的量级」，负载写的是 50000 条、每月增长约 5%。这两句对不上：筛选项按记录数增长，12 个月后涨到接近 1.8 倍，而它本来就是主导项。
-
-第二条是唯一性。按 `run_id` 建映射，前提是 `run_id` 能唯一确定一条记录。同一条运行被重跑、或几次写入共用一个 `run_id` 时，映射只留最后写入的那一条，先写的那些从表示里消失；筛选按它计数就会少算。把一份带重复 `run_id` 的记录分别按行与按映射的值筛一遍：
-
-```python run id="data-algorithms-and-scale.design-review.dict-drops-record"
-rows = [
-    ("r-201", "gain2", 0.98, True, "2024-05-02"),
-    ("r-202", "gain2", 0.55, True, "2024-05-02"),
-    ("r-201", "gain4", 0.42, False, "2024-05-03"),
-    ("r-203", "gain2", 0.77, True, "2024-05-02"),
+```python run id="data-algorithms-and-scale.design-review.group-query"
+runs = [
+    {"run_id": "r1", "group": "A", "success": True, "score": 0.8},
+    {"run_id": "r2", "group": "B", "success": True, "score": 0.9},
+    {"run_id": "r3", "group": "A", "success": False, "score": 0.7},
+    {"run_id": "r4", "group": "A", "success": True, "score": 0.5},
 ]
-threshold = 0.50
-wanted = "gain2"
+by_group = {}
+for run in runs:
+    group = run["group"]
+    if group not in by_group:
+        by_group[group] = []
+    by_group[group].append(run)
 
-by_row = []
-for row in rows:
-    if row[2] >= threshold and row[3] and row[1] == wanted:
-        by_row.append(row[0] + "/" + row[4])
 
-by_id = {}
-for row in rows:
-    by_id[row[0]] = row
+def filter_runs(candidates, wanted, threshold):
+    matched = []
+    for run in candidates:
+        if run["group"] == wanted and run["success"] and run["score"] >= threshold:
+            matched.append(run["run_id"])
+    return matched
 
-by_dict = []
-for key in sorted(by_id):
-    row = by_id[key]
-    if row[2] >= threshold and row[3] and row[1] == wanted:
-        by_dict.append(key + "/" + row[4])
 
-print("source rows", len(rows))
-print("records held by dict", len(by_id))
-print("matched by row scan", by_row)
-print("matched by dict values", by_dict)
+wanted = "A"
+print("whole scan:", filter_runs(runs, wanted, 0.5))
+print("group scan:", filter_runs(by_group.get(wanted, []), wanted, 0.5))
+print("records checked:", len(runs), len(by_group.get(wanted, [])))
 ```
 
-源数据四行，映射只持有三个 `run_id`：`r-201` 的 gain2 记录被后写的 gain4 记录覆盖，按行筛出三条、按映射的值筛出两条。唯一性不成立时，方案丢记录是静默的：筛选给出的结果偏少，没有任何一处报错。要留住全部记录，键得能唯一确定一条运行（例如运行标识加一个保证唯一的版本号），或者先把同一 `run_id` 的多条记录合并成一条再建映射。
+两次筛选输出一致，第二次只查看 A 组。这并不保证每次都省很多：若目标组包含绝大多数记录，$k$ 接近 $n$。只有各组近似均匀时，才可以估计 $k \approx n/20$。
 
-第三条是有序性，它只对用边界定位的那个候选项成立。把「按指标取一段」交给排好序的序列、用取中点砍半的方式定位，前提是序列在每次写入之后仍然有序。负载里每天约 200 次追加与改状态，如果候选方案只在建库时排序一次，后续写入却不维护次序，定位就落不到正确的边界上。要让这条前提成立，写入一侧要跟着维护次序，这是它单独的一份代价。
+索引需要维护。追加记录要加入相应分组；改参数组要从旧组移到新组。这里只按组建立索引，组内记录的成功状态与指标仍在查询时检查。若进一步按状态或指标组织，还要承担相应更新成本。
 
-第四条是查询与写入的比例。按参数组分组的那份记录是否划算需要比较节省的查询工作与维护成本：负载现在是 110 : 1，把维护一条记录的代价摊到每次筛选上很轻。写入集中放大时——一次整批改状态、一次全量重建——维护项按被改的条数增长，筛选次数不变，比例一走低，这份记录就可能比它省下的更多。读写比例只是其中一项：目标参数组的记录数决定能少查看多少条记录，维护这份记录要多少额外写入、它占多少内存、延迟目标有多紧，同样决定它划不划算；目标参数组包含大部分记录时，省下的查看有限，维护成本或内存占用高时，比例再高也未必划算。
+## 核对方案假设
 
-## 方案逐项对回负载
+**规模。** “只考虑初始快照”与持续增长不符。查询量、分组分布也可能改变，应按目标期间的规模估算，实测是否满足延迟预算。
 
-方案选中的表示与算法，逐项对回负载：
+**唯一性。** 要保留全部运行，`run_id` 必须唯一标识一次运行。若重跑共用标识，字典会覆盖旧记录。可以为每次运行分配唯一标识，或使用标识与版本组成的唯一键；静默覆盖不能替代需求确认。
 
-- 按 `run_id` 取详情、按 `run_id` 追加与改状态、按 `run_id` 去重都走以 `run_id` 为键的映射，合计每天约 2200 次。
-- 每天约 20000 次的筛选没有对应的结构，它逐条走过整份库，一天 1000000000 条次，占全部工作的 99.9998%。
-- 方案声称优化过的按键定位，对应的是那 2200 次里的定位。
-- 「库保持现在的量级」与「每月 5% 增长」对不上，主导项继续随记录数放大。
-- 唯一性不成立时，映射静默丢记录，筛选结果偏少。
+**更新。** 索引必须与主记录保持一致。即使例子里保存了同一条记录的引用，修改参数组也不会自动把它移到另一个列表。若维护已排序的索引，追加和指标变化还必须维护有序性。
 
-审查这份方案要给的判断：把操作频率与操作成本一并看，当场排除的是那些一次筛选要碰不低于整份库的候选；保留的是把一次筛选要碰的集合缩到目标参数组的做法；这个做法把代价从读移到写，能不能成立要看目标参数组的记录数、维护成本、内存与延迟目标，读写比例只是其中一项。方案的薄弱处在主导项、增长方向与唯一性三处，不在它优化过的那条按 `run_id` 定位的方式上。
+**收益。** 每天两万次查询值得研究预处理，但读写比例不能独自证明方案划算。还要看各组实际大小、额外内存、更新成本与时间预算。若测量发现排序占主要时间，单独减少扫描可能还不够。
+
+这份方案应先确认唯一性与增长假设，再针对高频筛选评估索引。按键取详情很快，只解释了其中一种操作。
 
 ## 练习
 
-同一个结果库上，Agent 提了两个「加速筛选」的候选，都想替掉现在的整表遍历：
+下面建库代码是否满足“全部运行结果都要保留”？先预测记录数和 A 组查询结果，再运行。分别考虑“重跑必须保留”和“只留最新结果”两种需求，说明该如何处理重复标识。
 
-> 甲：每次筛选之前，先把库按参数组重排一遍，再沿着参数组取一段——先排好再取总是更快。
->
-> 乙：给每条记录对照全部参数组各打一个标记，筛选时按标记取——检查得越全，筛得越快。
-
-工作负载：库 50000 条记录，20 个参数组，每天 20000 次筛选。
-
-两个候选在一次筛选里碰到的记录数，以及一天里的合计数，与整表遍历比；重排那个候选只数了一遍全表读取，重排还要比较与搬移，这个数只是下界。
-
-```python run id="data-algorithms-and-scale.design-review.exercise-candidates"
-records = 50000
-groups = 20
-filters_per_day = 20000
-
-
-def scan_whole(n):
-    touched = 0
-    for record in range(n):
-        touched += 1
-    return touched
-
-
-def resort_then_take(n):
-    touched = 0
-    for record in range(n):
-        touched += 1
-    return touched
-
-
-def mark_every_group(n, g):
-    touched = 0
-    for record in range(n):
-        for group in range(g):
-            touched += 1
-    return touched
-
-
-whole = scan_whole(records)
-resort = resort_then_take(records)
-mark = mark_every_group(records, groups)
-
-print("whole scan one filter", whole, "one day", whole * filters_per_day)
-print("resort one filter", resort, "one day", resort * filters_per_day)
-print("mark one filter", mark, "one day", mark * filters_per_day)
+```python run id="data-algorithms-and-scale.design-review.dict-drops-record"
+rows = [
+    {"run_id": "r1", "group": "A", "score": 0.8},
+    {"run_id": "r2", "group": "A", "score": 0.7},
+    {"run_id": "r1", "group": "B", "score": 0.4},
+]
+by_id = {}
+for row in rows:
+    by_id[row["run_id"]] = row
+print("source count:", len(rows), "stored count:", len(by_id))
+matched = []
+for row in by_id.values():
+    if row["group"] == "A":
+        matched.append(row["run_id"])
+print("group A:", matched)
 ```

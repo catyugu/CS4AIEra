@@ -10,7 +10,7 @@ objectives:
   - 根据输入要求、返回值和副作用判断怎样使用一个函数
 ---
 
-把可能重复被调用的过程固定下来，封装成函数，可以减少代码的冗余，提高程序的可读性和可维护性。
+函数把一段计算命名。调用方交给它参数，函数执行自己的代码，再把结果返回。读懂一个函数，需要分别追踪它返回什么、修改什么。
 
 ## 定义函数，再调用它
 
@@ -30,19 +30,19 @@ print(label)
 ## return 结束当前调用
 
 ```python run id="program-semantics.functions-as-boundaries.find"
-def first_failed(statuses):
-    for status in statuses:
-        if status == "failed":
-            return status
+def first_above(numbers, limit):
+    for number in numbers:
+        if number > limit:
+            return number
     return None
 
 
-print(first_failed(["converged", "failed", "failed"]))
-print(first_failed(["converged"]))
-print(first_failed([]))
+print(first_above([3, 8, 12], 5))
+print(first_above([3, 8, 12], 20))
+print(first_above([], 5))
 ```
 
-找到第一项失败时，`return` 结束整个调用，剩下的列表元素不再检查。没有找到时，函数返回 `None`，表示没有结果。函数执行到末尾而没有遇到 `return`，也会返回 `None`。
+找到第一个超过上限的数时，`return` 结束整个调用，剩下的列表元素不再检查。没有找到时，函数返回 `None`，表示没有结果。函数执行到末尾而没有遇到 `return`，也会返回 `None`。
 
 返回值和输出是不同的事：`return` 把值交给调用方，`print` 把文本写入输出。调用方可以保存、比较或继续使用返回值；屏幕上有文字不表示函数返回了那个字符串。
 
@@ -53,8 +53,6 @@ print(first_failed([]))
 ```python run id="program-semantics.functions-as-boundaries.binding"
 def add_task(tasks, title):
     tasks.append(title)
-    tasks = []
-    print("local tasks:", tasks)
 
 
 pending = ["parse"]
@@ -63,7 +61,7 @@ print("caller tasks:", pending)
 print("returned:", result)
 ```
 
-`append` 修改原列表，调用方看到 `['parse', 'render']`。随后的 `tasks = []` 创建另一个列表，只让局部名字指向它，没有撤销追加。函数没有 `return`，所以 `result` 为 `None`。修改与重绑定的区别见 <CrossRef id="program-semantics.names-objects-and-state" />。
+`append` 修改原列表，调用方看到 `['parse', 'render']`。函数没有 `return`，所以 `result` 为 `None`。如果把函数体改成 `tasks = [title]`，它只会改变局部参数名的绑定，不会修改调用方的列表。修改与重绑定的区别见 <CrossRef id="program-semantics.names-objects-and-state" />。
 
 ## 修改输入，还是返回一份新结果
 
@@ -89,7 +87,7 @@ print("same list:", pending is updated)
 
 ## 练习
 
-下面的函数声称“返回前 `count` 项任务，原清单保持不变”，允许 `count` 为非负整数。预测它的返回值和调用后 `tasks` 的内容，再运行验证。构造一个只有一项任务的输入，判断这个说法是否成立；然后改写函数，使空列表和 `count = 0` 时也满足要求。
+`del tasks[count:]` 删除从下标 `count` 到末尾的元素。下面的函数声称“返回前 `count` 项任务，原清单保持不变”，允许 `count` 为非负整数。预测它的返回值和调用后 `tasks` 的内容，再运行验证。构造一个只有一项任务的输入，判断这个说法是否成立；然后改写函数，使空列表和 `count = 0` 时也满足要求。
 
 ```python run id="program-semantics.functions-as-boundaries.exercise-take"
 def first_tasks(tasks, count):
@@ -101,7 +99,3 @@ tasks = ["parse", "render", "review"]
 print("result:", first_tasks(tasks, 2))
 print("original:", tasks)
 ```
-
-
-注：
-- `tasks[count:]` 表示从下标 `count` 到末尾的一段；`del` 删除这段元素。把 `del` 换成 `return tasks[:count]` 会返回从开头到 `count` 之前的新列表，不修改原列表。

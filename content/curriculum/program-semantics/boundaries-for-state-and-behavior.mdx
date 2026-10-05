@@ -72,7 +72,9 @@ print("same list:", first.tasks is second.tasks)
 
 ## 模块对象与命名空间
 
-Python 文件作为模块加载时，顶层名字保存在模块的命名空间中。命名空间是一组名字到对象的对应。其他模块可以通过导入访问这些名字。
+模块把一组相关定义放在一起。Python 文件作为模块加载时，顶层名字保存在模块的命名空间中。命名空间是一组名字到对象的对应。其他模块可以通过导入访问这些名字。
+
+`math` 是 Python 提供的数学模块。它的 `ceil` 函数向上取整：`5 / 2` 是 2.5，向上取整得到 3。例如每页放两项，五项需要三页。
 
 ```python run id="program-semantics.boundaries-for-state-and-behavior.module-names"
 import math

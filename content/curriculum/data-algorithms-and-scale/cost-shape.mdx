@@ -10,215 +10,103 @@ objectives:
   - 判断数据规模放大后哪一部分工作增长得最快，是否出现明显的规模风险
   - 说明渐近上界、紧确增长阶与实际运行时间的区别
 ---
-一次参数扫描把一批候选参数组合各算一遍，每条结果写成一条记录 `(candidate_id, score)`：候选的标识，和它在验证指标上的得分。扫描结束后，先从头到尾过一遍数出得分达到阈值的候选，再给每个候选从批次开头重新找到它自己的那条记录。
 
-先只数查看记录的次数。数候选那次从头到尾的扫描，查看次数随候选数按比例增长，候选数翻倍就翻一倍；重新找自己那一段给每条都从头找一遍，候选数翻倍，它的查看次数涨到接近原来的四倍。
+同样是遍历一个列表，计算总和与检查所有元素对，需要的工作量不同。列表变长后，一个程序仍然很快，另一个可能慢得多。判断原因时，先看它到底重复了哪些操作。
 
-同样一批记录、同样的翻倍，两段工作的放大方式不同。差别来自每一段工作随候选数怎样重复；把它的查看次数数出来，就能描述工作量随候选数的增长率。候选数就是这段工作的<Term id="input-size">输入规模</Term>。知道增长率，才能在候选数再涨一个量级之前判断出先变贵的是哪一段、会不会到不可接受的地步。
+## 规模和计数单位
 
-## 先数操作次数
+<Term id="input-size">输入规模</Term>记作 $n$，这里指列表的元素个数。暂时把读取一个元素、比较两个小整数、做一次小整数加法都按固定成本计；列表的第一个位置和最后一个位置读取成本相同。
 
-把一批记录放进程序，在三个规模上数一数三种做法的查看次数。每查看一条记录就是读它的标识与得分，记作一次工作；查看批次里任意位置的一条都记一次，位置越靠后并不更贵。
+这是一个简化的成本模型。它允许我们比较操作次数怎样增长，不等于每种操作在机器上用时完全相同。超长字符串和很大的整数也不能始终按固定成本处理。
+
+## 逐项计算与两两比较
+
+下面两个函数分别计算总和、找出值相等的元素对。返回的计数帮助我们观察实际执行了多少次加法或比较。
 
 ```python run id="data-algorithms-and-scale.cost-shape.three-shapes"
-def build_batch(n):
-    rows = []
-    for index in range(n):
-        rows.append(("c-" + str(index), 0.5 + index * 0.001))
-    return rows
+def total(values):
+    answer = 0
+    additions = 0
+    for value in values:
+        answer += value
+        additions += 1
+    return answer, additions
 
 
-def first_row_count(rows):
-    row = rows[0]
-    return 1
+def equal_pairs(values):
+    pairs = []
+    comparisons = 0
+    for i in range(len(values)):
+        for j in range(i + 1, len(values)):
+            comparisons += 1
+            if values[i] == values[j]:
+                pairs.append((i, j))
+    return pairs, comparisons
 
 
-def full_scan_count(rows):
-    inspected = 0
-    for row in rows:
-        inspected += 1
-    return inspected
-
-
-def locate_each_count(rows):
-    inspected = 0
-    for target in rows:
-        for row in rows:
-            inspected += 1
-            if row[0] == target[0]:
-                break
-    return inspected
-
-
-print("n first-row full-scan locate-each")
-for n in (100, 200, 400):
-    rows = build_batch(n)
-    print(n, first_row_count(rows), full_scan_count(rows), locate_each_count(rows))
+values = [2, 5, 2, 8]
+print("sum and additions:", total(values))
+print("equal pairs and comparisons:", equal_pairs(values))
 ```
 
-三列的查看次数随候选数变化的方式不同。
+`range(n)` 依次给出 0 到 $n-1$ 的整数；`range(i + 1, n)` 给出 $i+1$ 到 $n-1$ 的整数。内层循环只检查当前位置之后的元素，避免把同一对比较两遍。
 
-第一列始终是 1：读第一条记录的得分，候选是 100 条还是 400 条都只读这一条。这是固定不变的工作，计数是常数。
+四个元素求和需要四次加法。检查元素对则比较 3+2+1=6 次，找到下标 `(0, 2)` 上的两个 2。
 
-第二列等于候选数：从头到尾完整过一遍，看过的条数就是批次的长度，候选数翻倍，查看次数翻倍。这是线性的工作。
+一般地，求和需要 $n$ 次加法，元素对比较需要
 
-第三列在候选数翻倍时涨到接近四倍。给每个候选从批次开头找到它自己，找第 $k$ 条要先看过它前面的每一条，全部 $n$ 条合起来查看次数是
+$$ (n-1)+(n-2)+\dots+1=\frac{n(n-1)}{2} $$
 
-$$1 + 2 + \dots + n = \frac{n(n+1)}{2}.$$
+次。这是把每个位置与它后面的所有位置配对得到的计数，不取决于有没有找到重复值。
 
-候选数从 $n$ 变成 $2n$，这个和从约 $n^2/2$ 变成约 $2n^2$，约是原来的四倍。这是二次的工作：由两层相乘得到，外层每条都把内层整段重做一遍，候选数既做了外层的次数、又做了内层的长度，两个因子乘在一起。
+| 元素数 | 求和的加法次数 | 元素对的比较次数 |
+| --- | ---: | ---: |
+| 100 | 100 | 4950 |
+| 200 | 200 | 19900 |
+| 400 | 400 | 79800 |
+
+求和的工作量与 $n$ 成正比，称为线性增长。两两比较包含一个二次项，称为二次增长；元素数翻倍，比较次数逐渐接近原来的四倍。
+
+读取一个非空列表的第一项只需一次读取，不管列表有多长，这是常数工作。三种计算都可能只有几行代码，代码长度说明不了执行次数。
+
+## 每次减半为什么是对数增长
+
+在有序列表里找一个值，可以比较中间元素，再把可能位置缩到一半。原来有 16 个可能位置，缩成 8、4、2、1，只需四次减半；原来有 32 个，则需要五次。
+
+把 $n$ 连续除以 2，直到剩下 1，需要约 $\log_2 n$ 次。这里的对数回答的是“2 的几次方等于 $n$”。元素数翻倍，所需减半次数只多一次，所以二分查找的最坏比较次数是对数增长。具体定位方式见 <CrossRef id="data-algorithms-and-scale.preprocessing-and-indexes" />。
+
+如果一种计算有约 $\log_2 n$ 层，每层处理全部 $n$ 个元素，总工作就约为 $n\log_2 n$。例如把序列不断一分为二，再合并有序的两半：每个合并层处理全部元素，层数随 $\log_2 n$ 增长。这解释了常见比较排序的线性对数成本，不要求亲手实现排序。
 
 ## 上界与紧确增长阶
 
-设 $T(n)$ 是规模为 $n$ 时的操作次数，$g(n)$ 是用来比较的非负函数。$T(n)=O(g(n))$ 表示渐近上界：存在正常数 $C$ 和阈值 $n_0$，当 $n\ge n_0$ 时，$T(n)\le Cg(n)$。它保证增长不超过这个量级，不要求恰好按这个量级增长。
+算法资料通常用 $O$ 或 $\Theta$ 描述增长。它们不写固定倍数和较低次项，但含义不同。
 
-$T(n)=\Theta(g(n))$ 表示紧确增长阶：存在正常数 $c,C$ 和阈值 $n_0$，使足够大的 $n$ 都满足
+- $O(n^2)$ 给出渐近上界：足够大时，工作量不超过某个固定倍数的 $n^2$。
+- $\Theta(n^2)$ 给出紧确增长阶：足够大时，工作量既不低于某个正的固定倍数的 $n^2$，也不超过另一个固定倍数的 $n^2$。
+
+精确定义如下。设 $T(n)$ 是操作次数，$g(n)$ 是用于比较的非负函数：$T(n)=O(g(n))$ 表示存在常数 $C>0$ 和阈值 $n_0$，当 $n\ge n_0$ 时都有 $T(n)\le Cg(n)$；$T(n)=\Theta(g(n))$ 则要求还存在常数 $c>0$，使
 
 $$c g(n)\le T(n)\le C g(n).$$
 
-也就是同时有相同量级的上界与下界。本例三列分别是 $\Theta(1)$、$\Theta(n)$ 和 $\Theta(n^2)$。第三列的精确公式 $n(n+1)/2$ 说明翻倍比值趋近于 4；这个比值来自公式。单独一个 $O(n^2)$ 上界不能推出“翻倍约四倍”，因为 $T(n)=n$ 同样属于 $O(n^2)$。
+上面的求和是 $\Theta(n)$，元素对比较是 $\Theta(n^2)$。线性工作同样可以写成 $O(n^2)$，因为这是一个宽松上界；因此单凭 $O(n^2)$ 不能断言“翻倍约四倍”。该例的翻倍比值来自具体公式。$\Theta$ 也只规定固定倍数的范围，不规定每次翻倍的准确比值。
 
-紧确增长阶也不规定每次翻倍的准确比值：常数倍范围内的波动仍然可以满足 $\Theta(n^2)$。外推时应区分具体计数公式、增长阶和测量数据。操作成本的建模方法可参阅 [MIT 6.006：计算模型与 Python 成本](https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-fall-2011/resources/mit6_006f11_lec02/)。
+| 增长阶 | 典型工作 |
+| --- | --- |
+| $\Theta(1)$ | 读取一个已知位置 |
+| $\Theta(\log n)$ | 二分查找的最坏比较次数 |
+| $\Theta(n)$ | 逐项求和 |
+| $\Theta(n\log n)$ | 逐层合并的工作量 |
+| $\Theta(n^2)$ | 检查所有元素对 |
+| $\Theta(2^n)$ | 对每个子集各做固定数量的工作 |
 
-## 每次减半
+最后一行来自每个元素“选或不选”的二选一：每多一个元素，子集数翻倍。候选数的估算与方案取舍见 <CrossRef id="data-algorithms-and-scale.search-space-and-pruning" />。
 
-批次若已经按得分从低到高排好，定位一个得分只需每次取可能位置区间的中点那一条，和要查的得分比一下，把可能的位置缩到其中一半。区间每步砍掉一半，查看次数随候选数怎样变？
+## 增长阶不能确定实际运行时间
 
-```python run id="data-algorithms-and-scale.cost-shape.halving"
-def build_batch(n):
-    rows = []
-    for index in range(n):
-        rows.append(("c-" + str(index), 0.5 + index * 0.001))
-    return rows
+固定倍数会影响小规模结果。假设方案甲要做 $4n$ 份工作，方案乙要做 $n(n-1)/2$ 份工作，计数单位相同。$n=4$ 时分别为 16 和 6，乙更少；$n=100$ 时分别为 400 和 4950，甲更少。只看一个小样例，就可能选错适合大规模的方案。
 
-
-def bisect_count(rows, target):
-    low = 0
-    high = len(rows)
-    looks = 0
-    while low < high:
-        middle = (low + high) // 2
-        looks += 1
-        if rows[middle][1] < target:
-            low = middle + 1
-        else:
-            high = middle
-    return looks
-
-
-print("n middle-looks")
-for n in (100, 200, 400, 800):
-    rows = build_batch(n)
-    print(n, bisect_count(rows, rows[n - 1][1]))
-```
-
-候选数从 100 增到 800，查看次数从 7 增到 10：候选数每翻一倍，查看次数只多 1。区间每比较一次就减半，候选数翻倍只是多切一刀。这是对数的工作，本例最坏情况下的查看次数为 $\Theta(\log n)$：括号里是 $n$ 的对数，也就是把 $n$ 对折到 1 需要的次数；候选数乘很多倍，查看次数才加几次。候选数越大，对折的做法比从头走一遍省下的越多。
-
-## 每层过一遍、层数对折
-
-把批次按得分排好序，最里面反复做的一件事是合并：把两份各自有序的短段合成一段有序的。做法是先把整批一分为二，每半再一分为二，直到每段只剩一条，再自下而上把相邻两段合起来。每一段的合并都要把这一段里的记录过一遍，于是每一层合起来查看的次数都是全部候选数。这种合并要读多少条记录？
-
-```python run id="data-algorithms-and-scale.cost-shape.merge-levels"
-def merge_read_count(n):
-    inspected = 0
-    ranges = [(0, n)]
-    head = 0
-    while head < len(ranges):
-        low, high = ranges[head]
-        head += 1
-        if high - low > 1:
-            inspected += high - low
-            middle = (low + high) // 2
-            ranges.append((low, middle))
-            ranges.append((middle, high))
-    return inspected
-
-
-print("n merge-reads per-item")
-for n in (4, 8, 16, 32):
-    print(n, merge_read_count(n), merge_read_count(n) // n)
-```
-
-候选数从 4 条到 32 条，总查看次数是 8、24、64、160；除以候选数，得到每条平均被读过 2、3、4、5 次。每一层的总查看次数都是候选数 $n$，层的数量由对折决定：候选数翻一倍，层数只加 1。两个因子相乘，总数是 $n$ 乘以对折层数。这是线性对数的工作，这套合并过程的读取计数为 $\Theta(n \log n)$：它比线性工作多出「层数随候选数增长」这一个因子，比二次工作少一个随 $n$ 增长的因子。对于 $n^2$ 与 $n \log n$ 这两个计数函数，候选数翻倍时，前者变成四倍，后者变成两倍多一些，候选数越大越接近两倍。
-
-## 指数增长
-
-前面几种计算里，每一步只是把一段工作原样重复若干次，或把规模对折若干次。另一种写法的每一步都分成两个方向各继续一次，两边都要算到底。
-
-枚举「哪些候选进入最终短名单」的所有取法就是这种写法：从只有一种空取法开始，每考虑一个候选，就把现有的每种取法各留一份、再各加进这个候选，取法的份数每步翻一倍。
-
-```python run id="data-algorithms-and-scale.cost-shape.branching"
-print("candidates possible subsets")
-for n in (8, 12, 16):
-    print(n, 2 ** n)
-```
-
-每多考虑一个候选，子集数量就翻一倍：8 个候选时有 256 个，16 个候选时有 65536 个。如果每个子集只做固定数量的操作，总工作为 $\Theta(2^n)$；如果还要把每个子集中的元素逐项检查，就必须另计这部分成本。增长记号需要对应你实际数的操作。
-
-## 常见增长率
-
-同一段工作在候选数增长时计数变成原来的几倍：
-
-| 增长率 | 一段这样的工作 | 计数怎样随候选数变 | 典型计数的紧确增长阶 |
-| --- | --- | --- | --- |
-| 固定不变 | 读第一条记录 | 不变 | $\Theta(1)$ |
-| 对数 | 每步把可能区间砍掉一半 | 翻倍时只多 1 次 | $\Theta(\log n)$ |
-| 线性 | 从头到尾过一遍 | 翻倍时变成 2 倍 | $\Theta(n)$ |
-| 线性对数 | 每一层过一遍全部候选，层数对折 | 翻倍时变成 2 倍多一些 | $\Theta(n \log n)$ |
-| 二次 | 每条都再对全部候选做一遍 | 翻倍时变成约 4 倍 | $\Theta(n^2)$ |
-| 指数 | 每一步分成两个都继续 | 每加 1 个候选就翻一倍 | $\Theta(2^n)$ |
-
-这张表用来给一段程序里的每个部分定位。一段工作属于哪一行，候选数放大时它与其他部分的差距就朝哪个方向走：行越靠下，倍数越大，候选数放大以后它越早盖过上面的部分。程序里同时有线性与二次的两段，候选数只要足够大，二次的那段就吃掉绝大部分查看次数；指数增长最终会超过表中这些多项式增长；是否超过预算还取决于常数、目标规模和单次操作成本。
-
-相乘得到的两层不必是同一个规模。让每个候选对照每个指标各检查一次，两层分别是候选数与指标数，查看次数是两者的乘积，计数为 $\Theta(n \cdot m)$；翻倍的是哪一层，计数就按那一层的倍数增长，两层同时翻倍则约变成四倍。看一段由乘法得到的工作，要分别问清两层各自是什么、放大时哪一层在涨。
-
-## 小规模上量一次能说明多少
-
-一份实现给每条记录做四项检查再过一遍，全部候选走完是每个候选 4 次；另一份实现按标识给每个候选从批次开头找它自己，是 $1 + 2 + \dots + n$ 次。把两者在几个规模上各数一遍：
-
-```python run id="data-algorithms-and-scale.cost-shape.small-sample"
-def per_item_count(n):
-    inspected = 0
-    for index in range(n):
-        inspected += 4
-    return inspected
-
-
-def locate_each_count(n):
-    inspected = 0
-    for target in range(n):
-        for row in range(n):
-            inspected += 1
-            if row == target:
-                break
-    return inspected
-
-
-print("n four-checks locate-each")
-for n in (4, 8, 12, 100):
-    print(n, per_item_count(n), locate_each_count(n))
-```
-
-在 4 条记录上，二次的那份查看次数比逐条检查的更少，只比较这一个规模的计数，会看到它操作更少；不同操作的实际耗时仍需测量；候选数达到 8 时，计数的大小关系就反了过来；到 100 条，二次已经比逐条检查多出一个数量级。小候选数上谁多谁少由常数决定——每条固定做的几次检查在总数小时占的比例大，增长项的差异还不明显。规模变大时，二次迟早超过线性。
-
-一次测量只给出它测的那个规模上的一个比值，看不出这段工作属于哪种增长率，因此定不出下一个规模上计数会变成几倍。指数增长更极端：在一二十个候选上跑得动，再加几个就停不下来，而在小规模上测到的那点计数看不出这件事。有限几个规模的测量可以检验推导、暴露异常，但不能证明渐近增长阶。判断放大后的工作量，需要依据程序如何重复操作推导计数，再用目标环境中的测量估计实际时间。
+渐近记号也不能直接回答“能否在一秒内结束”。要先按程序推导工作量，再在目标环境测量实际时间。有限几个规模的测量有助于检查估算，却不能证明所有规模的增长律。操作成本的建模方法可参阅 [MIT 6.006：计算模型与 Python 成本](https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-fall-2011/resources/mit6_006f11_lec02/)。
 
 ## 练习
 
-一份评估方案给每个候选对照每个指标各检查一次，用来给候选打上它通过的指标。它附带的判断是：「候选数翻倍时，这部分最多慢一倍。」这个判断在什么前提下成立，又在什么情况下失效？
-
-
-```python run id="data-algorithms-and-scale.cost-shape.exercise"
-def metric_checks(n, m):
-    checked = 0
-    for candidate in range(n):
-        for metric in range(m):
-            checked += 1
-    return checked
-
-
-print("candidates metrics checks")
-for n in (100, 200):
-    for m in (5, 10):
-        print(n, m, metric_checks(n, m))
-```
+有 $n$ 条记录，每条有 $m$ 个指标。计算每条记录的指标总和，要做多少次加法？分别考虑“只增加记录数”和“记录数、指标数同时翻倍”。为什么只写“这是两层循环，所以是二次增长”不足以描述成本？

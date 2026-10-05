@@ -10,7 +10,7 @@ objectives:
   - 用临界输入区分两个相似的条件
 ---
 
-三个任务的状态依次是 `converged`、`failed`、`converged`。程序需要数出成功和失败的任务各有多少个。它不能对每项都执行同一个加法：看到不同状态时，要执行不同的语句。
+用字符串 `"finished"` 表示任务已完成，`"failed"` 表示任务失败。三个任务的状态依次是 `finished`、`failed`、`finished`。程序需要数出成功和失败的任务各有多少个。它不能对每项都执行同一个加法：看到不同状态时，要执行不同的语句。
 
 ## 条件选择要执行的语句
 
@@ -18,33 +18,35 @@ objectives:
 
 ```python run id="program-semantics.choosing-the-next-step.condition"
 status = "failed"
-if status == "converged":
+if status == "finished":
     print("finished")
 else:
     print("needs attention")
 print("checked")
 ```
 
-输出先是 `needs attention`，然后是 `checked`。最后一行没有缩进，属于分支之后的程序，两种状态都会执行它。把 `status` 改为 `"converged"`，第一行输出随之改变。
+输出先是 `needs attention`，然后是 `checked`。最后一行没有缩进，属于分支之后的程序，两种状态都会执行它。把 `status` 改为 `"finished"`，第一行输出随之改变。
 
 多于两种情况时，可以在 `if` 与 `else` 之间写 `elif`。条件按顺序判断，第一个为真的分支执行，其后的分支不再判断。
 
 ## for 逐项处理一个列表
 
-方括号可以把几个值写成一个列表。`for status in statuses:` 每轮取列表的下一个元素，绑定到名字 `status`，再执行缩进的循环体；元素取完，循环结束。
+`for status in statuses:` 每轮取列表的下一个元素，绑定到名字 `status`，再执行缩进的循环体；元素取完，循环结束。
 
 ```python run id="program-semantics.choosing-the-next-step.trace"
-statuses = ["converged", "failed", "converged"]
+statuses = ["finished", "failed", "finished"]
 finished = 0
 failed = 0
 for status in statuses:
-    if status == "converged":
+    if status == "finished":
         finished += 1
     else:
         failed += 1
     print(status, finished, failed)
 print("totals:", finished, failed)
 ```
+
+这段计数程序假定状态只有 `"finished"` 和 `"failed"` 两种；若还允许 `"pending"`，就需要另写分支，不能把所有未完成项都记为失败。
 
 `finished += 1` 在这里相当于 `finished = finished + 1`。每轮只增加一个计数，最后得到成功 2 个、失败 1 个。循环体里的 `print` 执行三次，循环后的 `print` 执行一次。把列表改成 `[]`，循环体一次也不执行，两个计数仍为 0。
 
@@ -63,7 +65,7 @@ while pending > 0 and processed < limit:
 print("processed:", processed, "remaining:", pending)
 ```
 
-`and` 要求两边条件都成立。两轮之后 `pending` 为 0，循环结束。把初始值改成 5，程序处理三项后因 `processed < limit` 为假而停下，还有两项没处理。处理次数达到上限和工作全部完成，是两种不同的结束原因。
+`>` 与 `<` 分别比较是否大于、是否小于；`and` 要求两边条件都成立，`or` 要求至少一边成立，`not` 将真假反转。`!=` 表示不相等。两轮之后 `pending` 为 0，循环结束。把初始值改成 5，程序处理三项后因 `processed < limit` 为假而停下，还有两项没处理。处理次数达到上限和工作全部完成，是两种不同的结束原因。
 
 循环条件要有机会变假。如果漏掉 `pending -= 1`，待处理数量不会减少；本例仍会被次数上限停下，但没有完成声称的工作。如果同时漏掉 `processed += 1`，两个条件都不会改变，循环会一直执行。
 
@@ -73,14 +75,14 @@ print("processed:", processed, "remaining:", pending)
 
 “最多处理三项”要求在处理次数达到 3 时停止。把条件改成 `processed <= limit`，次数为 3 时仍会再执行一轮。检查 2、3、4 这些紧邻上限的值，比只看一个远小于上限的输入更容易区分 `<` 与 `<=`。
 
-字符串比较也按实际值进行：`"Converged"` 与 `"converged"` 不相等。程序会按写下来的条件执行，不会根据作者的意图忽略大小写。
+字符串比较也按实际值进行：`"Finished"` 与 `"finished"` 不相等。程序会按写下来的条件执行，不会根据作者的意图忽略大小写。
 
 ## 练习
 
 下面程序应当处理全部三项。运行前预测每轮的 `i`，再指出为什么次数上限会被用满。把 `i += 1` 移到合适的位置，检查结果；再用空列表检查循环是否仍能正确结束。`len(statuses)` 返回元素个数，`statuses[i]` 读取下标为 `i` 的元素，下标从 0 开始。
 
 ```python run id="program-semantics.choosing-the-next-step.exercise-increment-inside"
-statuses = ["converged", "failed", "converged"]
+statuses = ["finished", "failed", "finished"]
 i = 0
 steps = 0
 while i < len(statuses) and steps < 6:

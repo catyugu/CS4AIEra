@@ -10,169 +10,104 @@ objectives:
   - 沿有向边判断哪些任务可达
   - 说明依赖被用来定义一个必须先后完成的执行顺序时，环意味着什么
 ---
-一个发布项目把九个任务按「谁属于谁」组织起来：顶层是 `project`，它下面有 `design`、`build`、`verify` 三个子任务，`design` 下面又有 `mockups` 与 `spec`，其余同理。这九个任务之间还写着第二种关系——某个任务只能在另一个任务完成之后才能开始。按这些先后关系整理一份完成顺序时，清单停在了半路：参与依赖的五个任务里只排出 `mockups`、`spec`、`code`，`assets` 与 `tests` 一直没被排出，这份依赖没有一份能满足全部约束的完整顺序。同一批任务上的两种关系表达的含义不同；排出顺序失败另有原因，与任务数量无关。
 
-## 归属关系是一棵树
+目录中的一个文件夹有一个上级；构建任务却可能要等待多个任务完成。树与图能表达这两种不同的关系。
 
-这里的树是有根的层次结构：根没有上级，其余每个节点恰好有一个上级，从根沿父子关系能到达全部节点。这些条件共同保证沿上级追溯会停在根，不会绕回自己。只有“每个节点至多一个上级”还不够，两个节点互为上级也满足这一个条件，却形成了环。
+## 树表达层次
+
+有根的树有一个根节点，根没有上级；其余每个节点恰好有一个上级，从根沿父子关系可以到达全部节点。
 
 ```text
 project
-├── design
-│   ├── mockups
-│   └── spec
-├── build
-│   ├── code
-│   └── assets
-└── verify
-    └── tests
+├── source
+│   └── main.py
+└── tests
 ```
 
-把每个任务的上级记下来，再沿上级往上走到顶层：
+节点是结构中的一个元素，连接父子节点的是边。这棵树里，`main.py` 的上级是 `source`，`source` 的上级是 `project`。沿上级追溯，不会绕回自己，而会停在根。
 
 ```python run id="data-algorithms-and-scale.hierarchy-relations-and-dependencies.layers"
-parent = {
-    "project": None,
-    "design": "project",
-    "build": "project",
-    "verify": "project",
-    "mockups": "design",
-    "spec": "design",
-    "code": "build",
-    "assets": "build",
-    "tests": "verify",
-}
-
-for task in sorted(parent):
-    top, layers = task, 0
-    while parent[top] is not None:
-        top = parent[top]
-        layers += 1
-    print(task, "top:", top, "layers:", layers)
+parent = {"project": None, "source": "project",
+          "main.py": "source", "tests": "project"}
+node = "main.py"
+depth = 0
+while parent[node] is not None:
+    node = parent[node]
+    depth += 1
+print("root:", node, "depth:", depth)
 ```
 
-从 `tests` 沿上级往上走：`tests` 的上级是 `verify`，`verify` 的上级是 `project`，共 2 层；`project` 自己是 0 层。在归属关系上做一次「找到它所属的顶层任务」的操作，经过的层数就是该任务到根的深度：深度为 2 的任务有 `mockups`、`spec`、`code`、`assets`、`tests`，深度为 1 的是 `design`、`build`、`verify`。层级决定这类操作要走几步：任务挂得越深，到达顶层经过的层越多。
+深度是从根到该节点经过的边数。根的深度为 0，`main.py` 为 2。找上级直到根，需要的步数随深度增长：相同数量的节点，排成很长的单链和较浅的分支结构，查找步数可以很不一样。
 
-## 依赖是边的另一种含义
+上述程序假定 `parent` 真正表示一棵树，且所有上级都在字典里。只规定“每个节点至多一个上级”还不足以保证这一点：两个节点互为上级就会形成环。
 
-依赖关系说的是先后：某个任务只有在另外的任务完成之后才能开始。它写出来是一列有向边，每条边从一个前置任务指向等待它的任务。归属关系里 `code` 只有一个上级 `build`；依赖关系里 `tests` 却有好几个前置——`code` 和 `assets`。一个任务只有一个上级，却可以有多个前置，这是依赖关系比树多出来的第一件事；它多出来的第二件事，是允许两个在归属上没有祖辈关系的任务直接相连——`assets` 属于 `build`，`tests` 属于 `verify`，它们之间照样有一条依赖。默认把依赖记成有向<Term id="simple-graph">简单图</Term>：没有从一个任务指向它自己的边，也没有端点相同的重复边。
+## 图表达更一般的关系
 
-从依赖的边能问「可达」：从一个任务出发，沿边的方向一连串走下去，能到达的任务就是它可达的任务。可达只沿边的方向成立——`mockups` 是 `assets` 的前置，从 `mockups` 沿边走到得了 `assets`，反过来不成立。
+图由节点与边组成。依赖关系中的有向边 `build → test` 表示必须先完成 `build`，才能开始 `test`：
+
+```text
+fetch → build → test
+config ───┘
+```
+
+`build` 同时等待 `fetch` 和 `config`，这种多个前置的关系不能用一个上级表达。边的方向有含义：完成 `build` 可以让 `test` 更接近就绪，反过来不成立。这里把依赖表示为有向<Term id="simple-graph">简单图</Term>，不包含自环和同端点的重复边。
+
+从一个节点沿有向边连续前进，能到达另一个节点，就称后者从前者可达。依赖图中，修改 `fetch` 的结果可能影响 `build`，再影响 `test`。下面把每个节点直接指向的后续节点保存成列表，用队列逐项检查：
 
 ```python run id="data-algorithms-and-scale.hierarchy-relations-and-dependencies.reachable"
-requires = {
-    "mockups": [],
-    "spec": ["mockups"],
-    "code": ["spec"],
-    "assets": ["mockups", "tests"],
-    "tests": ["code", "assets"],
-}
-before = []
-for task in requires:
-    for prereq in requires[task]:
-        before.append((prereq, task))
+from collections import deque
 
-
-def reaches(start):
-    found = [start]
-    index = 0
-    while index < len(found):
-        task = found[index]
-        index += 1
-        for u, v in before:
-            if u == task and v not in found:
-                found.append(v)
-    return sorted(found)
-
-
-for start in ("mockups", "code", "tests"):
-    print("from", start, "reach:", reaches(start))
+after = {"fetch": ["build"], "config": ["build"],
+         "build": ["test"], "test": []}
+pending = deque(["fetch"])
+seen = {"fetch"}
+while pending:
+    node = pending.popleft()
+    for next_node in after[node]:
+        if next_node not in seen:
+            seen.add(next_node)
+            pending.append(next_node)
+print("reachable, including start:", sorted(seen))
 ```
 
-从 `mockups` 出发能沿依赖走到全部五个任务；从 `code` 出发只到得了 `code`、`tests`、`assets`；从 `tests` 出发只到得了 `tests` 与 `assets`。方向决定可达的范围：`tests` 与 `assets` 互相可达，两者却都到不了 `mockups`。
+`seen` 记录已经发现的节点，避免同一个节点重复加入队列。输出包括起点本身。即使图里有环，也不会因重复入队而一直循环；每个节点最多入队一次。
 
+## 依赖环与执行顺序
 
-## 依赖排不出顺序时
+要安排执行，必须把每个任务放在全部前置之后。这种顺序称为<Term id="topological-order">拓扑序</Term>。上图可以按 `fetch, config, build, test` 执行，也可以交换前两个任务，顺序不一定唯一。
 
-要把依赖关系变成一份能照着做的顺序，可以反复挑一个「前置都已经排在前面」的任务放到末尾。这组依赖里 `assets` 与 `tests` 互相等待，这个过程会停在半路。
+如果再加入 `test → build`，`build` 等 `test`，`test` 又等 `build`，形成<Term id="cycle">环</Term>。在“全部前置完成后才能开始”的规则下，谁都不能先完成，因而不存在满足全部依赖的顺序。
+
+简单的排法是反复挑一个前置都已排好的任务。下面按任务名选择第一个就绪项，因此相同输入给出固定输出。字典里的列表保存**前置**，与上面保存后续的 `after` 方向相反；所有前置都必须是字典中的任务。
 
 ```python run id="data-algorithms-and-scale.hierarchy-relations-and-dependencies.order"
-requires = {
-    "mockups": [],
-    "spec": ["mockups"],
-    "code": ["spec"],
-    "assets": ["mockups", "tests"],
-    "tests": ["code", "assets"],
-}
-
-
-def place(needs):
-    order = []
-    left = sorted(needs)
-    while True:
-        ready = None
-        for task in left:
-            waiting = False
-            for prereq in needs[task]:
-                if prereq not in order:
-                    waiting = True
-            if not waiting:
-                ready = task
-                break
-        if ready is None:
-            break
-        order.append(ready)
-        left.remove(ready)
-    return order, left
-
-
-order, left = place(requires)
-print("as given:", order, "left over:", left)
-
-fixed = dict(requires)
-fixed["assets"] = ["mockups"]
-order, left = place(fixed)
-print("one dependency removed:", order, "left over:", left)
-```
-
-按给定的依赖排，只排出 `mockups`、`spec`、`code`，留下 `assets` 与 `tests`：`assets` 等 `tests`，`tests` 又等 `assets`，两条边互相等待，谁都不能先排。这组依赖含一个<Term id="cycle">环</Term>，所以一份满足全部依赖的完整顺序不存在；这与任务数量无关。去掉 `assets` 等 `tests` 这一条依赖，同样的挑法排完全部五个任务，得到 `mockups`、`assets`、`spec`、`code`、`tests`。这样挑出的顺序就是一个<Term id="topological-order">拓扑序</Term>：每个任务都排在它的全部前置之后。
-
-
-## 练习
-
-一份阶段计划把它排不出完整完成顺序解释为「需要处理的阶段太多」。下面这一格把它的前置关系排一遍。判断标准：停滞时逐个看剩下的阶段，它的未完成前置是否都落在剩下的阶段里。
-
-```python run id="data-algorithms-and-scale.hierarchy-relations-and-dependencies.exercise-cycle"
-requires = {
-    "build": ["fetch"],
-    "config": [],
-    "fetch": ["config"],
-    "sign": ["upload"],
-    "upload": ["build", "sign"],
-}
-
+requires = {"fetch": [], "config": [],
+            "build": ["fetch", "config"], "test": ["build"]}
 order = []
 left = sorted(requires)
-while True:
+while left:
     ready = None
     for task in left:
-        unmet = []
+        waiting = False
         for prereq in requires[task]:
             if prereq not in order:
-                unmet.append(prereq)
-        if len(unmet) == 0:
+                waiting = True
+                break
+        if not waiting:
             ready = task
             break
     if ready is None:
         break
     order.append(ready)
     left.remove(ready)
-
 print("order:", order)
-for task in left:
-    unmet = []
-    for prereq in requires[task]:
-        if prereq not in order:
-            unmet.append(prereq)
-    print(task, "unmet prerequisites:", unmet)
+print("not scheduled:", left)
 ```
+
+`remove` 从列表中删除指定值。每轮排出一项，或因没有就绪项而退出。若还剩任务却没有任何就绪项，在前置都有效、没有遗漏节点的假设下，就存在依赖环。剩余任务既可能在环中，也可能只是等待环中的任务，不能把它们全都称为环上的节点。
+
+这个实现方便观察“找就绪项”的规则，反复扫描的成本可能很高。大图上可以维护每个节点尚未完成的前置数量，配合队列避免重复扫描。
+
+## 练习
+
+给 `build` 增加前置 `test`，再增加一个以 `test` 为前置的 `publish` 任务。预测排出的顺序和剩余任务，再运行。哪些任务真正位于环中，哪些只是受环阻塞？如果只删除一个依赖，怎样恢复可执行顺序？

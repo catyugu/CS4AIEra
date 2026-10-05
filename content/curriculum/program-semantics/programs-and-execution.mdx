@@ -10,96 +10,81 @@ objectives:
   - 预测一段短程序结束后每个名字指向什么值，并指出输入改变时哪些结果跟着变
 ---
 
-一次测量记下三个读数 12.5、11.5、12.0，传感器带一个 0.2 的零点偏移，需要从平均值里减去。程序要算出校正后的读数：
+程序可以替我们计算三个数的平均值：
 
 ```python run id="program-semantics.programs-and-execution.order"
-reading_a = 12.5
-reading_b = 11.5
-reading_c = 12.0
-offset = 0.2
-mean = (reading_a + reading_b + reading_c) / 3
-corrected = mean - offset
-print(corrected)
+a = 12.5
+b = 11.5
+c = 12.0
+mean = (a + b + c) / 3
+print(mean)
 ```
 
-运行一遍，输出里只有一行，那个数是校正后的读数。要追踪一次执行，先看每个名字绑定到哪个值、每一次求值得到什么，再看它们按什么顺序发生。
+程序从第一行开始执行。前三行给数值取名，第四行计算平均值，最后一行把结果写到输出里。
 
-## 语句按顺序执行，各自完成一个动作
+## 表达式与赋值
 
-程序是一串语句，从第一行开始逐条执行。这一串里出现三种写法：
+`12.5`、`a`、`a + b + c` 都是表达式（expression）。执行一个表达式，得到它的值，这叫求值。读取名字 `a` 时，得到的是它当前关联的值。
 
-- 表达式（expression）：求值后得到一个值，例如 `12.1`、`reading_a`、`reading_a + reading_b + reading_c`；
-- 赋值语句（assignment）：规定一个动作——先求值等号右边的表达式，再把左边的名字绑定到得到的结果值；
-- 名字绑定（binding）：让一个名字关联到一个值；读一个名字，取回它当前绑定到的值。
+赋值语句 `a = 12.5` 先求值等号右边，再把左边的名字关联到结果。这种关联叫绑定（binding）。`=` 在这里表示赋值；判断两个值是否相等，要用 `==`。
 
-`mean = (reading_a + reading_b + reading_c) / 3` 执行时，右边的和式先求值：读 `reading_a`、`reading_b`、`reading_c` 当前各自绑定到的值，把它们相加得到 `36.0`，再除以 `3`，得到这三个读数的平均，把 `mean` 绑定到这个值。这一步不改动原来三个名字指向的值，只新增一个名字。`corrected = mean - offset` 随后读取 `mean` 与 `offset`，算出 `11.8`，再把 `corrected` 绑定到它。
+执行 `mean = (a + b + c) / 3` 时，先读取三个名字的值，相加得到 `36.0`，再除以 `3`。括号要求先计算加法。最后，名字 `mean` 绑定到结果 `12.0`。这一行不会改变 `a`、`b`、`c` 的绑定。
 
-## 值带有类型，类型决定它能参与哪些运算
+赋值也可以改变已有名字的绑定。`a = a + 1` 先用旧的 `a` 计算，再让 `a` 指向结果。它不会回头重新计算已经赋给 `mean` 的值。
 
-每个值都有一个类型。`12` 的类型是 `int`，`0.2` 的类型是 `float`，`"8"` 的类型是 `str`。`type(...)` 返回一个值的类型。类型决定这个值能参与哪些运算：`+` 对两个整数求它们的和，对两个浮点数求它们的和，对一个整数和一个浮点数也求和（结果是浮点数），对两个字符串把它们首尾拼接。整数与字符串之间没有定义这种加法。
+## 调用函数
+
+`print(mean)` 是一次函数调用（call）。`print` 是 Python 已经提供的函数，括号里的值是交给它的参数。它把参数写到输出中。`print(a, b)` 可以一次打印两个值。
+
+有些函数用于计算并返回一个结果，例如 `round` 把这里的浮点数取整：
+
+```python run id="program-semantics.programs-and-execution.calls"
+value = 11.87
+rounded = round(value)
+shown = print(value)
+print("rounded:", rounded)
+print("shown:", shown)
+```
+
+`round(value)` 返回 `12`，可以把它保存到 `rounded`，继续参与运算。`print(value)` 先输出 `11.87`，它的返回值是 `None`，所以 `shown` 为 `None`。`None` 是一个表示没有结果或缺失的特殊值。
+
+**返回值与输出是两件事。** `rounded = round(value)` 保存了计算结果，却没有打印它；`print(value)` 写出了文字，却没有返回那个数。
+
+## 值有类型
+
+`12` 是整数，类型名是 `int`；`12.5` 是浮点数，类型名是 `float`；带引号的 `"12"` 是字符串，类型名是 `str`。字符串可以表示文本，也可以包含看起来像数字的字符。函数 `type` 返回一个值的类型。
+
+类型决定哪些运算有意义。同一个 `+`，对数值做加法，对字符串做拼接：
 
 ```python run id="program-semantics.programs-and-execution.types"
-reading_a = 12
-reading_b = 8
-offset = 0.2
-total = reading_a + reading_b
-corrected = total - offset
-
-print(type(reading_a), type(offset), type(corrected))
-print(2 + 3, 2 + 3.0, "2" + "3")
-print(type(2 + 3), type(2 + 3.0), type("2" + "3"))
+print(type(12), type(12.5), type("12"))
+print(2 + 3)
+print(2 + 3.0)
+print("2" + "3")
 print(1 + "2")
 ```
 
-前三行打印出各值的类型、三类和运算各自的结果，以及这些结果的类型。`"2" + "3"` 得到 `"23"`，两个操作数都是字符串，`+` 对它们有定义。最后一行 `1 + "2"` 要求把整数与字符串相加，`+` 上没有这条规则，求值失败，报出 `TypeError: unsupported operand type(s) for +: 'int' and 'str'`。
+整数与浮点数相加，结果是浮点数。两个字符串相加得到 `"23"`。最后一行要求整数与字符串相加，Python 没有为这两个类型定义这种操作，于是抛出 `TypeError`，也就是类型错误。
 
-## 调用已有的函数
+## 出错后，哪些语句已经执行
 
-`print(corrected)` 里的 `print` 是一个名字，它绑定到一个已有的函数；`print(corrected)` 是对这个函数的调用（call）。调用先求值括号里的表达式，把得到的值交给函数。`round(...)` 同样是调用。
+赋值 `b = "11.5"` 本身合法，它只是把名字绑定到一个字符串。若把开头程序的第二行改成这样，错误会出现在计算平均值时：`a + b` 要求把浮点数与字符串相加。
 
-每次调用都会得到一个值，有些调用还产生可见的行为。`round(corrected)` 算出与 `11.87` 最接近的整数并把它返回，作为这次调用的结果；`print(corrected)` 把值转成文本写到输出里。
-
-```python run id="program-semantics.programs-and-execution.calls"
-corrected = 11.87
-rounded = round(corrected)
-shown = print(corrected)
-print(rounded, type(rounded))
-print(shown, type(shown))
-```
-
-`round(corrected)` 得到 `12`，类型是 `int`，这个值可以绑定到名字，也可以继续参与运算。`print(corrected)` 先把 `11.87` 写到输出，它这次调用得到的值是 `None`（类型 `NoneType`）：`print` 的作用是把内容写到输出，`None` 不携带计算结果。`corrected = 11.87` 与 `print(corrected)` 的区别也在这里：前者只算出值并交给名字，输出里看不到任何东西；这一段程序里，外部可观察的输出由 `print` 这样的调用产生，计算本身不写任何东西到输出。
-
-## 运算不适用时出错，执行在那一行停下
-
-把开头那段程序里的 `reading_b = 11.5` 改成带引号的 `reading_b = "11.5"`，其余不变：
-
-```python
-reading_a = 12.5
-reading_b = "11.5"
-reading_c = 12.0
-offset = 0.2
-mean = (reading_a + reading_b + reading_c) / 3
-corrected = mean - offset
-print(corrected)
-```
-
-前四行都是正常的赋值：`reading_b` 被绑定到字符串 `"11.5"`，这一步没有出错。执行到 `mean = (reading_a + reading_b + reading_c) / 3`，右边的和式要求把 `12.5` 与 `"11.5"` 相加，`+` 上没有这条规则，求值在这里失败，抛出一个 `TypeError`。执行停在这一行：后面的 `corrected = ...` 与 `print(corrected)` 都不再运行，输出里不会出现校正后的读数。
-
-类型错误通常在程序第一次对这个值执行不受支持的操作时出现；赋值只把值绑定到名字，不检查它以后会参与什么运算。`reading_b = "11.5"` 绑定到名字上的是字符串，`reading_b = 11.5` 绑定到的是浮点数，这个类型差别决定后面哪一行能用 `+`。执行到失败为止已经完成的部分保留下来：打印类型的那段程序里，失败行之前的几条 `print` 已经写入了输出，失败行之后的语句不再执行。
+没有捕获的异常会结束这次执行，失败语句之后的代码不再运行。已经输出的文字不会被撤回。上面的类型示例先打印了类型和三种加法结果，最后才出错；开头的平均值程序则会在到达 `print(mean)` 之前出错。
 
 ## 练习
 
-下面这段程序与开头那段读三个读数、减去零点偏移的程序做相同的计算。
+运行前，先写出两行输出。然后分别做以下修改，预测结果，再运行验证：
 
-1. 把 `reading_b = 11.5` 改成 `reading_b = 14.5`（仍是浮点数）：哪些打印结果变、哪些不变，执行结束时 `mean` 与 `corrected` 各绑定到哪个值？
-2. 把 `reading_b = 11.5` 改成 `reading_b = "11.5"`（带引号的文本）：哪一行最先失败，失败之前输出里有没有内容，哪些行没有执行？
+1. 把 `b` 的初始值改成 `14.5`。
+2. 把 `b` 的初始值改成字符串 `"11.5"`：哪一行首先失败，失败前有没有输出？
 
 ```python run id="program-semantics.programs-and-execution.exercise"
-reading_a = 12.5
-reading_b = 11.5
-reading_c = 12.0
-offset = 0.2
-mean = (reading_a + reading_b + reading_c) / 3
-corrected = mean - offset
-print(mean, corrected)
+a = 12.5
+b = 11.5
+c = 12.0
+mean = (a + b + c) / 3
+a = a + 1
+print("a:", a)
+print("mean:", mean)
 ```
