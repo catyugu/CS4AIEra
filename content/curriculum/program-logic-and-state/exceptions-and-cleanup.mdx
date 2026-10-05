@@ -15,7 +15,7 @@ objectives:
 
 ## try 与 except
 
-`int(text)` 尝试把字符串解析成整数。无法转换时，它抛出 `ValueError`。`try` 标出可能失败的代码，`except ValueError` 处理这类异常：
+`int(text)` 尝试把字符串解析成整数。无法转换时，它抛出 `ValueError`。`try` 中写要尝试执行的代码，`except ValueError` 指定发生这类异常时怎么办：
 
 ```python run id="program-logic-and-state.exceptions-and-cleanup.catch"
 text = "fast"
@@ -31,7 +31,7 @@ print("finished checking")
 
 ## 异常可以传到调用方
 
-如果当前函数没有处理异常，它就不能正常返回。异常沿调用关系传播，由调用方继续寻找匹配的处理代码：
+如果当前函数没有处理异常，它就不能正常返回。异常沿调用关系传播，由调用方继续寻找匹配的处理代码。下面的两个函数分别负责转换耗时、处理一条记录：
 
 ```python run id="program-logic-and-state.exceptions-and-cleanup.path"
 def parse_seconds(text):
@@ -57,7 +57,7 @@ except ValueError as failure:
 
 ## 捕获位置与失败的含义
 
-如果要求“坏记录单独报告，其余记录继续处理”，就把捕获放在逐项处理的循环里：
+如果要求“坏记录单独报告，其余记录继续处理”，就把捕获放在逐项处理的循环里。`entries` 的每项是一对值，`for name, text in entries` 在每轮将它们分别赋给 `name` 和 `text`：
 
 ```python run id="program-logic-and-state.exceptions-and-cleanup.positions"
 entries = [("entry 1", "12"), ("entry 2", "fast"), ("entry 3", "5")]
@@ -78,32 +78,37 @@ print("total for valid entries:", total)
 
 ## 捕获过宽可能掩盖缺陷
 
-`except Exception` 会捕获许多不同类型的异常。下面的函数把参数名 `text` 写成了 `txt`，这是实现错误，即使传入合法的 `"12"` 也会出现 `NameError`：
+一条记录约定用字符串保存耗时，无法解析的文本可以报告为无效。但如果数据来源把“缺失”写成了 `None`，这与无效文本是不同的情况。`int(None)` 会抛出 `TypeError`。
+
+下面两种处理方式遇到这条记录时，会给调用方什么信息？
 
 ```python run id="program-logic-and-state.exceptions-and-cleanup.scope"
-def seconds_from(text):
-    return int(txt)
+def seconds_from(entry):
+    return int(entry["duration"])
 
 
-def broad(text):
+def broad(entry):
     try:
-        return seconds_from(text)
+        return seconds_from(entry)
     except Exception:
-        return 0
+        return None
 
 
-def narrow(text):
+def narrow(entry):
     try:
-        return seconds_from(text)
+        return seconds_from(entry)
     except ValueError:
-        return 0
+        return None
 
 
-print("broad:", broad("12"))
-print("narrow:", narrow("12"))
+entry = {"duration": None}
+print("broad:", broad(entry))
+print("narrow:", narrow(entry))
 ```
 
-`broad` 把名字写错也变成了 0。`narrow` 只捕获转换失败，`NameError` 会继续传播。修正名字后，两次合法调用都返回 12。
+`broad` 的 `except Exception` 捕获了许多不同类型的异常，把缺失值也当成了可处理的文本错误。`narrow` 只捕获 `ValueError`，数据类型不符合约定时，`TypeError` 继续传播。将耗时改成 `"fast"`，两者都返回 `None`；改成 `"12"`，两者都返回 12。
+
+如果业务允许缺失耗时，可以单独检查 `None`，给出相应结果。重点是先决定缺失数据应当怎样处理，再选择代码，而不是把所有异常都变成同一种结果。
 
 选择捕获类型，要依据这段代码能够处理哪些失败。即使类型选得窄，也要检查 `try` 内是不是有多个位置可能抛出同类异常，避免把无关错误当成预期失败。
 

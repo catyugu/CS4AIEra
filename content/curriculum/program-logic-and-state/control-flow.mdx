@@ -1,7 +1,7 @@
 ---
 id: program-logic-and-state.control-flow
 slug: /program-logic-and-state/control-flow
-order: 30
+order: 40
 title: 条件、循环与控制流
 status: published
 objectives:
@@ -14,7 +14,7 @@ objectives:
 
 ## 条件选择要执行的语句
 
-`>=` 比较是否大于或等于，比较结果是布尔值：`True` 表示真，`False` 表示假。执行 `if` 时先判断条件；条件为真，执行其下面缩进的语句，否则执行 `else` 下的语句。
+`>=` 比较是否大于或等于，比较结果是<Term id="boolean">布尔值</Term>：`True` 表示真，`False` 表示假。执行 `if` 时先判断条件；条件为真，执行其下面缩进的语句，否则执行 `else` 下的语句。冒号标出分支的开始，分支内的语句通常缩进四个空格，同一层使用相同的缩进。
 
 ```python run id="program-logic-and-state.control-flow.condition"
 number = -2
@@ -49,25 +49,28 @@ print("sum:", total)
 
 ## while 每轮重新检查条件
 
-如果不是按一份现成列表逐项执行，而是要一直重复到条件不成立，可以用 `while`。例如把一个数不断减半，直到它不大于 1：
+如果要一直重复到条件不成立，可以用 `while`。例如确定至少要翻倍多少次，才能从一份数据增长到目标数量：
 
 ```python run id="program-logic-and-state.control-flow.halving"
-number = 20
-while number > 1:
-    number = number / 2
-    print(number)
-print("stopped at:", number)
+target = 20
+capacity = 1
+doublings = 0
+while capacity < target:
+    capacity = capacity * 2
+    doublings += 1
+    print("capacity:", capacity)
+print("doublings:", doublings)
 ```
 
-每轮开始前都判断 `number > 1`。最后一次减半得到 0.625，再次判断条件为假，便执行循环之后的语句。改成 `number >= 1`，从 16 开始时会多执行一次；相等时是否继续，要由需要完成的计算决定。
+每轮开始前都判断 `capacity < target`。容量依次变成 2、4、8、16、32，到 32 时已经够用，下一次判断为假，循环结束。将目标改为 16，再比较 `<` 与 `<=`：相等时是否还要翻倍，会直接影响结果。
 
-如果删除修改 `number` 的那行，条件一直为真，程序就无法结束。运行这种程序时可以点“停止”，但那只是中止执行，没有让算法完成计算。
+如果删除修改 `capacity` 的那行，目标为 20 时条件一直为真，循环就无法结束。遇到这种程序可以点“停止”，但中止执行不等于完成计算。
 
 ## and 与 or 不一定计算两边
 
 组合条件时，`and` 要求两边都为真，`or` 要求至少一边为真，`not` 则将真假反转。更关键的是计算顺序：Python 从左往右判断，已经能确定结果，就跳过右边。这叫短路求值，规则见 [Python 语言参考：布尔运算](https://docs.python.org/3/reference/expressions.html#boolean-operations)。
 
-假设只在列表非空、第一项大于 10 时输出它。`len(numbers)` 返回元素数，`numbers[0]` 读取第一项；空列表没有第一项。
+假设只在列表非空、第一项大于 10 时输出它。空列表没有第一项，因此必须先检查长度，再读取 `numbers[0]`。
 
 ```python run id="program-logic-and-state.control-flow.short-circuit"
 numbers = []
@@ -91,7 +94,7 @@ else:
 
 `continue` 跳过本轮剩余语句，开始下一轮；`break` 立即结束当前循环。下面只收集前两个非负数：
 
-```python
+```python run id="program-logic-and-state.control-flow.select"
 numbers = [-2, 3, -1, 8, 12]
 selected = []
 for number in numbers:
@@ -107,7 +110,7 @@ print(selected)
 
 ## 练习
 
-把收集数量改成变量 `limit`，让程序返回前 `limit` 个非负数，数量不足时返回全部符合条件的数。下面的写法在 `limit = 2` 时正常；分别检查 0、1，以及大于符合条件项数的值，判断它是否都满足要求。再尝试移动一次数量检查，使这些输入使用同一套规则处理。
+把收集数量改成非负整数 `limit`，收集前 `limit` 个非负数，数量不足时保留全部符合条件的数。下面的写法在 `limit = 2` 时正常。分别检查 0、1，以及大于符合条件项数的值，判断它是否都满足要求。若有问题，调整数量检查的位置。
 
 ```python run id="program-logic-and-state.control-flow.exercise-limit"
 numbers = [-2, 3, -1, 8, 12]

@@ -1,0 +1,47 @@
+---
+id: program-logic-and-state.modules-and-imports
+slug: /program-logic-and-state/modules-and-imports
+order: 80
+title: 模块与导入：使用别处的定义
+status: published
+objectives:
+  - 读懂 import 与 from import 分别建立了什么名字
+  - 用模块名访问其中的函数，并判断导入是否复制了函数
+---
+
+程序常常需要使用已经写好的函数。例如五项内容每页放两项，需要三页；普通除法得到 2.5，还需要向上取整。Python 的 `math` 模块已经提供了这个函数，不必再写一份。
+
+## 通过模块名找到函数
+
+模块把一组相关定义放在一起。`import math` 加载数学模块，并建立名字 `math`，指向这个模块对象：
+
+```python run id="program-logic-and-state.modules-and-imports.module-function"
+import math
+
+items = 5
+per_page = 2
+pages = math.ceil(items / per_page)
+print("pages:", pages)
+```
+
+`math.ceil` 用点号访问模块中的函数，`ceil` 将这里的数向上取整。点号不只用于实例：`first.notes` 访问笔记本的属性，`math.ceil` 访问模块的属性。
+
+Python 文件作为模块加载时，文件最外层定义的函数、类和变量，都在模块的<Term id="namespace">命名空间</Term>中。自己的文件也是如此：若 `notebook.py` 定义了 `Notebook`，其他文件使用 `import notebook` 后，可以调用 `notebook.Notebook("draft")`。本页的单元格不创建这些文件，只使用运行环境已有的模块。
+
+## 也可以直接导入一个名字
+
+`from math import ceil` 在当前位置建立名字 `ceil`，于是可以直接调用它：
+
+```python run id="program-logic-and-state.modules-and-imports.imported-name"
+import math
+from math import ceil
+
+print("pages:", ceil(5 / 2))
+print("same function:", math.ceil is ceil)
+```
+
+两种写法引用的是同一个函数，最后一行输出 `True`。导入没有复制函数，也没有把 `math` 中的所有名字都放进当前代码。用 `math.ceil` 调用时，函数来自哪个模块也一目了然。导入规则见 [Python 教程：模块](https://docs.python.org/3/tutorial/modules.html)。
+
+## 练习
+
+只保留 `from math import ceil`，`ceil(5 / 2)` 和 `math.ceil(5 / 2)` 是否都能使用？在第二个单元格中删去第一行，先预测，再运行。随后只保留 `import math`，检查同样的问题。

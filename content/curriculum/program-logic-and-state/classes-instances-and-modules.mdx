@@ -2,15 +2,16 @@
 id: program-logic-and-state.classes-instances-and-modules
 slug: /program-logic-and-state/classes-instances-and-modules
 order: 70
-title: 类、实例与模块
+title: 类与实例：把状态和操作放在一起
 status: published
 objectives:
   - 说明实例、属性与方法之间的关系
   - 区分每个实例各自的状态与类上共享的状态
-  - 读懂模块对象、模块命名空间与导入后的名字
 ---
 
-一份笔记本保存名称和若干条笔记。把这些状态与添加笔记的操作写在一起，就可以用一个对象表示一本笔记本。类定义这种对象有哪些状态、怎样操作；根据类创建的具体对象称为实例。
+一本笔记本保存名称和若干条笔记。用列表保存笔记、用函数追加内容，已经能完成这些操作。如果要管理多本笔记本，还可以把每本的状态与操作组织成一个对象。
+
+类定义这种对象怎样初始化、提供哪些操作；根据类创建的具体对象称为实例。下面只定义一种笔记本，然后创建两本，观察它们的笔记是否独立。
 
 ## 一个类可以创建多个实例
 
@@ -33,7 +34,9 @@ print(second.name, second.notes)
 print("same list:", first.notes is second.notes)
 ```
 
-`class Notebook:` 创建一个类对象，绑定到 `Notebook`。`Notebook("draft")` 创建这个类的一个实例，并调用 `__init__` 初始化它。`self` 接收到这个新实例，`name` 接收到字符串 `"draft"`。
+`class Notebook:` 定义一个类，绑定到名字 `Notebook`。类体里的 `def` 定义它提供的方法，缩进表示这些方法属于这个类。`__init__` 是 Python 约定的初始化方法名，两边各有两个下划线。
+
+`Notebook("draft")` 创建这个类的一个实例，并调用 `__init__` 初始化它。`self` 接收到这个新实例，`name` 接收到字符串 `"draft"`。
 
 `self.name = name` 在实例上建立属性 `name`，`self.notes = []` 建立属性 `notes`。每次初始化都新建列表，因此两个笔记本各有自己的笔记列表，最后一行打印 `False`。用点号访问属性，例如 `first.notes`，就能取得实例保存的对象。
 
@@ -69,27 +72,6 @@ print("same list:", first.notes is second.notes)
 类体中的 `notes = []` 在创建类时执行一次，列表保存在类对象上，这叫<Term id="class-attribute">类属性</Term>。两个实例都没有自己的 `notes` 属性，读取时就找到类上的同一个列表。一次追加使两个笔记本都看到 `first idea`。
 
 如果笔记列表属于各个笔记本，就在 `__init__` 中为每个实例新建列表；如果所有笔记本确实要共同维护一份笔记列表，才使用共享对象。判断依据是笔记列表应该由谁保存和修改。
-
-## 模块对象与命名空间
-
-类把一个对象的状态和操作组织在一起。程序变大以后，还需要组织多组类、函数与常量，让不同文件能使用这些定义；模块处理的是这些名字放在哪里、怎样找到它们。
-
-模块把一组相关定义放在一起。Python 文件作为模块加载时，顶层名字保存在模块的命名空间中。命名空间是一组名字到对象的对应。其他模块可以通过导入访问这些名字。
-
-`math` 是 Python 提供的数学模块。它的 `ceil` 函数向上取整：`5 / 2` 是 2.5，向上取整得到 3。例如每页放两项，五项需要三页。
-
-```python
-import math
-from math import ceil
-
-pages = math.ceil(5 / 2)
-print("pages:", pages)
-print("same function:", math.ceil is ceil)
-```
-
-`import math` 在当前命名空间建立名字 `math`，指向模块对象；`math.ceil` 访问该模块的 `ceil` 属性。`from math import ceil` 则在当前命名空间直接建立名字 `ceil`，绑定到同一个函数。导入不复制函数，也不会让模块里的所有名字自动成为本地名字。
-
-自己的文件也是如此。例如 `notebook.py` 顶层定义了 `Notebook`，其他文件使用 `import notebook` 后便可以调用 `notebook.Notebook("draft")`。模块命名空间避免不同文件的顶层名字直接混在一起，但不表示这些名字无法被外部访问。导入规则见 [Python 教程：模块](https://docs.python.org/3/tutorial/modules.html)。
 
 ## 练习
 

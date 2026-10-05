@@ -1,7 +1,7 @@
 ---
 id: program-logic-and-state.sequences-sets-and-mappings
 slug: /program-logic-and-state/sequences-sets-and-mappings
-order: 40
+order: 30
 title: 序列、集合与映射
 status: published
 objectives:
@@ -10,7 +10,7 @@ objectives:
   - 预测修改容器后得到的内容与访问不存在元素时的结果
 ---
 
-同样的几个值，可以保存成列表，也可以保存成集合。用哪种容器，决定了我们还能区分哪些信息。
+三次测量得到 `[4, 7, 4]`。需要计算平均值时，两次 4 都要保留；只问出现过哪些数时，重复次数可以忽略。列表、集合和字典都能容纳多个值，但保存的信息不同。
 
 ## 序列保存次序和重复
 
@@ -18,15 +18,27 @@ objectives:
 
 列表可以修改：`values[1] = 8` 替换第二项，`values.append(9)` 在末尾追加。这些操作改变原列表，所有指向它的名字都会看到修改。
 
-切片 `values[:2]` 取得前两项，`values[1:]` 取得从下标 1 到末尾的部分，返回新列表。切片末尾不包括在内；超出实际长度时，取到已有的那部分即可。
+```python run id="program-logic-and-state.sequences-sets-and-mappings.list-positions"
+values = [4, 7, 4]
+print("length:", len(values))
+print("second:", values[1])
+values[1] = 8
+values.append(9)
+print("updated:", values)
+print("first two:", values[:2])
+```
+
+最后一行使用<Term id="slice">切片</Term>：`values[:2]` 取得下标 2 之前的元素，返回新列表。`values[1:]` 则从下标 1 取到末尾。切片允许只取实际存在的部分；直接读取 `values[10]` 会报 `IndexError`，因为列表没有这个位置。空列表的长度为 0，也没有下标为 0 的元素。
 
 元组也属于序列，适合把几个相关值放在一起，例如坐标 `(3, 5)`。它的元素位置固定，创建后不能替换。`x, y = (3, 5)` 将两项分别赋给两个名字，称为解包；这里的名字数要与元素数一致。
+
+解包也可以处理由列表保存的一对值，例如 `x, y = [3, 5]`。
 
 ## 集合保存不同的值
 
 集合只保留互不相同的元素。`set(values)` 将列表转换成集合，`4 in unique` 判断 4 是否在集合里。观察转换后还剩哪些信息：
 
-```python
+```python run id="program-logic-and-state.sequences-sets-and-mappings.set-membership"
 values = [4, 7, 4]
 unique = set(values)
 print("list length:", len(values))
@@ -37,13 +49,13 @@ print("list first:", values[0])
 
 列表长度为 3，集合大小为 2。集合仍能回答“有没有 4”，但两个 4 变成一项，已经无法恢复原来的次数与位置。集合没有第一个、第二个这样的下标，也不保证按加入顺序遍历。
 
-`{4, 7}` 可以直接创建集合，`set()` 创建空集合。空的 `{}` 则表示字典。
+`{4, 7}` 可以直接创建集合，`set()` 创建空集合。空的 `{}` 则表示字典。`unique.add(9)` 把 9 加入集合，再加入相同的值也不会多出一项。`in` 是成员检查，也能用于列表，例如 `4 in values`；`not in` 检查是否不存在。
 
 ## 映射保存键值对应
 
 映射按键找到对应值。Python 的字典 `dict` 就是一种映射：
 
-```python
+```python run id="program-logic-and-state.sequences-sets-and-mappings.mapping-update"
 prices = {"apple": 4, "pear": 7}
 print("apple:", prices["apple"])
 prices["apple"] = 5
@@ -51,9 +63,11 @@ print("updated:", prices["apple"])
 print("key count:", len(prices))
 ```
 
-`"apple"` 是键，4 是原来的值。对同一键再次赋值，替换它对应的值，不增加一个同名键。一个键只对应一个值；若要保留多次报价，可以把报价列表作为这个值。
+`"apple"` 是键，4 是原来的值。对同一键再次赋值，替换它对应的值，不增加一个同名键。一个键只对应一个值，这个值也可以是列表等容器。
 
 `"apple" in prices` 检查键是否存在。直接读取没有保存的键会抛出 `KeyError`，如 `prices["banana"]`。键标识的是所查项目，不是它在容器中的第几个位置。
+
+字符串和整数可以作为字典键，也能作为集合元素。列表则不能，因为这两种容器要求键或元素支持稳定的<Term id="hash-value">哈希值</Term>。当前例子使用字符串或整数即可，查找机制在下一章再讨论。
 
 [Python 字典](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)保持键的插入顺序，更新值不改变这个顺序。这是 Python 的语言保证，抽象的映射只要求键值对应，不必要求插入顺序。
 
@@ -69,11 +83,13 @@ print("key count:", len(prices))
 
 ## 练习
 
-一天三次报价是 `[4, 7, 4]`。有人建议只保存集合，再用集合的元素算平均报价。用原列表与转换后的集合各算一次，比较结果，并说明丢失了什么信息。`sum` 返回数值之和。
+下面按水果名保存报价。一天里同一种水果可以报价多次，现在的字典是否保留了全部报价？先预测输出，再运行。如果既要按水果查找，又要保留每次报价，应怎样改变字典里的值？
 
 ```python run id="program-logic-and-state.sequences-sets-and-mappings.exercise"
-quotes = [4, 7, 4]
-unique = set(quotes)
-print("original mean:", sum(quotes) / len(quotes))
-print("set mean:", sum(unique) / len(unique))
+prices = {}
+prices["apple"] = 4
+prices["pear"] = 7
+prices["apple"] = 6
+print("prices:", prices)
+print("apple:", prices["apple"])
 ```

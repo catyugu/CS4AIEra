@@ -7,124 +7,117 @@ status: published
 objectives:
   - 从一份工作负载描述里选出表示与算法并说明依据
   - 用操作频率与操作成本淘汰明显不合理的候选
-  - 指出 Agent 给出的方案在规模、表示与失败条件下的薄弱处
+  - 检查方案是否保留数据，以及更新后是否仍能正确查询
   - 说明方案假设是否被满足
 ---
 
-一个仿真结果库上线前，Agent 提交了这样的方案：
+一个书目查询功能准备上线。初版方案如下：
 
-> 用以 `run_id` 为键的字典保存每次运行。打开详情时按键读取。按参数组、成功状态和指标门槛筛选时，遍历全部值，再把命中的记录按指标排序。字典查找很快，所以查询性能已经优化好了。数据规模按建库时的快照考虑。
+> 用以 `id` 为键的字典保存书目。打开详情时按键读取。按分类、可借状态和评分门槛筛选时，遍历全部值，再把命中的记录按评分排序。字典查找很快，应该能满足查询需求。
 
-需求却是保留全部运行结果，库还会继续增长。运营方给出的<Term id="workload">工作负载</Term>如下：
+书目会继续增加，借出和归还也会改变可借状态。目前对使用情况的估计如下：
 
 | 项目 | 规模或频率 |
 | --- | --- |
-| 当前记录数 | 50000 条，每月增长约 5% |
+| 当前书目数 | 50000 条，每月增长约 5% |
 | 按条件筛选 | 每天约 20000 次 |
-| 按 run_id 打开详情 | 每天约 2000 次 |
-| 追加记录、更新状态 | 每天约 200 次 |
-| 参数组 | 20 个，数量分布尚未统计 |
+| 按编号打开详情 | 每天约 2000 次 |
+| 追加书目、更新记录 | 每天约 200 次 |
+| 分类 | 20 个，各类书目数量尚未统计 |
 
-审查要回答的是：方案是否保留所需数据，哪类操作消耗最多，以及增长和写入是否会破坏它的假设。
+这是一个假设的工作负载，用来比较方案；增长率也只是估计。查询要求沿用章首的约定：返回目标分类中评分不低于门槛的可借书目，评分从高到低，同分时按编号升序。怎样判断初版方案够不够用？
 
 ## 字典加速了哪种查询
 
-按 `run_id` 取详情，确实可以利用字典的键。筛选按参数组、状态和指标进行，这些字段存在值里，字典并没有按它们组织记录，因此仍要逐条检查。
+按 `id` 取详情，确实可以利用字典的键。筛选需要分类、可借状态和评分，这些字段存在值里，字典没有按它们组织记录，因此仍要逐条检查。
 
-假设每次筛选必须检查全部 $n$ 条记录，当前每天检查的记录条次是 $20000n$。可以直接计算这个量，无须用一个只做计数的循环模拟扫描：
+假设每次筛选检查全部 $n$ 条记录，当前每天检查的记录条次是 $20000n$：
 
 | 时点 | 记录数约为 | 每天筛选检查的记录条次约为 |
 | --- | ---: | ---: |
 | 当前 | 50000 | 10 亿 |
 | 一年后，按每月 5% 增长 | $50000\times 1.05^{12}\approx 89800$ | 18 亿 |
 
-当前每天十亿条次检查，只是工作量估计，不能直接断言耗时或不可行。还要结合每条检查的成本和时间预算。按每月 5% 增长，一年后记录数约为现在的 1.8 倍；如果查询次数不变，扫描工作也相应增长。
+“十亿条次”指所有查询合计的检查次数，同一条记录会被反复检查。它不能直接换算成运行时间，还要知道每条检查的成本和允许等待多久。
 
-这还没有计算命中结果的排序。一次命中 $r$ 条记录，比较排序通常需要 $O(r\log r)$ 的工作，返回结果本身也有成本。详情查找、写入与记录扫描不是相同的基本操作，不能仅按调用数量算出各自占总耗时的百分比。
+这还没有计入排序。一次命中 $r$ 条记录，比较排序的成本上界为 $O(r\log r)$，返回结果本身也有成本。按键查找和逐条筛选不是相同的基本操作，不能只根据调用次数算出它们各占多少运行时间。
 
-## 减少每次筛选的范围
+## 比较准备、查询与更新
 
-可以比较三种候选：
+可以考虑三种方案：
 
-| 方案 | 每次查询的工作 | 其他代价 |
+| 方案 | 每次筛选的工作 | 准备与更新的代价 |
 | --- | --- | --- |
-| 扫描全部记录 | 检查 $n$ 条，再排序命中项 | 无额外分组结构 |
-| 每次查询先按参数组排序 | 对全库排序，再定位组内记录 | 每次都重做排序，很可能比直接扫描更贵 |
-| 维护按参数组组织的索引 | 只检查目标组的 $k$ 条，再排序命中项 | 额外空间、构建和更新成本 |
+| 扫描全部记录 | 检查 $n$ 条，再排序命中项 | 无额外分类结构 |
+| 保存按分类排序的列表 | 二分找到分类范围，检查其中的 $k$ 条，再排序命中项 | 初次排序；追加或改分类时要维护有序性 |
+| 维护“分类 → 记录列表”索引 | 按分类取得 $k$ 条，检查后排序命中项 | 初次分组、额外空间；追加或改分类时要维护分组 |
 
-按组索引的做法见 <CrossRef id="data-algorithms-and-scale.representation-preprocessing-and-indexes" />。这里实际比较全库扫描与组内扫描，排序需求暂保持相同：
+这里的排序列表按分类排列，不能同时保证每次筛选的结果按评分排列。两种整理方法都减少了扫描范围，但都还有查询和更新成本。
+
+下面实际比较全库扫描与分类索引。两次使用同一个查询函数，区别只在交给它检查的记录范围：
 
 ```python run id="data-algorithms-and-scale.design-review.group-query"
-runs = [
-    {"run_id": "r1", "group": "A", "success": True, "score": 0.8},
-    {"run_id": "r2", "group": "B", "success": True, "score": 0.9},
-    {"run_id": "r3", "group": "A", "success": False, "score": 0.7},
-    {"run_id": "r4", "group": "A", "success": True, "score": 0.5},
+books = [
+    {"id": "b1", "category": "science", "available": True, "rating": 4.0},
+    {"id": "b2", "category": "science", "available": False, "rating": 4.9},
+    {"id": "b3", "category": "history", "available": True, "rating": 4.7},
+    {"id": "b4", "category": "science", "available": True, "rating": 4.5},
 ]
-by_group = {}
-for run in runs:
-    group = run["group"]
-    if group not in by_group:
-        by_group[group] = []
-    by_group[group].append(run)
+by_category = {}
+for book in books:
+    category = book["category"]
+    if category not in by_category:
+        by_category[category] = []
+    by_category[category].append(book)
 
 
-def scan_all(records, wanted, threshold):
+def ranking_key(book):
+    return (-book["rating"], book["id"])
+
+
+def query(records, category, threshold):
     matched = []
-    for record in records:
-        if record["group"] == wanted and record["success"] and record["score"] >= threshold:
-            matched.append(record["run_id"])
-    return matched
+    for book in records:
+        if book["category"] == category and book["available"] and book["rating"] >= threshold:
+            matched.append(book)
+    return sorted(matched, key=ranking_key)
 
 
-def scan_group(group_records, threshold):
-    matched = []
-    for record in group_records:
-        if record["success"] and record["score"] >= threshold:
-            matched.append(record["run_id"])
-    return matched
-
-
-wanted = "A"
-group_records = by_group.get(wanted, [])
-print("whole scan:", scan_all(runs, wanted, 0.5))
-print("group scan:", scan_group(group_records, 0.5))
-print("records checked:", len(runs), len(group_records))
+category_books = by_category.get("science", [])
+print("whole scan:", query(books, "science", 4.0))
+print("category scan:", query(category_books, "science", 4.0))
+print("records checked:", len(books), len(category_books))
 ```
 
-`scan_all` 检查参数组、成功状态与指标。`scan_group` 的输入已经由索引选定参数组，只检查后两项；索引有效是这个函数的输入要求。两次筛选输出一致，第二次只查看 A 组。这并不保证每次都省很多：若目标组包含绝大多数记录，$k$ 接近 $n$。只有各组近似均匀时，才可以估计 $k \approx n/20$。
+`sorted(matched, key=ranking_key)` 返回排好序的新列表，不修改 `matched`。`key` 指定一个函数，为每本书生成比较用的值；这里把函数交给排序工具，不在这个位置自己调用它。
 
-索引需要维护。追加记录要加入相应分组；改参数组要从旧组移到新组。这里只按组建立索引，组内记录的成功状态与指标仍在查询时检查。若进一步按状态或指标组织，还要承担相应更新成本。
+`ranking_key` 返回元组 `(-评分, 编号)`。元组先比较第一项，同分时再比较第二项。评分前加负号，较高评分便有较小的比较值，因此升序排序得到“评分从高到低，编号从小到大”。规则见 [Python 排序指南：键函数](https://docs.python.org/3/howto/sorting.html#key-functions)。
 
-## 核对方案假设
+两次输出都先是 `b4`、再是 `b1`。分类索引让第二次只检查三条科学类书目，而全库扫描要检查四条。若目标分类包含绝大多数书目，$k$ 接近 $n$，就省不了多少。只有各类数量近似均匀时，才可以估计 $k\approx n/20$。
 
-**规模。** “只考虑初始快照”与持续增长不符。查询量、分组分布也可能改变，应按目标期间的规模估算，实测是否满足延迟预算。
+## 更新以后，哪些假设还要成立
 
-**唯一性。** 要保留全部运行，`run_id` 必须唯一标识一次运行。若重跑共用标识，字典会覆盖旧记录。可以为每次运行分配唯一标识，或使用标识与版本组成的唯一键；静默覆盖不能替代需求确认。
+借出一本书时，只修改它的 `available`，按分类索引仍有效，因为分类没变，查询也会重新检查可借状态。把一本书改到另一类，就要从旧分类列表移除，再加入新分类列表。共享记录对象不会自动维护这种分组关系。
 
-**更新。** 索引必须与主记录保持一致。即使例子里保存了同一条记录的引用，修改参数组也不会自动把它移到另一个列表。若维护已排序的索引，追加和指标变化还必须维护有序性。
-
-**收益。** 每天两万次查询值得研究预处理，但读写比例不能独自证明方案划算。还要看各组实际大小、额外内存、更新成本与时间预算。若测量发现排序占主要时间，单独减少扫描可能还不够。
-
-这份方案应先确认唯一性与增长假设，再针对高频筛选评估索引。按键取详情很快，只解释了其中一种操作。
+每个编号还必须唯一标识需求中的一本书。如果同一书目编号下要保存多册副本，单个字典值就要能表达这些副本；若每册分别编号，也要明确编号代表什么。先确定数据含义，再决定同名键该覆盖、合并还是拒绝。
 
 ## 练习
 
-下面建库代码是否满足“全部运行结果都要保留”？先预测记录数和 A 组查询结果，再运行。分别考虑“重跑必须保留”和“只留最新结果”两种需求，说明该如何处理重复标识。`by_id.values()` 遍历字典保存的值，也就是这里的记录。
+书目系统收到两批数据，下面的导入方式是否符合需求？先预测保存的记录数和科学类查询结果，再运行。分别考虑“第二批是修正资料”和“第二批是另一册新书”两种情况：编号重复时应该覆盖、另分编号，还是报告冲突？`by_id.values()` 遍历字典的值，也就是这里的书目记录。
 
 ```python run id="data-algorithms-and-scale.design-review.dict-drops-record"
 rows = [
-    {"run_id": "r1", "group": "A", "score": 0.8},
-    {"run_id": "r2", "group": "A", "score": 0.7},
-    {"run_id": "r1", "group": "B", "score": 0.4},
+    {"id": "b1", "category": "science", "rating": 4.0},
+    {"id": "b2", "category": "science", "rating": 4.7},
+    {"id": "b1", "category": "history", "rating": 4.5},
 ]
 by_id = {}
 for row in rows:
-    by_id[row["run_id"]] = row
+    by_id[row["id"]] = row
 print("source count:", len(rows), "stored count:", len(by_id))
 matched = []
 for row in by_id.values():
-    if row["group"] == "A":
-        matched.append(row["run_id"])
-print("group A:", matched)
+    if row["category"] == "science":
+        matched.append(row["id"])
+print("science:", matched)
 ```
