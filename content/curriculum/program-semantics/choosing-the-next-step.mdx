@@ -10,13 +10,13 @@ objectives:
   - 指出分支条件写错之后会出现什么结果
   - 说明一个循环在什么条件下会停下来
 ---
-三次仿真跑完，结果装在一个列表里：`r1` 与 `r3` 的状态是 `converged`，`r2` 的状态是 `failed`。程序从头走一遍这个列表，对每一条测试它的状态：如果状态是 `converged`，就把 `run_id` 追加进 `finished`，否则跳过。这次运行结束，`finished` 里有两个 id。我们希望用程序化的语言描述这个流程。
+三次仿真跑完，结果装在一个列表里：`r1` 与 `r3` 的状态是 `converged`，`r2` 的状态是 `failed`。程序从头走一遍这个列表，对每一条测试它的状态：如果状态是 `converged`，就把 `run_id` 追加进 `finished`，否则跳过。这次运行结束，`finished` 里有两个 id。
 
 ## 条件决定一段语句是否执行
 
-执行到 `if` 时先求值它后面的条件，得到一个真值：真就执行它下面缩进的那一段语句，假就整段跳过，转去看下一个 `elif`；`elif` 的条件依次不成立时才执行 `else` 那一段。缩进决定每一段的边界，缩进相同且相邻的语句在同一段里。分支按书写顺序从上往下判断，第一个为真的分支执行，它之后的条件不再求值。两个条件可以在同一条记录上同时为真时，书写顺序决定哪一个生效。
+执行到 `if` 时先求值它后面的条件，得到一个真值：真就执行它下面缩进的那一段语句，假就跳到 `else` 那一支。缩进决定每一段的边界，缩进相同且相邻的语句在同一段里。分支多于两个时写成 `if` → `elif` → `else`：按书写顺序从上往下判断，第一个为真的分支执行，它之后的条件不再求值。
 
-程序对每一条记录做一次这样的判断：条件为真，`finished.append(run["run_id"])` 执行；条件为假，这一句跳过，程序从 `if` 那一段直接转到循环体的下一步。
+程序对每一条记录做一次这样的判断：条件为真，`finished.append(run["run_id"])` 执行；条件为假，改执行 `else` 那一支。
 
 ## 遍历一批数据
 
@@ -29,16 +29,20 @@ runs = [
     {"run_id": "r3", "status": "converged"},
 ]
 finished = []
+failed = []
 for run in runs:
     print(run["run_id"], run["status"])
     if run["status"] == "converged":
         finished.append(run["run_id"])
+    else:
+        failed.append(run["run_id"])
 print("finished:", finished)
+print("failed:", failed)
 ```
 
 `for X in 序列:` 在每次进入循环体之前把 `X` 绑定到序列里的下一个元素，然后执行下面缩进的那一段；元素取完，循环结束。递增下标、判断是否越界、在什么时刻停止，都由这条语句处理，循环体里不出现这些。
 
-输出是 3 行迭代记录，加一行结果。第 1 行 `r1`、`converged`，条件为真，`append` 执行；第 2 行 `r2`、`failed`，条件为假，`append` 在这一条上被跳过；第 3 行 `r3`、`converged`，`append` 执行。循环转 3 圈，等于列表长度，`append` 执行 2 次，`finished` 是 `['r1', 'r3']`。哪几条记录进入 `if` 的那一支，由每一条 `status` 的取值决定。
+输出是 3 行迭代记录，加两行结果。第 1 行 `r1`、`converged`，走 `if` 那一支；第 2 行 `r2`、`failed`，走 `else` 那一支；第 3 行 `r3`、`converged`，走 `if` 那一支。循环在这个列表上转 3 圈，`finished` 是 `['r1', 'r3']`，`failed` 是 `['r2']`。哪一条记录进入哪一支，由它自己 `status` 的取值决定。
 
 ## 收敛循环：残差与步数上限
 
@@ -70,9 +74,9 @@ while residual > tolerance and iterations < max_iterations:
 print(iterations, residual <= tolerance)
 ```
 
-输出的 `iterations` 是 20、`residual <= tolerance` 是 `False`：20 圈之后残差仍在容差之上，循环由 `iterations < max_iterations` 这一半条件停下，这一次运行没有收敛。收敛循环通常同时写两半条件：一半是收敛判据 `residual > tolerance`，一半是步数上限 `iterations < max_iterations`。上限在残差正常下降时不影响结果，它保证即使残差不再下降，程序也在有限步内停下，并把这次运行记为未收敛；列表里 `r2` 的 `failed`，就是这类在步数上限内没压到容差以内的运行。
+输出的 `iterations` 是 20、`residual <= tolerance` 是 `False`：20 圈之后残差仍在容差之上，循环由 `iterations < max_iterations` 这一半条件停下，这一次运行没有收敛。收敛循环通常同时写两半条件：一半是收敛判据 `residual > tolerance`，一半是步数上限 `iterations < max_iterations`。上限在残差正常下降时不影响结果，它保证即使残差不再下降，程序也在有限步内停下，并把这次运行记为未收敛；本例把列表里的 `failed` 读作「在步数上限内没压到容差以内」这一类运行。
 
-遍历一批元素用 `for`，圈数由序列长度决定，循环体里没有推动某个量变化的语句。重复次数由循环体里算出的量决定时用 `while`，条件里至少有一个量在每圈朝使它变假的方向移动。
+遍历一个序列用 `for`：每圈把下一个元素绑定到名字上，元素取完就结束，循环体里没有推动某个量变化的语句；`for` 也能遍历长度事先不知道的序列，`break` 会让它提前结束。重复次数由循环体里算出的量决定时用 `while`，条件里至少有一个量在每圈朝使它变假的方向移动。
 
 ## 条件写错以后
 

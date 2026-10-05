@@ -18,7 +18,7 @@ objectives:
 
 `name = expr` 分两步执行：先求值 `expr`，得到一个对象；再把当前命名空间中的 `name` 绑定到这个对象。执行前后没有任何对象被改写。读取一个名字，取回它当前指向的那个对象。
 
-对象有三个彼此独立的属性。身份（identity）在对象的整个存活期内不变，`is` 判断两个名字是否指向同一个对象；类型（type）决定这个对象提供哪些操作；值是这些操作读到和写入的内容。可变性由类型决定：类型里有没有改写自身内容的操作，决定一个对象创建之后能不能被就地修改。
+描述一个对象时要分开三件事。身份（identity）在对象的整个存活期内不变，`is` 判断两个名字是否指向同一个对象；类型（type）决定这个对象提供哪些操作；值是这些操作读到和写入的内容。可变性由类型决定：类型里有没有改写自身内容的操作，决定一个对象创建之后能不能被就地修改。
 
 `analysis_view = samples` 把两个名字绑到同一个对象，它们互为<Term id="alias">别名</Term>。涉及名字的语句分成两类：
 
@@ -58,7 +58,7 @@ print("kept:", kept)
 print("reading is kept:", reading is kept)
 ```
 
-`kept` 仍读出 `12.5`：`reading + 0.2` 创建了新对象，`reading` 换指新对象，`kept` 的绑定没有改变，`reading is kept` 打印 `False`。不可变对象没有修改自身内容的操作，改变的是名字的指向，不是对象的内容。
+`kept` 仍读出 `12.5`：`reading + 0.2` 创建了新对象，`reading` 换指新对象，`kept` 的绑定没有改变，`reading is kept` 打印 `False`。不可变对象没有修改自身内容的操作，改变的是名字的指向，不是对象的内容。元组自身也没有改写内容的操作，但它可以引用一个列表，通过那个元素仍能改到里面的内容。
 
 列表、字典、集合提供修改自身的操作：对同一个列表的追加、删除、排序都改写这个对象，不产生新容器。
 
@@ -76,7 +76,7 @@ print("batches is working:", batches is working)
 print("batches[0] is working[0]:", batches[0] is working[0])
 ```
 
-`list(batches)` 建出一个新的外层列表，`batches is working` 打印 `False`；元素位置上的引用被原样复制，`batches[0] is working[0]` 打印 `True`，两个位置的第一个批次是同一个列表。给 `working[0]` 追加读到的 `0.97` 同时出现在 `batches[0]` 里：这次复制隔离的只有外层容器。改动发生在批次内部的元素上时，需要<Term id="deep-copy">深拷贝</Term>递归复制可达的子对象，标准库的 `copy.deepcopy` 提供这个操作。
+`list(batches)` 建出一个新的外层列表，`batches is working` 打印 `False`；元素位置上的引用被原样复制，`batches[0] is working[0]` 打印 `True`，两个位置的第一个批次是同一个列表。给 `working[0]` 追加读到的 `0.97` 同时出现在 `batches[0]` 里：这次复制隔离的只有外层容器。改动发生在批次内部的元素上时，浅拷贝不够；要隔离到那一层，需要<Term id="deep-copy">深拷贝</Term>：递归复制可达的子对象，让副本持有自己的那一份。
 
 ## 共享在什么时候成为缺陷
 

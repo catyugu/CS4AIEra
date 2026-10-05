@@ -64,7 +64,7 @@ print(distinct_ids[1])
 
 `distinct_ids` 只留下不同的值，长度为 3，两个 `build-index` 合成一个。集合没有位置，`distinct_ids[1]` 抛 `TypeError: 'set' object is not subscriptable`。
 
-`by_id` 由 `(id, title)` 构成，键是标识、值是标题；重复的标识在字典里只留一份，`list(by_id)` 给出三个键。按键取值 `by_id["send-digest"]` 得到 `Send weekly digest`。列表没有键这一层，`by_position["send-digest"]` 抛 `TypeError: list indices must be integers or slices, not str`，下标位置的类型必须是整数。
+`by_id` 由 `(id, title)` 构成，键是标识、值是标题；同一个标识在字典里只对应一个键，后写入的那条覆盖先写入的；`list(by_id)` 给出三个键。按键取值 `by_id["send-digest"]` 得到 `Send weekly digest`。列表没有键这一层，`by_position["send-digest"]` 抛 `TypeError: list indices must be integers or slices, not str`，下标位置的类型必须是整数。
 
 按键取值在键不存在时失败：`by_id["archive-logs"]` 抛 `KeyError: 'archive-logs'`。字典的 `get` 把键不存在变成一次默认值返回，`by_id.get("archive-logs", "unassigned")` 得到 `unassigned`。
 
@@ -76,7 +76,7 @@ print(distinct_ids[1])
 
 按提交顺序列出要求形状保留位置与先后，序列保留，集合不保留。去掉重复要求每个标识只出现一次，集合与字典的键各留一份，序列不合并。按标识取出要求从标识直接定位到任务，字典按键定位，序列只能按下标取出后由程序比较标识。
 
-字典同时满足三件事：键是标识，键不重复，`list(by_id)` 按提交顺序给出全部键。序列同时满足顺序、位置与取出第几个，但它没有标识到元素的对应，也不合并重复。集合满足去重与成员判断，但没有位置，也不保留先后。
+字典承担前两件：键是标识，键不重复。`list(by_id)` 按提交顺序给出全部键，这一条来自 Python 字典实现的插入顺序，不是映射这一形状的规定。序列同时满足顺序、位置与取出第几个，但它没有标识到元素的对应，也不合并重复。集合满足去重与成员判断，但没有位置，也不保留先后。
 
 从键定位值只要求每个键最多对应一个值，不要求保存键的先后。Python 的字典额外保留键的插入顺序（见 [映射类型 dict](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)），这是该实现给出的保证；按键定位值属于映射这一形状的规定，插入顺序不属于它。同一批数据换形状时，丢掉的是新形状没有表达的那一类事实：从序列进集合丢掉位置与重复，从字典只取出键就丢掉值一侧的对应。
 
