@@ -6,9 +6,6 @@ aliases:
   - memoization
   - 备忘录
 short: 把每个子问题的解记下来，再次遇到同一个子问题时直接取用。
-related:
-  - pseudo-polynomial
-  - recurrence
 ---
 
 记忆化在执行递归时保存每个子问题的结果：子问题出现时先查表，命中就直接返回，未命中才计算并存入表中。它消掉重叠子问题的重复计算。
