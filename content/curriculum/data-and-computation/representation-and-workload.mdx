@@ -11,6 +11,99 @@ objectives:
   - 指出换一种表示以后哪一类操作变贵
 ---
 
-{/* 骨架段（作者备注）：正式扩写时用一个具体情境、反常输出或必须作出的选择替换本段，不保留本段句式。 */}
+五条提交先后进入任务系统：`build-index`、`send-digest`、`resize-covers`、`build-index`、`sync-crm`，每条带一个标识和一个大小。`build-index` 被提交了两次。同一批任务上要满足四件事：按提交顺序把任务列出来，按标识取回一项，把重复提交的标识合成一份，按大小取出最大的几项。四件事要求这批数据保留不同的事实：列出要点名每一次提交的位置，取一项要从标识直接定位到对应的记录，去重要把相同的标识合并，取最大的几项要在条目之间按大小排出次序。
 
-表示决定数据本身怎样组织：一批数据是序列、集合还是映射，决定了程序允许哪些操作、哪些操作要自己写。工作负载决定该选哪一种——要不要保持次序、允不允许重复、按位置取还是按成员或按键取、读多还是写多。这一课只处理主数据本身采用什么抽象表示：映射提供按键访问这一保证，至于它靠什么做到、维护它要多少空间与更新成本，属于在数据之外额外维护结构时再算的账。
+同一批数据可以取几种形状。一条序列按位置保存元素，重复的标识各占一个位置。一个集合保存互不相同的元素，集合里没有位置。一个映射保存键到值的对应，每个键最多一条记录，按键一步定位。这三种形状是<Term id="abstract-data-type">抽象数据类型</Term>：它们规定能回答哪些查询、每个查询给出什么结果，内部怎么存由具体实现决定。Python 的字典实现映射，并额外保留键的插入顺序，这是该实现给出的保证（[映射类型](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)）；按唯一的键定位对应的值是映射这一形状规定的保证。
+
+把同一批任务摆成序列和映射：
+
+```text
+submissions   build-index  send-digest  resize-covers  build-index  sync-crm
+positions     0            1            2              3            4
+
+by id         build-index -> 7     send-digest -> 3
+              resize-covers -> 5   sync-crm -> 9
+```
+
+序列的五个位置对应五次提交，`build-index` 在其中占两个位置；映射的四条记录对应四个不同的标识，每个标识只有一条。按提交顺序列出由序列的位置直接给出，映射按插入顺序列出键得到同一个次序；按标识取回一项由映射直接给出，序列从头逐个比对标识；把重复的标识合成一份由映射的键给出，集合同样去重，序列保留重复的每一次；按大小取出最大的几项要在这批数据之外另做一次比较。
+
+## 按标识取一项要比较多少条目
+
+<Term id="workload">工作负载</Term>是同一批数据上一段使用里发生的操作及各自的次数。同一批任务在两种形状下回答同一串按标识取项的查询。序列每检查一个条目做一次标识比较，一次标识比较计一次工作，这是这里采用的<Term id="cost-model">成本模型</Term>；按键取项的那段代码把标识交给字典一次，字典内部为定位做了多少工作由映射的实现决定，不在这一格的计数里。
+
+```python run id="data-and-computation.representation-and-workload.lookup-cost"
+tasks = [
+    ("build-index", 7),
+    ("send-digest", 3),
+    ("resize-covers", 5),
+    ("build-index", 7),
+    ("sync-crm", 9),
+]
+
+
+def find_in_list(entries, wanted):
+    compared = 0
+    for task_id, size in entries:
+        compared += 1
+        if task_id == wanted:
+            return size, compared
+    return None, compared
+
+
+as_list = list(tasks)
+queries = ["resize-covers", "archive-logs", "build-index", "sync-crm"]
+total = 0
+for wanted in queries:
+    size, compared = find_in_list(as_list, wanted)
+    total += compared
+    print("list", wanted, size, compared)
+print("list comparisons", total, "entries", len(as_list))
+
+by_id = {}
+for task_id, size in tasks:
+    by_id[task_id] = size
+
+for wanted in queries:
+    print("dict", wanted, by_id.get(wanted))
+print("dict lookups", len(queries), "entries", len(by_id))
+```
+
+序列为四次查询各比较了 3、5、1、5 个条目，合计 14 次标识比较：命中的查询停在命中项所在的位置，`archive-logs` 不在批次里，序列扫完五个条目才判定没有。字典对同一串查询各做一次按键访问，缺失的标识由 `get` 返回 `None`。同一个标识写第二次时，序列追加一个新位置，字典改掉已有键对应的值：五条提交在序列里是五个条目，在字典里是四个键。
+
+写进这批数据的方式也参与选择。每次到达都追加一条、很少按标识取时，序列保留每一次到达；反复按标识取时，映射把取项变成一次按键定位。插入与读取各自发生的次数，连同要不要保留次序与唯一性，一起决定用哪种形状。
+
+## 换一种形状以后哪类操作变贵
+
+把序列换成以标识为键的映射，按位置取第几个元素不再就手：映射没有位置这一层，取出第几个键要先由键的序列得到它，再按键取回值；保留每一次到达也一并失去，重复标识的那次提交不再单独存在。把映射换成序列，按标识取一项退化为逐个比对。
+
+按大小取出最大的几项对两种形状都不是现成的操作。字典按标识组织，不按大小；序列按到达次序排列，也不按大小。要得到按大小排在最前的几项，需要把条目按大小相互比较，或者另外维护一份按大小排好的次序；维护这样一份次序要花的时间与空间、以及数据变化时对它的同步，属于在主数据之外再维护结构的问题（<CrossRef id="data-and-computation.preprocessing-and-indexes" />）。
+
+以下这段把一批任务按键存成字典，再从字典里取出前两项当作大小最大的两项。它取出的是哪两项，各自的大小是多少？
+
+判断标准：看取出的两项是不是这批任务里大小最大的两项。
+
+```python run id="data-and-computation.representation-and-workload.largest"
+tasks = [
+    ("build-index", 7),
+    ("send-digest", 3),
+    ("resize-covers", 5),
+    ("build-index", 7),
+    ("sync-crm", 9),
+]
+
+by_id = {}
+for task_id, size in tasks:
+    by_id[task_id] = size
+
+first_two = []
+for key in list(by_id)[:2]:
+    first_two.append((key, by_id[key]))
+
+print("entries", len(by_id))
+print("first two", first_two)
+```
+
+## 这批任务用哪种形状
+
+四件事由不同的形状承担，哪一件在负载里发生得最多，决定这个批次用哪一种：反复按标识取、反复判断一个标识在不在时用映射；按到达顺序不断追加、结尾列一遍时用序列。按大小取最大的几项两种形状都不直接提供，要在这批数据之外另排一次次序。
+

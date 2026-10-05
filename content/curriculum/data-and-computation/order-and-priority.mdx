@@ -11,6 +11,127 @@ objectives:
   - 指出一个错误会以什么顺序被处理
 ---
 
-{/* 骨架段（作者备注）：正式扩写时用一个具体情境、反常输出或必须作出的选择替换本段，不保留本段句式。 */}
+一个 Agent 运行时同一时刻接着三件事。一批任务按提交顺序放好：先提交的先处理，后提交的排在它后面，每个提交方都能预期自己的任务落在什么位置。某个任务失败时要重试，重试之前先撤掉它上一次跑了一半的改动，撤销的次序和改动的次序相反——最后做的一步最先撤。还有一类任务带优先级，运行时每次要取当前优先级最高的那一项，它可能刚加入，也可能很早就搁置在那里。三件事都在问「下一步处理哪一项」，给出的答案却不同：一件取最早放进来的，一件取最近放进来的，一件取优先级最高的。让同一个「取一项」的动作同时承担这三件事，其中至少两件会拿到错的顺序。
 
-处理顺序是一种设计选择：先进先出适合排队，后进先出适合嵌套与回退，反复取当前最重要的一项需要专门维护的结构。要判断的是这份工作负载实际要求哪种顺序，以及每次重新扫描在规模变大后的后果。
+处理顺序因此是一种设计选择。这份<Term id="workload">工作负载</Term>实际要求哪一种顺序，取决于下一步该处理哪一项是由什么决定的：加入的先后、最近一次发生，还是优先级。
+
+## 同一批任务，两种取出顺序
+
+队列和栈都是只规定「从哪一端取项」的<Term id="abstract-data-type">抽象数据类型</Term>。队列在一端加入、从另一端取出，取出的次序与加入的次序相同，也就是先进先出（FIFO）；栈在同一端加入和取出，取出的次序与加入的次序相反，也就是后进先出（LIFO）。同一批项放进这两种容器，取出的次序正好相反。把四个步骤按先后放进队列和栈，再逐项取出：
+
+```python run id="data-and-computation.order-and-priority.two-orders"
+batch = ["load input", "transform", "write output", "publish"]
+
+queue = list(batch)
+by_queue = []
+while queue:
+    by_queue.append(queue.pop(0))
+
+stack = list(batch)
+by_stack = []
+while stack:
+    by_stack.append(stack.pop())
+
+print("submitted", batch)
+print("queue", by_queue)
+print("stack", by_stack)
+```
+
+队列把最早放进去的 `load input` 先取出来，栈把最后放进去的 `publish` 先取出来；两者给出同一批项的两个方向相反的次序。
+
+队列适合一批项都要按到达次序轮到的工作：按提交顺序执行、公平排队——先到的先处理，没有一项能插到前面。栈适合最近发生的最先处理的工作：撤销按改动的倒序进行，重试把最近一次失败放在最前。
+
+错误的处理顺序也由存放它的容器给出。系统把失败的每一次尝试记录进容器，恢复时从容器里取一项出来处理：记录进栈，最近一次失败最先被处理；记录进队列，失败按发生的先后被处理。几个错误嵌套发生时，最内层的错误最后发生，放在栈上就最先被处理——撤销一个任务跑了一半的改动，走的正是这个次序，从最后一次改动往回退。
+
+边界由容器本身覆盖。空批次下两个循环都不执行，两者都给出空次序。失败的任务重试时会被再次放进容器：放进队列排在最后，放进栈排在最先，同一项的下一次处理时机因此在两种容器里不同。
+
+## 反复取当前最重要的一项
+
+带优先级的任务里，每次要取当前优先级最高的那一项。一种写法是每次取出之前把整个列表扫一遍，找出优先级最高的那一项：下面这种写法在批次上取前若干项，数出一共读了批次里的多少项。另一种写法把每一项交给一个一直能给出当前最值的结构，同样取这些项，数出这个结构被喂进多少项。
+
+这个结构就是<Term id="priority-queue">优先队列</Term>：插入一项、取走当前优先级最高（或最低）的一项，它不承诺别的操作。Python 标准库的 [heapq](https://docs.python.org/3/library/heapq.html) 在普通列表上提供这组操作。
+
+```python run id="data-and-computation.order-and-priority.rescan-vs-structure"
+import heapq
+
+
+def by_rescan(batch, k):
+    remaining = list(batch)
+    order = []
+    reads = 0
+    for _ in range(k):
+        best = 0
+        for index in range(1, len(remaining)):
+            reads += 1
+            if remaining[index][0] < remaining[best][0]:
+                best = index
+        order.append(remaining.pop(best))
+    return order, reads
+
+
+def by_structure(batch, k):
+    structure = []
+    for item in batch:
+        heapq.heappush(structure, item)
+    order = []
+    for _ in range(k):
+        order.append(heapq.heappop(structure))
+    return order, len(batch)
+
+
+def make_batch(size):
+    batch = []
+    for index in range(size):
+        batch.append(((index * 37) % size, "task-" + str(index)))
+    return batch
+
+
+for size in (400, 800):
+    batch = make_batch(size)
+    for k in (50, 200):
+        order, reads = by_rescan(batch, k)
+        print("batch", size, "draws", k, "rescan batch reads", reads)
+
+order, fed = by_structure(make_batch(400), 200)
+print("batch", 400, "draws", 200, "structure batch feeds", fed)
+
+first, _ = by_rescan(make_batch(400), 200)
+print("same order", first == order)
+```
+
+每次重新扫描的写法在 400 项的批次上取 50 项，读了批次里的 18725 项；同一批次取 200 项，读了 59900 项。批次翻倍到 800，取 50 项读 38725 项，取 200 项读 139900 项。取的次数越多、批次越大，读的项数都跟着增长：每取一项都要把当时剩下的项看一遍，找下一项的工作随批次放大，批次一大，挑下一项本身就要花掉可观的时间。把每一项交给优先队列的写法只把这 400 项各喂进去一次，此后每取一项是向结构要一项，不再读批次。两种写法取出的是同一串项。
+
+优先队列给出的是当前最值：两项优先级相同时，取哪一项没有规定，接口只保证取到的是当前优先级最高的一项之一。取走一项之后，剩下的项还在结构里，下一次要的是它们之中的最值，不需要回到原批次重来。反复取当前最重要的一项，需要的就是这组操作：一项一次放进结构，每次向它要当前最值。
+
+## 回到那批任务
+
+开头那份运行时有三种「取下一项」的需求，分别落在三种结构上。按提交顺序执行和公平排队，取的是最早放进来的那一项，用队列。失败任务的重试与撤销取的是最近一次发生的那一项，用栈；记录的错误按同一个次序被处理，最近一次失败最先恢复。带优先级的任务每次取当前优先级最高的一项，用优先队列，避免每取一次就重新扫描一遍批次。三种需求各要一个方向，一个「取一项」的动作给不出同时满足三者的顺序。
+
+## 练习
+
+一个任务系统把失败的每一次尝试记录进容器，恢复时从容器里取记录来处理。恢复必须与失败发生的次序相反：最近一次失败最先处理。判据：一种取法给出正确的恢复次序，当且仅当它取出的次序与失败发生的次序相反。哪一份取法给出正确的恢复次序？
+
+```python run id="data-and-computation.order-and-priority.exercise-recovery-order"
+failures = ["timeout", "checksum mismatch", "disk full"]
+
+
+def recover_with(procedure, log):
+    working = list(log)
+    order = []
+    while working:
+        order.append(procedure(working))
+    return order
+
+
+def from_front(items):
+    return items.pop(0)
+
+
+def from_back(items):
+    return items.pop()
+
+
+print("occurred", failures)
+print("front", recover_with(from_front, failures))
+print("back", recover_with(from_back, failures))
+```
