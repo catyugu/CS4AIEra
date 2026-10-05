@@ -1,0 +1,14 @@
+---
+id: data-and-computation.hierarchy-relations-and-dependencies
+slug: /data-and-computation/hierarchy-relations-and-dependencies
+order: 70
+title: 层次、关系与依赖怎样表示
+status: draft
+objectives:
+  - 说明树表达的是哪一类关系，图比树多表达了哪些关系
+  - 说明一次操作要经过多少层由什么决定
+  - 判断两个位置是否可达，并区分「经过的位置最少」与「总代价最低」两个不同的问题
+  - 说明依赖被用来定义一个必须先后完成的执行顺序时，环意味着什么
+---
+
+层次、任意关系与依赖是三种不同的信息形状：树里每个元素只有一个上级，图里任何两个位置都可以相连，依赖则要求某些事情先后发生。要判断的是这份数据实际是哪一种形状，一次操作要经过多少层，以及当依赖被用来定义一个必须先后完成的执行顺序时，出现环意味着什么。
