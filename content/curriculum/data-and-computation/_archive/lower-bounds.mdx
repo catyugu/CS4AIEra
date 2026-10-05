@@ -1,0 +1,157 @@
+---
+id: algorithms.lower-bounds
+slug: /algorithms/lower-bounds
+title: 下界与比较模型
+order: 270
+status: archived
+objectives:
+  - 说明比较下界的适用范围：它约束的是比较次数，而且只在这个模型内成立
+  - 用「找最小值至少 n - 1 次比较」热身
+  - 用决策树把 n! 种相对次序与叶数联系起来，推出高度至少 ceil(log2(n!))
+  - 用 n! >= (n/2)^(n/2) 得出 Omega(n log n)，不依赖 Stirling 公式
+  - 说清这条下界不约束写入次数、辅助空间与稳定性
+---
+
+构造算法给出一个方法、证明它正确、再算出它的成本上界。这里反过来问：有没有一些成本，是任何方法都省不掉的。
+
+## 比较模型
+
+下界总是相对于某个模型而言的。讨论固定在<Term id="comparison-model">比较模型</Term>里：
+
+- 输入是 $n$ 个键，两两不同
+- 算法唯一能做的事，是取两个键问「第一个是否小于第二个」
+- 每次比较得到一个布尔答案
+
+真实程序当然还能做别的事：读内存、比较下标、检查数组长度。但关于**键的相对次序**，在这个模型里算法只能从两两比较中得到信息；所有下界结论都带着这个前提，脱离模型就没有这条下界。
+
+模型里「键两两不同」这条限制是为了让计数论证保持干净。一旦允许重复键，输入不再对应 $n!$ 个彼此不同的严格全序；需要区分的相对次序取决于重复的模式。极端地，当所有键值都相同时，根本不存在 $n!$ 种不同的严格次序需要区分。重复键下的精确比较下界需要另外计数。
+
+## 热身：找最小值需要 n - 1 次比较
+
+找最小值是一个比完整排序更小的任务，它和下界的关系最直接。
+
+不变量：每次比较之后，「仍可能是最小值」的候选集合至多减少一个元素。比较两个候选者时，较大者立刻可以被排除，因此 $n$ 个候选缩到 1 个，至少要排除 $n - 1$ 个，也就是至少要 $n - 1$ 次比较；而一次线性扫描恰好用 $n - 1$ 次比较就能找到最小值。
+
+这条论证里没有出现数组、循环或语言细节，只有「一次比较能排除几个候选者」。结论是：**找最小值至少需要 $n - 1$ 次比较**，而扫描达到这个数，所以找最小值是 $\Theta(n)$。
+
+随机 quickselect（见 <CrossRef id="algorithms.selection-and-top-k" />）对任意固定秩的期望成本是 $O(n)$，而这里的最小值就是 $r = 0$ 的特例；$n - 1$ 次比较的下界说明这个特例在线性量级上已经最优。若要把 $\Omega(n)$ 下界推广到任意秩，还需要更细的选择下界论证。所以最小值只用于下界证明的热身，不据此把所有秩的 $O(n)$ 上界改写成 $\Theta(n)$。
+
+```python run id="alg.ordering.minimum-lower-bound"
+def scan_for_minimum(values, counters):
+    """A linear scan: every element after the first is compared with the running minimum."""
+    best = values[0]
+    for value in values[1:]:
+        counters["comparisons"] += 1
+        if value < best:
+            best = value
+    return best
+
+
+n = 4096
+values = list(range(n))
+values.reverse()
+counters = {"comparisons": 0}
+best = scan_for_minimum(values, counters)
+print("scan on n =", n, ": minimum", best, "| comparisons", counters["comparisons"],
+      "| equals n - 1:", counters["comparisons"] == n - 1)
+
+print()
+print("how far can n - 2 comparisons take the candidate set?")
+n = 8
+candidates = list(range(n))
+for step in range(n - 2):
+    first, second = candidates[0], candidates[1]
+    if first > second:
+        winner, eliminated = second, first
+    else:
+        winner, eliminated = first, second
+    candidates = [winner] + candidates[2:]
+    print(f"  comparison {step + 1}: eliminated {eliminated} | still possible minima: {len(candidates)}")
+print("after", n - 2, "comparisons at least", len(candidates), "candidates remain:",
+      "you cannot name the minimum yet")
+```
+
+扫描的比较次数是 $n - 1$，与下界一致。$n - 2$ 次比较之后仍然无法给出答案：每一步至多排除一个候选者，所以候选集合至少还剩 2 个。
+
+## 排序的决策树
+
+排序的下界需要更强的东西，因为一次比较能排除的候选者不再是一个。做法是把「任何比较算法」都看成一棵树。
+
+| 元素 | 定义 |
+| --- | --- |
+| 内部节点 | 一次比较，两个分支对应两个可能的答案 |
+| 叶子 | 算法给出的输出 |
+| 从根到叶的一条路径 | 算法在这次运行里做过的全部比较及其结果 |
+
+要下界的是这棵树的高度，也就是最坏情况下从根到叶的比较次数。关键一步是数一数叶子至少要有多少：
+
+算法到达叶子之后不再获得关于键的信息，并必须给出一个固定的输出顺序。如果两个不同的严格全序能够到达同一个叶子，同一个输出不可能同时对这两个输入次序正确，所以每个叶子至多代表一种输入相对次序。
+
+$n$ 个两两不同的键一共有 $n!$ 种相对次序，而算法对每一种都必须给出正确答案，因此决策树至少有 $n!$ 个叶子。这一步把「$n!$ 种排列」从直觉变成了可用的事实。
+
+## 从叶数推出高度
+
+一棵高度为 $h$ 的二叉树最多有 $2^h$ 个叶子，于是
+
+$$2^h \ge n! \quad \Longrightarrow \quad h \ge \lceil \log_2(n!) \rceil.$$
+
+把它写成关于成本的形式，量词要贴着公式写：
+
+$$\max_{x} C_A(x) \ge \lceil \log_2(n!) \rceil$$
+
+对任意确定性的比较排序 $A$ 成立。$\max_x C_A(x)$ 是「最坏输入上的比较次数」，$\ge$ 说的是：**总存在某个输入**让这个算法做这么多次比较。
+
+它不是说每个输入都需要这么多比较。已排序输入上插入排序只用 $n - 1$ 次比较，Timsort 会利用输入里已有的有序片段——这些都与下界不矛盾：下界约束的是最坏输入，不约束每一次运行。
+
+```python run id="alg.ordering.decision-tree-height"
+from math import factorial, log2
+
+
+def smallest_height(n):
+    """Smallest h with 2**h >= n!: a binary decision tree of height h has at most 2**h leaves."""
+    leaves = factorial(n)
+    return (leaves - 1).bit_length()
+
+
+print(f"{'n':>5} {'ceil(log2(n!))':>15} {'n log2 n':>10} {'ratio':>7}")
+for n in (4, 8, 16, 64, 512, 4096):
+    height = smallest_height(n)
+    print(f"{n:>5} {height:>15} {n * log2(n):>10.1f} {height / (n * log2(n)):>7.3f}")
+
+print()
+print("n = 4 by hand: 4! = 24, and a decision tree of height 4 has at most 2**4 = 16 leaves.")
+print("  2**4 =", 2 ** 4, "< 24 <= 2**5 =", 2 ** 5, "so the height is at least",
+      smallest_height(4), ".")
+```
+
+## 不靠 Stirling 的 Ω(n log n)
+
+$\lceil \log_2(n!) \rceil$ 这个表达式已经可以计算，但为了看出它的量级，需要一个不依赖 Stirling 公式的界。把 $n!$ 写成 $n$ 个因子的乘积，只看后半部分：
+
+$n!$ 的最后 $\lceil n/2 \rceil$ 个因子，每个都不小于 $n/2$，因此
+
+$$n! \ge \left(\frac{n}{2}\right)^{n/2}.$$
+
+取以 2 为底的对数：$\frac{1}{2} \cdot n\,(\log_2 n - 1) \le \log_2(n!)$。
+
+所以
+
+$$\log_2(n!) \ge \frac{n}{2}\left(\log_2 n - 1\right) = \Omega(n \log n).$$
+
+这条推导只用整数因子计数，没有用 Stirling 公式，也不需要知道 $\log_2(n!)$ 的精确值。Stirling 在这里只作为补充：它给出
+
+$$\log_2(n!) = n \log_2 n - \Theta(n),$$
+
+即主项之外还有一个线性的修正（约 $1.44\,n$ 的负项），这个更精确的表达式在解释实测比值为什么低于 1 时有用，但证明不依赖它。
+
+## 下界只约束比较次数
+
+$\Omega(n \log n)$ 是关于**比较次数**的下界。决策树只数比较，一次比较之后跟着多少次元素移动、占多少额外空间、输出是否稳定，它都没有记录。所以这条下界不推出：
+
+- **写入门槛**：找最小值可以只读不写，也可以每发现一个更小的元素就把它交换到最前面；两者的比较次数都是 $n - 1$，写入次数一个是 0、一个最多 $n - 1$。
+- **辅助空间**：比较次数与空间是两条独立的成本轴。归并排序的比较工作是 $\Theta(n \log n)$，并使用 $\Theta(n)$ 缓冲；<CrossRef id="algorithms.heapsort" /> 里的堆排序具有 $\Theta(n \log n)$ 的最坏比较成本，却只使用 $O(1)$ 辅助空间。比较下界本身推不出空间下界。
+- **稳定性**：稳定性是输出后置条件的一部分（见 <CrossRef id="algorithms.sorting" />），与比较次数之间没有推出关系。归并排序的实现稳定，<CrossRef id="algorithms.heapsort" /> 里的原地堆排序实现不稳定；这一差异不是由 $\Omega(n \log n)$ 比较下界决定的。
+
+模型也有适用条件。如果键带有比较之外可利用的结构，例如键取自一个已知的有限整数域，算法可以检查数字的位或桶编号，而不只是问「谁更小」。计数排序与基数排序就属于这一类，它们不在二元比较决策树里，因此不构成反例。它们的实际成本取决于值域大小、字长与基数。
+
+随机比较排序的相应下界需要更强的平均深度论证，叶数下界本身只约束确定性算法在其最深输入上的比较次数。

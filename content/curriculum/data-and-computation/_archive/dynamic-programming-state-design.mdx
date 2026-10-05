@@ -1,0 +1,175 @@
+---
+id: algorithms.dynamic-programming-state-design
+slug: /algorithms/dynamic-programming-state-design
+order: 180
+title: 动态规划：状态设计、求值顺序与解的恢复
+status: archived
+objectives:
+  - 用一个只记录单个位置的错误状态说明状态为什么必须保留决定剩余子问题的全部信息
+  - 能写出编辑距离的递推式，并写出边界上的基本状态
+  - 按转移引用哪些状态确定填表顺序，并说明这个顺序是状态依赖图的一个拓扑序
+  - 从填好的表回溯出一次具体的操作序列，说明记录什么信息才能给出方案
+  - 解释背包填表的工作量为什么按容量数值有多项式界、按输入位数却是指数界
+---
+
+两个字符串 `a = "kitten"` 与 `b = "sitting"`。一次编辑是插入、删除或替换一个字符，每种算一步；把 `a` 改成 `b` 最少需要几步？替换 `k` 为 `s`、替换 `e` 为 `i`、在末尾插入 `g`，三步可以完成，问题是这样是不是最少的。
+
+## 只记录一个位置不够
+
+顺着 $a$ 往前推进，一个自然的写法是用一个下标 $i$ 记住「已经处理到 $a$ 的第 $i$ 个字符」，把状态写成 $D(i)$。这个状态站不住：$b$ 已经匹配到第 2 个字符与已经匹配到第 8 个字符，接下来要做的事完全不同——下一步插入哪个字符由 $b$ 里还没出现的那一段决定，是删除还是替换由两个当前位置的字符是否相同决定。只看 $i$，这两种处境被当成同一个状态。
+
+要把两串字符都记进来：$a$ 的前 $i$ 个字符，$b$ 的前 $j$ 个字符。将「把 $a[:i]$ 改成 $b[:j]$ 的最少操作数」记作
+
+$$D(i, j),$$
+
+问题的答案就是 $D(m, n)$，其中 $m = |a|$、$n = |b|$。
+
+## 从最后一步列出全部转移
+
+看 $D(i, j)$ 这一步，$a$ 的第 $i$ 个字符 $a_i$ 与 $b$ 的第 $j$ 个字符 $b_j$ 只有两处可能。
+
+两个字符相同时它们可以直接对上，不需要操作，$D(i, j) = D(i-1, j-1)$。
+
+两个字符不同时，最后一步是三种操作之一，每种对应一个先决状态：
+
+| 最后一步 | 先决状态 | $D(i, j)$ |
+| --- | --- | --- |
+| 删除 $a_i$ | 把 $a[:i-1]$ 改成 $b[:j]$ | $D(i-1, j) + 1$ |
+| 在末尾插入 $b_j$ | 把 $a[:i]$ 改成 $b[:j-1]$ | $D(i, j-1) + 1$ |
+| 把 $a_i$ 替换成 $b_j$ | 把 $a[:i-1]$ 改成 $b[:j-1]$ | $D(i-1, j-1) + 1$ |
+
+三种操作覆盖了最后一步的所有可能，取其中最小：
+
+$$D(i, j) = 1 + \min\bigl(D(i-1, j),\ D(i, j-1),\ D(i-1, j-1)\bigr), \quad a_i \ne b_j.$$
+
+三个候选状态都比 $(i, j)$ 小：两个下标都不增，至少一个减少，所以它们都在更靠近 $(0, 0)$ 的位置上。
+
+基本状态是 $D(0, j) = j$（$a$ 为空，把 $b$ 的 $j$ 个字符逐个插入）与 $D(i, 0) = i$（$b$ 为空，把 $a$ 的 $i$ 个字符逐个删除），它们是同一组方程在边界上的取值。
+
+当前状态的值由先决状态的值组合出来，这条性质称为<Term id="optimal-substructure">最优子结构</Term>。它说的是值能不能拼出来，与状态划分得够不够细无关：状态不够时，递推式照样写得出来，算出的却是混合了两种处境的数。贪心与分治的递推同样可以具备这条性质，它决定递推能不能写，不决定该用哪种范式。
+
+## 填出一张二维表
+
+$D(i, j)$ 的两个下标各有 $m + 1$ 与 $n + 1$ 种取值，把值排进一张 $(m+1) \times (n+1)$ 的表，第 $i$ 行第 $j$ 列就是 $D(i, j)$。
+
+```python run id="alg.dp.edit-distance-table"
+def edit_distance_table(a, b):
+    """table[i][j]: fewest edits turning a[:i] into b[:j]."""
+    table = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]
+    for i in range(len(a) + 1):
+        table[i][0] = i
+    for j in range(len(b) + 1):
+        table[0][j] = j
+    for i in range(1, len(a) + 1):
+        for j in range(1, len(b) + 1):
+            if a[i - 1] == b[j - 1]:
+                table[i][j] = table[i - 1][j - 1]
+            else:
+                table[i][j] = 1 + min(table[i - 1][j], table[i][j - 1], table[i - 1][j - 1])
+    return table
+
+
+a, b = "kitten", "sitting"
+table = edit_distance_table(a, b)
+print("      " + "".join(f"{ch:>3}" for ch in b))
+for i, row in enumerate(table):
+    label = "" if i == 0 else a[i - 1]
+    print(f"{label:>3}" + "".join(f"{value:>3}" for value in row))
+```
+
+表里每格的值由左边、上边、左上三个格子决定；第 0 行与第 0 列是基本状态，直接从下标读出来，右下角就是最少操作数。
+
+## 求值顺序由依赖方向决定
+
+转移只引用 $(i-1, j)$、$(i, j-1)$、$(i-1, j-1)$：第 $i$ 行只读第 $i-1$ 行与同一行左边的格子。按 $i$ 从小到大逐行填，填到 $(i, j)$ 时三个先决状态都已经算好。
+
+把每个状态画成一个顶点、把「计算 $B$ 之前必须先知道 $A$」画成一条 $A \to B$ 的边，得到状态依赖图；按上面这个顺序求值，正是这张图的一个<Term id="topological-order">拓扑序</Term>（<CrossRef id="algorithms.dags-and-topological-order" />）。$i$ 在每条转移上要么减少要么不变，引用 $(i, j-1)$ 时 $j$ 减少，依赖关系没有环，按这样的顺序求值必然终止。
+
+填表给出的值正确，靠的是沿依赖图的归纳：假设每个先决状态已经持有它对应子问题的正确值，转移式由这些值算出当前状态的值；基本状态直接成立，按拓扑序每一步都满足这个假设，整张表因此正确。归纳的形状与分治相同，区别是不同路径会汇合到同一个状态，子问题互相重叠（<CrossRef id="algorithms.divide-and-conquer" />）。
+
+## 恢复最优操作序列
+
+表给出的是最少操作数，没有给出具体怎么做。要恢复方案，得知道每一格的值是从哪个先决状态来的：往上、往左还是往左上。三个候选的值可能并列最小，逐格重新比较能走出其中一条；更省事的做法是填表时就把选择记下来，给每个状态存一个前驱。
+
+这与最短路径里的<Term id="predecessor-vertex">前驱顶点</Term>是同一类信息：在 <CrossRef id="algorithms.shortest-paths" /> 的松弛里，更新 `distance[v]` 的同时把来源顶点记进 `predecessor[v]`，沿前驱回溯得到一条路径。回溯从 $(m, n)$ 出发，每一步按先决状态把当前格的决定翻译成一个操作，走到 $(0, 0)$ 就得到完整方案。
+
+```python run id="alg.dp.edit-distance-operations"
+def edit_distance_table(a, b):
+    """table[i][j]: fewest edits turning a[:i] into b[:j]."""
+    table = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]
+    for i in range(len(a) + 1):
+        table[i][0] = i
+    for j in range(len(b) + 1):
+        table[0][j] = j
+    for i in range(1, len(a) + 1):
+        for j in range(1, len(b) + 1):
+            if a[i - 1] == b[j - 1]:
+                table[i][j] = table[i - 1][j - 1]
+            else:
+                table[i][j] = 1 + min(table[i - 1][j], table[i][j - 1], table[i - 1][j - 1])
+    return table
+
+
+def edit_operations(a, b):
+    """Walk the filled table back from (len(a), len(b)); list the operations in order."""
+    table = edit_distance_table(a, b)
+    i, j = len(a), len(b)
+    operations = []
+    while i > 0 or j > 0:
+        if i > 0 and j > 0 and a[i - 1] == b[j - 1]:
+            i, j = i - 1, j - 1
+        elif i > 0 and table[i][j] == table[i - 1][j] + 1:
+            operations.append(f"delete {a[i - 1]}")
+            i -= 1
+        elif j > 0 and table[i][j] == table[i][j - 1] + 1:
+            operations.append(f"insert {b[j - 1]}")
+            j -= 1
+        else:
+            operations.append(f"replace {a[i - 1]} with {b[j - 1]}")
+            i, j = i - 1, j - 1
+    return operations[::-1]
+
+
+for step, operation in enumerate(edit_operations("kitten", "sitting"), start=1):
+    print(step, operation)
+```
+
+三次操作是替换 `k` 为 `s`、替换 `e` 为 `i`、在末尾插入 `g`；两串里位置相同的 `i`、`t`、`t`、`n` 逐一对上，不产生操作，走完表就得到这三步。
+
+## 回看 DAG 最短路：状态不必排成数组
+
+到这里状态都带着下标 $(i, j)$ 或 $(i, c)$，被排进一张表。状态也可以住在图顶点上。取一张有向无环图，在顶点 $v$ 上放一个状态：「从源点 $s$ 到 $v$ 的最短距离」$dist(v)$，
+
+$$dist(v) = \min_{(u, v) \in E} \bigl(dist(u) + w(u, v)\bigr).$$
+
+- 状态是顶点 $v$，状态的值是到 $v$ 的最短距离；
+- 先决状态是 $v$ 的所有入边前驱 $u$；
+- 组合方式是取最小；
+- 依赖关系由有向边给出，图无环，按拓扑序求值即可（<CrossRef id="algorithms.dags-and-topological-order" />）。
+
+```python run id="alg.dp.dag-distances"
+order = ["s", "a", "b", "c", "d"]
+out_edges = {"s": [("a", 3), ("b", 6)], "a": [("c", 2)], "b": [("c", 1), ("d", 4)], "c": [("d", 1)], "d": []}
+
+distance = {v: float("inf") for v in out_edges}
+predecessor = {}
+distance["s"] = 0
+for u in order:
+    for v, w in out_edges[u]:
+        if distance[u] + w < distance[v]:
+            distance[v] = distance[u] + w
+            predecessor[v] = u
+
+for v in order:
+    print(f"{v}: distance {distance[v]}, predecessor {predecessor.get(v)}")
+```
+
+`order` 是这张图的一个拓扑序；先决状态都在当前顶点之前，每个顶点因此只求值一次，定下来之后不再改变。代价是一次拓扑排序加上对每条边的一次检查，$\Theta(|V| + |E|)$。状态的形状由问题本身给出，图上的状态不需要数组下标。
+
+## 深入：伪多项式时间
+
+填一段表的工作量由状态数与每个状态检查的转移次数相乘而来。编辑距离有 $(m+1)(n+1)$ 个状态，每个状态至多检查 3 个转移，代价是 $\Theta(mn)$。背包有 $(n+1)(W+1)$ 个状态，每个状态的转移是常数次，代价写成 $\Theta(nW)$。这个界里的两个量不能合并成一个：$n$ 是物品数，$W$ 是一个数值。
+
+**输入长度**是写出这一组整数所需的位数，其中 $W$ 占 $\Theta(\log(W+1))$ 位；而状态数随 $W$ 的**数值**线性增长。把所有重量与容量同乘 1000，每个整数各多出约十位、输入总共只多几十个比特，状态数却涨了约 1000 倍——这样的界称为<Term id="pseudo-polynomial">伪多项式</Term>（pseudo-polynomial）：它是输入中数值的多项式，不是输入长度的多项式。
+
+数值很大的整数权重：$W = 2^k$ 只需要 $k + 1$ 个二进制位就能写出，容量动态规划却有 $\Theta(2^k)$ 个容量状态。适当条件下可以换成按总价值索引的表，让代价依赖 $\sum_i v_i$，但那同样是伪多项式，只是在价值范围远小于容量范围时更合适。

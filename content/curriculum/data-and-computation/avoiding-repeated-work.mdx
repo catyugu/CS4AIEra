@@ -1,0 +1,14 @@
+---
+id: data-and-computation.avoiding-repeated-work
+slug: /data-and-computation/avoiding-repeated-work
+order: 110
+title: 避免重复计算
+status: draft
+objectives:
+  - 说明同一个子问题被反复求解时浪费了什么
+  - 判断一个问题是否适合把已经算过的结果存下来
+  - 说明状态数量怎样决定总工作量
+  - 指出状态本身爆炸时缓存为什么不起作用
+---
+
+把同一个子问题算了很多遍，是搜索里最常见的浪费。要判断的是这个问题有没有可以被复用的状态、状态有多少、每个状态要做多少次转移——状态数量决定总工作量，状态本身爆炸时缓存也救不了它。

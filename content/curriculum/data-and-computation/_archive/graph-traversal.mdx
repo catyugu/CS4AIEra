@@ -1,0 +1,209 @@
+---
+id: algorithms.graph-traversal
+slug: /algorithms/graph-traversal
+order: 210
+title: 遍历、连通分量与访问不变量
+status: archived
+objectives:
+  - 说明标记时刻怎样决定队列里会不会出现重复顶点，并指出它牵动的成本不变量
+  - 说明发现时标记与 parent 表怎样保证父指针不成环，并读出遍历森林
+  - 证明可达集合定理，并说明无向图遍历森林的每棵树恰是一个连通分量
+  - 把遍历成本拆成顶点状态操作与邻接项检查两类，并推出单源与全图的渐近界
+---
+
+遍历回答一个问题：给定一个起点，顺着边能到达哪些顶点。从 $a$ 出发把能走到的顶点全找出来，边只用来扩展「已经到达的顶点还能通向哪里」。
+
+取一张最小的图：$a$ 在上，$b$、$c$ 在中间横排，$d$ 在下，四条侧边加中间一条 $b$–$c$，围成一个菱形，$|V| = 4$、$|E| = 5$。
+
+```text
+      a
+     / \
+    b---c
+     \ /
+      d
+```
+
+| 顶点 | 邻居 |
+| --- | --- |
+| $a$ | $b, c$ |
+| $b$ | $a, c, d$ |
+| $c$ | $a, b, d$ |
+| $d$ | $b, c$ |
+
+从 $a$ 出发手工走：$a$ 的邻居 $b$、$c$ 都没见过，是「下一步要处理」的顶点；处理 $b$ 时发现新的 $d$，处理 $c$ 与 $d$ 时邻居都已见过。整个过程维护两个集合：已经发现的顶点，和已经发现、还没处理完的顶点——后者是<Term id="frontier">搜索前沿</Term>（frontier，即尚未处理完的顶点集合）。
+
+下一个处理的顶点从搜索前沿里取。取最早放上的那个——先进先出——会先把 $a$ 的全部邻居处理完，再处理这些邻居的邻居，一层层向外扩，这就是广度优先搜索（breadth-first search，BFS）。队列提供先进先出，用来保存搜索前沿。
+
+```python run id="alg.graphs.bfs"
+from collections import deque
+
+graph = {
+    "a": ["b", "c"],
+    "b": ["a", "c", "d"],
+    "c": ["a", "b", "d"],
+    "d": ["b", "c"],
+}
+
+seen = {"a"}
+queue = deque(["a"])
+while queue:
+    u = queue.popleft()
+    for v in graph[u]:
+        if v not in seen:
+            seen.add(v)
+            queue.append(v)
+    print(f"pop {u}: queue=[{', '.join(queue)}]")
+```
+
+每次出队的轨迹是：
+
+1. 取出 $a$，$b$、$c$ 依次入队，队列 $[b, c]$
+2. 取出 $b$，$c$ 已标记，$d$ 入队，队列 $[c, d]$
+3. 取出 $c$，$d$ 已标记，队列 $[d]$
+4. 取出 $d$，队列空
+
+四个顶点各入队一次，队列条目共 4 个。这里 `seen` 在顶点进入队列的那一刻就被记入。
+
+记入 `seen` 的时刻有两种选择：进入队列时记，还是被取出时记，上面用的是前者。把 `seen.add(v)` 从发现处挪到取出处，再运行一次：顶点都还能找到，但队列里出现重复项——$c$ 入队两次、$d$ 入队三次，四个顶点产生 7 个队列条目。被破坏的是每个顶点只进入搜索前沿一次这条成本<Term id="invariant">不变量</Term>。这条规则称为**发现时标记**：顶点进入搜索前沿的那一刻就把它记入 `seen`，此后任何已经看到它的邻居都不会再把它送进队列。可达性本身不要求发现时标记：取出时才标记的实现换一套论证也能找到全部可达顶点；发现时标记同时给出唯一性与线性成本界。
+
+**建模条件**：默认建模为有限<Term id="simple-graph">简单图</Term>——没有 <Term id="self-loop">自环</Term>，也没有 <Term id="parallel-edge">平行边</Term>；规模参数用 $|V|$ 与 $|E|$。单源遍历要求源点 $s \in V$；空图没有可选的源点，因此不能发起合法的单源遍历。只讨论图的结构可达性：即使输入图带权，BFS 与 DFS 也不读取权重。
+
+## 两种搜索前沿
+
+广度优先与深度优先的差别在搜索前沿用什么容器：BFS 用队列，DFS 用栈（后进先出），递归实现则直接用调用栈。两者的共同骨架相同——发现时标记，处理一个顶点时扫描它的邻接表。
+
+处理顺序决定一条性质。BFS 从源点出发按层处理：$level[v] = level[parent[v]] + 1$，队列里的顶点按非递减的层号被取出——初始只有源点，处理一个 $\ell$ 层顶点时新发现的顶点层号都是 $\ell + 1$，追加到队尾，于是同一时刻队列里只有相邻两层，$\ell$ 层排在 $\ell + 1$ 层之前。DFS 沿一条路径尽量深入；它的访问顺序随邻居枚举顺序改变，不依赖某个特定次序。
+
+两种搜索前沿的空间都是 $O(|V_R|)$，$V_R$ 是从源点可达的顶点集合，最坏 $O(|V|)$：队列只保存已发现但尚未处理的顶点，每个顶点至多入队一次。
+
+## 父指针与遍历森林
+
+遍历过程中每个顶点被首次发现时记下它的父顶点，得到一张 parent 表：源点没有父，其余每个被发现的顶点 $v$ 恰有一个 `parent[v]`，它是首次发现 $v$ 的那个顶点，并且 $(parent[v], v)$ 是图中的一条边。从一个尚未发现的顶点重新启动遍历时，它成为一棵新树的根。
+
+`parent[v]` 的发现时间严格早于 $v$，所以沿 parent 指针走时发现时间严格递减，不可能回到已经过的顶点，parent 关系也就不可能成环。每个顶点至多一个父、又没有环，parent 关系把已发现顶点分成若干棵树——这就是**遍历森林**。同一棵树上，父指针链给出的正是两点之间不重复顶点的那条<Term id="path">简单路径</Term>，因此森林可以被当作结构来读。
+
+```python run id="alg.graphs.parent-forest"
+from collections import deque
+
+graph = {
+    "a": ["b", "c"],
+    "b": ["a", "c", "d"],
+    "c": ["a", "b", "d"],
+    "d": ["b", "c"],
+}
+
+parent = {"a": None}
+seen = {"a"}
+queue = deque(["a"])
+while queue:
+    u = queue.popleft()
+    for v in graph[u]:
+        if v not in seen:
+            seen.add(v)
+            parent[v] = u
+            queue.append(v)
+
+print("parent:", {v: parent[v] for v in sorted(parent)})
+print("parent edges:", sorted((parent[v], v) for v in parent if parent[v] is not None))
+print("each parent edge is a graph edge:",
+      all(v in graph[parent[v]] for v in parent if parent[v] is not None))
+```
+
+从 $a$ 出发，$b$、$c$ 的父是 $a$，$d$ 的父是 $b$；三条 parent 边 $(a, b)$、$(a, c)$、$(b, d)$ 都出现在图里。$d$ 是被 $b$ 发现的——队首取到 $b$ 时它的邻接表扫到尚未标记的 $d$，因此 `parent[d]` 是 `b`。
+
+## 可达集合定理
+
+**定理**：遍历终止时，已发现顶点集合恰好等于从源点可达的顶点集合。
+
+要证两件事：每个已发现的顶点都从 $s$ 可达，每个从 $s$ 可达的顶点都被发现。两边都不依赖搜索前沿用队列还是用栈。
+
+**（已发现 $\Rightarrow$ 可达）** 按首次发现的顺序归纳。源点 $s$ 可达自身；若已证明 $u$ 从 $s$ 可达，而扫描边 $(u, v)$ 时首次发现 $v$，就把这条边接在 $s$ 到 $u$ 的路径后面，得到 $s$ 到 $v$ 的路径。无向图完全相同。
+
+**（可达 $\Rightarrow$ 已发现）——关键一步** 反设算法终止后仍有可达但未发现的 $w$。取一条从 $s$ 到 $w$ 的路径，沿它找到第一个未发现的顶点 $x$，它的前驱 $u$ 已发现。由终止性，$u$ 最终会进入搜索前沿并被处理，完整扫描它的邻接项，包括边 $(u, x)$；那时 $x$ 仍未发现，于是它会在这一步被发现，与「终止后仍未发现」矛盾。
+
+## 连通分量
+
+对无向图，遍历森林直接刻画连通性。
+
+**定理**：从每个尚未发现的顶点重新启动一次遍历，每棵遍历树的顶点集合恰好是一个连通分量。因此遍历森林的树根数等于连通分量数；孤立顶点自成一棵只有一个顶点的树。
+
+从未发现的顶点 $r$ 重启一次遍历，按可达集合定理，它恰好发现所有从 $r$ 可达的顶点。无向图里「从 $r$ 可达」正是「与 $r$ 处于同一个连通分量」，所以这棵遍历树的顶点集合恰好是 $r$ 所在的分量。这次遍历结束时该分量内已经没有未发现的顶点，下一次重启必定落在另一个分量。于是每个连通分量恰好对应一棵遍历树，反之亦然。
+
+```python run id="alg.graphs.components"
+from collections import deque
+
+
+def components(graph):
+    parent, sizes = {}, []
+    for start in sorted(graph):
+        if start in parent:
+            continue
+        parent[start] = None
+        queue, size = deque([start]), 0
+        while queue:
+            u = queue.popleft()
+            size += 1
+            for v in graph[u]:
+                if v not in parent:
+                    parent[v] = u
+                    queue.append(v)
+        sizes.append(size)
+    return sizes
+
+
+graph = {
+    "a": ["b", "c"], "b": ["a", "d"], "c": ["a", "d"], "d": ["b", "c"], "e": [],
+}
+print("component count:", len(components(graph)), "sizes:", components(graph))
+```
+
+在这张图上，从 $a$ 出发的一棵树覆盖 $a, b, c, d$ 四个顶点，孤立顶点 $e$ 自成一棵单顶点树：遍历重启两次得到 2 个分量，大小为 $[4, 1]$。这就是遍历森林的树根数等于连通分量数的实例。
+
+对有向图，重复启动遍历得到的只是一个遍历森林，它的划分可能依赖顶点的处理顺序，不能当作强连通分量的分解。
+
+## 两类成本
+
+把 <CrossRef id="algorithms.graph-representation" /> 里「枚举一个顶点的邻居」「扫描全部邻接项」「查询特定边」三个操作分开计数的口径用到遍历上，成本分成两类：
+
+| 工作类别 | 计数对象 | 单源成本 |
+| --- | --- | --- |
+| 顶点状态与搜索前沿操作 | 每个被发现顶点常数次（标记、入队/出队，或一次调用） | $\Theta(\lvert V_R \rvert)$ |
+| 邻接项检查 | 每个已发现顶点的邻居表扫描一次 | $\Theta(\lvert E_R \rvert)$ |
+
+所以单源遍历是 $\Theta(|V_R| + |E_R|)$；源点能到达全部顶点时退化为 $\Theta(|V| + |E|)$。无向图里每条边被看到两次（两个方向各一次），有向图里每个可达出边被看到一次——两者都是 $\Theta(|E_R|)$，常数不影响量级。
+
+这里的 $V_R$ 是从源点可达的顶点集合，$E_R$ 是这些顶点的邻接扫描所触及的边。对有向图，只要边 $(u, v)$ 的尾点 $u \in V_R$，就有 $v \in V_R$，所以被扫描的出边仍留在可达子图内。这个界还有一条前提：访问标记按需建立——标记表里没有的顶点视作尚未发现；若实现先初始化全部 $|V|$ 个顶点的状态，那一步要另计 $\Theta(|V|)$，整个调用是 $\Theta(|V| + |E_R|)$。
+
+全图遍历时，每个顶点要么成为某棵树的根、要么被某个已有顶点首次发现一次，所以顶点状态与搜索前沿工作总计 $\Theta(|V|)$；同时每个顶点的邻接表恰好被扫描一次：有向图的每条边作为一个出边项被检查一次，无向图的每条边作为两个邻接项被检查两次。无论有向图中是否存在跨遍历树的边，总邻接项工作都是 $\Theta(|E|)$。因此全图邻接表遍历为 $\Theta(|V| + |E|)$。
+
+下面按两类分别计数：
+
+```python run id="alg.graphs.costs"
+from collections import deque
+
+graph = {"a": ["b", "c"], "b": ["a", "c"], "c": ["a", "b"], "d": []}
+state_ops = item_checks = 0
+state = {}
+for start in sorted(graph):
+    if start in state:
+        continue
+    state[start] = True
+    state_ops += 1
+    queue = deque([start])
+    state_ops += 1
+    while queue:
+        u = queue.popleft()
+        state_ops += 1
+        for v in graph[u]:
+            item_checks += 1
+            if v not in state:
+                state[v] = True
+                state_ops += 1
+                queue.append(v)
+                state_ops += 1
+E = sum(len(neighbours) for neighbours in graph.values()) // 2
+print("state operations", state_ops, "= 3*|V| =", 3 * len(graph))
+print("adjacency items", item_checks, "= 2*|E| =", 2 * E)
+```
+
+这张图 $|V| = 4$、$|E| = 3$。顶点状态操作每个顶点 3 次（标记、入队、出队），等于 $3|V|$；邻接项检查每条边两个方向各一次，等于 $2|E|$。孤立顶点 $d$ 仍贡献 3 次顶点状态操作、0 次邻接项检查——成本的两类分别由 $|V|$ 与 $|E|$ 决定。

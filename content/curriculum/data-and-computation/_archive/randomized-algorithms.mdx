@@ -1,0 +1,107 @@
+---
+id: algorithms.randomized-algorithms
+slug: /algorithms/randomized-algorithms
+order: 320
+title: 随机化算法
+status: archived
+objectives:
+  - 说出随机化算法的契约和确定性算法的不同
+  - 给出用随机向量抽查矩阵乘积时一次误判概率的上界，并说明正确结果为什么不会被拒
+  - 用独立重复，以计算成本代价把单侧错误概率压低
+  - 说明拉斯维加斯算法的运行时间为什么是随机变量，以及它的期望时间从哪里得到
+---
+
+一个整数候选 $C$ 被声称等于两个 $n \times n$ 矩阵的乘积 $AB$。最直接的验算是把 $AB$ 重算一遍再与 $C$ 逐项比较，代价 $\Theta(n^3)$ 次标量运算；而一次矩阵向量乘法的代价只有 $\Theta(n^2)$。
+
+我们希望用几次随机的矩阵向量乘法检验换掉重算，代价是答案带上一点出错的可能，这就是一种简单的随机化算法。
+
+## 一次抽查有多可靠
+
+$C = AB$ 时，$A(Bx) = (AB)x = Cx$ 对每个 $x$ 都成立，抽查一定通过。$C \ne AB$ 时，差 $D = AB - C$ 不是零矩阵，取它一行非零的行 $d$。把 $x$ 除某个 $d_j \ne 0$ 的分量以外的分量都固定下来：$d \cdot x = 0$ 是关于 $x_j$ 的一次方程，$d_j \ne 0$ 时最多有一个解，而 $x_j$ 只取 $0$ 与 $1$，所以这批固定取值下最多一半的 $x$ 让差为零。$Dx = 0$ 蕴含 $d \cdot x = 0$，一次抽查放过一个错误乘积的概率因此不超过 $1/2$。
+
+这一次抽查的契约是：运行时间确定（三次矩阵向量乘法，代价 $\Theta(n^2)$），答案可能出错，而且出错只出在「接受错误乘积」这一侧——正确的乘积在任何一次抽查里都不会被拒。把随机性用在答案上、运行时间有确定上界的一类算法，称为**蒙特卡洛算法**（Monte Carlo algorithm）。
+
+## 重复到错误概率任意小
+
+一次 $1/2$ 的上界太松。把 $k$ 轮独立抽查按「每一轮都通过才算通过」组合起来：接受一个错误乘积要求 $k$ 轮同时出错，概率上界随 $k$ 按 $2^{-k}$ 下降；正确的乘积在任何一轮都不会被拒，这条规则只压低「接受错误乘积」这一侧。
+
+组合规则的两个前提都直接写在规则里。「每一轮都通过」要求错误是单侧的：错误如果也可能出在把正确结果拒掉的一侧，这条规则会把正确结果一起拒掉，错误概率不再按 $p^k$ 下降。「概率相乘」要求各轮的随机位相互独立。
+
+```python run id="alg.rand.amplify"
+import random
+
+
+def verify_product(a, b, c, rng):
+    """Freivalds' check: multiply by a random 0/1 vector on the right."""
+    n = len(a)
+    x = [rng.randint(0, 1) for _ in range(n)]
+    bx = [sum(b[i][j] * x[j] for j in range(n)) for i in range(n)]
+    abx = [sum(a[i][j] * bx[j] for j in range(n)) for i in range(n)]
+    cx = [sum(c[i][j] * x[j] for j in range(n)) for i in range(n)]
+    return abx == cx
+
+
+def verify_repeated(a, b, c, rng, rounds):
+    """Accept only when every round accepts."""
+    return all(verify_product(a, b, c, rng) for _ in range(rounds))
+
+
+rng = random.Random(20260603)
+n = 8
+a = [[rng.randint(0, 9) for _ in range(n)] for _ in range(n)]
+b = [[rng.randint(0, 9) for _ in range(n)] for _ in range(n)]
+product = [[sum(a[i][t] * b[t][j] for t in range(n)) for j in range(n)] for i in range(n)]
+wrong = [row[:] for row in product]
+row = n // 2
+wrong[row][row] += 1
+wrong[row][row + 1] += 1
+
+trials = 500
+print("correct product accepted:", verify_repeated(a, b, product, rng, 5))
+for rounds in (1, 2, 4):
+    accepted = sum(1 for _ in range(trials) if verify_repeated(a, b, wrong, rng, rounds))
+    print(f"k={rounds}: false accept {accepted / trials:.4f} | bound 2^-k = {2 ** -rounds:.5f}")
+```
+
+## 答案永远正确，代价随随机位变化
+
+另一类用法把随机性花在时间上。给一个有 12 个变量的可满足实例：5 条子句要求 $x_1, \dots, x_5$ 全为真，其余 7 个变量不出现在任何子句里。抽一个随机赋值、检查它是否满足全部子句，不满足就再抽一个。
+
+循环只在赋值满足全部子句时返回，返回的答案因此一定正确；随机的是要抽多少次。一个随机赋值满足这 5 条子句的概率是 $2^{-5}$，成功之前的试验次数服从参数 $p = 2^{-5}$ 的几何分布，期望是 $1/p = 32$。
+
+```python run id="alg.rand.restart-search"
+import random
+
+clauses = [1, 2, 3, 4, 5]        # x1..x5 must all be true; the other variables are free
+variables = 12
+rng = random.Random(20260605)
+
+
+def restart_search(rng):
+    """Draw assignments until one satisfies every clause; return how many draws it took."""
+    draws = 0
+    while True:
+        draws += 1
+        assignment = [rng.randint(0, 1) for _ in range(variables)]
+        if all(assignment[i - 1] == 1 for i in clauses):
+            return draws
+
+
+runs = [restart_search(rng) for _ in range(200)]
+print("mean draws:", sum(runs) / len(runs))
+print("most draws in one run:", max(runs))
+print("1 / p =", 2 ** len(clauses))
+```
+
+期望值只保证平均：单次运行可以抽很久，$p$ 很小时平均值本身也可以大到指数级，抽样换不来最坏情形上的保证。
+
+答案一定正确、运行时间是随机变量的一类算法，称为**拉斯维加斯算法**（Las Vegas algorithm）：它的契约写成期望时间，或某个高概率下成立的时间上界。上面的期望值来自成功概率 $p$ 的下界——$p$ 未知时，只能报出「若 $p$ 至少是多少，期望时间不超过多少」。
+
+随机主元的快速排序是这一类契约的另一个实例：无论主元落在哪里，输出都是排好序的数组，随机性只改变比较次数，期望比较次数是 $\Theta(n \log n)$（<CrossRef id="algorithms.quicksort" />）。
+
+## 两类契约的对比
+
+| 契约 | 输出 | 运行时间 | 报出的量 |
+| --- | --- | --- | --- |
+| 蒙特卡洛 | 可能出错 | 确定上界 | 错误概率的上界 |
+| 拉斯维加斯 | 总是正确 | 随机变量 | 期望时间，或高概率时间界 |

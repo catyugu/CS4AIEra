@@ -1,0 +1,211 @@
+---
+id: algorithms.linked-structures
+slug: /algorithms/linked-structures
+order: 260
+title: 链表与指针结构
+status: archived
+objectives:
+  - 区分已持有节点与只知道位置两种操作模型，写出同一操作在这两种模型下的最坏成本
+  - 推导单链表中按位置插入与访问需要多少次引用跳转，并读出跳数与下标的关系
+  - 陈述单链表的表示不变量，说明不变量被破坏后遍历为什么可能不终止
+  - 说明双向链表的反向引用让已知节点删除变成常数成本、以及哨兵节点的用法
+---
+
+序列的每个元素可以放进一个独立节点，节点之间用引用相接。一个节点保存这个元素的值，以及一个指向下一节点的引用 `next`；整条链由入口引用 `head` 定位，最后一个节点的 `next` 是 `None`：
+
+```text
+head --> +-------+------+     +-------+------+     +-------+------+
+nodes    | value | next | --> | value | next | --> | value | next | --> None
+         +-------+------+     +-------+------+     +-------+------+
+```
+
+链式结构不搬动已有的元素：拼接关系编码在 `next` 里，改一处引用就改变序列怎么接下去，其余节点原地不动。同一个抽象序列接口（见 <CrossRef id="algorithms.arrays-and-lists" />）在这里把修改的代价从移动元素转移到走引用。
+
+## 已持有节点与只知道位置
+
+把一个 99 插到序列的位置 1，是同一个抽象操作。调用方手里可能已经拿着那个位置的节点引用，也可能只有一个下标 `1`。链式结构上这两种情形走的代码路径不同：手里有节点时插入只改两条引用，代价是常数；只有下标时，代码必须先从入口引用沿 `next` 走到那个位置，代价随下标增长。
+
+`insert_after(node, value)` 在已持有的节点之后插入，只改两条引用；`insert_at(head, position, value)` 只有入口引用与下标，要走到 `position - 1` 处的前驱再改引用。
+
+```python run id="alg.linked.known-node-vs-position"
+class Node:
+    def __init__(self, value, next=None):
+        self.value = value
+        self.next = next
+
+
+def values_of(head):
+    out, node = [], head
+    while node is not None:
+        out.append(node.value)
+        node = node.next
+    return out
+
+
+def insert_after(node, value):
+    node.next = Node(value, node.next)          # two structural writes, zero hops
+
+
+def insert_at(head, position, value):
+    previous, hops = head, 0
+    while hops < position - 1:
+        previous, hops = previous.next, hops + 1
+    insert_after(previous, value)
+    return head, hops
+
+
+head = Node(1, Node(2, Node(3)))
+insert_after(head.next.next, 99)                # we already hold the node for position 2
+print("held node (position 2):", values_of(head))
+for position in (1, 2, 3):
+    head = Node(1, Node(2, Node(3)))
+    head, hops = insert_at(head, position, 99)
+    print(f"position {position}: hops={hops} -> {values_of(head)}")
+```
+
+已持有的尾节点上插入，跳数是 0；按下标 3 插入，要先走 2 步再改引用。两次的结果都是 `[1, 2, 3, 99]`。定位前驱是「只知道位置」独有的开销。
+
+下面按最坏情形计数，单位是一次沿 `next` 前进或一次引用赋值。规模度量是节点数 $n$，并区分调用方手里拿着什么：
+
+| 抽象操作 | 已持有相关节点（前驱，或首尾句柄） | 只知道位置 $i$ |
+| --- | --- | --- |
+| `insert(i, x)` | $\Theta(1)$ 次结构写入（$i = 0$ 时改的是 `head`） | 定位前驱 $\Theta(i)$，再加 $\Theta(1)$ 次写入；对 $i$ 取最坏是 $\Theta(n)$ |
+| `delete(i)` | $\Theta(1)$ 次结构写入（双向链表，或单链表已持有前驱） | 定位 $\Theta(i)$，再加 $\Theta(1)$ 次写入；对 $i$ 取最坏是 $\Theta(n)$ |
+| 读取位置 $i$ 的元素 | 已持有该节点时读它的值是 $\Theta(1)$ | 沿 `next` 走 $i$ 步，为 $\Theta(i)$；对 $i$ 取最坏是 $\Theta(n)$ |
+| 头部插入与头部删除 | $\Theta(1)$ 次结构写入（移动 `head` 入口引用） | $\Theta(1)$：`insert(0, x)` 与 `delete(0)` 都只改入口引用 `head`，不需要定位 |
+
+「已持有相关节点」一列假定这个句柄当前属于该结构；对来自另一个结构的节点调用解链会破坏那边的链接。头部插入要把新的入口引用交回调用方（返回新 `head`，或把链表封装在容器对象里），改动才对调用方可见。
+
+单链表上，只持有目标节点、拿不到前驱时，删除无法完成：链接只从前往后走，目标节点的前驱从它本身到达不了。同时能访问 `head` 时可以重新从头搜索前驱，最坏 $\Theta(n)$。把后继的值复制进目标节点、再解链后继的写法改变的是传入节点的 payload、删掉的是它的后继，传入的节点句柄并没有被移除，而且对最后一个节点失效。
+
+两端操作同样受这个区分支配。另存一个尾引用可以让尾插达到 $\Theta(1)$，尾删仍要先找到前驱，最坏 $\Theta(n)$；维护首尾两个引用的双向链表，两端插入与删除都能达到最坏 $\Theta(1)$，代价是每次结构修改要同步两条反向引用。把哪一侧暴露给调用方（节点句柄还是下标），直接决定调用方能达到什么成本。
+
+## 表示不变量
+
+上面的成本结论依赖两个前提：手里的节点句柄属于这个结构，而且从入口引用出发的遍历会终止。这两条由表示不变量保证。
+
+**表示不变量**：每条从入口引用出发的遍历都终止，且读出的值序列恰好是结构所表示的抽象序列。
+
+单链表的抽象函数是：从 `head` 出发沿 `next` 前进，得到有限且不重复的节点序列 $x_0, \dots, x_{n-1}$，抽象序列就是它们的 `value` 序列，最后一个节点的 `next` 是 `None`。
+
+空结构用 `None` 表示；「链表剩余部分」也是一个链表（`None` 是它的空情形），遍历与长度因此既能写成循环，也能写成递归。违反不变量的一处 `next` 指错，后面的整条遍历跟着错，最常见的表现是遍历不终止。
+
+```python run id="alg.linked.build-and-invariants"
+class Node:
+    def __init__(self, value, next=None):
+        self.value = value
+        self.next = next
+
+
+def build(values):
+    head = None
+    for value in reversed(values):
+        head = Node(value, head)
+    return head
+
+
+def to_list(head):
+    out, node = [], head
+    while node is not None:
+        out.append(node.value)
+        node = node.next
+    return out
+
+
+head = build([1, 2, 3])
+print("values:", to_list(head))
+print("head holds the first element:", head.value)
+print("tail points nowhere:", head.next.next.next is None)
+print("the rest of a list is a list:", to_list(head.next))
+print("empty structure:", build([]) is None, to_list(None))
+```
+
+`build` 用头插法构造，是 $\Theta(n)$ 次引用赋值。遍历写成了循环：递归版本的调用深度等于节点数，会受解释器的递归上限约束（见 <CrossRef id="python.runtime-vs-language" />）。
+
+## 只知道位置时仍然逐个走
+
+已持有的节点句柄让修改是 $\Theta(1)$；只有一个位置编号时，链式表示没有捷径——连续数组按下标一次地址计算就取到元素，链式结构只能从入口引用沿 `next` 走下标步数。
+
+```python run id="alg.linked.index-access"
+class Node:
+    def __init__(self, value, next=None):
+        self.value = value
+        self.next = next
+
+
+def build(values):
+    head = None
+    for value in reversed(values):
+        head = Node(value, head)
+    return head
+
+
+def access_by_position(head, position):
+    node, hops = head, 0
+    while hops < position:
+        node, hops = node.next, hops + 1
+    return node.value, hops
+
+
+head = build(range(1000))
+for position in (0, 10, 500, 999):
+    value, hops = access_by_position(head, position)
+    print(f"linked position {position:4d}: hops={hops:4d}  value={value}")
+
+values = list(range(1000))
+print("array position 999:", values[999])
+```
+
+同一个单位成本模型下，链式结构的按位置访问是 $\Theta(n)$，连续数组是 $\Theta(1)$。位置 0 是例外：`insert(0, x)` 与 `delete(0)` 只改 `head`，单链表上也是 $\Theta(1)$。
+
+换成双向链表也不改变按位置访问：反向引用让已持有的节点直接找到前驱，从位置出发仍要逐个走，代价是 $\Theta(i)$，对 $i$ 取最坏是 $\Theta(n)$。反向引用加快的是从一个已持有节点出发的移动。
+
+## 双向链表与反向引用
+
+双向链表的节点多一个指向上一节点的引用 `prev`：`Node = (value, prev, next)`。这条反向引用换来「已持有节点删除是 $\Theta(1)$」：从目标节点本身就能取到前驱，不必从头搜索；代价是每次结构修改要同时维护正向与反向两条链接。
+
+双向链表另外要求：
+
+- 空结构：`head is None` 当且仅当 `tail is None` 当且仅当 `length == 0`；
+- 非空：$x_0$ 是 `head`，$x_{n-1}$ 是 `tail`，`head.prev is None`，`tail.next is None`；
+- 每个相邻对满足 $x_i.next$ 是 $x_{i+1}$ 且 $x_{i+1}.prev$ 是 $x_i$；`length == n`。
+
+这些条件合起来说明「每个合法具体状态都能解释成一个抽象序列」：`head`、`tail`、正向可达链与 `length` 必须是同一个结构。
+
+`unlink` 里故意漏掉修正反向指针的那一行：
+
+```python run id="alg.linked.doubly-invariant-check"
+class Node:
+    def __init__(self, value, prev=None):
+        self.value = value
+        self.prev = prev
+        self.next = None
+
+
+def unlink(node):
+    node.prev.next = node.next
+    # node.next.prev = node.prev          # this line is missing
+
+
+a, b, c, d = Node(1), Node(2), Node(3), Node(4)
+a.next, b.prev = b, a
+b.next, c.prev = c, b
+c.next, d.prev = d, c
+unlink(b)
+
+forward, node = [], a
+while node is not None:
+    forward.append(node.value)
+    node = node.next
+backward, node = [], d
+while node is not None:
+    backward.append(node.value)
+    node = node.prev
+print("forward from head:", forward)
+print("backward from tail:", backward)
+print("c.prev is b:", c.prev is b)
+```
+
+正向遍历从 `a` 出发读到 `[1, 3, 4]`：`2` 被绕过了。反向遍历从 `d` 出发读到 `[4, 3, 2, 1]`：`2` 又出现，因为 `c.prev` 仍指着 `b`。把注释掉的那一行 `node.next.prev = node.prev` 加回 `unlink`，反向遍历变成 `[4, 3, 1]`，双向不变量恢复。`head`、`tail`、`length` 由各自的修改点维护，这里只看节点之间的两条链接。
+
+两端还要各自改 `head` 与 `tail`，这是这套表示里剩下的特殊情形。在两端各放一个不存数据的哨兵节点，可以把端点并入一般的接链与解链，调用方不再为端点写分支；代价是不变量变复杂——带哨兵的环状结构里没有 `None` 端点，「走到末尾」与「遇到环」不再能用同一个条件区分。

@@ -1,0 +1,14 @@
+---
+id: data-and-computation.order-and-priority
+slug: /data-and-computation/order-and-priority
+order: 70
+title: 栈、队列与优先级
+status: draft
+objectives:
+  - 说明后进先出与先进先出各自适合什么工作负载
+  - 判断反复取当前最重要的一项需要什么结构
+  - 说明每次重新扫描在规模变大后为什么不可接受
+  - 指出一个错误会以什么顺序被处理
+---
+
+处理顺序是一种设计选择：先进先出适合排队，后进先出适合嵌套与回退，反复取当前最重要的一项需要专门维护的结构。要判断的是这份工作负载实际要求哪种顺序，以及每次重新扫描在规模变大后的后果。

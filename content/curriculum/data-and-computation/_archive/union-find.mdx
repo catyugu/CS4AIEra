@@ -1,0 +1,96 @@
+---
+id: algorithms.union-find
+slug: /algorithms/union-find
+order: 420
+title: 并查集与增量连通性
+status: archived
+objectives:
+  - 用「一个划分」的抽象状态描述并查集，并写出 find 与 union 的契约
+  - 说明并查集支持什么、不支持什么，以及按大小合并加路径压缩的成本结论为什么是一条摊还界
+  - 说明无向森林的边数为什么由成分数唯一决定
+---
+
+一张无向图，边一条一条地加进来，每加一条就问一次「$u$ 和 $v$ 现在还连通吗」。最直接的做法是重新遍历一遍图：单次回答是对的，代价是每次查询都重扫全图。
+
+把这类查询改写成「维护顶点集合上的一个划分」，就换来便宜的查询：并查集要给出这组操作、划分的表示以及它的摊还成本。
+
+## 从静态连通性到增量连通性
+
+在一张给定的无向图上，遍历森林的每棵树恰好是一个连通分量。那是一个**静态快照**上的结论：图给定，跑一次 BFS/DFS，连通性就全部知道了。
+
+换一个操作模型，问题就变了。假设边是一条一条加入的（$E_0 \subseteq E_1 \subseteq \cdots$），中间要反复回答同一个问题：「$u$ 和 $v$ 现在连通吗？」设一共问 $q$ 次，第 $j$ 次问的时候图里已经有 $E_{i_j}$，那么每问一次就重跑一遍遍历，总成本是
+
+$$\Theta\left(\sum_{j = 1}^{q} \big(|V| + |E_{i_j}|\big)\right).$$
+
+最自然的用法是每加入一条边就问一次：此时 $q$ 与最终边数同阶，记最终边数为 $M = |E|$，总成本就是 $\Theta(M|V| + M^2)$——平方级。因此需要一种能**增量维护**连通关系的结构。
+
+## 并查集：维护一个划分
+
+并查集的抽象状态是**顶点集合上的一个划分**：若干个两两不交的块，每个块就是当前图的一个连通分量。`parent`、`size`、`rank` 都只是这个划分的一种表示，不是它的定义。
+
+| 操作 | 后置条件 |
+| --- | --- |
+| `find(v)` | 返回 `v` 所在块中的某个代表元；不指定是哪一个，只要求同一块内返回值相同 |
+| `union(u, v)` | 把 `u` 与 `v` 所在的两个块合并成一个块 |
+
+契约是：处理完边前缀 $E_i$ 之后，对任意 $u, v$，`find(u) == find(v)` 当且仅当 $u, v$ 在 $(V, E_i)$ 中连通。
+
+这条充要条件就是并查集的契约。它按加入的边数归纳：$E_0 = \varnothing$ 时每个顶点自成一个块，契约平凡成立；加入边 $(u, v)$ 时，如果 $u, v$ 原本同块，那么图与划分都没有变化，契约保持不变；如果原本异块，新边恰好把这两个连通分量合成一个，而 `union` 也恰好合并这两个块，其余块不受影响，契约同样保持。所以每个前缀 $E_i$ 之后契约都成立。
+
+同一块说明它们之间已经有路径，不同块说明它们还没有被任何已加入的边连起来。下面这个单元格把一段边序列并进同一个顶点集合上的划分，打印最终的块与块数。
+
+```python run id="alg.graphs.dsu-partition"
+class DisjointSet:
+    def __init__(self, vertices):
+        self.parent = {vertex: vertex for vertex in vertices}
+        self.size = {vertex: 1 for vertex in vertices}
+
+    def find(self, vertex):
+        while self.parent[vertex] != vertex:
+            self.parent[vertex] = self.parent[self.parent[vertex]]
+            vertex = self.parent[vertex]
+        return vertex
+
+    def union(self, u, v):
+        root_u, root_v = self.find(u), self.find(v)
+        if root_u == root_v:
+            return False
+        if self.size[root_u] < self.size[root_v]:
+            root_u, root_v = root_v, root_u
+        self.parent[root_v] = root_u
+        self.size[root_u] += self.size[root_v]
+        return True
+
+vertices = ["a", "b", "c", "d", "e", "f"]
+edges = [("a", "b"), ("c", "d"), ("b", "c"), ("e", "f"), ("a", "d")]
+structure = DisjointSet(vertices)
+for u, v in edges:
+    print("union", (u, v), "accepted:", structure.union(u, v))
+blocks = {}
+for vertex in vertices:
+    blocks.setdefault(structure.find(vertex), []).append(vertex)
+print("partition:", sorted(sorted(block) for block in blocks.values()), "| components:", len(blocks))
+```
+
+`find` 沿 `parent` 指针走到根，并把这条链上的顶点直接挂到根上；`union` 只连接两个不同块的根，对已经在同一块的 $u, v$ 返回假——没有新边能让同一个块再合并一次。
+
+## 成本与能力边界
+
+能力边界如下：
+
+- 支持：反复做「加入一条边」与 `union` 两个块，查询两个顶点是否同块；
+- 不支持：一般的删边——把一条边去掉后重新分裂块，超出这个结构的操作范围；
+- 不给路径：`find` 只回答「是不是同一块」，不给出连接它们的实际路径；
+- 不是有向工具：它不回答有向可达，也不是强连通分量算法。
+
+**这份实现的成本是一条摊还界**。按大小合并配上路径压缩，$m$ 次操作的整串成本是 $O((n + m)\alpha(n))$，其中 $n$ 是顶点数、$\alpha$ 是反阿克曼函数，它增长极慢，精确推导超出本课范围。这不是说单次 `find` 最坏也只需要 $O(\alpha(n))$：只做按大小合并、不配路径压缩时，树高已被限制在 $O(\log n)$，某一次 `find` 仍可能花 $O(\log n)$；路径压缩保证的是这种昂贵的结构不会持续出现，摊还到整串操作上，整串 $m$ 次操作的成本才是 $O((n + m)\alpha(n))$。
+
+## 森林、树与成分数
+
+有限无向森林的边数由成分数唯一决定：
+
+**定理。** 若有限无向图 $(V, E)$ 是森林，其连通分量数为 $c$，则 $|E| = |V| - c$。$c = 1$ 就是树，于是非空树的边数恰好是 $|V| - 1$；空图有 $|E| = 0 = |V| - c$（$c = 0$）。
+
+证明按连通分量逐个算：树的边数是顶点数减一（对 $|V|$ 归纳，每次删一个叶子），把 $c$ 棵树加起来就是 $|V| - c$。
+
+这条等式直接给出并查集里成分数的变化：**每一次成功的 union 都让成分数减一**，因为它合并的是两个不同的块。返回假的那次 union 不改变划分——它接下的那条边在已加入的边里形成了一个环。成分数从 $|V|$ 开始，每成功合并一次减一，读出的块数就是当前的成分数。

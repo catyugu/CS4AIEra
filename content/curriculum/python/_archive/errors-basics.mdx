@@ -1,0 +1,139 @@
+---
+id: python.errors-basics
+slug: /python/errors-basics
+order: 140
+title: 错误与异常处理
+status: archived
+objectives:
+  - 读出一个异常的类名与消息，并说出它来自哪一类失败
+  - 用 try/except 在正确的位置捕获预期的失败，保证捕获范围只覆盖会失败的语句
+  - 定义并抛出表达本程序语义的错误类型，让调用方可以按类型处理
+  - 说明裸 `except` 为什么掩盖真正的缺陷
+---
+
+读一次失败时，第一个问题是它属于哪一类：类型给出方向，消息给出这一次的细节。这个判断决定错误是在本地被处理、向上传递，还是让程序终止。
+
+## 异常改变控制流
+
+失败发生时 Python 抛出一个**异常对象**：它有一个类型（描述失败的种类）和一条消息（描述这一次的细节）。抛出会放弃当前的正常执行路径，沿调用栈向上找处理者；没有人处理，程序终止并打印回溯。
+
+```python
+try:
+    可能失败的语句
+except 某个异常类型 as 变量:
+    处理
+```
+
+两条规则决定这段代码的行为：
+
+- **按类型捕获，写具体的类型**：`except ValueError` 不会捕获 `TypeError`。捕获之后不要静默丢弃——转换、记录或重新抛出，吞掉异常会让失败在更远处以更奇怪的形式出现。
+- **捕获范围只应覆盖会失败的那几条语句**：把可能失败的调用限制在最小范围；把整个函数体包进 `try`，范围太大就会连自己的缺陷一起吞掉。
+
+常见的失败与它们的类型：
+
+| 类型 | 出现过的地方 |
+| --- | --- |
+| `TypeError` | 类型不匹配，例如用 `str` 与 `int` 相加 |
+| `ValueError` | 类型正确但内容不合法，例如 `int("abc")` |
+| `KeyError` / `IndexError` | 键或位置不存在 |
+| `ZeroDivisionError` | 除以零 |
+| `AttributeError` | 对象上没有这个属性 |
+| `FileNotFoundError` | 文件不存在（见 <CrossRef id="python.files-basics" />） |
+
+自定义错误用继承 `Exception` 的类表示。类型是调用方用来分支的依据，消息是给人读的细节，两者不能互相替代。重复的失败处理可以并列多个 `except` 子句；异常的传播路径、子类匹配、`else`/`finally` 的执行顺序、异常链与自定义异常的层次设计由 <CrossRef id="python.exceptions" /> 处理。
+
+## 认出错误
+
+```python run id="py.err.types"
+def show(failure):
+    print(f"{type(failure).__name__:20s} {failure}")
+
+
+for operation in (
+    lambda: "text" + 1,
+    lambda: int("abc"),
+    lambda: {"a": 1}["b"],
+    lambda: [1, 2][5],
+    lambda: 1 / 0,
+):
+    try:
+        operation()
+    except Exception as failure:
+        show(failure)
+```
+
+类名指明失败的种类，消息指明这一处的细节。排查时先看类名确定方向，再看消息定位到具体值。未处理的异常会把类型、消息与调用路径打印成回溯，不要为了输出干净把所有异常都捕获掉。
+
+## 捕获预期的失败
+
+```python run id="py.err.try-except"
+def read_count(text):
+    try:
+        value = int(text)
+    except ValueError as failure:
+        return f"not an integer: {failure}"
+    return value * 2
+
+
+for text in ("21", "abc", "7"):
+    print(f"{text!r} ->", read_count(text))
+
+print("execution continues to this line")
+```
+
+`try` 只包住会失败的那一行，`int` 之后的计算在它外面：转换失败被就地处理成返回值，调用方拿到一个可判断的结果，程序并不终止。成功路径与失败路径都走到函数末尾，无需额外分支；需要区分「没有异常时的收尾」与清理动作时，用 `else` 与 `finally`，它们的执行顺序见 <CrossRef id="python.exceptions" />，资源清理属于 <CrossRef id="python.context-managers" />。
+
+## 抛出自己的错误
+
+```python run id="py.err.custom"
+class InvalidRange(Exception):
+    """A port outside the valid range."""
+
+
+def parse_port(text):
+    value = int(text)
+    if not 1 <= value <= 65535:
+        raise InvalidRange(f"port {value} is outside 1..65535")
+    return value
+
+
+for text in ("8080", "70000", "not-a-number"):
+    try:
+        print(f"{text!r} ->", parse_port(text))
+    except InvalidRange as failure:
+        print(f"{text!r} -> handled by type: {failure}")
+    except ValueError as failure:
+        print(f"{text!r} -> invalid value: {failure}")
+```
+
+函数在发现不合法状态时抛错，比返回特殊值更明确：`InvalidRange` 与 `ValueError` 在调用侧是两个不同的分支，调用方据此决定是提示用户改输入还是回退默认端口。错误类型属于接口的一部分，写进文档才有意义。`ValueError` 表示参数内容不合法；当调用方需要按错误类别采取不同处理时，自定义异常类型才开始有价值，只有一个笼统的 `ValueError` 够用时不必为它造类型。
+
+## 捕获范围要窄
+
+```python run id="py.err.narrow-scope"
+def parse_wide(text):
+    try:
+        return int(text.strip())
+    except:  # bare except: it swallows defects in this function too
+        return None
+
+
+def parse_narrow(text):
+    try:
+        return int(text.strip())
+    except ValueError as failure:
+        raise ValueError(f"not an integer: {failure}")
+
+
+print("bare except hides a real bug:", parse_wide(None))
+
+try:
+    parse_narrow(None)
+except AttributeError as failure:
+    print("the narrow version lets the real bug through:", type(failure).__name__)
+
+print("both handle the expected failure:", parse_wide("12"), parse_narrow("12"))
+```
+
+两段代码对 `"abc"` 的处理相同，差别在 `None`：`parse_wide` 与 `parse_narrow` 的规约都要求参数 `text` 是 `str`，传入 `None` 违背了这条规约，`text.strip()` 是编程错误；裸 `except` 却把它伪装成「输入不合法」，返回 `None` 让错误继续往下传播到更远的地方。捕获具体类型，让不属于预期的失败照常抛出。异常留给失败情形：能直接判断的状态直接判断，不要用宽泛的捕获代替本可以清楚写出的普通分支，只捕获自己准备处理的异常。
+

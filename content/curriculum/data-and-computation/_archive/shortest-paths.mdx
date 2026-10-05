@@ -1,0 +1,183 @@
+---
+id: algorithms.shortest-paths
+slug: /algorithms/shortest-paths
+order: 370
+title: 最短路径与松弛
+status: archived
+objectives:
+  - 用一个统一的距离函数描述单源最短路问题，并区分有限、不可达与负环三种取值
+  - 说明松弛操作只把有限标签换成真实游走的权重，解释前驱指针为什么不单独构成路径的输出要求
+  - 证明单位权下 BFS 的层号恰等于最少边数
+  - 用一个加权图说明 BFS 的层号与按权重的最小距离为何不同
+---
+
+一张有向图，每条边带一个权重。从 $s$ 到 $f$ 有三条路线：$s \to f$ 的权重是 3，$s \to g \to f$ 是 $1 + 1 = 2$，$s \to h \to f$ 是 $2 + 2 = 4$。一条路线的权重是它经过的各边权重之和，三条分别是 3、2、4，最小的是 $s \to g \to f$ 的 2；边数最少的 $s \to f$ 只有一条边，权重反而更大。
+
+```text
+        s
+      / | \
+     /  |  \
+    g   |   h
+    |   |   |
+    |   |   |
+    +-> f <-+
+```
+
+```python run id="alg.graphs.shortest-paths-three-routes"
+arcs = [("s", "f", 3), ("s", "g", 1), ("g", "f", 1), ("s", "h", 2), ("h", "f", 2)]
+weight = {(u, v): w for u, v, w in arcs}
+routes = {
+    "s -> f": [("s", "f")],
+    "s -> g -> f": [("s", "g"), ("g", "f")],
+    "s -> h -> f": [("s", "h"), ("h", "f")],
+}
+for name, edges in routes.items():
+    print(name, "costs", sum(weight[edge] for edge in edges))
+print("fewest cost to f:", min(sum(weight[edge] for edge in edges) for edges in routes.values()))
+```
+
+一条路线就是一列顶点 $s = u_0, u_1, \dots, u_k = f$，其中每一对相邻顶点都有一条边，这样的顶点序列叫 <Term id="walk">游走</Term>（walk）。游走的权重是各边权重之和。游走允许重复顶点；**简单路径**（simple path）额外要求顶点互不重复，上面三条路线都是简单路径。
+
+从 $s$ 到 $f$ 的所有游走里，权重最小的是 2，这个数就是 $s$ 到 $f$ 的**距离**。更大的图里不必枚举游走：给每个顶点一个距离标签，从 $distance[s] = 0$、其余顶点为 $+\infty$ 开始，反复取一条边 $(u, v, weight)$，若 $distance[u] + weight < distance[v]$，就把 $distance[v]$ 换成 $distance[u] + weight$，并记下 <Term id="predecessor-vertex">前驱顶点</Term> `predecessor[v] = u`；这个操作叫 <Term id="relaxation">松弛边</Term>。
+
+**建模条件**：把图记成有向加权图 $G = (V, E, w)$，源点 $s \in V$，$V$ 与 $E$ 有限，$|E|$ 用「边序列长度」计数；权重由 $w \colon E \to R$ 给出，$w$ 不限制正负。<CrossRef id="algorithms.graph-representation" /> 把权重定义在边上，并给出「全部边构成一个连续可迭代序列」的边列表接口。
+
+## 距离的三种取值
+
+记 $s$ 到 $v$ 的距离为 $\delta(s, v)$，把从 $s$ 到 $v$ 的所有游走记成一个集合 $W(s, v)$。$s$ 到 $f$ 的三条路线权重都有限，$W(s, f)$ 有最小元素，$\delta(s, f) = 2$：最短的游走存在。把图扩展一步，最短的游走不再总是存在，距离还会取到另外两种值。
+
+**走不到。** 加一个顶点 $c$，没有任何边指向它，$W(s, c)$ 是空集；$s$ 到 $c$ 没有游走，约定 $\delta(s, c) = +\infty$。
+
+**负边。** 加 $s \to a$ 权重 2、$a \to b$ 权重 $-3$。$s \to a \to b$ 的权重是 $2 + (-3) = -1$，$\delta(s, b) = -1$：有限，而且是负数。
+
+**负环。** 再加 $b \to a$ 权重 1，$a \to b \to a$ 合计 $-3 + 1 = -2$，每绕一圈净减 2。从 $s$ 走到 $a$，绕任意多圈再回到 $a$，得到权重越来越小的 $s \to a$ 游走，$W(s, a)$ 的权重没有下界，$\delta(s, a) = -\infty$。
+
+**环**（cycle）是一列顶点 $v_0, v_1, \dots, v_k = v_0$，其中 $v_0, \dots, v_{k-1}$ 两两不同，且每一对相邻顶点都是边；环的权重是各边权重之和，权重之和小于 0 的环叫**负环**，$a \to b \to a$ 合计 $-2 < 0$ 就是一个。
+
+如果一个负环从 $s$ 可达，最短的游走就不再存在，因此距离要写成所有游走权重的下确界。$w(W)$ 表示游走 $W$ 的权重，单源最短路径问的是
+
+$$\delta(s, v) = \inf \lbrace \, w(W) \;\colon\; W \in W(s, v) \, \rbrace.$$
+
+下确界而不是最小值：三种取值里只有有限的那种由集合里的元素取到。
+
+负环把 $\delta$ 压到 $-\infty$ 还依赖一条可达性：它必须从 $s$ 可达，并且从它出发还能走到 $v$；只能从 $s$ 走到、却走不到 $v$ 的负环不改变 $\delta(s, v)$。
+
+```python run id="alg.graphs.shortest-paths-three-outcomes"
+arcs = [
+    ("s", "a", 2), ("a", "b", -3), ("b", "a", 1),
+    ("s", "f", 3), ("s", "g", 1), ("g", "f", 1),
+    ("s", "h", 2), ("h", "f", 2),
+]
+weight = {(u, v): w for u, v, w in arcs}
+
+print("fewest cost to f:", min(weight[("s", "f")], weight[("s", "g")] + weight[("g", "f")],
+                              weight[("s", "h")] + weight[("h", "f")]))
+print("some edge enters c:", any(v == "c" for _, v, _ in arcs))
+print("cycle a -> b -> a costs:", weight[("a", "b")] + weight[("b", "a")])
+```
+
+三种取值合成一张表：
+
+| $\delta(s, v)$ 的取值 | 条件 |
+| --- | --- |
+| $+\infty$ | $v$ 从 $s$ 不可达 |
+| $-\infty$ | 存在一条从 $s$ 可达、并且从它出发还能走到 $v$ 的负环 |
+| 有限值 | 其它情况，此时它是某个具体游走的权重 |
+
+两条极端取值各一句话；有限取值要论证下确界被取到。论证从**任意**一条 $s \to v$ 游走出发，不能假定「最优游走」存在，因为下确界未必由集合中的元素取得。
+
+**不可达**：$W(s, v)$ 是空集，按 $\inf(\text{空集}) = +\infty$ 立即得到 $\delta(s, v) = +\infty$。
+
+**有可达负环**：设 $C$ 是一条从 $s$ 可达、并且从它出发还能走到 $v$ 的负环。把 $C$ 重复任意多次，得到一条比一条轻的 $s \to v$ 游走，权重没有下界，于是 $\delta(s, v) = -\infty$。
+
+**有限值**：不存在这样的负环时，$\delta(s, v)$ 有限，并且被一条**简单路径**取到；简单路径至多含 $|V| - 1$ 条边，这个界会给基于轮次的最短路径算法提供轮数上界。
+
+**证明骨架**：任取一条 $s \rightsquigarrow v$ 游走 $W$，它重复顶点时含有环，环上的顶点都从 $s$ 可达、又能走到 $v$，按假设环的权重非负，删掉它不增加权重；把重复顶点逐个删掉，$W$ 化归为一条权重不超过它的简单路径，所以任意游走的权重都不小于某条简单路径的权重。有限图上简单路径只有有限条，设 $p$ 是其中权重最小的一条，则 $w(p) \le w(W)$ 对一切游走 $W$ 成立，于是 $w(p) \le \delta(s, v)$；$p$ 本身是游走又给出 $\delta(s, v) \le w(p)$，两者相等，$\delta(s, v)$ 由简单路径 $p$ 取到。
+
+## 松弛的不变量
+
+松弛操作要给出距离，靠的是一条安全性不变量：
+
+**安全性不变量**：任何时刻，每个有限的 $distance[v]$ 都是某条真实 $s \rightsquigarrow v$ 游走的权重。
+
+这条不变量是上界性质：松弛给出的数永远不会低于真实最优值，只会逐渐逼近它。
+
+它是**存在性**陈述：它断言某个真实游走取到该权重；`predecessor[v] = u` 只记录「最后一次改善 $v$ 时用的是边 $(u, v)$」，并不保存历史版本。看一个反例，边按 $s \to u: 10$、$u \to v: 0$、$s \to x: 1$、$x \to u: 1$ 的顺序扫描，扫描一轮后：
+
+$$
+\begin{aligned}
+distance[u] &= 2, & predecessor[u] &= x \\
+distance[v] &= 10, & predecessor[v] &= u \\
+distance[x] &= 1, & predecessor[x] &= s
+\end{aligned}
+$$
+
+当前 predecessor 链 $s \to x \to u \to v$ 的权重是 $1 + 1 + 0 = 2$，而 $distance[v]$ 是 10：$v$ 是在 $u$ 还是 10 的时候被改善的，那条历史没有留下来。
+
+三件事要分开：安全性不变量说的是「有限标签是某条真实游走的权重」（存在性）；`predecessor[v]` 只记录最后一条改善边；只有在具体算法的**最终条件**下——例如没有相关负环——才能另外证明最终的 predecessor 指针可以还原出一条最短路径。
+
+存在多条等长最短路时 predecessor 并不唯一，哪一条取决于边的处理顺序，因此不能把 predecessor 形成的树当作算法的输出要求。
+
+## 单位权下的 BFS
+
+当 $w(e) = 1$ 对所有边成立时，「最短的游走」恰是「边数最少的游走」，BFS 直接给出答案；<CrossRef id="algorithms.graph-traversal" /> 用队列不变量给出 BFS 的层次结构。
+
+把「所有边权重相同」当成「权重都取 1」会丢掉公共权重本身：公共权重 $c > 0$ 时最小权重等价于最少边数，且 $\delta = c \cdot level$；$c = 0$ 时所有可达顶点的距离都是 0；$c < 0$ 时更长的游走反而更轻，有相关环时得到 $-\infty$。所以前提写成单位权。
+
+**定理**：BFS 的层号等于最少边数，即 $level[v] =$「$(s, v)$ 的最少边数」。
+
+**（上界）** parent 链 $v \to parent[v] \to \dots \to s$ 每一步都是一条边，长度恰为 $level[v]$，所以存在一条 $level[v]$ 条边的游走，最少边数 $\le level[v]$。
+
+**（下界）** 沿任意一条 $s = u_0 \to \dots \to u_k = v$ 的游走对 $i$ 归纳可得 $level[u_i] \le i$：BFS 出队按层号非递减，队列里只有当前层与下一层，所以处理层号为 $l$ 的 $u_i$ 时，它的邻居 $u_{i+1}$ 拿到的层号不超过 $l + 1$，无论 $u_{i+1}$ 是在这一步才被发现，还是此前已经发现。取 $i = k$ 得 $level[v] \le k$；每条游走都满足这条，最少边数 $\ge level[v]$。
+
+两方向合起来 $level[v] =$ 最少边数。证明依赖 BFS 的队列不变量与 $level[v] = level[parent[v]] + 1$，与边的权重无关。
+
+```python run id="alg.graphs.shortest-paths-unit-weight"
+from collections import deque
+
+
+def levels(adjacency, source):
+    """BFS over an adjacency dict; the weights on the edges are never read."""
+    level = {source: 0}
+    queue = deque([source])
+    while queue:
+        u = queue.popleft()
+        for v in adjacency[u]:
+            if v not in level:
+                level[v] = level[u] + 1
+                queue.append(v)
+    return level
+
+
+unit = {"s": ["a", "b"], "a": ["c"], "b": ["c"], "c": ["d"], "d": []}
+print("unit weights: level = fewest edges:", levels(unit, "s"))
+
+weighted = {"s": ["a", "b"], "a": [], "b": ["a"]}
+cost = {("s", "a"): 5, ("s", "b"): 1, ("b", "a"): 1}
+level = levels(weighted, "s")
+print("weights: level[a] =", level["a"], "| lightest walk to a costs", cost[("s", "b")] + cost[("b", "a")])
+```
+
+带权的那张图是反例：$s \to a$ 的权重是 5，但 $s \to b \to a$ 只要 2。BFS 说 $a$ 是 1 条边之外：按边数看正确，按权重看错误。
+
+权重统一的假设一旦撤掉，层号与距离就分道扬镳：$level$ 计量边数，$distance$ 计量权重。把权重计入距离的推进方式要对权重加一条约束，才能重新获得可以证明的确定结构——这条约束就是非负性 $w(e) \ge 0$。
+
+## 深入：删环与简单路径的取到
+
+设不存在从 $s$ 可达、又能走到 $v$ 的负环。任取一条 $s \rightsquigarrow v$ 游走 $W$，它可能重复顶点。$W$ 中出现的每个环都从 $s$ 可达，也都能走到 $v$——游走的前半段把环连到 $s$，后半段连到 $v$，所以按假设这些环的权重都非负。
+
+若 $W$ 重复了顶点，在所有「同一顶点的两次出现」里选间隔最短的一对：它们之间没有别的重复顶点，这一段的内部顶点两两不同，按环的定义它就是 $W$ 里的一个环，权重非负。删掉这一段，剩下的一条仍是从 $s$ 到 $v$ 的游走，顶点数减少、权重不增加。对剩下的游走重复这一步，最终得到一条权重不超过 $w(W)$ 的简单路径。
+
+有限图只有有限条简单路径，它们的权重集合有最小值，记取到它的简单路径为 $p$。任意游走 $W$ 的权重都满足 $w(p) \le w(W)$，所以 $w(p) \le \delta(s, v)$；$p$ 本身是游走，又给出 $\delta(s, v) \le w(p)$。两者相等，$\delta(s, v)$ 由简单路径 $p$ 取到。
+
+## 深入：BFS 下界的三种情形
+
+处理层号为 $l$ 的 $u_i$ 时，它的邻居 $u_{i+1}$ 拿到的层号不超过 $l + 1$。$u_{i+1}$ 相对 BFS 的状态只有三种：
+
+| $u_{i+1}$ 的状态 | 层号为什么不超过 $l + 1$ |
+| --- | --- |
+| 尚未发现 | 处理 $u_i$ 时扫到它，发现的层号就是 $l + 1$ |
+| 已发现、尚未 `finished` | 队列不变量（出队按层号非递减，队列只含当前层 $l$ 与下一层 $l + 1$）给出 $level[u_{i+1}] \le l + 1$ |
+| 已经 `finished` | 按层号非递减的出队顺序，它的层号更早确定且不超过 $l$，自然不超过 $l + 1$ |
+
+三种情形都给出 $level[u_{i+1}] \le l + 1 \le i + 1$，沿 $i = 0$ 到 $k$ 归纳即得 $level[u_i] \le i$。

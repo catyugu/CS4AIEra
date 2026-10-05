@@ -1,0 +1,176 @@
+---
+id: algorithms.stacks-and-queues
+slug: /algorithms/stacks-and-queues
+order: 390
+title: 栈、队列与双端队列
+status: archived
+objectives:
+  - 说明从列表开头出队为什么会搬动其余元素，并用移动计数给出证据
+  - 写出栈、队列与双端队列各自允许的端点操作，以及每个接口必须补全的要素
+  - 按成本模型比较动态数组、环形缓冲与链式表示在两端的操作成本，并指出结论属于哪种情形
+  - 写出环形缓冲的表示不变量，并据此判断一次操作序列是否破坏了它
+---
+
+一批任务按到达顺序处理：按到达顺序放进一个列表，处理时从列表开头取出下一个。取出这一步写成 `values.pop(0)`，与从末尾取出的 `values.pop()` 只差一个参数。
+
+`list` 把元素连续存放。在头部插入或删除要搬动其余元素：删掉下标 0 的元素之后，为了让下标 $i$ 的元素仍然紧跟在 $i-1$ 之后，剩下的每个元素都要向前挪一个槽位，这一移动量随队列长度增长。
+
+## 从队首取出：`list.pop(0)` 的代价
+
+下面的探针把每次出队搬动的元素个数累加起来，在三种队列长度上打印总移动量与每次出队平均承担的移动量：
+
+```python run id="alg.queue.naive-list"
+def drain_with_moves(values):
+    """Dequeue from the front of a list while counting element moves."""
+    moves = 0
+    order = []
+    while values:
+        order.append(values.pop(0))
+        moves += len(values)
+    return order, moves
+
+
+for size in (200, 400, 800):
+    order, moves = drain_with_moves(list(range(size)))
+    print(f"n={size:4d}  dequeues={size:4d}  moves={moves:7d}  moves/n={moves / size:6.1f}")
+```
+
+总移动量按 $\Theta(n^2)$ 增长，每次出队平均搬动的元素个数随队列长度线性上升。队列需要的是队首的常数成本删除——一次取出搬动的元素个数不随队列长度变化。加入的一端与取出的一端，就是区分下面几个抽象类型的坐标。
+
+## 按端点区分的抽象类型
+
+刚才需要的是两种操作：加入一个元素、取出一个元素。栈把两者都放在同一端；队列在一端加入、从另一端取出；双端队列两端都能加入与取出。三个抽象类型由「允许在哪些端点操作」区分：
+
+| 类型 | 操作 | 语义 |
+| --- | --- | --- |
+| 栈 | `push`、`pop`、`peek` | 后进先出（LIFO） |
+| 队列 | `enqueue`、`dequeue`、`front` | 先进先出（FIFO） |
+| 双端队列 | 以上四端操作 | 两端都可插入与删除 |
+
+接口必须补全三件事，否则实现之间无法互换：
+
+- **空结构上的行为**：抛异常，还是返回哨兵值？返回 `None` 会把「空」与「存了 `None`」混为一谈。
+- **容量**：无界（内存限制实际起作用），或固定容量（满时抛错、覆盖、还是阻塞）。
+- **迭代顺序**：从栈顶到栈底，还是相反；迭代过程中允许修改吗。
+
+同一组操作可以由代价完全不同的结构承担，成本由表示决定；因此每个复杂度结论都要带三个限定：成本模型、输入规模，以及它是最坏、摊还还是期望。
+
+| 表示 | 栈顶 | 队首出队 | 两端操作 | 按位置读取 | 内存 |
+| --- | --- | --- | --- | --- | --- |
+| 动态数组（尾部为栈顶） | 摊还 $O(1)$ | $\Theta(n)$ | 只有一端便宜 | $\Theta(1)$ | 连续块，有空槽 |
+| 环形缓冲（固定容量） | $\Theta(1)$ | $\Theta(1)$ | $\Theta(1)$ | $\Theta(1)$ | 定长连续块，无分配 |
+| 双向链式（逐节点） | $\Theta(1)$ | $\Theta(1)$ | $\Theta(1)$ | $\Theta(n)$ | 每元素一个节点加两个引用 |
+| 分块双向链式（`deque`） | $\Theta(1)$ | $\Theta(1)$ | $\Theta(1)$ | 两端附近 $O(1)$，中部 $\Theta(n)$ | 块内连续，跨块跳转 |
+
+表中未标摊还的格子都是最坏情形。
+
+按端点选表示：只有一端操作（栈）用动态数组的末尾；两端都要操作（队列、滑动窗口）用环形缓冲或 `deque`。摊还界只覆盖一串操作的总成本，不给出单次操作单独的上界，这条论证见 <CrossRef id="algorithms.amortized" />。
+
+## 栈
+
+动态数组的尾端正好是栈顶：`append` 与 `pop()` 都作用在末尾，不需要移动元素。
+
+```python run id="alg.stack.list-stack"
+stack = []
+stack.append("a")
+stack.append("b")
+print("top:", stack[-1], "| size:", len(stack))
+
+print("pop:", stack.pop(), "then:", stack.pop())
+print("empty now:", not stack)
+
+try:
+    stack.pop()
+except IndexError as failure:
+    print("popping an empty stack:", type(failure).__name__, "-", failure)
+```
+
+`pop()` 不带参数时作用在末尾，因此是摊还 $O(1)$；`pop(0)` 是 $\Theta(n)$。这两种调用长得几乎一样，成本差一个数量级，是读代码时要留意的位置。
+
+## 环形缓冲
+
+固定容量的队列可以用一块定长数组加两个下标实现：`head` 指向最旧的元素，`count` 记录元素个数，新元素写在 `(head + count) mod capacity`。元素在物理数组中循环移动，逻辑顺序由下标运算维持。
+
+构造前置是 `capacity` 为正整数，否则下面第二条不变量无法满足。表示不变量有两条，另有一条把物理状态解释回抽象序列的抽象函数：
+
+1. $0 \le \text{count} \le \text{capacity}$；
+2. $0 \le \text{head} < \text{capacity}$；
+3. 逻辑顺序的第 $i$ 个元素位于物理位置 $(\text{head} + i) \bmod \text{capacity}$。
+
+```python run id="alg.queue.ring-buffer"
+class RingBuffer:
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.slots = [None] * capacity
+        self.head = 0
+        self.count = 0
+
+    def enqueue(self, value):
+        if self.count == self.capacity:
+            raise OverflowError("ring buffer is full")
+        self.slots[(self.head + self.count) % self.capacity] = value
+        self.count += 1
+
+    def dequeue(self):
+        if self.count == 0:
+            raise IndexError("ring buffer is empty")
+        value = self.slots[self.head]
+        self.slots[self.head] = None
+        self.head = (self.head + 1) % self.capacity
+        self.count -= 1
+        return value
+
+
+buffer = RingBuffer(4)
+for value in (1, 2, 3, 4):
+    buffer.enqueue(value)
+print("full:", buffer.slots, "| head:", buffer.head, "| count:", buffer.count)
+
+print("dequeue:", buffer.dequeue(), buffer.dequeue())
+for value in (5, 6):
+    buffer.enqueue(value)
+
+print("after wrapping:", buffer.slots, "| head:", buffer.head, "| count:", buffer.count)
+logical = [buffer.slots[(buffer.head + offset) % buffer.capacity] for offset in range(buffer.count)]
+print("logical order:", logical)
+print("invariants:", 0 <= buffer.count <= buffer.capacity, 0 <= buffer.head < buffer.capacity)
+
+try:
+    for value in (7, 8, 9):
+        buffer.enqueue(value)
+except OverflowError as failure:
+    print("fixed capacity rejects overflow:", type(failure).__name__, "-", failure)
+```
+
+物理数组是 `[5, 6, 3, 4]`：`5`、`6` 落在开头两个槽位，`3`、`4` 落在随后两个，逻辑顺序却仍是 `3, 4, 5, 6`。下标运算把一块定长内存变成了循环使用的队列。它不搬移任何元素，两端操作都是 $\Theta(1)$，代价是容量必须在创建时确定。逻辑下标到物理位置只差一次取模运算，所以按位置读取也是 $\Theta(1)$；在中间插入或删除的最坏成本是 $\Theta(n)$，靠近端点时移动的元素更少。
+
+## 双端队列
+
+Python 的 `collections.deque` 是分块的双向链式结构。在把固定大小的块（block）的分配、释放与链接视为 $\Theta(1)$ 的成本模型下，两端 `append` 或 `pop` 都是 $\Theta(1)$：它不会像动态数组那样在扩容时复制随 $n$ 增长的整段元素。
+
+```python run id="alg.deque.both-ends"
+from collections import deque
+
+queue = deque([2, 3])
+queue.appendleft(1)
+queue.append(4)
+print("both ends:", list(queue))
+print("pop from the right:", queue.pop(), "| popleft:", queue.popleft())
+print("remaining:", list(queue))
+
+bounded = deque(maxlen=3)
+for value in range(5):
+    bounded.append(value)
+print("bounded deque keeps the newest three:", list(bounded))
+
+bounded.appendleft(-1)
+print("pushing on the other end evicts the opposite end:", list(bounded))
+```
+
+`maxlen` 把容量约束直接写进接口约定：满时从另一端淘汰元素，不抛错。这类「有界 + 淘汰」的语义适合做滑动窗口，但它同时改变了「插入」的含义——调用方必须明确接受丢弃。
+
+deque 的两端操作在上述模型下是 $\Theta(1)$，不需要在扩容时刻承担突发复制，而其中间访问是 $\Theta(n)$，不要按随机访问假定成本。
+
+Python 文档把这两端操作写作「approximately $O(1)$」（[collections — deque objects](https://docs.python.org/3/library/collections.html#collections.deque)），描述的是该实现的实际性能，没有把最坏上界写进接口约定；上面的 $\Theta(1)$ 结论属于「块操作按常数计成本」的成本模型。
+
+决定表示的始终是端点操作模式与延迟要求；抽象类型叫「栈」还是「队列」本身不决定表示。

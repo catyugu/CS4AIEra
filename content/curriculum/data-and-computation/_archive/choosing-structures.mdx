@@ -1,0 +1,97 @@
+---
+id: algorithms.choosing-structures
+slug: /algorithms/choosing-structures
+order: 90
+title: 从操作工作负载选择数据结构
+status: archived
+objectives:
+  - 用功能需求排除丢掉了所需信息的结构，并说明这类不匹配与规模无关
+  - 写出以符号系数表示的单次操作成本函数，并按工作负载频率对两个候选求和
+  - 把四个符号系数都暂设为 1 求出一个示例临界点，并说明系数改变时临界点怎样移动
+  - 说明渐近阶、摊还界、常数、局部性与内存在成本模型的哪一步进入
+---
+
+给一组整数键，要求支持插入、按键查找、以及在键的区间 $[low, high)$ 内取出一段。有序数组和哈希表都能存下这组键，但两者的单次操作成本来自不同的机制；选哪一个由<Term id="workload">工作负载</Term>决定。选择分两步：先按功能需求排除丢掉所需信息的结构，再为剩下的候选把单次操作成本按频率加权求和，解出翻转点。
+
+## 功能筛选：排除丢掉所需信息的结构
+
+功能筛选只看要支持哪些操作，与规模无关：
+
+| 维度 | 要问的问题 |
+| --- | --- |
+| 顺序 | 遍历顺序要不要稳定、要不要按键有序 |
+| 唯一性 | 同一元素可不可以重复出现 |
+| 位置 | 要不要按下标访问，插删之后旧下标要不要仍然指向同一元素 |
+| 外部位置引用 | 容器给出的、指向其内部位置或节点的引用（句柄），在增删其他元素后要不要仍指向同一逻辑元素 |
+| 范围 | 要不要按键的区间取一段 |
+| 极值 | 要不要反复取出最小或最大的元素 |
+
+功能筛选问的是：**这个表示有没有丢掉问题定义需要的信息**。表示保留什么、维持哪些不变量，由表示层的不变量决定（见 <CrossRef id="algorithms.abstractions-and-invariants" />）。去重丢掉重复元素，搬移让旧下标指向别的元素，结构重建让节点引用失效：这些绑定丢掉之后无法从表示里恢复。分界是：**能从已保存信息里算出来的是成本问题，问题要求的信息已被丢掉的是功能需求问题。** 给表示补一份元数据来恢复它没保存的信息，是换成一个新的复合表示，原始信息并未回来。
+
+「顺序」分成两种。**按键排序**：键本身还在集合里，`sorted(s)` 就能排出来，是成本问题。**原始顺序**（插入顺序、历史顺序）：`set` 没有保存，再花时间也恢复不了；要保留只能从一开始额外维护一份序列，那就选定了「`set` + 序列」这个复合表示。范围查询和取极值都只是扫描——扫一遍筛出区间、扫一遍取极值，信息都在，是成本问题，`dict` 可以用它保存的插入顺序先列出键再索引；反复取最小或最大的对数界见 <CrossRef id="algorithms.heaps" />。只有当候选被限死在「结构自带的迭代器与访问原语、不许任何适配步骤」时，范围与极值才直接淘汰结构；默认允许适配时，工作负载单元格里 `dict` 的范围查询就是一次「扫描 + 输出」。
+
+| 需求 | 被排除的常见结构 | 原因 |
+| --- | --- | --- |
+| 同一元素允许重复出现 | `set`、`dict` 的键 | 去重把重复信息丢掉了，恢复不出来 |
+| 增删其他元素后，容器句柄仍指向同一逻辑元素 | 动态数组 | 搬移把位置句柄与那个元素的绑定丢掉了 |
+
+`set` 与 `dict` 的键各自去重，需要保留重复元素时它们直接不合格。动态数组在中间插入或删除时搬移后续元素，**容器给出的位置句柄**——下标、指向内部存储槽位的指针、按位置走动的迭代器——随之指向别的元素或失效；链表给出的是节点句柄，只要该节点未被删除就继续指向它。句柄与对象引用要分开：调用方对**元素对象本身**的外部引用属于调用方，`items[10]` 拿到的对象在列表搬移后仍是同一个对象，失效的是「第 10 个槽位」这个位置含义。
+
+筛选之后答案可以是一个组合：哈希表加一份按键有序的缓存、堆加字典做延迟删除，都比在两者间二选一更常见。选择的对象是「表示组合」。
+
+## 成本比较：按工作负载解出翻转点
+
+剩下的候选在同一条基准上比：把每个操作的单次成本乘以它在工作负载里的次数，求和。写清工作负载在先，填成本在后。一份工作负载要交代四件事：操作集合与各自的频率、输入规模与增长方式、访问模式（顺序读或随机读、有无局部性、是否成批），以及对最坏情形的容忍度（摊还界够不够，还是单次延迟要有界）。权重来自实际发生的操作，计入「将来可能要用」的操作就是另一份工作负载。
+
+四类基本操作各用符号系数标价：一次键比较 $c_\text{cmp}$、一次元素搬移 $c_\text{move}$、一次散列探测 $c_\text{probe}$、一次结果元素的产出 $c_\text{emit}$。系数是每种基本操作的单位成本，工作负载频率是每类操作的发生次数，两者是模型的独立输入：两个候选必须计在同一份操作清单和同一组系数上（见 <CrossRef id="algorithms.cost-model" />）。
+
+设结构里持有 $n$ 个键，两个候选持有同一组键，记二分查找定位需要的比较次数 $p = \lceil \log_2 n \rceil$。逐项写出单次操作的成本：
+
+| 操作 | 有序数组 | 哈希表 |
+| --- | --- | --- |
+| 插入 | $p\,c_\text{cmp} + \frac{n}{2}\,c_\text{move}$ | $c_\text{probe}$ |
+| 按键查找 | $p\,c_\text{cmp}$ | $c_\text{probe}$ |
+| 区间查询 | $2p\,c_\text{cmp} + k\,c_\text{emit}$ | $n\,c_\text{cmp} + k\,c_\text{emit}$ |
+
+设工作负载里插入、查找、区间查询各发生 $f_\text{ins}$、$f_\text{lk}$、$f_\text{rg}$ 次，两个候选的总成本就是上表各项按频率加权求和：
+
+$$C_\text{array} = f_\text{ins}\left(p\,c_\text{cmp} + \tfrac{n}{2}\,c_\text{move}\right) + f_\text{lk}\,p\,c_\text{cmp} + f_\text{rg}\left(2p\,c_\text{cmp} + k\,c_\text{emit}\right)$$
+
+$$C_\text{hash} = \left(f_\text{ins} + f_\text{lk}\right)c_\text{probe} + f_\text{rg}\left(n\,c_\text{cmp} + k\,c_\text{emit}\right)$$
+
+让 $C_\text{array} = C_\text{hash}$，解出的区间查询次数就是翻转点：频率向量与系数向量共同决定它，把任一个当变量都能解出一族临界值。上表的插入记的是中间插入：末尾追加是摊还常数，中间插入要搬移 $\Theta(n)$ 个元素，对单次延迟有上限的工作负载按单次最坏成本重新比较（见 <CrossRef id="algorithms.amortized" />）。
+
+```python run id="alg.choose.workload"
+n = 200                        # keys held; both candidates store the same set
+k = 20                         # elements a range query returns
+p = (n - 1).bit_length()       # comparisons to binary-search n keys
+workload = {"insert": 200, "lookup": 800, "range": 40}
+
+
+def break_even(c):
+    array = (p * c["cmp"] + n // 2 * c["move"], p * c["cmp"],
+             2 * p * c["cmp"] + k * c["emit"])
+    hash_ = (c["probe"], c["probe"], n * c["cmp"] + k * c["emit"])
+    delta = [array[i] - hash_[i] for i in range(3)]
+    if delta[2] == 0:
+        return None
+    return -(workload["insert"] * delta[0] + workload["lookup"] * delta[1]) / delta[2]
+
+
+vectors = {
+    "all 1":       {"cmp": 1, "move": 1, "probe": 1, "emit": 1},
+    "cmp 8x move": {"cmp": 8, "move": 1, "probe": 1, "emit": 1},
+    "move 8x cmp": {"cmp": 1, "move": 8, "probe": 1, "emit": 1},
+}
+print("coefficients   range queries to break even")
+for label, c in vectors.items():
+    be = break_even(c)
+    shown = "never" if be is None else f"{be:.0f}"
+    print(f"  {label:<13}{shown:>5}")
+```
+
+把四个系数都暂设为 1，总成本表达式退化成可以直接相加的整数计数，解出一个示例翻转点。区间查询次数增加时哈希表每次都要扫描全表，累计成本增长更快：区间查询次数低于翻转点时哈希表更便宜，高于它时有序数组更便宜。
+
+系数向量改变时翻转点移动：一次比较的相对成本调高，翻转点下降；一次搬移的相对成本调高，翻转点上升。
+
+选择的判断按三层收敛：结构先要满足功能需求，丢掉了问题所需信息的表示在任何频率下都不合格，与规模无关；剩下的候选在规模增长下比成本，渐近阶更低的一层直接胜出（见 <CrossRef id="algorithms.asymptotic-analysis" />）；落在同一渐近阶上时，再用实际工作负载、常数因子与内存行为分出高下（见 <CrossRef id="algorithms.complexity-in-practice" />）。

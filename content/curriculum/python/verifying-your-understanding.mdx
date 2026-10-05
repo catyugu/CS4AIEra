@@ -1,0 +1,14 @@
+---
+id: python.verifying-your-understanding
+slug: /python/verifying-your-understanding
+order: 100
+title: 怎样验证自己的理解
+status: draft
+objectives:
+  - 为一个函数挑出会暴露错误的边界输入
+  - 把一条前置条件写成可以自动检查的形式
+  - 设计一个能推翻自己猜测的最小实验
+  - 列出审查 Agent 给出的代码时先检查的几件事
+---
+
+读一段程序时形成的判断可能是错的，验证方法不是更仔细地读，而是构造能推翻它的实验：挑一个边界输入、写一条断言、跑一次最小复现。同一件事还有一半：一份代码在提交之前，哪几处必须先检查。

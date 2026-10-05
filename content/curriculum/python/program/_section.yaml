@@ -1,5 +1,0 @@
-id: python.program
-label: 程序边界
-order: 70
-summary: 语言保证与实现细节的边界、模块与导入的命名空间、类型标注作为可机械检查的约束。
-status: active

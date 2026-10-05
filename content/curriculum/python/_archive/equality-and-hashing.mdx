@@ -1,0 +1,104 @@
+---
+id: python.equality-and-hashing
+slug: /python/equality-and-hashing
+order: 130
+title: 相等与哈希契约
+status: archived
+objectives:
+  - 陈述相等与哈希之间的契约，并据此判断两个值是否落在同一个字典键上
+  - 解释插入后修改参与哈希的字段为什么会让条目无法查找
+  - 预测一个类定义 __eq__ 之后可哈希性发生的变化，并说明恢复它的条件
+---
+
+把一个对象存成字典键，之后修改它的一个字段，再用同一个对象去查，字典报告这个键不存在。条目还在表里，查找路径却不再经过它：没有异常，也没有警告。
+
+## 插入后修改键
+
+```python run id="py.hash.mutable-key"
+class Key:
+    def __init__(self, value):
+        self.value = value
+
+    def __hash__(self):
+        return hash(self.value)
+
+    def __eq__(self, other):
+        return isinstance(other, Key) and self.value == other.value
+
+
+key = Key(1)
+lookup = {key: "stored"}
+print("before mutation:", lookup.get(key))
+
+key.value = 2
+print("after mutation: ", lookup.get(key))
+print("membership:     ", key in lookup)
+print("entries:        ", len(lookup))
+
+lookup[Key(2)] = "reinserted"
+print("after reinserting the same value:", len(lookup))
+print("lookup by a fresh Key(2):", lookup.get(Key(2)))
+```
+
+修改 `key.value` 之后，查找、成员判定都失败，而 `len(lookup)` 仍为 1：条目没有消失，只是位于旧哈希对应的位置上。哈希表在插入时按哈希值选定位置，查找时重算哈希走到同一位置，再用相等比较确认；哈希值改变后，查找走到错误的候选集合，确认落空。用 `Key(2)` 重新赋值不会更新原条目，而是在新哈希的位置上插入第二个条目，于是表里出现两个 `__eq__` 判定相等的键。这个对象就是<Term id="mutable-key">可变键</Term>。
+
+## 哈希定位与相等确认
+
+```python run id="py.hash.confirms"
+class Always:
+    def __init__(self, value):
+        self.value = value
+
+    def __hash__(self):
+        return 1
+
+    def __eq__(self, other):
+        return isinstance(other, Always) and self.value == other.value
+
+
+table = {Always("a"): 1, Always("b"): 2, Always("c"): 3}
+print("same hash:", hash(Always("a")) == hash(Always("b")))
+print("distinct keys:", len(table))
+print("lookup:", table[Always("b")])
+```
+
+这三个对象的哈希完全相同，字典仍然区分它们：查找先定位到同一个候选集合，再逐个用 `==` 确认，结果确定。定位与确认是两步，冲突只增加确认的次数，不改变语义。哈希值不是标识，不同的键可以有相同的哈希，这种情形称为<Term id="hash-collision">哈希冲突</Term>。
+
+相等与哈希的契约约束这两步的配合：`a == b` 蕴含 `hash(a) == hash(b)`。反向不成立，因此 `__hash__` 必须与 `__eq__` 取自同一组字段；两者不一致时，相等的对象会落到不同的候选集合，字典漏查、重复。
+
+## 可哈希的键
+
+```python run id="py.hash.unhashable"
+from dataclasses import FrozenInstanceError, dataclass
+
+
+class Money:
+    def __init__(self, cents):
+        self.cents = cents
+
+    def __eq__(self, other):
+        return isinstance(other, Money) and self.cents == other.cents
+
+
+@dataclass(frozen=True)
+class FrozenMoney:
+    cents: int
+
+
+print("Money.__hash__ is None:", Money.__hash__ is None)
+
+try:
+    {Money(100): "coffee"}
+except TypeError as exc:
+    print("failed:", type(exc).__name__, "|", "unhashable" in str(exc))
+
+print("frozen works as a key:", {FrozenMoney(100): "coffee"}[FrozenMoney(100)])
+
+frozen = FrozenMoney(100)
+try:
+    frozen.cents = 200
+except FrozenInstanceError as exc:
+    print("frozen rejects mutation:", type(exc).__name__)
+```
+
+类定义 `__eq__` 而未定义 `__hash__` 时，Python 把 `__hash__` 置为 `None`，实例放进字典或集合会抛出 `TypeError`。可哈希性需要显式恢复，并且只由不参与可变状态的字段计算哈希。`@dataclass(frozen=True)` 把这两件事绑在一起：按字段生成 `__eq__` 与 `__hash__`，同时拒绝写入字段，因此 `FrozenMoney(100)` 可以直接作键，插入后也无法被修改。

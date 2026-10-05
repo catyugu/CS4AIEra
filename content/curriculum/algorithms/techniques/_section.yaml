@@ -1,5 +1,0 @@
-id: algorithms.techniques
-label: 算法设计范式
-order: 70
-summary: 把已经见过的算法抽象成设计范式——分治、贪心、动态规划、状态空间搜索与随机化——并说明每种范式靠什么论证成立、在什么条件下失效。
-status: active

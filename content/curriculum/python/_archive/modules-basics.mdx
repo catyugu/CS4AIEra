@@ -1,0 +1,93 @@
+---
+id: python.modules-basics
+slug: /python/modules-basics
+order: 230
+title: 模块与导入
+status: archived
+objectives:
+  - 说明 import 语句把什么绑定到了哪个名字
+  - 用 __name__ 判断一个文件是被导入还是作为程序运行，并写出脚本入口
+  - 说明模块是一个独立命名空间
+  - 区分模块找不到与属性不存在两类错误各自报出什么
+---
+
+同一个文件里的代码越来越多，或者一段已经跑通的代码需要在第二个程序里也用到，Python 的做法是把可复用的部分移进单独的 `.py` 文件，再用 `import` 从别的文件里取回。
+
+## 导入一个模块
+
+`import math` 在当前文件新增一个名字 `math`，它指向 math 模块对象；`from math import sqrt` 把模块里的一个属性直接绑到当前名字上：
+
+```python run id="py.mod.import-forms"
+import math
+import math as shorthand
+from math import sqrt
+
+print("module object:", math)
+print("two names, one object:", shorthand is math)
+print("attribute access:", math.pi, round(math.pi, 3))
+print("imported directly:", sqrt(9))
+```
+
+三种写法的区别只在绑定了哪个名字：
+
+| 写法 | 绑定的名字 | 值 |
+| --- | --- | --- |
+| `import math` | `math` | 模块对象 |
+| `import math as m` | `m` | 同一个模块对象 |
+| `from math import sqrt` | `sqrt` | 模块里的一个属性 |
+
+`shorthand is math` 为真：`import math as shorthand` 没有复制模块，两个名字指向同一个对象，`math.pi` 与 `shorthand.pi` 取出同样的值。`from ... import` 省掉前缀，读代码时就看不出 `sqrt` 来自哪个模块。导入失败会让程序停在导入这一句，导入语句的位置也声明了这个文件对另一个文件的依赖。
+
+## 把代码拆到另一个文件
+
+把 `add` 移进 `calculator.py`；`main.py` 只 `import` 它并调用 `add`：
+
+```python
+# calculator.py
+print("calculator loaded")
+
+
+def add(left, right):
+    return left + right
+
+
+def main():
+    print("2 + 3 =", add(2, 3))
+
+
+if __name__ == "__main__":
+    main()
+```
+
+```python
+# main.py
+import calculator
+
+print("3 + 4 =", calculator.add(3, 4))
+```
+
+运行 `python main.py` 打印 `calculator loaded` 与 `3 + 4 = 7`：`import calculator` 找到文件，把产生的模块对象绑到名字 `calculator`，`calculator.add` 因此可用。`calculator loaded` 出现在 `3 + 4 = 7` 之前——它是 `calculator.py` 顶层的一句 `print`，导入时就执行了。`import` 会执行被导入模块的顶层代码，模块对象是这次执行的产物。
+
+运行 `python calculator.py` 打印 `calculator loaded` 与 `2 + 3 = 5`：这个文件作为程序启动，末尾的守卫成立，`main()` 执行。守卫成立与否取决于 `__name__`——每个模块都有这个属性：被导入时它的值是模块名，作为程序启动的那个文件取 `"__main__"`。`if __name__ == "__main__":` 把只应在直接运行时执行的代码——命令行入口、示例调用——与可复用的定义分开，导入时不执行入口。
+
+模块是一个独立命名空间：`calculator.py` 里定义的名字属于 `calculator`，`main.py` 里定义的名字属于 `main.py`，两边通过 `calculator.名字` 或参数互相访问。搜索路径、包与 `__init__.py`、相对导入与循环导入，以及模块体的执行与缓存规则见 <CrossRef id="python.modules-and-imports" />。
+
+## 失败情形
+
+两类失败各自报一个异常类型与一条消息：
+
+```python run id="py.mod.failures"
+try:
+    import module_that_does_not_exist
+except ModuleNotFoundError as failure:
+    print("missing module:", type(failure).__name__, "-", failure)
+
+import math
+
+try:
+    math.no_such_function
+except AttributeError as failure:
+    print("missing attribute:", type(failure).__name__, "-", failure)
+```
+
+两类错误指向两个不同的原因：模块不在搜索路径上、模块里没有这个名字。第一类在导入时抛出，第二类在取属性时抛出。

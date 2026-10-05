@@ -1,5 +1,0 @@
-id: algorithms.graphs
-label: 图
-order: 60
-summary: 从一张图上的可达问题出发，逐步加入条件——边有没有方向、有没有权重、要不要连通性——得到遍历、拓扑序、最短路与最小生成树。
-status: active

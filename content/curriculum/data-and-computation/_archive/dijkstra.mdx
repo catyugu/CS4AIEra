@@ -1,0 +1,103 @@
+---
+id: algorithms.dijkstra
+slug: /algorithms/dijkstra
+order: 160
+title: 非负权与 Dijkstra
+status: archived
+objectives:
+  - 写出 Dijkstra 的非负权前置条件与按最小候选值推进的步骤
+  - 证明「确定即最终」的不变量依赖边权非负
+  - 说明优先队列实现要么维护位置表支持减键，要么在取出时丢弃过期条目
+  - 解释一条负边为什么让已确定的顶点不再等于真实最短距离
+---
+
+从源点出发，我们希望按距离从小到大的顺序把每个顶点的最短距离逐个确定下来：先确定最近的，再确定次近的，确定过的就不再回头改写。按这个顺序推进，前提是「当前最小的暂定距离已经是最终的」。它凭什么成立？这个「确定即最终」又在什么权重条件下失效？
+
+推进算法要用到 <CrossRef id="algorithms.shortest-paths" /> 的松弛操作与安全性不变量——任何时刻每个有限的标签都是某条真实游走的权重。有向加权图记作 $G = (V, E, w)$，边权由 $w: E \to R$ 给出。问题定义还要包含一条对权重的约束：
+
+$$w(e) \ge 0 \quad \forall e \in E.$$
+
+零权边允许；一旦出现负边，保证失效：算法可能先确定了某个顶点，之后才发现一条负边能让它的真实距离更小。
+
+## 算法的推进
+
+算法按最终确定（settle）的方式推进：
+
+1. $distance[s] = 0$，其余为 $+\infty$。
+2. 反复取「尚未确定、且暂定距离有限」的顶点中距离最小者 $u$，把 $u$ 标记为已确定，然后松弛 $u$ 的每条出边 $(u, v, weight)$。
+3. 当不存在这样的顶点时停止。
+
+从 $s$ 可达的顶点恰好被确定一次；不可达顶点的距离标签一直是 $+\infty$，它们既不需要确定，也不在「取最小者」的范围内。
+
+非负性一旦撤掉，算法给出的确定值就不再是最终值。取 $s \to a = 2$、$s \to b = 5$、$b \to a = -10$：算法先确定 $a = 2$，随后松弛 $b \to a$ 才把它的距离降到 $-5$，而真实的最短游走 $s \to b \to a$ 的权重正是 $-5$。确定时刻的值已经不是最终答案，把已确定的顶点当最终答案就会返回错值。有「碰巧算对」的负权实例不代表算法适用：撤掉非负假设，按最小候选值推进的结构不再保证正确。
+
+正确性依赖一条「确定即最终」的不变量。
+
+## 确定不变量的证明
+
+**基例**：第一次被确定的顶点是 $s$，$distance[s] = 0 = \delta(s, s)$——空游走的权重是 0，而所有边非负，不存在更轻的 $s \to s$ 游走。所以第一次确定就是对的。
+
+**定理**：归纳地假设 $s \in S$，且 $S$ 中每个顶点的 distance 都已是真实最短距离。此时暂定距离最小的未确定顶点 $u$，其暂定距离已经是 $\delta(s, u)$。
+
+反设 $\delta(s, u) < distance[u]$。取一条从 $s$ 到 $u$ 的最短路径 $P$，记 $w(P) = \delta(s, u)$。沿 $P$ 从 $s$ 出发找第一个不在 $S$ 中的顶点 $y$（$s$ 在 $S$ 中，所以 $y$ 一定存在），记它沿 $P$ 的前驱为 $x$，并把 $P$ 上从 $y$ 到 $u$ 的剩余部分记为后缀 $Q$。此时
+
+$$
+\begin{aligned}
+distance[y] &\le distance[x] + w(x, y) \quad \text{x 确定时松弛过边 } (x, y) \\
+             &= \delta(s, x) + w(x, y) \quad \text{x 在 } S \text{ 中，其距离已正确} \\
+             &\le w(P \text{ 上 } s \rightsquigarrow x \text{ 这一段}) + w(x, y) \\
+             &\le w(P \text{ 上 } s \rightsquigarrow y \text{ 这一段}) \quad \text{这一前缀是一条候选 } s \rightsquigarrow y \text{ 路径} \\
+             &\le w(P) = \delta(s, u) \quad w(Q) \ge 0 \\
+             &< distance[u] \quad \text{反设}
+\end{aligned}
+$$
+
+倒数第二步用到非负条件：$Q$ 是从 $y$ 走到 $u$ 的一段路径，权重是若干非负边之和，删掉它不会让权重变大。这与 $u$ 是暂定距离最小者（$distance[u] \le distance[y]$）矛盾。
+
+反向的不等式由安全性不变量给出：暂定距离总是某条真实游走的权重，所以 $distance[u] \ge \delta(s, u)$。两侧夹紧即得等号。
+
+## 优先队列的实现
+
+Dijkstra 每轮从「尚未确定的顶点」里取暂定距离最小者，并可能在松弛后把某个顶点的候选值改小。这要求优先队列支持减键：把某个元素的键改小并恢复堆序。二叉堆只维护位置关系，不记录「顶点在数组里的下标」，要在原地改键就得额外维护一张位置表，并在每次交换时同步更新。Python 的 `heapq` 没有这张表，于是走另一条路：
+
+| 实现 | 减键的处理 |
+| --- | --- |
+| 抽象优先队列 | 支持 decrease-key：改键后在堆里恢复堆序 |
+| `heapq` | 距离更新时把新条目压进堆，pop 时丢弃过期条目；一个顶点只被确定一次，但堆里可能有它的多个旧条目 |
+
+`heapq` 的条目写成 `(distance, serial, vertex)`：顶点之间不需要可比较，一个递增计数器在距离相同时用作次级比较键，堆也就永远不会去比较两个顶点。取出时把条目携带的 `distance` 与 `distance[vertex]` 的当前值比较，也顺手查一次顶点是否已经确定过；条目更旧就丢弃它，继续取下一个。这样的条目称为过期条目——顶点仍然有效，键早被后来的更新取代。距离标签用稀疏字典保存，缺少键就读作 $+\infty$。单元格走这条路，只有在新值更小时才压入，答案与教材版一致。
+
+在从 $s$ 可达的顶点集 $V_R$ 与边集 $E_R$ 上：每次成功松弛至多压入一个条目，所以压入次数不超过 $|E_R| + 1$，弹出次数与之同阶，堆大小同样不超过 $|E_R| + 1$；每次堆操作 $O(\log(|E_R| + 1))$。总计 $O\big(|V_R| + |E_R| + (|E_R| + 1)\log(|E_R| + 1)\big)$。
+
+```python run id="alg.graphs.shortest-paths-dijkstra"
+import heapq
+from itertools import count
+
+INF = float("inf")
+
+adjacency = {
+    "s": [("a", 4), ("b", 1)], "a": [("c", 3)],
+    "b": [("a", 1), ("c", 6), ("d", 7)], "c": [], "d": [], "e": [],
+}
+serial = count()
+distance = {"s": 0}
+settled = set()
+order = []
+heap = [(0, next(serial), "s")]
+while heap:
+    candidate, _, u = heapq.heappop(heap)
+    if u in settled or candidate > distance.get(u, INF):
+        continue
+    settled.add(u)
+    order.append((u, candidate))
+    for v, weight in adjacency[u]:
+        if candidate + weight < distance.get(v, INF):
+            distance[v] = candidate + weight
+            heapq.heappush(heap, (candidate + weight, next(serial), v))
+
+print("settle order:", [u for u, _ in order])
+print("settled at:", dict(order))
+print("final distances:", {v: distance[v] for v in sorted(distance)})
+```
+
+非负图上打印出的确定顺序是 $s, b, a, c, d$，每个顶点在确定时刻的暂定距离都等于手工算出的最终距离：$s = 0$，$b = 1$，$a = 2$，$c = 5$，$d = 8$。不可达的 $e$ 从没进过堆，`distance` 里也没有它，读作 $+\infty$。
