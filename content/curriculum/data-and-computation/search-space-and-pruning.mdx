@@ -11,6 +11,290 @@ objectives:
   - 说明改变搜索顺序在什么条件下才真的减少实际工作量
 ---
 
-{/* 骨架段（作者备注）：正式扩写时用一个具体情境、反常输出或必须作出的选择替换本段，不保留本段句式。 */}
+一批候选要在名额上限内挑出一组：每条候选占用一份名额，也带一条预估收益，整组占用的名额之和不能超过上限，收益之和要尽量大。挑法只有一条，逐条给出一条二选一决策——这条候选放进这一组，或者不放。六条候选摊开是 64 种组合，逐个检查还做得到；同一套挑法放到二十条候选上，二选一的决策多了十四步，组合数涨到 1048576 种。组合数怎样从决策数量与每一步的候选数算出、涨到多大以后逐组合检查不再可行、以及怎样让一整块组合不必检查，决定的是这套挑法能不能用。
 
-如果连续有 $n$ 个相互独立的二选一决定，候选数量是 $2^n$；20 个这样的决定大约是一百万种组合。更一般地，每一步有 $b$ 种选择、连续作 $d$ 步决定，候选规模约为 $b^d$。要判断的是这份搜索空间有多大、从什么规模开始穷举不可行，以及怎样证明整块候选不必检查：在部分解上算出一个界、丢弃不可能胜出的区域、在允许时接受近似解。改变搜索顺序本身不减少搜索空间，它只有在配合提前停止或剪枝以后才可能减少实际工作量——更早找到好答案不等于搜索得更少。
+## 组合数由决策数量与每一步的候选数相乘得到
+
+逐条二选一：每多一条候选，前一步已经数出的每一种组合分成「放它」和「不放它」两支，组合数翻一倍——$d$ 条候选给出 $2^d$ 种。每一步的候选数是 $b$ 种时，同一个乘积写成 $b^d$。搜索空间的大小按决策数量度量：把决策数量取作<Term id="input-size">规模</Term>，每一步的候选数就是这一步乘上去的因子。二十条候选约一百万种只在每一步都是二选一时成立；每步三种选法时，二十步给出 $3^{20}$ 种，与二选一的 $2^{20}$ 不是同一个数。
+
+```python run id="data-and-computation.search-space-and-pruning.brute-force"
+candidates = [("A", 3, 7), ("B", 4, 9), ("C", 2, 4),
+              ("D", 5, 10), ("E", 3, 6), ("F", 1, 2)]
+budget = 10
+
+
+def best_subset(items, room):
+    """Every candidate is taken or skipped; each subset is checked at the leaf."""
+    taken = []
+    best = {"gain": 0, "names": [], "nodes": 0}
+
+    def explore(index, used, gain):
+        best["nodes"] += 1
+        if index == len(items):
+            if used <= room and gain > best["gain"]:
+                best["gain"] = gain
+                best["names"] = list(taken)
+            return
+        name, slots, worth = items[index]
+        taken.append(name)
+        explore(index + 1, used + slots, gain + worth)
+        taken.pop()
+        explore(index + 1, used, gain)
+
+    explore(0, 0, 0)
+    return best
+
+
+found = best_subset(candidates, budget)
+print("candidates", len(candidates), "budget", budget)
+print("best gain", found["gain"], "taken", found["names"])
+print("subsets", 2 ** len(candidates), "nodes", found["nodes"])
+print()
+print("decisions  two-way  three-way")
+for d in (4, 8, 12, 16, 20, 30, 40):
+    print(d, 2 ** d, 3 ** d)
+```
+
+六条候选、名额上限 10 的这一组一共 64 种组合，逐个检查访问 127 个节点（64 个完整组合，加上把它们分出来的一层层分叉点），收益最大的一组取到 22。决策数量每加一步，组合数翻一倍：十二步 4096 种，十六步 65536 种，二十步 1048576 种，三十步 1073741824 种，四十步 1099511627776 种。逐个组合看一遍的次数就是组合数：二十步是一百万次，三十步是十亿次，四十步是一万亿次。二十步的一百万次还在逐组合检查能勉强完成的范围内，三十步的十亿次与四十步的一万亿次已经超出它：穷举的可行边界落在二十到三十个二选一决策之间。同一个决策数量换成每步三选一，二十步给出 3486784401 种。
+
+各步的候选数不同时，组合数是各步候选数依次相乘，$b^d$ 只适用于每一步候选数相同的情形。决策之间不独立、一步的选择改变下一步的选项数时，按实际分出的支数相乘。
+
+## 证明一整块组合不必检查
+
+把已经作出的「放／不放」决策串成一个部分选择。它下面挂着一整块还没展开的组合，块里每个组合从这串决策开始，只是后面的决策各不相同。给这一块算一个界：在这个部分选择的基础上，把还没决定的候选按最有利的方式补完，最多能到多少收益。界覆盖块里的每一个组合，一旦它没有超过手头最好的那一组，整块连同它下面的分叉可以一起跳过。
+
+判定这次能不能跳过的两个量：沿已走过的分支找到的最好一组的收益，和这一块的界。界追不上那个最好值，块里给不出更好的组合，跳过它不会漏掉答案。
+
+算这个界的做法不止一种。把还没决定的候选的收益全部加起来是一个界；它不看还剩多少名额，把装不下的候选也算了进去，停在最好值之上的时间更长，能整块跳过的区域就少。把剩余名额按候选的收益密度从高到低填满、最后一条按剩余名额切一部分，得到更紧的界：它允许把一条候选拆开，所以不低于块里每个完整组合能取到的收益，同时受剩余名额限制。一个界只要不低于块里每个完整组合，它就是合法的；把界算得比块里真实能取到的收益还低，会连含最好组合的块一起跳过，搜索照常返回一个偏小的答案，不报错。
+
+```python run id="data-and-computation.search-space-and-pruning.bound-prunes"
+from fractions import Fraction
+
+candidates = [("A", 3, 7), ("B", 4, 9), ("C", 2, 4),
+              ("D", 5, 10), ("E", 3, 6), ("F", 1, 2)]
+budget = 10
+
+rated = []
+for name, slots, worth in candidates:
+    rated.append((Fraction(worth, slots), name, slots, worth))
+rated.sort(reverse=True)
+ordered = []
+for density, name, slots, worth in rated:
+    ordered.append((name, slots, worth))
+
+
+def fractional(items, index, room):
+    """Best gain if the remaining candidates may be taken in parts."""
+    rest = []
+    for name, slots, worth in items[index:]:
+        rest.append((Fraction(worth, slots), slots, worth))
+    rest.sort(reverse=True)
+    total = Fraction(0)
+    for density, slots, worth in rest:
+        if slots <= room:
+            room -= slots
+            total += worth
+        else:
+            total += Fraction(worth * room, slots)
+            break
+    return total
+
+
+def search(items, room, use_bound):
+    """Depth-first; with use_bound, a block whose bound cannot beat the best is skipped."""
+    state = {"gain": 0, "nodes": 0}
+    taken = []
+
+    def explore(index, used, gain):
+        state["nodes"] += 1
+        if index == len(items):
+            if used <= room and gain > state["gain"]:
+                state["gain"] = gain
+            return
+        if use_bound:
+            if used > room:
+                return
+            if gain + fractional(items, index, room - used) <= state["gain"]:
+                return
+        name, slots, worth = items[index]
+        taken.append(name)
+        explore(index + 1, used + slots, gain + worth)
+        taken.pop()
+        explore(index + 1, used, gain)
+
+    explore(0, 0, 0)
+    return state
+
+
+names = []
+for name, slots, worth in ordered:
+    names.append(name)
+print("order", names)
+for use_bound in (False, True):
+    result = search(ordered, budget, use_bound)
+    print("bound", use_bound, "gain", result["gain"], "nodes", result["nodes"])
+```
+
+同一批候选、同一份顺序，不在块上算界时访问 127 个节点，用按名额填满的界降到 13，两版取到的最大收益都是 22——界只改变要检查的节点，取到的最大收益不变。松一些的界把块的上限抬得更高，要等最好值涨上来才触发跳过，留下的块更多。
+
+## 改变顺序只在配上界时才省工作
+
+每个节点上的界不随访问顺序改变；随顺序改变的是界要和哪个最好值比较。沿一条分支先走到底、把较好的一组先拿到手，后面的块更早地落在界之下，可以跳过；先试收益低、密度低的候选，最好值迟迟上不去，同样的块要继续展开。
+
+```python run id="data-and-computation.search-space-and-pruning.order"
+from fractions import Fraction
+
+candidates = [("A", 3, 7), ("B", 4, 9), ("C", 2, 4),
+              ("D", 5, 10), ("E", 3, 6), ("F", 1, 2)]
+budget = 10
+
+
+def by_density(items):
+    rated = []
+    for name, slots, worth in items:
+        rated.append((Fraction(worth, slots), name, slots, worth))
+    rated.sort(reverse=True)
+    ordered = []
+    for density, name, slots, worth in rated:
+        ordered.append((name, slots, worth))
+    return ordered
+
+
+def fractional(items, index, room):
+    """Best gain if the remaining candidates may be taken in parts."""
+    rest = []
+    for name, slots, worth in items[index:]:
+        rest.append((Fraction(worth, slots), slots, worth))
+    rest.sort(reverse=True)
+    total = Fraction(0)
+    for density, slots, worth in rest:
+        if slots <= room:
+            room -= slots
+            total += worth
+        else:
+            total += Fraction(worth * room, slots)
+            break
+    return total
+
+
+def search(items, room, use_bound):
+    """Depth-first; with use_bound, a block whose bound cannot beat the best is skipped."""
+    state = {"gain": 0, "nodes": 0}
+    taken = []
+
+    def explore(index, used, gain):
+        state["nodes"] += 1
+        if index == len(items):
+            if used <= room and gain > state["gain"]:
+                state["gain"] = gain
+            return
+        if use_bound:
+            if used > room:
+                return
+            if gain + fractional(items, index, room - used) <= state["gain"]:
+                return
+        name, slots, worth = items[index]
+        taken.append(name)
+        explore(index + 1, used + slots, gain + worth)
+        taken.pop()
+        explore(index + 1, used, gain)
+
+    explore(0, 0, 0)
+    return state
+
+
+dense = by_density(candidates)
+reverse = list(dense)
+reverse.reverse()
+dense_names = []
+for name, slots, worth in dense:
+    dense_names.append(name)
+reverse_names = []
+for name, slots, worth in reverse:
+    reverse_names.append(name)
+print("density", dense_names)
+print("reverse", reverse_names)
+for use_bound in (False, True):
+    for label, order in (("density", dense), ("reverse", reverse)):
+        result = search(order, budget, use_bound)
+        print("bound", use_bound, label, "nodes", result["nodes"])
+```
+
+同一批候选、同一个界、同样的 64 种组合：按收益密度把候选排在前面，访问 13 个节点；把顺序倒过来，访问 39 个。去掉界再跑这两种顺序，前后都是 127 个节点——只重排顺序、不在块上算界，检查量一个也不省。顺序不减少搜索空间，它改变的是一个界能提前触发多少次。
+
+## 回到那份候选清单
+
+开头那份六条候选、名额上限 10 的清单一共 64 种组合。逐组合检查访问 127 个节点，收益最大的一组取到 22；把密度高的候选排在前面、在部分选择上按剩余名额算出界，访问的节点压到 13，同一份界配上倒过来的顺序回到 39。这份清单能不能在候选变多以后继续用，落在几个数上：组合数由决策数量与每一步的候选数相乘得到，二十条候选已经是 1048576 种；块上的界追不上手头最好的那一组就能整块跳过，把 64 种组合的检查压到 13 个节点；顺序只在配上这样一个界时，才改变实际检查的节点。
+
+## 练习
+
+一个界把还没决定的候选的收益全部加起来，不看还剩多少名额；另一个界按剩余名额填满。哪一个判掉的块更多？
+
+判据：比较三行访问的节点数。
+
+```python run id="data-and-computation.search-space-and-pruning.exercise-bounds"
+from fractions import Fraction
+
+candidates = [("A", 3, 7), ("B", 4, 9), ("C", 2, 4), ("D", 5, 10), ("E", 3, 6)]
+budget = 9
+
+
+def fractional(items, index, room):
+    """Best gain if the remaining candidates may be taken in parts."""
+    rest = []
+    for name, slots, worth in items[index:]:
+        rest.append((Fraction(worth, slots), slots, worth))
+    rest.sort(reverse=True)
+    total = Fraction(0)
+    for density, slots, worth in rest:
+        if slots <= room:
+            room -= slots
+            total += worth
+        else:
+            total += Fraction(worth * room, slots)
+            break
+    return total
+
+
+def total_left(items, index, gain):
+    """Gain of everything left, ignoring the slots that remain."""
+    total = gain
+    for name, slots, worth in items[index:]:
+        total += worth
+    return total
+
+
+def search(items, room, bound_kind):
+    """Depth-first; bound_kind picks which bound, if any, stops a block."""
+    state = {"gain": 0, "nodes": 0}
+    taken = []
+
+    def explore(index, used, gain):
+        state["nodes"] += 1
+        if index == len(items):
+            if used <= room and gain > state["gain"]:
+                state["gain"] = gain
+            return
+        if bound_kind != "none":
+            if used > room:
+                return
+            if bound_kind == "sum":
+                limit = total_left(items, index, gain)
+            else:
+                limit = gain + fractional(items, index, room - used)
+            if limit <= state["gain"]:
+                return
+        name, slots, worth = items[index]
+        taken.append(name)
+        explore(index + 1, used + slots, gain + worth)
+        taken.pop()
+        explore(index + 1, used, gain)
+
+    explore(0, 0, 0)
+    return state
+
+
+for kind in ("none", "sum", "fraction"):
+    result = search(candidates, budget, kind)
+    print(kind, "gain", result["gain"], "nodes", result["nodes"])
+```

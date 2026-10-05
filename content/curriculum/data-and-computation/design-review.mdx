@@ -10,7 +10,184 @@ objectives:
   - 指出 Agent 给出的方案在规模、表示与失败条件下的薄弱处
   - 说明方案依赖的前置条件是否被满足
 ---
+一个搜索页服务上线前，Agent 交回一份方案：
 
-{/* 骨架段（作者备注）：正式扩写时用一个具体情境、反常输出或必须作出的选择替换本段，不保留本段句式。 */}
+> 商品目录用一个以商品标识为键的字典保存；建库时按标识写入，每件商品的一条完整记录是它的值。用户提交筛选条件（价格上限、只看现货、目标类目）时，程序取出字典里的全部记录逐条比对，把命中的商品用 `sorted` 按相关度从高到低排好返回。点开某件商品时，用它的标识直接从字典取出详情。方案末尾附了一句：按键查找已经是常数时间，目录已经去重，查找这条路径优化过了。
+>
+> 数据规模按建库时的一次快照定：目录保持现在的量级，之后只做查询。
 
-把前面所有判断放在一条完整的工作负载上：先按功能需求排除掉丢必要信息的表示，再用操作频率与成本形状淘汰明显不合理的候选，最后判断一份方案在规模、表示与失败条件下的薄弱处。
+搜索页运营方给出这份服务的<Term id="workload">工作负载</Term>：
+
+| 项目 | 数值 |
+| --- | --- |
+| 目录件数 | 现在 50000 件，每月增长约 5% |
+| 筛选请求 | 每天约 20000 次 |
+| 详情打开 | 每天约 2000 次 |
+| 目录更新（上架、改价、下架） | 每天约 200 次 |
+| 读（筛选与详情）与写的比例 | 约 110 : 1 |
+
+方案里那两句声明——查找已经优化过、目录保持现在的量级——都要放到这份负载上逐条核对。
+
+## 方案对上的是哪一类操作
+
+以标识为键的映射，把「按标识取一项」和「按标识写一项」变成对单条记录的定位。这份负载用到它的操作有两类：按标识打开详情，每天约 2000 次；按标识写入上架、改价、下架，每天约 200 次。两类都落在映射上。方案说的去重也由它承担：同一个标识再次写入时覆盖同一条记录（见 <CrossRef id="data-and-computation.representation-and-workload" />）。
+
+负载里次数最多的操作是筛选，每天约 20000 次。筛选要取出价格、现货、类目三项都满足的一组记录，它不按标识定位单条。映射的键是标识，值里虽然存着价格与类目，映射本身不按这些字段组织；从映射里取出满足三项条件的全部记录，只能把每一条值都过一遍。方案优化的「查找」是按标识定位那一条路径，筛选这条路径没有被任何一个结构接住，仍然逐条走过整份目录。
+
+选定表示之前要问的是：负载里反复发生的是哪几类操作，候选表示让哪一类变便宜。方案把 2000 次的那一类变便宜了，20000 次的那一类留在了原地。
+
+## 把频率乘以成本形状
+
+哪一项主导，用一条计数规则把三类操作折到同一把尺上：一次按键取一项记一次查看，一次按键写一项记一次查看，一次筛选把目录逐件看一遍、记目录件数次。这是这里采用的<Term id="cost-model">成本模型</Term>。把每类操作的频率乘以各自的单次查看量，再求和：
+
+```python run id="data-and-computation.design-review.daily-cost"
+catalogue_size = 50000
+filters_per_day = 20000
+details_per_day = 2000
+updates_per_day = 200
+
+filter_term = filters_per_day * catalogue_size
+detail_term = details_per_day * 1
+update_term = updates_per_day * 1
+total = filter_term + detail_term + update_term
+
+print("filter", filter_term)
+print("detail", detail_term)
+print("update", update_term)
+print("total", total)
+print("filter share percent", round(100.0 * filter_term / total, 4))
+
+grown = catalogue_size
+for month in range(12):
+    grown = grown * 105 // 100
+print("size after 12 months", grown)
+print("filter term after growth", filters_per_day * grown)
+```
+
+筛选一天要查看 1000000000 件次，详情合计 2000 件次，更新合计 200 件次，三项合计 1000002200 件次，筛选占 99.9998%。被方案点名优化过的按键定位，合计是全部工作里万分之一都不到的一项。
+
+目录按每月 5% 增长，12 个月后是 89788 件，筛选项随之涨到 1795760000 件次，其余两项不变。这份负载里会随规模放大的是筛选项，它是两层相乘：一天的筛选次数乘上目录件数，两个因子都随使用时长上涨。
+
+## 哪些候选当场淘汰
+
+需要动手的只有筛选。给筛选列几个候选，按「一次筛选要碰多少件商品」排开；这个数不低于整份遍历的候选，不必再算频率。
+
+| 候选做法 | 一次筛选碰到的商品数 | 一天合计（20000 次筛选） |
+| --- | --- | --- |
+| 方案现用：取出映射的全部值逐条比对 | 整份目录，$n$ | $20000n$，当前 1000000000 件次 |
+| 每次筛选之前把目录按类目重排一遍，再取一段 | 至少整份目录，重排还要额外的比较与搬移 | 比方案更高：每次筛选都重做一遍整表工作 |
+| 每件商品对照全部类目各打一个标记，筛选时按标记取 | $n$ 乘以类目数 | 再乘上类目数，约为方案的 20 倍 |
+| 主数据之外维护一份按类目组织的记录，筛选只碰目标类目 | 约为 $n$ 除以类目数 | 首个把单次量降到整表之下的形状 |
+
+除最后一行以外的候选，光看它们一次筛选碰的商品数，被每天 20000 次的频率一乘就比现方案更差，当场排除。能被保留的只有最后一行：把一次筛选要碰的集合从整份目录压到目标类目那一段。主数据之外另有一份结构的做法，机制与两侧代价已有完整说明（见 <CrossRef id="data-and-computation.preprocessing-and-indexes" />）；这里是同一种东西换了分组字段。
+
+这一行的便宜从写这一侧付：目录每更新一条，分组记录要跟着改一条。它值不值得建，取决于读与写的比例，以及写入有没有维护住它依赖的次序。
+
+## 方案依赖哪几条前提
+
+方案的可用性压在四条<Term id="precondition">前置条件</Term>上。每一条都要在工作负载里找到依据；找不到依据时，要说清哪一类操作会先出问题。
+
+第一条是数据规模与增长方向。方案自己写「目录保持现在的量级」，负载写的是 50000 件、每月增长约 5%。这两句对不上：筛选项按目录件数增长，12 个月后涨到接近 1.8 倍，而它本来就是主导项。
+
+第二条是唯一性。按标识建映射，前提是标识能唯一确定一条记录。同一件商品在多个区域各有一条记录、几条记录共用一个标识时，映射只留最后写入的那一条，先写的那些从表示里消失；筛选按它计数就会少算。把一份带重复标识的目录分别按行与按映射的值筛一遍：
+
+```python run id="data-and-computation.design-review.dict-drops-record"
+rows = [
+    ("p-201", "lighting", 32.0, True, "west"),
+    ("p-202", "lighting", 88.0, True, "west"),
+    ("p-201", "decor", 30.0, False, "east"),
+    ("p-203", "lighting", 55.0, True, "west"),
+]
+budget = 60.0
+wanted = "lighting"
+
+by_row = []
+for row in rows:
+    if row[2] <= budget and row[3] and row[1] == wanted:
+        by_row.append(row[0] + "/" + row[4])
+
+by_id = {}
+for row in rows:
+    by_id[row[0]] = row
+
+by_dict = []
+for key in sorted(by_id):
+    row = by_id[key]
+    if row[2] <= budget and row[3] and row[1] == wanted:
+        by_dict.append(key + "/" + row[4])
+
+print("source rows", len(rows))
+print("records held by dict", len(by_id))
+print("matched by row scan", by_row)
+print("matched by dict values", by_dict)
+```
+
+源数据四行，映射只持有三个标识：`p-201` 的 west 记录被 east 记录覆盖，按行筛出两条、按映射的值筛出一条。唯一性不成立时，方案丢记录是静默的：筛选给出的结果偏少，没有任何一处报错。要留住全部记录，键得能唯一确定一行（标识加区域），或者先把重复标识合并成一条再建映射。
+
+第三条是有序性，它只对用边界定位的那个候选项成立。把「按价格取一段」交给排好序的序列、用取中点砍半的方式定位，前提是序列在每次写入之后仍然有序。负载里每天约 200 次上架与改价，而方案只在建库时排序一次；写入不改动次序，定位就落在错误的边界上。要让这条前提成立，写入一侧要跟着维护次序，这是它单独的一份代价。
+
+第四条是查询与写入的比例。按类目分组的那份记录只在读远多于写时划算：负载现在是 110 : 1，把维护一条记录的代价摊到每次筛选上很轻。写这一侧集中放大时——一次整批改价、一次全量重建——维护项按被改的条数增长，筛选次数不变，比例一走低，这份记录就可能比它省下的更多。
+
+## 回到这份方案
+
+方案选中的表示与算法，逐项对回负载：
+
+- 按标识取详情、按标识写入更新、按标识去重都落在以标识为键的映射上，合计每天约 2200 次。
+- 每天约 20000 次的筛选没有对应的结构，它逐条走过整份目录，一天 1000000000 件次，占全部工作的 99.9998%。
+- 方案声称优化过的按键查找，对应的是那 2200 次里的定位。
+- 「目录保持现在的量级」与「每月 5% 增长」对不上，主导项继续随目录件数放大。
+- 唯一性不成立时，映射静默丢记录，筛选结果偏少。
+
+审查这份方案要给的判断：把操作频率与成本形状放在一起看，当场排除的是那些一次筛选要碰不低于整份目录的候选；保留的是把每次筛选要碰的集合压到目标类目那一段的做法；这个做法把代价从读这一侧移到写这一侧，能不能成立取决于读写比例，以及写入有没有维护它依赖的次序。方案的薄弱处在主导项、增长方向与唯一性这三处，不在它优化过的那条路径上。
+
+## 练习
+
+同一个搜索页上，Agent 提了两个「加速筛选」的候选，都想替掉现在的整表遍历：
+
+> 甲：每次筛选之前，先把目录按类目重排一遍，再沿着类目取一段——先排好再取总是更快。
+>
+> 乙：给每件商品对照全部类目各打一个标记，筛选时按标记取——检查得越全，筛得越快。
+
+工作负载：目录 50000 件，20 个类目，每天 20000 次筛选。
+
+一行判据：把两个候选在一次筛选里要碰的商品数、以及一天里的合计数都数出来，与整表遍历比。
+
+```python run id="data-and-computation.design-review.exercise-candidates"
+catalogue_size = 50000
+categories = 20
+filters_per_day = 20000
+
+
+def scan_whole(n):
+    "Current shim: one pass over the catalogue per filter."
+    touched = 0
+    for item in range(n):
+        touched += 1
+    return touched
+
+
+def resort_then_take(n):
+    "Reorder first; reordering reads every record at least once."
+    touched = 0
+    for item in range(n):
+        touched += 1
+    return touched
+
+
+def mark_every_category(n, c):
+    "One mark per record per category."
+    touched = 0
+    for item in range(n):
+        for category in range(c):
+            touched += 1
+    return touched
+
+
+whole = scan_whole(catalogue_size)
+resort = resort_then_take(catalogue_size)
+mark = mark_every_category(catalogue_size, categories)
+
+print("whole scan one filter", whole, "one day", whole * filters_per_day)
+print("resort one filter", resort, "one day", resort * filters_per_day)
+print("mark one filter", mark, "one day", mark * filters_per_day)
+```
