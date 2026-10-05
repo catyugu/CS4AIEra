@@ -1,0 +1,125 @@
+---
+id: data-algorithms-and-scale.avoiding-repeated-work
+slug: /data-algorithms-and-scale/avoiding-repeated-work
+order: 80
+title: 复用已经计算过的结果
+status: published
+objectives:
+  - 说明同一个状态被反复求解时浪费了什么
+  - 说出一个状态要能被复用必须包含哪些信息
+  - 估算总工作量：不同状态的数量乘以每个状态的处理成本
+  - 说明不同状态的数量本身爆炸时，复用已算结果为什么救不了它
+---
+一段搜索要数从起点走到第 8 个位置一共有多少条走法，每步只能向前跨 1 格或 2 格。程序站在一个位置上，分别试着跨 1 格和跨 2 格，把两条路线各自的走法数相加，一直算到终点。8 号位置上的走法数是 34；为了这个 34，函数被进入 67 次，而这一路上一共只有 9 个不同的位置。第 2 号位置算了 13 次，第 1 号位置算了 21 次，反复算出的数相同。
+
+同一个位置被一遍遍重新求解，每次求得的答案完全相同。把算过的答案留下来、再次遇到同一个位置直接取用，是这段搜索里能省掉的重复。能省掉多少，取决于把什么算作「同一个位置」，以及一共有多少个不同的位置。
+
+## 同一个子问题被反复求解
+
+函数可以调用自己，这叫递归。下面 ways(position) 求到该位置的走法数：最后一步跨 1 格或 2 格，分别对应两个更小的子问题；位置 0 和 1 直接返回，递归在这里结束。
+
+```python run id="data-algorithms-and-scale.avoiding-repeated-work.repeated-solves"
+def ways(position):
+    computed.append(position)
+    if position == 0:
+        return 1
+    if position == 1:
+        return 1
+    return ways(position - 1) + ways(position - 2)
+
+
+computed = []
+total = ways(8)
+print("ways to reach 8:", total)
+print("values computed:", len(computed))
+for position in range(8, -1, -1):
+    count = 0
+    for seen in computed:
+        if seen == position:
+            count += 1
+    print("position", position, "computed", count, "times")
+```
+
+两条不同的路线会在中间某个位置汇合：先跨 2 格再跨 1 格，与先跨 1 格再跨 2 格，都停在第 3 号位置。从这个位置展开的那一段只由这个位置决定，与怎么走到这里无关；两段历史落在同一个位置以后，从这个位置展开的那一段会被原样重做一遍。越靠近起点的位置被重做越多：8 号位置算了 1 次，第 4 号位置 5 次，第 2 号位置 13 次，第 1 号位置 21 次。67 次求解里只有 9 次落在一个新位置上，其余 58 次重算的是已经算过的值。
+
+## 把已算的结果留下来
+
+把位置当作键、算出的走法数当作值，存进一张表。函数每次都先查这张表：表里有这个位置就直接返回存下的值，没有才继续往下算，算完把结果写回表里。再次遇到同一个位置时，一整段展开被一次查表代替。
+
+```python run id="data-algorithms-and-scale.avoiding-repeated-work.memoized-solves"
+memo = {}
+
+
+def ways(position):
+    if position in memo:
+        return memo[position]
+    computed.append(position)
+    if position == 0:
+        answer = 1
+    elif position == 1:
+        answer = 1
+    else:
+        answer = ways(position - 1) + ways(position - 2)
+    memo[position] = answer
+    return answer
+
+
+computed = []
+total = ways(8)
+print("ways to reach 8:", total)
+print("values computed:", len(computed))
+print("entries in table:", len(memo))
+```
+
+走法数仍是 34，被计算的值的个数从 67 降到 9：每个位置各算一次，表里留下 9 条记录，覆盖 0 到 8 每一个位置。把决定子问题的那个位置当作状态，同一个状态的结果只算一次、之后直接取用，这一步称为<Term id="memoization">记忆化</Term>。
+
+把每个状态只算一次之后，工作量按两样东西相乘估：不同状态的数量乘以每个状态的处理成本。这段搜索有 9 个状态，每个状态检查跨 1 格与跨 2 格两个转移。把一次转移检查记作一份工作；9 个状态各处理一遍，每个状态至多检查两个转移，总工作量至多是 18 次转移检查；位置 0 和 1 直接返回，不再检查转移。67 次求解里多出来的部分没有增加新状态，只是把同一批状态重算。
+
+## 状态要带上改变后续结果的信息
+
+一个状态的结果能被复用，条件是它带上了后续计算需要的全部信息。在这段搜索里，位置就够：一个位置展开出的分支只由这个位置决定，与它是从哪一段历史走到的无关，所以两条路线落在同一个位置时，要算的是同一个子问题，结果可以共用。
+
+把规则改成不允许连续跨两次 2 格。这时从一个位置往后有多少条走法，还取决于上一步跨的是 1 格还是 2 格：上一步跨了 2 格时，下一步只能跨 1 格，可选的转移少了一条。位置相同而上一跨不同的两段历史，往后的走法数不是同一个数；只把位置当作键，这两段历史会被并成一个状态，共用一个结果。要让结果可复用，状态得写成位置与上一步跨法这两样信息的组合。
+
+下面这一格把每个位置在上一步跨 1 格、上一步跨 2 格两种情况下的走法数分别打印出来。如果同一位置的两列数值不同，就已经足以说明只用位置作键会混淆两个子问题。几次相同的输出不能证明所有输入下都可复用。
+
+```python run id="data-algorithms-and-scale.avoiding-repeated-work.state-columns"
+memo = {}
+
+
+def ways(position, prev_long):
+    if (position, prev_long) in memo:
+        return memo[(position, prev_long)]
+    if position == 0:
+        answer = 1
+    elif position == 1:
+        answer = 1
+    elif prev_long == 1:
+        answer = ways(position - 1, 0)
+    else:
+        answer = ways(position - 1, 0) + ways(position - 2, 1)
+    memo[(position, prev_long)] = answer
+    return answer
+
+
+print("position prev-1 prev-2")
+for position in range(8, -1, -1):
+    print(position, ways(position, 0), ways(position, 1))
+```
+
+## 不同状态的数量本身会增长
+
+复用消掉的是同一个状态的重复求解，每个不同状态仍然要算一次。当不同状态本身随输入成倍增长时，即使每个状态只计算一次，仍然要处理全部不同状态。另一段搜索每次从剩下的物件里取走一件，一直取到取完：已经把哪些物件取走，决定接下来还有哪些可选，所以状态里要记下已取走的那一批物件。不同的取件历史取走的是不同的那几件，属于不同的状态；不同状态的数量等于「已取走的物件」的所有可能，也就是这批物件子集的个数。
+
+物件有 $n$ 件时，子集有 $2^n$ 个，不同状态的数量就是 $2^n$。
+
+```python run id="data-algorithms-and-scale.avoiding-repeated-work.decision-states"
+print("items distinct states")
+states = 1
+for items in range(1, 31):
+    states = states * 2
+    if items == 10 or items == 20 or items == 30:
+        print(items, states)
+```
+
+10 件物件是一千多个状态，20 件是一百多万个，30 件超过十亿个。把这 $2^n$ 个状态各算一次，工作量仍然随物件数翻倍增长：每多一件物件，状态翻一倍，20 件到 30 件之间从一百多万涨到十亿。复用消掉的是状态之间的重复求解，状态本身的数量不变；30 件的状态数超过十亿。是否做得完，需要把状态数乘以每个状态的处理成本，并检查保存结果需要的内存。

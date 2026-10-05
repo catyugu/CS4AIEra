@@ -1,5 +1,0 @@
-id: algorithms.ordering
-label: 排序、查找与选择
-order: 50
-summary: 单调性把查找变成边界定位；排序、选择与下界共用同一套关于比较的信息论证：一次比较能得到多少关于次序的信息，界就落在哪里。
-status: active

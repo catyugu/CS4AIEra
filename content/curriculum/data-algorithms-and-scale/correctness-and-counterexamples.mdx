@@ -1,0 +1,139 @@
+---
+id: data-algorithms-and-scale.correctness-and-counterexamples
+slug: /data-algorithms-and-scale/correctness-and-counterexamples
+order: 20
+title: 正确性：规约、反例与不变量
+status: published
+objectives:
+  - 写清一份方案允许什么输入，以及它声称保证什么结果
+  - 用一个反例推翻一条看似正确的规则
+  - 写出一个循环每一步都保持的性质
+  - 说明一个循环为什么一定会结束
+---
+
+一批任务按提交顺序进入任务系统，同一次提交会因重试而出现两次：`resize-covers` 在第一项和第三项各出现一次，第三项的标题多了 `, retry`。一段脚本要按标识去重，每个标识只留下第一次提交的那一项，其余按提交顺序排好。
+
+下面的版本把每项任务的标识与标题放进一个字典，遍历结束后按键列出：
+
+```python run id="data-algorithms-and-scale.correctness-and-counterexamples.dedupe-keys"
+tasks = [
+    ("resize-covers", "Resize cover images"),
+    ("send-digest",   "Send weekly digest"),
+    ("resize-covers", "Resize cover images, retry"),
+    ("build-index",   "Rebuild search index"),
+]
+
+
+def dedupe(tasks):
+    first = {}
+    i = 0
+    while i < len(tasks):
+        task_id, title = tasks[i]
+        first[task_id] = title
+        i += 1
+    return list(first.items())
+
+
+print(dedupe(tasks))
+```
+
+输出里三个标识各出现一次，先后是 `resize-covers`、`send-digest`、`build-index`，正是它们第一次出现的顺序。对不上的只有 `resize-covers` 那一行的标题：它取的是第三次提交的 `Resize cover images, retry`。在同一个标识只带一种标题的任务批次上，这段脚本都给出想要的结果；重复提交带着新标题时才看得出来这一项取错了。
+
+要判断它到底对不对，先得写清它保证什么：允许什么样的输入，对每一种输入保证什么样的结果。把保证写下来，「留下的标题应该是第一次提交的那一句」才成为一条可以判定真假的命题，上面那一行输出也才成为一个反例。
+
+## 一段脚本保证什么
+
+这段脚本的输入是一串任务，每项写成 `(标识, 标题)` 两元组，标题是字符串，同一个标识在不同项里可能带着不同的标题。它保证的结果有三句：
+
+- 输出是一串二元组，长度等于输入里不同标识的个数；
+- 每个出现过的标识在输出里恰好对应一项，该项的标题是输入中该标识第一次出现时的那一句；
+- 各项按标识第一次出现的先后排列。
+
+写下这三句，就写下这段脚本的<Term id="specification">规约</Term>：规约规定允许哪些输入、必须产生哪些结果，不规定用哪种写法实现。同一批任务用字典、用集合加列表、用两遍遍历都能实现，只要输出满足这三句，这些写法都满足规约。
+
+三个边界由规约自己覆盖。输入为空时没有标识，输出是空列表。同一个标识重复提交而标题相同，输出里仍只有一项。同一个标识重复提交而标题不同，输出留第一次的那一句——第二句在这里起作用；规约若漏掉标题的要求，只留下「每个标识各一项、按首次出现排序」，两种留下方式都满足剩下的要求，`resize-covers` 留哪一句就成了没有规定的选择。
+
+## 一个反例推翻整条保证
+
+规约写清之后，「这段脚本对每个输入都返回第一次提交的标题」是一条对全部输入成立的主张。推翻它不必检验全部输入，只需要一个满足输入约束、却不满足第二句的输入，开头那批任务就是：`resize-covers` 第三次重复提交带着新标题，脚本返回的正是这一句，而输入里该标识第一次出现时是 `Resize cover images`。
+
+检验通过的方向上得不到这条结论。一段脚本在几十批任务上都留下第一次的标题，只说明这几十个输入上没有撞到问题；通过检验的输入再多也是有限个，可能的输入有无限多个，有限次检验推不出「对每个输入都成立」。
+
+要让「这段脚本是对的」有依据，得说明它为什么对每一个满足输入约束的任务都成立。这段实现靠一个循环逐项处理，说明落在循环上。
+
+## 循环每一步保持的性质
+
+先看循环每一轮开始时的状态。把每一轮开头的下标与字典打印出来：
+
+```python run id="data-algorithms-and-scale.correctness-and-counterexamples.loop-state"
+tasks = [
+    ("resize-covers", "Resize cover images"),
+    ("send-digest",   "Send weekly digest"),
+    ("resize-covers", "Resize cover images, retry"),
+    ("build-index",   "Rebuild search index"),
+]
+
+
+def dedupe(tasks):
+    first = {}
+    i = 0
+    while i < len(tasks):
+        print(i, first)
+        task_id, title = tasks[i]
+        if task_id not in first:
+            first[task_id] = title
+        i += 1
+    return list(first.items())
+
+
+print(dedupe(tasks))
+```
+
+输出每一行的第一项是这一轮开始时的下标，第二项是此刻的字典。下标 0 那一行字典为空；下标 1 那一行处理完第一项，字典里是 `resize-covers` 的第一次标题；下标 2 那一行处理完 `send-digest`，字典里有两个标识；下标 3 那一行与下标 2 那一行相同，因为下标 2 处理的是重复的 `resize-covers`，`task_id not in first` 为假，字典没有新增。最后一行是返回的结果，`resize-covers` 留着第一次的标题。
+
+每一轮循环开始时，字典都把已经处理过的那些任务里每个标识对应到它第一次出现的标题，各项按首次出现的先后排列。这条性质就是这段循环的<Term id="invariant">不变量</Term>。循环体做三件事：取出当前项；标识不在字典里时写入它的标题；把下标加一。写入只在标识第一次出现时发生，下标加一之后，下一轮开始时可对照的前缀多了一项，不变量继续成立。
+
+不变量把「整段脚本满足规约」拆成两件可以分别检查的事：循环每一轮开始时它成立；循环结束时它蕴含规约要求的结果。循环条件 `i < len(tasks)` 为假时，下标等于任务项数，字典覆盖了全部输入，规约的三句在这一刻同时成立。
+
+字典按每个键第一次写入的先后保存它们（见 [映射类型 dict](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)），而写入只发生在标识第一次出现时，键的位置与标题同时固定在第一次，`list(first.items())` 给出的就是标识首次出现的顺序。
+
+## 循环为什么一定结束
+
+不变量说明的是：循环一旦结束，结果满足规约。循环会不会结束是另一条性质，要单独说明。
+
+上面这段循环里，下标从 0 开始，每轮由循环体的 `i += 1` 增加 1，增加到等于任务项数时 `i < len(tasks)` 为假。尚未处理的任务项数 `len(tasks) - i` 是一个非负整数，每一轮严格减少 1。非负整数不能一直严格递减下去，这个量最多下降 `len(tasks)` 次，循环就在有限轮内结束。
+
+终止依赖循环体里那一句推进。`i += 1` 若被漏掉，`len(tasks) - i` 不再下降，`i < len(tasks)` 一直为真，循环不再结束。不变量在每一轮开头仍然成立，终止的主张却不成立。
+
+
+## 练习
+
+两份实现都按标识去重，同一份规约是：每个标识恰好留一项，标题取该标识第一次出现时的那一句，各项按首次出现的顺序排列。哪一份在什么输入上违反规约？给出那个输入，以及同一输入下两份输出各自的内容。
+
+```python run id="data-algorithms-and-scale.correctness-and-counterexamples.exercise-dedupe"
+def dedupe_a(tasks):
+    seen = set()
+    result = []
+    for task_id, title in tasks:
+        if task_id not in seen:
+            seen.add(task_id)
+            result.append((task_id, title))
+    return result
+
+
+def dedupe_b(tasks):
+    result = []
+    for task in tasks:
+        if task not in result:
+            result.append(task)
+    return result
+
+
+tasks = [
+    ("build-index", "Rebuild search index"),
+    ("resize-covers", "Resize cover images"),
+    ("resize-covers", "Resize cover images, retry"),
+]
+print("a", dedupe_a(tasks))
+print("b", dedupe_b(tasks))
+```

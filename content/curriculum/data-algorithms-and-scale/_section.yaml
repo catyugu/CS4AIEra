@@ -1,0 +1,5 @@
+id: data-algorithms-and-scale
+label: 数据、算法与规模
+order: 20
+summary: 从需求出发，把计算问题描述清楚，选择数据表示和计算方法，并判断方案在真实规模下是否可行。
+status: active

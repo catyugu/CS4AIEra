@@ -1,5 +1,0 @@
-id: python.async
-label: 协作式异步
-order: 80
-summary: 协程、任务与事件循环的调度模型；异步迭代与异步生成器；异步上下文管理；取消、清理、超时与结构化任务生命周期。
-status: active

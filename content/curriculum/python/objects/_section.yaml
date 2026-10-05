@@ -1,5 +1,0 @@
-id: python.objects
-label: 对象与共享状态
-order: 20
-summary: 对象图与身份、别名与可变性、复制与共享状态、相等与哈希契约。
-status: active

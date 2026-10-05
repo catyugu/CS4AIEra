@@ -1,0 +1,166 @@
+---
+id: program-semantics.failure-is-behavior
+slug: /program-semantics/failure-is-behavior
+order: 60
+title: 异常：传播、捕获与清理
+status: published
+objectives:
+  - 说明一个异常从抛出到被捕获经过了哪些位置
+  - 判断一段代码应该在本地处理失败还是继续向上抛
+  - 说出捕获范围过宽会掩盖哪些错误
+  - 指出清理动作在失败路径上是否一定执行
+---
+
+一批任务按提交顺序处理，每项带一个耗时，程序把各项耗时相加得到这一批的总工作量。前三项是 `resize-covers` 12、`send-digest` 3、`build-index`，第三项的耗时字段写成了 `"fast"`。一个版本把这一次失败记作 0，继续处理 `archive-logs`，最后报告总工作量 20，日志里没有失败记录。要判断这次处理是否成立，先看清一次失败在程序里发生了什么。
+
+## 异常沿调用链离开当前执行
+
+一段代码遇到它无法继续的条件时，抛出一个异常对象：对象带一个类型（失败的种类）和一个消息（这一次的具体值）。`raise` 接受一个异常类（解释器实例化它）或一个异常实例，把它交给当前这次调用。抛出之后，当前这段执行被放弃：`raise` 之后的语句不再执行，解释器沿调用链退到调用方，逐帧检查那一帧的 `try` 有没有与异常类型匹配的 `except` 子句，子类的异常也匹配父类的子句；退出的每一帧先运行它自己的 `finally`。没有一层匹配时，程序停止，解释器打印回溯。
+
+下面这段程序里，`parse_seconds` 在 `int("fast")` 处抛出 `ValueError`；`process` 与 `run_batch` 都没有 `except`，异常一路退到最外层被接住。
+
+```python run id="program-semantics.failure-is-behavior.path"
+def parse_seconds(text):
+    return int(text)
+
+done = []
+
+def process(name, text):
+    seconds = parse_seconds(text)
+    done.append((name, seconds))
+    print("processed", name, seconds)
+
+def run_batch(tasks):
+    for name, text in tasks:
+        process(name, text)
+
+tasks = [("resize-covers", "12"), ("send-digest", "3"), ("build-index", "fast"), ("archive-logs", "5")]
+try:
+    run_batch(tasks)
+except ValueError as failure:
+    print("stopped:", type(failure).__name__, "-", failure)
+print("results kept:", done)
+```
+
+`processed` 只打印两次：`build-index` 在 `int` 处失败，`process` 里它后面的语句没有执行，`run_batch` 的循环停在它这里，`archive-logs` 从未被处理。异常对象携带的类型与消息在捕获处读出：`ValueError` 指出值不合法，消息指到具体那一个值 `'fast'`。失败从抛出点开始放弃剩下的路径：抛出点之后的语句不再执行，此前已经产生的结果仍然保留。
+
+## 捕获位置决定是否继续处理
+
+同一个失败可以在多个位置被接住，接住它的位置决定调用方随后看到的是失败本身还是一个值。下面同一批任务、同一段解析逻辑写成三个版本：`run_lenient` 在每一项就地接住 `ValueError`，用一个默认值 0 顶替；`run_strict` 不接住，让失败退到调用方；`run_tagged` 接住后补上任务名，再用 `raise` 继续向上抛。
+
+```python run id="program-semantics.failure-is-behavior.positions"
+def parse_seconds(text):
+    return int(text)
+
+def run_lenient(tasks):
+    total = 0
+    for name, text in tasks:
+        try:
+            seconds = parse_seconds(text)
+        except ValueError:
+            seconds = 0
+        total += seconds
+        print("counted", name, seconds)
+    return total
+
+def run_strict(tasks):
+    total = 0
+    for name, text in tasks:
+        total += parse_seconds(text)
+    return total
+
+def run_tagged(tasks):
+    total = 0
+    for name, text in tasks:
+        try:
+            total += parse_seconds(text)
+        except ValueError as failure:
+            raise ValueError(name + ": " + str(failure))
+    return total
+
+tasks = [("resize-covers", "12"), ("send-digest", "3"), ("build-index", "fast"), ("archive-logs", "5")]
+print("lenient total:", run_lenient(tasks))
+try:
+    print("strict total:", run_strict(tasks))
+except ValueError as failure:
+    print("strict stopped:", type(failure).__name__, "-", failure)
+try:
+    print("tagged total:", run_tagged(tasks))
+except ValueError as failure:
+    print("tagged stopped:", type(failure).__name__, "-", failure)
+```
+
+三个版本对前两项的处理相同（`counted` 打印出 12 与 3），差别落在 `build-index`：`run_lenient` 把它记作 0、继续到 `archive-logs`，返回总工作量 20；`run_strict` 停在 `build-index`，调用方接住并读出 `ValueError`；`run_tagged` 也在 `build-index` 停下，但它先接住失败，再 `raise` 一个带任务名的新异常，调用方读到的消息里因此有 `build-index`。`run_lenient` 的返回值看不出 `build-index` 出过错：0 与「这一项真的耗时 0」没有区别，调用方拿到的是一份看起来完整的报告。
+
+要决定捕获放在哪里，问的是捕获异常的代码能不能据此产生正确的结果。`run_lenient` 不知道 `build-index` 的耗时，却照样交出一个数，它没有处理这次失败，只是把它擦掉。`run_tagged` 给出的是中间做法：这段代码不能算出 `build-index` 的耗时，但它知道失败的是哪一项，于是接住后补上这条信息、再用 `raise` 把失败继续向上抛。能决定整批继续还是停下的是调用方，也就是调用 `run_batch` 的一方。可以就地恢复的情形是捕获处掌握产生正确结果所需的信息，例如换一条路径取回同一个值；拿不到时，把失败继续向上抛。
+
+## 捕获范围决定哪些失败被看见
+
+捕获子句按类型匹配，写宽一点会把不同种类的失败一起接住。失败至少分两类。一类由这次输入或环境带来，这段代码把它当作一种需要处理的结果：文件不存在、输入不合法、请求超时。另一类说明程序本身有误：访问了不存在的名字、实现没有维持它声称的不变量。前一类属于<Term id="specification">规约</Term>覆盖的情况，哪一种输入对应哪一种结果由规约写明，调用方传错参数也落在这一类；后一类是实现的缺陷，重试和默认值都不会让它消失。
+
+下面只捕获预期的转换失败。但解析函数里还故意写错了一个名字：参数是 `text`，实际读取的是 `txt`。即使输入是合法字符串，也会出现 `NameError`；这是实现缺陷，和调用方传入非法类型不同。
+
+```python run id="program-semantics.failure-is-behavior.scope"
+def seconds_from(text):
+    return int(txt.strip())
+
+
+def broad(text):
+    try:
+        return seconds_from(text)
+    except Exception:
+        return 0
+
+
+def narrow(text):
+    try:
+        return seconds_from(text)
+    except ValueError:
+        return 0
+
+
+print("broad:", broad("12"))
+print("narrow:", narrow("12"))
+```
+
+`broad` 把 `NameError` 也变成了 0，调用方无法区分缺陷与真正的零耗时。`narrow` 只处理 `ValueError`，名字写错的异常继续传播。把 `txt` 修正为 `text` 后，两次合法调用都返回 12；再换成 `"fast"`，两次才会触发预期的转换失败。捕获类型需要根据能处理的情况选择；窄捕获有助于让无关缺陷继续显现，但不能保证捕获到的异常一定来自预期位置。
+
+## 清理在失败路径上也执行
+
+释放资源、关闭句柄、记录结束这类动作在成功与失败两条路径上都要做。写在 `try` 之后的语句属于被放弃的路径，异常展开时不会执行；`finally` 把这些动作放到一个在正常结束、`return` 和异常传播时都会经过的位置（见 [Python 的 try 语句](https://docs.python.org/3/reference/compound_stmts.html#the-try-statement)）。下面两个版本的收尾都写在函数末尾，`run_plain` 的收尾在 `try` 之外，`run_guarded` 的收尾在 `finally` 里。
+
+```python run id="program-semantics.failure-is-behavior.finally"
+log = []
+
+def run_guarded(name, text):
+    log.append("start " + name)
+    try:
+        return int(text)
+    finally:
+        log.append("end " + name)
+
+def run_plain(name, text):
+    log.append("start " + name)
+    value = int(text)
+    log.append("end " + name)
+    return value
+
+print("guarded ok:", run_guarded("resize-covers", "12"))
+print("plain ok:", run_plain("send-digest", "3"))
+try:
+    run_plain("build-index", "fast")
+except ValueError as failure:
+    print("plain failed:", type(failure).__name__, "-", failure)
+try:
+    run_guarded("archive-logs", "fast")
+except ValueError as failure:
+    print("guarded failed:", type(failure).__name__, "-", failure)
+print("log:", log)
+```
+
+`log` 里 `build-index` 只有 `start build-index`、没有 `end`：失败在 `int` 处展开，`run_plain` 里它后面的语句被跳过。`archive-logs` 有 `start archive-logs` 也有 `end archive-logs`：`run_guarded` 的 `finally` 在异常继续向上传之前运行，`end` 照常补上。异常本身仍然到达调用方——`plain failed` 与 `guarded failed` 打印的是同一个 `ValueError`。
+
+
+## 练习
+
+在清理例子里把 `run_guarded` 的转换改成 `return int(text) + 1`。分别使用 `"12"` 和 `"fast"`，预测返回值、异常和日志。再把 `finally` 中的日志追加移到 `return` 之后，解释两种输入下为什么都不再记录结束。

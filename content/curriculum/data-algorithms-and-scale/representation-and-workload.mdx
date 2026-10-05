@@ -1,0 +1,82 @@
+---
+id: data-algorithms-and-scale.representation-and-workload
+slug: /data-algorithms-and-scale/representation-and-workload
+order: 30
+title: 根据操作选择数据结构
+status: published
+objectives:
+  - 根据操作频率比较列表扫描与字典查找
+  - 说明为了加速查询需要保留哪些数据、付出哪些写入和空间成本
+  - 区分抽象操作保证与具体实现的性能
+---
+
+仿真结果库保存每次运行的结果。一种查询按 `run_id` 打开详情，另一种查询按指标筛出合格记录。使用同一个字典，能让这两种查询都变快吗？
+
+序列、集合与映射的语义见 <CrossRef id="program-semantics.organizing-data" />。选择结构时，还需要知道实际会反复执行哪些操作。
+
+## 先确定重复记录该怎样处理
+
+如果每次运行都必须保留，包括同一标识的多次重跑，列表可以逐条追加。以 `run_id` 为键的字典会覆盖旧值，不能独自保存全部历史。如果需求明确只保留每个标识最新写入的结果，字典的覆盖操作才符合要求。
+
+下面的比较采用后一种要求。列表从末尾向前找，字典保存最后一次写入，查询返回相同的结果。
+
+```python run id="data-algorithms-and-scale.representation-and-workload.lookup-cost"
+runs = [("run-101", 0.81), ("run-102", 0.42),
+        ("run-103", 0.67), ("run-101", 0.79), ("run-104", 0.55)]
+
+
+def latest_in_list(entries, wanted):
+    compared = 0
+    for run_id, score in reversed(entries):
+        compared += 1
+        if run_id == wanted:
+            return score, compared
+    return None, compared
+
+
+by_id = {}
+for run_id, score in runs:
+    by_id[run_id] = score
+
+for wanted in ("run-103", "run-999", "run-101", "run-104"):
+    score, compared = latest_in_list(runs, wanted)
+    print(wanted, "list result:", score, "comparisons:", compared)
+    print(wanted, "dict result:", by_id.get(wanted))
+```
+
+列表分别比较 3、5、2、1 条记录。查询缺失标识时，它必须检查全部记录。字典把查找交给按键访问，代码不再逐条扫描；这不意味着字典内部只做一次整数比较。
+
+<Term id="workload">工作负载</Term>是实际发生的操作及其次数。每天只有一次详情查询，扫描五条记录没有必要复杂化；当记录有几万条、按标识查询每天发生几万次时，反复扫描的工作就会累积。常用的结构是否合适，要由这些操作和规模决定。
+
+## 抽象保证不承诺某种速度
+
+<Term id="abstract-data-type">抽象数据类型</Term>规定允许哪些操作、各操作给出什么结果。例如映射保证按键取得对应值，但不规定怎样存储键和值。
+
+哈希表与有序树都能实现映射，操作成本不同。Python 的 `dict` 使用哈希表；在通常的哈希分布和固定成本的键处理假设下，查找的平均成本不随条目数成比例增加，最坏情况却可能需要检查很多条目。键很长时，计算哈希和比较键也有成本。实现性能不能只从“映射”这个名字推出来。
+
+关于 Python `dict` 的顺序保证，直接使用容器课建立的规则即可。它保持首次插入顺序，覆盖值不会把键移到最后，所以它的键顺序也不能表示最近一次重跑的完成顺序。
+
+## 一个结构加速哪些操作
+
+以 `run_id` 为键的字典可以加速详情查询，也可以用键判断某个运行是否存在。但它不能直接找出 `score` 最高的两条记录：指标保存在值里，键没有按指标组织。
+
+```python run id="data-algorithms-and-scale.representation-and-workload.largest"
+by_id = {"run-101": 0.79, "run-102": 0.42, "run-103": 0.67}
+first_two = list(by_id.items())[:2]
+print("first inserted:", first_two)
+```
+
+取到的是最早插入的两个键，不是指标最大的两项。按指标筛选或排名，需要比较记录，或另行维护适合该查询的结构。
+
+| 经常发生的操作 | 可考虑的组织方式 | 需要付出的代价或保留的信息 |
+| --- | --- | --- |
+| 按完成顺序追加、保留全部运行历史 | 列表 | 按标识查询可能要扫描 |
+| 只关心某个标识是否出现 | 集合 | 不保留重复次数和记录详情 |
+| 反复按标识读写最新结果 | 字典 | 历史值会被覆盖；不能直接按指标排名 |
+| 保留历史，同时反复按标识查询 | 列表加按标识组织的查询结构 | 多占空间，每次写入要同步更新 |
+
+写多查少时，维护额外结构可能不划算；查得频繁时，它可能省下大量重复扫描。决定前先写清楚查询要返回什么，再比较查询、写入和空间成本。
+
+## 练习
+
+结果库要保留全部重跑记录，同时频繁查询某个 `run_id` 的最新结果。只有一个以 `run_id` 为键的字典会丢掉什么？如果保留列表，额外维护一个从标识到最新记录的字典，每次追加需要做哪些更新？

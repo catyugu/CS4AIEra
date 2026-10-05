@@ -1,0 +1,89 @@
+---
+id: program-semantics.organizing-data
+slug: /program-semantics/organizing-data
+order: 40
+title: 序列、集合与映射
+status: published
+objectives:
+  - 读懂列表、元组、集合与字典的常用操作
+  - 说明转换容器时哪些次序、重复或对应关系被保留
+  - 预测修改容器后得到的内容与访问不存在元素时的结果
+---
+
+任务清单里可能有重复任务，也可能需要用任务名找到它的说明。列表、集合和字典提供了不同的数据组织方式；先读懂它们表达什么，再判断一次操作会得到什么。
+
+## 序列按位置保存元素
+
+列表中的元素有次序，允许重复，下标从 0 开始。
+
+```python run id="program-semantics.organizing-data.sequence"
+tasks = ["parse", "render", "parse"]
+print("first:", tasks[0])
+print("count:", len(tasks))
+tasks[1] = "review"
+tasks.append("publish")
+print("tasks:", tasks)
+```
+
+`tasks[1] = "review"` 替换第二个元素；`append` 在末尾追加。最终列表为 `['parse', 'review', 'parse', 'publish']`，原来的两个 `parse` 都保留。
+
+元组也按位置保存元素，常用来把几个相关值放在一起，例如 `("parse", "pending")`。写成 `name, status = task` 可以将两个元素分别绑定到两个名字。元组创建后不能替换它的元素；列表可以。元组内如果引用可变对象，那个对象仍可被修改。
+
+列表和元组都属于序列。访问不存在的位置会抛出 `IndexError`，例如空列表的 `[0]`。判断某个值是否出现，可以写 `"parse" in tasks`。
+
+## 集合保存互不相同的元素
+
+```python run id="program-semantics.organizing-data.set"
+tasks = ["parse", "render", "parse"]
+unique = set(tasks)
+unique.add("review")
+unique.add("parse")
+print("count:", len(unique))
+print("contains parse:", "parse" in unique)
+print("sorted for display:", sorted(unique))
+```
+
+集合里每个不同的任务名只保留一份。再次加入 `parse` 不增加元素数。集合不记录位置，不能用 `unique[0]` 取第一项，也不保证按加入顺序遍历。这里为了让显示顺序固定，使用 `sorted` 返回按字符次序排列的新列表；它没有改变集合本身。
+
+`set()` 创建空集合，`{}` 创建的是空字典。
+
+## 映射保存键到值的对应
+
+Python 的 `dict`（字典）是一种映射。下面用任务名作为键，任务说明作为值：
+
+```python run id="program-semantics.organizing-data.mapping"
+descriptions = {"parse": "Read input", "render": "Create page"}
+print(descriptions["parse"])
+descriptions["parse"] = "Read updated input"
+descriptions["review"] = "Check page"
+print("keys:", list(descriptions))
+print("parse:", descriptions["parse"])
+print("missing:", descriptions.get("publish", "unassigned"))
+print("key membership:", "parse" in descriptions)
+print("value membership:", "Read updated input" in descriptions.values())
+```
+
+`descriptions["parse"]` 按键取值。给已有键赋值会替换原值，给新键赋值会增加一项。每个键最多对应一个值；要保留同一任务的多份说明，需要明确用列表等容器把它们放在那个值里。
+
+`in` 在字典上检查键，在 `values()` 上检查值。直接读取缺失键，例如 `descriptions["publish"]`，会抛出 `KeyError`；`get` 则返回指定的默认值。
+
+[Python 的 dict 文档](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)规定字典保持键的插入顺序，更新已有键不会把它移到末尾。Python 3.7 起这是语言保证。插入顺序是 Python `dict` 的语言语义，但不是抽象映射类型本身必须具有的性质。
+
+## 转换会丢掉什么
+
+`set(tasks)` 保留不同的任务名，丢掉重复次数与位置。`list(descriptions)` 得到键的列表，列表本身不再带着任务说明。转换后的容器只能保留你实际放进去的信息。
+
+读取之后的修改也要看清对象：两个名字指向同一个字典时，通过一个名字更新键值，另一个名字也能读到新值。容器没有改变赋值与共享对象的规则。
+
+## 练习
+
+预测下面三个输出，再运行。把最后一次赋值改成使用新键，比较字典的键数和顺序；尝试访问不存在的键，确认程序在哪一行停下。
+
+```python run id="program-semantics.organizing-data.exercise"
+names = ["parse", "render", "parse"]
+status = {"parse": "pending", "render": "pending"}
+status["parse"] = "finished"
+print("list count:", len(names))
+print("set count:", len(set(names)))
+print("mapping:", status)
+```
