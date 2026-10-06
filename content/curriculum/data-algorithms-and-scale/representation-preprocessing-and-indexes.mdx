@@ -79,9 +79,9 @@ print("same record:", books[0] is by_id["b1"])
 
 ```python run id="data-algorithms-and-scale.representation-preprocessing-and-indexes.index-update"
 books = [
-    {"id": "b1", "category": "science", "price": 30},
-    {"id": "b2", "category": "history", "price": 40},
-    {"id": "b3", "category": "science", "price": 50},
+    {"id": "b1", "category": "science"},
+    {"id": "b2", "category": "history"},
+    {"id": "b3", "category": "science"},
 ]
 by_category = {}
 for book in books:
@@ -90,15 +90,18 @@ for book in books:
         by_category[category] = []
     by_category[category].append(book)
 
-book = books[0]
-book["category"] = "history"
-print("science entries:", by_category["science"])
-print("history entries:", by_category["history"])
+def change_category(book, new_category):
+    by_category[book["category"]].remove(book)
+    book["category"] = new_category
+    
+change_category(books[0], "history")
+print("science:", by_category["science"])
+print("history:", by_category["history"])
 ```
 
-改变分类后，记录没有自动从 `science` 移到 `history`。**共享记录与维护分组是两件事。** 修改分类时，还要从旧列表移除这条记录，并加入新列表。
+**共享记录与维护分组是两件事。** 修改分类时，还要从旧列表移除这条记录，并把记录加入新列表。
 
-按编号查询可以用 `by_id["b1"]`；允许编号不存在时，`by_id.get("missing")` 返回 `None`。`get` 的第二个参数可以指定默认值，例如 `by_category.get("art", [])` 在没有该类时返回空列表。直接遍历字典取得的是键。
+> 列表的 `remove` 方法移除第一个与参数相等的元素，找不到时会报错。例如 `numbers = [10, 20]`，调用 `numbers.remove(10)` 后只剩 `[20]`。练习中的书目编号唯一，因此不同记录不会比较为相等。
 
 ## 抽象保证与实现性能
 
@@ -125,35 +128,6 @@ print("history entries:", by_category["history"])
 选择时先确认信息保留与结果要求，再比较准备、查询、更新和空间成本。两个索引都能“加速查询”，加速的可能是不同操作。
 
 ## 练习
-
-书目系统用 `by_category` 按分类查询。下面的函数将一本书改到另一类。调用后，按 `science` 查询应得到 `b3`，按 `history` 查询应得到 `b2` 和 `b1`，不要求它们的排列次序。
-
-先预测两个分组的内容，再运行。这个函数是否满足要求？如果不满足，修改函数，使记录中的分类与分组中的位置保持一致。还要检查将书改到原来不存在的 `art` 类时是否正常。
-
-```python run id="data-algorithms-and-scale.representation-preprocessing-and-indexes.exercise-change-category"
-books = [
-    {"id": "b1", "category": "science"},
-    {"id": "b2", "category": "history"},
-    {"id": "b3", "category": "science"},
-]
-by_category = {}
-for book in books:
-    category = book["category"]
-    if category not in by_category:
-        by_category[category] = []
-    by_category[category].append(book)
-
-
-def change_category(book, new_category):
-    book["category"] = new_category
-
-
-change_category(books[0], "history")
-print("science:", by_category["science"])
-print("history:", by_category["history"])
-```
-
-> 注：列表的 `remove` 方法移除第一个与参数相等的元素，找不到时会报错。例如 `numbers = [10, 20]`，调用 `numbers.remove(10)` 后只剩 `[20]`。练习中的书目编号唯一，因此不同记录不会比较为相等。
 
 直接扫描时，每次查询需要检查全部书目；维护分类索引时，只需读取目标分类的记录，但每次修改分类都要维护分组。分别估算两种方案每天查询需要读取多少条记录，再比较以下两个使用情况：它们都保存 10000 条书目，每次按分类查询约返回 100 条，不要求排序。哪种方案适合场景甲？哪种方案适合场景乙？
 
