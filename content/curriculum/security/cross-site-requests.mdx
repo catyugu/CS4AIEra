@@ -1,0 +1,59 @@
+---
+id: security.cross-site-requests
+slug: /security/cross-site-requests
+order: 50
+title: 自动携带凭据的跨站请求
+status: published
+objectives:
+  - 追踪攻击页面如何利用浏览器自动携带的凭据发起请求
+  - 区分响应读取限制、用户身份与操作意图
+  - 比较 CSRF 令牌、来源检查与 SameSite 的保护条件
+---
+
+用户已经登录文档服务，又打开了一个不相关的网页。那个网页让浏览器向文档服务提交修改请求。如果浏览器自动带上登录 cookie，服务器看到的身份可能完全有效，但修改并非用户在文档服务里主动发起。
+
+## 有身份的请求仍可能由别的页面发起
+
+<Term id="csrf">跨站请求伪造</Term>（CSRF）利用浏览器自动携带凭据的行为，让受害者的浏览器对目标服务提交攻击者选择的操作。资产是用户账户下的修改能力，对手控制的是另一个网页。
+
+假设服务通过 cookie 识别会话，该 cookie 在此次跨站提交中会被发送，修改接口接受普通表单编码，且没有额外来源或操作令牌检查。攻击页面可以包含这样的 HTML：
+
+```html
+<form action="https://notes.example/settings/email" method="post">
+  <input type="hidden" name="email" value="other@example.test">
+  <button type="submit">查看文档</button>
+</form>
+```
+
+这是不可执行的静态攻击路径材料，地址和邮件都是示例。表单规定提交目标与方法，隐藏字段提供对手选择的内容。用户点击按钮时，浏览器提交表单；能否附带 cookie 由 cookie 和浏览器规则决定。
+
+| 步骤 | 发起动作的参与者 | 服务器可能看到的内容 |
+| --- | --- | --- |
+| 打开攻击页面 | 用户 | 尚无修改请求 |
+| 提交表单 | 攻击页面的结构与用户点击 | 目标地址、对手选择的邮件 |
+| 附带适用 cookie | 浏览器 | 有效登录会话 |
+| 处理请求 | 文档服务 | 已认证用户与修改内容 |
+
+身份验证证明请求携带有效会话，不能证明用户理解并同意这项修改。
+
+## 读不到响应仍能产生副作用
+
+浏览器的<Term id="origin">源</Term>与 CORS 限制见 <CrossRef id="networks-and-web.tls-and-browser-boundaries" />。攻击网页不需要读出响应，只要修改完成就达到目的。普通表单提交也不等同于脚本需要预检的跨源请求。因此“API 没有允许跨源读取”不能独立防止 CSRF。
+
+修改操作应使用适合的非安全方法，但改成 `POST` 本身没有解决表单跨站提交。使用 `GET` 修改状态更危险，因为链接跳转等普通访问也可能触发它。
+
+## 在自动身份之外检查发起关系
+
+服务可以给合法页面提供一个不可预测、与会话关联的 CSRF 令牌。合法请求显式携带令牌，服务器验证令牌与当前会话；攻击页面即使能让浏览器附带会话 cookie，也通常不能跨源读取合法页面中的令牌。令牌不应只依赖一个会自动随请求发送的 cookie，也不应进入 URL 或日志。
+
+来源检查可以验证请求的 `Origin`，在规定条件下使用 `Referer` 等来源信息；缺失字段如何处理、代理之后怎样确定预期源，需要统一策略。控制必须部署在服务器，因为攻击者控制的页面没有义务配合客户端检查。机制与条件见 [OWASP：CSRF 防护](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)。
+
+`SameSite` 属性限制某些跨站情形下 cookie 的发送。这里的“站”按方案和可注册域名等规则判断，与源的方案、主机、端口三元组不同：两个子域可以不同源却同站。`Lax` 仍允许特定顶层导航携带 cookie；`None` 允许跨站发送并要求 `Secure`。具体行为见 [MDN：Set-Cookie 的 SameSite](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#samesitesamesite-value)。因此同站子域受对手控制等情况，还需要结合威胁模型判断，不能只看到属性存在就结束审查。
+
+如果攻击者已经通过 XSS 控制合法页面脚本，它可能读取 CSRF 令牌或直接发起合法同源请求。这解释了 CSRF 防护为何仍依赖页面脚本的信任边界；不同控制应共同覆盖实际攻击路径。
+
+## 练习
+
+一个修改接口同时接受表单和 JSON，团队只对 JSON 请求验证 CSRF 令牌，并声称“攻击页面无法通过 CORS 读取响应”。按上述攻击路径审查剩余的入口与可观察效果。
+
+客户端把 CSRF 令牌放在 cookie 中，服务器只检查这个 cookie 是否存在；会话 cookie 和令牌 cookie 都会在目标跨站请求中被发送。与“合法页面读取令牌，并显式写入请求内容后由服务器关联验证”相比，这个方案多验证了什么事实？

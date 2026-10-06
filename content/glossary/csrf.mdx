@@ -1,0 +1,15 @@
+---
+id: csrf
+term: 跨站请求伪造
+english: cross-site request forgery
+aliases:
+  - CSRF
+short: 利用浏览器自动携带凭据，使受害者向目标服务提交攻击者选择的操作。
+related:
+  - origin
+  - xss
+---
+
+跨站请求伪造利用浏览器自动附带的会话 cookie 等凭据，让另一个页面发起的操作被目标服务当成已认证用户的请求。
+
+攻击可以只依赖请求的副作用，无须读取响应；限制跨源读取因而不能独立阻止它。操作令牌、来源检查和 cookie 的 SameSite 策略提供不同条件下的保护，服务端还必须检查资源权限。机制见 [OWASP：CSRF 防护](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)。

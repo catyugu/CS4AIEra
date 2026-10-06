@@ -1,0 +1,15 @@
+---
+id: xss
+term: 跨站脚本
+english: cross-site scripting
+aliases:
+  - XSS
+short: 攻击者控制的内容在受信任网页环境中作为主动代码执行的漏洞。
+related:
+  - origin
+  - csrf
+---
+
+跨站脚本使攻击者控制的内容在受信任页面环境中执行。内容可以来自当前请求、持久存储或客户端的数据处理；“已经保存到数据库”不会使它自动可信。
+
+攻击脚本可能读取页面数据或以用户身份发起同源操作。保持文本和代码边界、按输出上下文编码，以及在允许富文本时使用适当清洗机制，分别针对不同解释位置。防护规则见 [OWASP：XSS 防护](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)。

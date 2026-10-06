@@ -1,0 +1,71 @@
+---
+id: security.parsing-injection-and-output
+slug: /security/parsing-injection-and-output
+order: 40
+title: 输入解析、注入与输出编码
+status: published
+objectives:
+  - 追踪不可信输入怎样从数据变成 SQL 或 HTML 结构
+  - 用参数化查询保持数据与 SQL 语法的边界
+  - 根据输出上下文选择文本输出、编码或受限 HTML 清洗
+---
+
+用户输入一个姓名，程序把它拼接进 SQL；用户输入一条评论，程序把它拼接进 HTML。两个接口原本都只想接收文本，但解析器看到的是合并后的整个语句或页面。输入里的语法字符可能改变结构。
+
+## 校验允许的值，解析要有一致的解释
+
+输入验证决定应用允许的类型、长度、格式和业务范围。例如转账金额要能解析为规定的数值，并满足正数和金额上限；某个文档编号即使格式合法，仍需检查访问权限。
+
+不同组件若以不同方式解释同一份输入，检查可能针对一个值，后续操作却使用另一个值。比如前端检查重复字段的第一个值，服务端使用最后一个值；或先验证路径，再解码出父目录跳转。系统需要规定解码、规范化和验证的顺序，并让后续处理使用已经验证过的同一表示。
+
+验证合法输入与防止它成为语法，是两项要求。姓名可以合法地包含单引号；删除姓名中的单引号会改变数据，也不能建立所有解释器的安全边界。
+
+## SQL 参数让输入继续作为数据
+
+SQLite 可以忠实展示这个差别。`connect(":memory:")` 创建当前单元格内的内存数据库；`execute` 执行语句，`fetchall` 取得全部结果行。这里的表只保存两条示例记录。
+
+```python run id="security.parsing-injection-and-output.sql-boundary"
+import sqlite3
+
+db = sqlite3.connect(":memory:")
+db.execute("CREATE TABLE people (name TEXT, email TEXT)")
+db.executemany(
+    "INSERT INTO people VALUES (?, ?)",
+    [("Ada", "ada@example.test"), ("Lin", "lin@example.test")],
+)
+
+name = "' OR 1=1 --"
+joined = "SELECT name, email FROM people WHERE name = '" + name + "'"
+print("query:", joined)
+print("joined:", db.execute(joined).fetchall())
+print("bound:", db.execute(
+    "SELECT name, email FROM people WHERE name = ?", (name,)
+).fetchall())
+db.close()
+```
+
+拼接后的输入结束了原来的字符串值，加入恒真的 `OR 1=1`，再用 SQL 注释符 `--` 让剩余部分成为注释。查询选择范围因此改变，这是 SQL 注入。
+
+参数化调用则把 SQL 结构与值分别提供给数据库接口。`?` 是 SQLite 值参数占位符，`(name,)` 是含一个元素的元组；`executemany` 将多个参数元组依次绑定到同一条插入语句。输入里的引号和 SQL 词语作为一个姓名值处理。接口契约见 [Python sqlite3：参数占位符](https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders)。
+
+参数通常不能替代表名、列名或排序方向等 SQL 结构。需要用户选择排序列时，把允许的选项映射到固定的列名，再构造必要结构；不要把“使用了参数”扩展成“所有拼接都安全”。防护原则见 [OWASP：SQL 注入防护](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html#primary-defenses)。
+
+## HTML 的文本位置与可执行位置
+
+HTML 是浏览器解释页面结构的语言。把用户内容作为 HTML 插入时，内容可能建立元素、事件处理或其他主动行为；当攻击者内容在受信任页面环境中执行时，就是<Term id="xss">跨站脚本</Term>（XSS）。内容来自数据库，仍不改变它最初受谁控制。
+
+只想显示文字时，应使用文本输出。例如真实浏览器代码可以写：
+
+```javascript
+element.textContent = userText;
+```
+
+`element` 代表目标页面元素，`textContent` 将内容作为文本节点设置，不把其中的标记解析成 HTML，见 [MDN：textContent](https://developer.mozilla.org/en-US/docs/Web/API/Node/textContent)。这段代码是静态浏览器材料，不在 Python 单元格里模拟执行。
+
+服务器生成 HTML 时，输出编码取决于插入位置：普通文本位置需要 HTML 文本编码，属性、URL、JavaScript 和 CSS 又有不同语法。通用地“替换几个特殊字符”不能覆盖所有位置；模板自动编码也不能保护开发者主动绕开的危险位置。如果产品允许富文本，需要维护中的清洗器保留允许的结构并删除不允许的行为。具体上下文规则见 [OWASP：XSS 防护](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html#output-encoding)。
+
+## 练习
+
+将单元格的姓名改为 `Ada` 和含单引号的普通姓名，比较拼接与绑定的语法和结果。若需要按 `name` 或 `email` 排序，审查“把列名作为 `?` 参数绑定”的方案能否表达这项选择。
+
+产品只允许评论显示普通文字，开发者选择把数据库中的评论赋给 `innerHTML`，理由是“保存时已经验证长度”。长度限制提供了什么保证？输出接口又需要什么保证？

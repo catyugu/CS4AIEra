@@ -1,0 +1,5 @@
+id: security
+label: 安全与信任边界
+order: 90
+summary: 从资产、对手与数据流推导安全控制，判断身份、权限、解析、依赖和审计能提供什么证据。
+status: active
