@@ -126,6 +126,38 @@ print("history entries:", by_category["history"])
 
 ## 练习
 
-修复分类修改后的索引，使按分类查到的记录重新符合数据。`group.remove(book)` 从列表中移除第一个等于 `book` 的元素；这里编号唯一，能确定要移除的记录。先保存旧分类，再思考移除和加入分别应该作用于哪个列表，新增分类不存在时又该怎样处理。
+书目系统用 `by_category` 按分类查询。下面的函数将一本书改到另一类。调用后，按 `science` 查询应得到 `b3`，按 `history` 查询应得到 `b2` 和 `b1`，不要求它们的排列次序。
 
-如果经常改分类、很少按分类查询，还值得维护 `by_category` 吗？如果每个编号的历史价格都要保留，`by_id` 当前的值还够用吗？分别指出需要重新确认的需求与新增代价。
+先预测两个分组的内容，再运行。这个函数是否满足要求？如果不满足，修改函数，使记录中的分类与分组中的位置保持一致。还要检查将书改到原来不存在的 `art` 类时是否正常。
+
+```python run id="data-algorithms-and-scale.representation-preprocessing-and-indexes.exercise-change-category"
+books = [
+    {"id": "b1", "category": "science"},
+    {"id": "b2", "category": "history"},
+    {"id": "b3", "category": "science"},
+]
+by_category = {}
+for book in books:
+    category = book["category"]
+    if category not in by_category:
+        by_category[category] = []
+    by_category[category].append(book)
+
+
+def change_category(book, new_category):
+    book["category"] = new_category
+
+
+change_category(books[0], "history")
+print("science:", by_category["science"])
+print("history:", by_category["history"])
+```
+
+> 注：列表的 `remove` 方法移除第一个与参数相等的元素，找不到时会报错。例如 `numbers = [10, 20]`，调用 `numbers.remove(10)` 后只剩 `[20]`。练习中的书目编号唯一，因此不同记录不会比较为相等。
+
+直接扫描时，每次查询需要检查全部书目；维护分类索引时，只需读取目标分类的记录，但每次修改分类都要维护分组。分别估算两种方案每天查询需要读取多少条记录，再比较以下两个使用情况：它们都保存 10000 条书目，每次按分类查询约返回 100 条，不要求排序。哪种方案适合场景甲？哪种方案适合场景乙？
+
+| 使用情况 | 每天按分类查询 | 每天修改分类 |
+| --- | ---: | ---: |
+| 甲 | 10000 次 | 20 次 |
+| 乙 | 20 次 | 10000 次 |
