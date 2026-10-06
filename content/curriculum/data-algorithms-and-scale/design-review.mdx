@@ -54,7 +54,7 @@ objectives:
 
 下面实际比较全库扫描与分类索引。两次使用同一个查询函数，区别只在交给它检查的记录范围。
 
-排列规则约定为评分从高到低、同分时按编号从小到大。`ranking_key` 返回 `(-评分, 编号)`，`sorted` 据此返回排好序的新列表；`key=ranking_key` 把函数交给排序操作，由它对每条记录调用；元组先比较第一项，相同时再比较第二项，负号让较高评分排在前面。规则见 [Python 排序指南：键函数](https://docs.python.org/3/howto/sorting.html#key-functions)。
+这段代码只验证筛选范围；评分排序仍是后续的一项工作。先用简单循环得到相同的命中编号，避免把分组是否正确与排序写法混在一起。
 
 ```python run id="data-algorithms-and-scale.design-review.group-query"
 books = [
@@ -73,56 +73,37 @@ for book in books:
     by_category[category].append(book)
 
 
-def ranking_key(book):
-    return (-book["rating"], book["id"])
-
-
 def query(records, category, threshold):
     matched = []
     for book in records:
         if book["category"] == category and book["available"] and book["rating"] >= threshold:
-            matched.append(book)
-    return sorted(matched, key=ranking_key)
+            matched.append(book["id"])
+    return matched
 
 
-category_books = by_category.get("science", [])
+category_books = []
+if "science" in by_category:
+    category_books = by_category["science"]
 print("whole scan:", query(books, "science", 4.0))
 print("category scan:", query(category_books, "science", 4.0))
 print("records checked:", len(books), len(category_books))
 ```
 
-`by_category.get("science", [])` 在分类存在时返回对应列表，不存在时返回给定的空列表。因此查询不存在的分类会得到空结果，而不会因为缺少键报错。`get` 不会把这个空列表存进字典，见 [Python 字典：get](https://docs.python.org/3/library/stdtypes.html#dict.get)。
-
-两次输出都先是 `b4`、再是 `b1`。分类索引让第二次检查五条科学类书目，全库扫描检查六条；查历史类时则只需检查一条。类别数量没有说明每类包含多少记录。若目标分类包含绝大多数书目，$k$ 接近 $n$，就省不了多少。只有各类数量近似均匀时，才可以估计 $k\approx n/20$。
+先检查分类键是否存在，再取对应列表；不存在时保留空列表，两次筛选都得到 `b1`、`b4`。这只是命中集合，排序以后才按评分返回。分类索引让第二次检查五条科学类书目，全库扫描检查六条；查历史类时则只需检查一条。类别数量没有说明每类包含多少记录。若目标分类包含绝大多数书目，$k$ 接近 $n$，就省不了多少。只有各类数量近似均匀时，才可以估计 $k\approx n/20$。
 
 ## 更新以后，哪些假设还要成立
 
 借出一本书时，只修改它的 `available`，按分类索引仍有效，因为分类没变，查询也会重新检查可借状态。把一本书改到另一类，就要从旧分类列表移除，再加入新分类列表。共享记录对象不会自动维护这种分组关系。
 
-下面单独维护分类索引，假定每个编号唯一、记录确实在旧分组中：
+可以用更新前后的分组表检查维护是否完成：
 
-```python run id="data-algorithms-and-scale.design-review.index-update"
-books = [
-    {"id": "b1", "category": "science"},
-    {"id": "b2", "category": "history"},
-]
-by_category = {"science": [books[0]], "history": [books[1]]}
+| 状态 | science 分组 | history 分组 | b1 的分类字段 |
+| --- | --- | --- | --- |
+| 修改前 | b1 | b2 | science |
+| 正确修改后 | 空 | b2、b1 | history |
+| 只改记录字段 | b1 | b2 | history |
 
-
-def change_category(book, new_category):
-    by_category[book["category"]].remove(book)
-    book["category"] = new_category
-    if new_category not in by_category:
-        by_category[new_category] = []
-    by_category[new_category].append(book)
-
-
-change_category(books[0], "history")
-print("science:", by_category["science"])
-print("history:", by_category["history"])
-```
-
-`remove(book)` 移除列表中第一个与该记录相等的元素，找不到时失败。移除可能要扫描旧分组，不能因为分类用字典定位就把整次更新算成常数成本。移入记录追加在新分组末尾，也不保证主列表中的原次序。
+最后一行让字段与分组出现矛盾，按新分类查找会漏掉 b1。正确更新要找到旧分组，移除记录，再加入新分组。若分组用列表保存，移除可能需要扫描旧分组，更新成本也应计入方案比较。
 
 每个编号还必须唯一标识需求中的一本书。如果同一书目编号下要保存多册副本，单个字典值就要能表达这些副本；若每册分别编号，也要明确编号代表什么。先确定数据含义，再决定同名键该覆盖、合并还是拒绝。
 

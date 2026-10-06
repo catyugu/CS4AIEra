@@ -11,7 +11,9 @@ objectives:
 
 一本笔记本保存名称和若干条笔记。用列表保存笔记、用函数追加内容，已经能完成这些操作。如果要管理多本笔记本，还可以把每本的状态与操作组织成一个对象。
 
-类定义这种对象怎样初始化、提供哪些操作；根据类创建的具体对象称为实例。下面只定义一种笔记本，然后创建两本，观察它们的笔记是否独立。
+如果分别用两个列表和两个名字保存笔记本，追加函数就要接收正确的列表，计数函数也要接收同一份状态。笔记本增加以后，调用方每次都要把这些对应关系传对。
+
+类把这组状态与操作放在一起：它定义对象怎样初始化、提供哪些操作；根据类创建的具体对象称为实例。下面创建两本笔记本，让每次方法调用从实例里取得要操作的状态。
 
 ## 一个类可以创建多个实例
 
@@ -68,3 +70,37 @@ first.notes.append("first idea")
 ```
 
 此时 `second.notes` 也包含 `first idea`。各本笔记本要有独立内容，就应在 `__init__` 中为每个实例创建列表。类把操作组织在一起，并不自动让所有状态彼此独立。
+
+
+## 把操作放进类里，怎样帮助调用方
+
+`first.add(text)` 已经说明要修改哪本笔记本；`first.count()` 从同一本的状态计算条数。若要增加“空笔记不能保存”的规则，可以在 `add` 中检查输入，让经过这个方法的调用遵守同一规则。
+
+这个组织方式适合多份状态遵守同一组操作规则的情形。只有一个独立计算、没有需要一起维护的状态时，普通函数也可以表达清楚。类的价值来自状态和操作的对应关系，而不是把函数改成点号写法。
+
+目前调用方仍能直接修改 `first.notes`。若一项规则必须覆盖所有修改路径，就需要进一步约定公开操作与内部状态的边界，见 <CrossRef id="program-composition.modules-and-boundaries" />。
+
+## 练习
+
+一个修改方案让 `count` 返回单独保存的计数，`add` 每追加一次就把计数加一。下面两条操作路径都可能发生，计数是否始终等于笔记条数？要保持一致，你会限制哪些操作，或怎样计算计数？
+
+```python run id="program-logic-and-state.classes-and-instances.exercise-state"
+class Notebook:
+    def __init__(self):
+        self.notes = []
+        self.saved_count = 0
+
+    def add(self, text):
+        self.notes.append(text)
+        self.saved_count += 1
+
+    def count(self):
+        return self.saved_count
+
+
+draft = Notebook()
+draft.add("first idea")
+draft.notes.append("second idea")
+print("reported:", draft.count())
+print("actual:", len(draft.notes))
+```
