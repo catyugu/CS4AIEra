@@ -10,7 +10,7 @@ objectives:
   - 预测协作任务何时允许其他任务执行
 ---
 
-程序等待文件或网络返回时，CPU 不一定在做计算。如果能在这段等待里处理另一项工作，就可以减少空闲时间。
+一份程序要取得两份网络数据。发送第一项请求后，要等对方返回，才能继续使用结果。这段时间里，它可以先发出第二项请求，让两项等待重叠。要解释这种安排，先区分执行工作与等待条件。
 
 ## 线程是可以独立调度的执行流
 
@@ -30,7 +30,13 @@ objectives:
 
 <Term id="event-loop">事件循环</Term>（event loop）记录哪些任务能继续、哪些还在等待。协作任务在等待时交回控制，事件循环便可以选择另一项就绪任务。
 
-Python 用 `async def` 定义异步函数。调用它先得到一个协程对象，函数体不会仅因为调用就自动执行。`await work()` 让当前任务执行并等待这次异步工作；`asyncio.create_task(work())` 则创建一个可由事件循环另行调度的任务。任务创建后，调用方可以继续安排其他工作，再等待它的结果，见 [Python asyncio：协程与任务](https://docs.python.org/3/library/asyncio-task.html#coroutines)。
+Python 用 `async def` 定义异步函数。读下面的代码时，分三步追踪：
+
+- 调用 `work()`，得到描述这次异步工作的协程对象。函数体此时尚未执行。
+- 用 `asyncio.create_task(work())` 把它安排成任务，交给事件循环调度。
+- 用 `await task` 等待该任务的结果；任务尚未完成时，当前任务可以让其他就绪任务执行。
+
+也可以直接写 `await work()`，由当前任务执行并等待这次异步工作，无须另建任务。任务创建与等待的规则见 [Python asyncio：协程与任务](https://docs.python.org/3/library/asyncio-task.html#coroutines)。
 
 下面先创建 A、B 两个任务，再依次等待结果。`sleep(0)` 明确让出一次执行机会，不测量真实耗时。浏览器单元格已有事件循环并支持顶层 `await`，可以直接等待 `main()`：
 
