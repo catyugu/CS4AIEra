@@ -1,0 +1,81 @@
+---
+id: program-execution.bytes-and-numbers
+slug: /program-execution/bytes-and-numbers
+order: 10
+title: 字节、整数与浮点数
+status: published
+objectives:
+  - 根据位宽推导无符号整数的范围，并区分回绕与检查失败
+  - 根据字节序解释同一组字节得到的不同整数
+  - 解释浮点舍入怎样影响相等判断和运算顺序
+---
+
+一个计数器从 255 加到 256，数学上没有困难。若它只有 8 个二进制位，却只提供 256 种不同状态，就必须决定超出范围时怎样处理。数的数学性质与程序采用的表示规则共同决定结果。
+
+## 位宽决定可表示范围
+
+一个位（bit）保存 0 或 1。这里讨论字节为 8 位的平台，一个字节（byte）有 $2^8=256$ 种模式。若用它表示无符号整数，范围是 0 到 255：最低位权重为 1，其余依次为 2、4、8，直到 128。一般的 $w$ 位无符号整数范围是 $0$ 到 $2^w-1$。
+
+保存 256 需要第 9 位。某些规则拒绝这次计算；某些规则丢弃超出位宽的部分，得到 0。这种回绕相当于对 $2^w$ 取余。业务要求“总数不能减少”时，回绕即使符合表示规则，也违反业务条件。
+
+C 可以声明定宽整数。下面是静态 C 代码；分号结束语句，`#include` 引入类型声明，`uint8_t` 在提供它的平台上表示恰好 8 位的无符号整数：
+
+```c
+#include <stdint.h>
+
+uint8_t count = 255;
+count = count + 1;
+```
+
+这里的小整数先被提升参与计算，再将 256 转回 `uint8_t`，保存为 0。C 的无符号规则允许这种模转换；有符号加法超出其结果类型范围则属于<Term id="undefined-behavior">未定义行为</Term>，不能从某台机器上观察到的回绕推定保证，见 [WG14 C 工作草案 N3096 的整数类型、整数转换与表达式规则](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n3096.pdf)。判断溢出要先确定表达式的类型，不能只看接收结果的变量。
+
+Python 整数按需要增加表示空间，没有固定 8 位上限，见 [Python 内置数值类型](https://docs.python.org/3/library/stdtypes.html#numeric-types-int-float-complex)。但将 Python 整数写入一个要求定宽整数的外部格式，仍必须处理范围；语言内部能算出结果，并不表示目标格式装得下。
+
+## 字节的顺序也是规则
+
+两个字节可以装下 16 位整数。十六进制用每一位表示 0 到 15，`0x1234` 表示 $1\times16^3+2\times16^2+3\times16+4=4660$。把它拆成两个字节，就是 `0x12` 与 `0x34`。
+
+| 按地址从低到高存放 | 解读规则 | 得到的整数 |
+| --- | --- | --- |
+| 12、34 | 大端：高位字节在前 | 4660 |
+| 12、34 | 小端：低位字节在前 | 13330 |
+
+字节序（endianness）规定多字节数的高低位怎样安排。解码方必须采用与编码方相同的规则。字节没有改变，错误发生在解释规则上。
+
+`bytes([0x12, 0x34])` 创建两个字节；`int.from_bytes` 按指定顺序读成整数。可以调换字节，也可以只改解码规则：
+
+```python run id="program-execution.bytes-and-numbers.endian"
+data = bytes([0x12, 0x34])
+print(int.from_bytes(data, byteorder="big"))
+print(int.from_bytes(data, byteorder="little"))
+```
+
+## 有限精度怎样表示小数
+
+二进制小数的小数位权重依次是 $1/2,1/4,1/8$。因此 0.5 和 0.125 可以精确表示。有限位二进制小数必然是某个整数除以 $2^k$；$1/10$ 的分母含有因子 5，约分后也消不掉，所以不能用有限位二进制小数精确表示。
+
+常见 Python 实现采用<Term id="binary64">binary64</Term> 格式表示 `float`，它提供有限有效位并按数量级改变数值间距，见 [Python 浮点数文档的表示误差](https://docs.python.org/3/tutorial/floatingpoint.html#representation-error)。输入的十进制小数先舍入到可表示值，运算结果也可能再次舍入。
+
+```python run id="program-execution.bytes-and-numbers.rounding"
+print(0.1 + 0.2)
+print(0.1 + 0.2 == 0.3)
+print((1e16 + -1e16) + 1.0)
+print(1e16 + (-1e16 + 1.0))
+```
+
+`1e16` 表示 $10^{16}$。在这个数量级，间隔已经大到加上 1 可能无法改变所存的浮点数。因此运算顺序会影响最后保留下来的信息，数学上成立的结合律不能直接用于逐步舍入的计算。
+
+允许近似误差的测量结果可以按业务容差比较。`math.isclose` 提供相对与绝对容差，见 [Python math.isclose](https://docs.python.org/3/library/math.html#math.isclose)；容差必须来自“多大偏差仍可接受”的要求。若金额始终以分计数，可以直接用整数保存分数，避免把舍入误差混进计数。
+
+## 练习
+
+一个文件格式把数量保存为 16 位无符号整数。方案甲直接写入计数的低 16 位；方案乙在写入前检查范围，超出就报告失败。若格式不允许拆成多条记录，分别判断两者在数量 65535、65536 时能否保存真实数量。读回结果与写入成功分别证明了什么？
+
+下面的检查适用于怎样的数值要求？先判断，再运行；把输入换成二进制能精确表示的小数，判断能否据此认为所有十进制小数都可靠。
+
+```python run id="program-execution.bytes-and-numbers.exercise"
+parts = [0.1, 0.2]
+total = parts[0] + parts[1]
+print(total == 0.3)
+print(round(total, 2) == round(0.3, 2))
+```

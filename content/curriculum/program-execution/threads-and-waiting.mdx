@@ -1,0 +1,95 @@
+---
+id: program-execution.threads-and-waiting
+slug: /program-execution/threads-and-waiting
+order: 60
+title: 线程、调度与协作式等待
+status: published
+objectives:
+  - 区分进程资源、线程执行状态与事件循环任务
+  - 根据运行、就绪、阻塞状态解释等待时 CPU 怎样被使用
+  - 判断计算任务和等待任务分别能否从并发获得收益
+---
+
+一个文件读取正在等待，程序还希望处理另一项工作。要做到这一点，需要保存尚未完成工作的执行位置，并让可以继续的工作获得执行机会。线程与协作任务保存状态的方式不同，也交给不同的调度者选择。
+
+## 线程共享进程资源，保留自己的执行位置
+
+线程（thread）是一条独立推进的执行序列，有自己的程序计数器、寄存器状态和调用栈。同一进程的多个<Term id="thread">线程</Term>共享地址空间及打开的资源；一个线程能访问另一个线程可访问的共享对象。POSIX 线程中共享与独立属性的清单见 [Linux pthreads 手册](https://man7.org/linux/man-pages/man7/pthreads.7.html#DESCRIPTION)。
+
+操作系统调度可运行的线程。在单核上，两个线程可以交替推进；多核上，两个线程可以在同一时刻执行。并发（concurrency）表示多个工作在重叠的时间段内推进， parallelism 所指的并行则要求同一时刻实际执行多个工作。并发并不要求多核。
+
+当线程切换时，需要保存原线程的执行状态、恢复另一个线程的状态。切换进程还涉及地址空间等上下文；缓存效果也可能变化。因此增加线程数量会增加管理成本，不能把线程数量直接当成吞吐量倍数。
+
+## 等待中的线程与可运行线程
+
+| 状态 | 含义 | 何时可以变化 |
+| --- | --- | --- |
+| 运行 | 正占用 CPU 推进指令 | 被调度替换或开始等待 |
+| 就绪 | 能继续执行，正在等 CPU | 被调度选择 |
+| 阻塞 | 等某个条件，当前不能继续 | 条件完成后转为就绪 |
+
+在阻塞读取中，线程可以等待数据，让 CPU 执行其他就绪线程。条件完成后，它通常先成为就绪，何时实际运行由调度决定。Linux 调度策略的具体规则见 [Linux sched 手册](https://man7.org/linux/man-pages/man7/sched.7.html)。
+
+不断循环询问“数据到了吗”会把等待变成持续执行，消耗 CPU。阻塞等待和这种忙等虽然都没有业务结果，资源需求却不同。程序耗时很长而 CPU 使用率低，可能是在等 I/O、锁或其他事件，仅优化加法指令不一定改变等待时间。
+
+## 一个线程也可以交替推进多个任务
+
+<Term id="event-loop">事件循环</Term>（event loop）管理任务就绪与等待。任务执行到必须等待的地方，保存可恢复状态并交回控制；循环选择另一项就绪任务。对于协作调度，正在执行的任务必须主动到达让出控制的位置。
+
+Python 用 `async def` 声明异步函数，调用它得到可以安排执行的协程；`await` 等待一个可等待操作。下面先建立两个任务，再分别等待它们。`create_task` 把协程安排给当前事件循环。本课程的单元格已有事件循环并支持顶层 `await`，因此末行直接等待 `main()`；普通 Python 脚本通常由 `asyncio.run(main())` 建立并运行循环，不能在已经运行的循环里再次这样启动，见 [Python asyncio 运行入口](https://docs.python.org/3/library/asyncio-runner.html#asyncio.run)。
+
+```python run id="program-execution.threads-and-waiting.cooperate"
+import asyncio
+
+
+async def step(label):
+    print(label, "start")
+    await asyncio.sleep(0)
+    print(label, "resume")
+
+
+async def main():
+    first = asyncio.create_task(step("A"))
+    second = asyncio.create_task(step("B"))
+    await first
+    await second
+
+
+await main()
+```
+
+`sleep(0)` 在这里没有测量真实时间，它用于明确让出控制。两项工作的开始与恢复可以交错，每项都必须先打印自己的 `start` 再打印 `resume`。不要把一次观察到的 A、B 次序当成所有调度器必须提供的顺序。协作调度、任务和 `sleep(0)` 的契约见 [Python asyncio 任务文档](https://docs.python.org/3/library/asyncio-task.html#sleeping)。
+
+`await` 不保证一定暂停：若等待对象已经完成，可以继续执行。反过来，异步函数里调用阻塞读取或长时间计算，又一直没有有效让出控制的操作，会占住这个事件循环线程，其他就绪任务仍不能推进。
+
+## 增加哪种执行单位取决于工作
+
+等待外部结果期间能推进别的工作，常能提高资源利用率。若工作主要是计算，单线程中的协作任务仍共享一个 CPU 执行机会；把计算函数改名为异步函数不会增加计算能力。
+
+普通启用 GIL 的 CPython 构建限制多个线程同时执行 Python 代码，但本地扩展可以释放 GIL，较新的 CPython 也提供不同的自由线程构建，见 [Python threading 的 GIL 与性能说明](https://docs.python.org/3/library/threading.html#gil-and-performance-considerations)。因此应先确认实现、构建方式和实际负载，不能把“Python 多线程”概括成固定性能结论。
+
+多进程可以得到多个独立地址空间并利用多个核心，但共享状态需要显式传递或共享安排。选择线程、进程或协作任务时，既要看执行机会，也要看状态在哪里，以及单个任务失败会影响谁。
+
+## 练习
+
+以下两项工作依次等待。先预测输出中可能出现的相对顺序，再运行。若希望它们都在任一项完成前获得开始机会，应改变任务建立的位置，还是仅增加一个 `await`？
+
+```python run id="program-execution.threads-and-waiting.exercise"
+import asyncio
+
+
+async def work(label):
+    print(label, "start")
+    await asyncio.sleep(0)
+    print(label, "end")
+
+
+async def main():
+    await work("A")
+    await work("B")
+
+
+await main()
+```
+
+一项计算需要持续占用 CPU，另一个任务每隔一段时间检查取消请求。若两者都位于同一个协作式事件循环，计算期间从不让出控制，取消请求能否及时被处理？指出方案需要增加的执行或让出控制边界。

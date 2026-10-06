@@ -1,0 +1,125 @@
+---
+id: program-execution.synchronization-and-deadlock
+slug: /program-execution/synchronization-and-deadlock
+order: 70
+title: 共享状态、同步与死锁
+status: published
+objectives:
+  - 根据合法交错构造共享状态丢失更新的反例
+  - 判断互斥范围是否覆盖需要一起保持的条件与修改
+  - 根据锁获取顺序解释死锁，并审查统一顺序能否排除等待环
+---
+
+共享计数从 0 开始，两个调用各加 1，最后却仍是 1。每个调用单独看都完成了“读旧值、加 1、写回”，问题出在它们同时依赖了同一份旧状态。
+
+## 单独正确的步骤可以交错成错误结果
+
+把递增拆成读取、计算和写回，允许下面的执行次序：
+
+| 次序 | 执行者 | 动作 | 共享 count |
+| --- | --- | --- | --- |
+| 1 | A | 读取旧值 0 | 0 |
+| 2 | B | 读取旧值 0 | 0 |
+| 3 | A | 写回自己算出的 1 | 1 |
+| 4 | B | 写回自己算出的 1 | 1 |
+
+最终状态丢失了一次更新。这种结果依赖执行交错的现象称为<Term id="race-condition">竞态条件</Term>（race condition）。共享可变状态与多个执行者已经足够产生这种风险，不要求它们真的同时占据两个核心。
+
+下面用真实的 asyncio 任务固定这个交错。两个 `Event` 是可等待通知：`set()` 发出通知，`wait()` 在通知到达前等待。每个任务先读旧值并通知另一个，等对方也完成读取后才写回，因此两者都会用开始时的旧值计算：
+
+```python run id="program-execution.synchronization-and-deadlock.lost-update"
+import asyncio
+
+count = 0
+
+
+async def add_one(mine, other):
+    global count
+    old = count
+    mine.set()
+    await other.wait()
+    count = old + 1
+
+
+async def main():
+    a_read = asyncio.Event()
+    b_read = asyncio.Event()
+    a = asyncio.create_task(add_one(a_read, b_read))
+    b = asyncio.create_task(add_one(b_read, a_read))
+    await a
+    await b
+
+
+await main()
+print(count)
+```
+
+`global count` 表示函数里的赋值修改外部的 `count`。这里没有模拟操作系统线程；两个协作任务直接修改同一 Python 状态。事件等待契约见 [Python asyncio Event](https://docs.python.org/3/library/asyncio-sync.html#asyncio.Event)。
+
+普通 C 多线程若未经同步地读写同一非原子对象，且至少一个操作是写入，会形成语言定义的数据竞争，属于未定义行为，见 [WG14 N3096 的多线程执行规则](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n3096.pdf)。不能把上表中的 1 和 2 当作这类 C 程序唯一允许的结果。上表推理假定每个读写动作有明确语义；asyncio 示例满足这个观察模型。
+
+## 互斥必须围住完整的状态判断
+
+互斥锁（mutex）规定同一时刻只有一个执行者进入受保护区域，其他执行者等待。持锁期间访问的代码称为临界区。若所有访问者都通过同一把锁，把“读取、计算、写回”整体放进临界区，就能排除两者同时使用同一旧值的交错。
+
+只分别保护读取和写入不足以保持递增。A 可以锁内读 0 后释放；B 也锁内读 0 后释放；两者随后分别锁内写 1。每个内存动作都受保护，业务更新仍然丢失。需要保护的是整个依赖旧状态作出新状态的操作。
+
+若要求剩余数量不得小于 0，“检查剩余大于 0”与“减去 1”也必须放在同一个保护范围。否则两者都可能在剩余为 1 时通过检查。这是在维护一个<Term id="invariant">不变量</Term>，锁的范围由这个条件决定。
+
+线程锁、进程间同步与协作任务锁的使用范围不同。`asyncio.Lock` 用于同一事件循环的任务，不为操作系统线程提供同步，见 [Python asyncio 同步原语](https://docs.python.org/3/library/asyncio-sync.html)。多个任务共享对象并不意味着任意一种名叫 lock 的对象都能保护它。
+
+## 等待另一把锁可能形成环
+
+假定两把不可重入的锁 L、R，每把锁只有持有者能释放。A 先取得 L，再等待 R；B 先取得 R，再等待 L：
+
+| 执行者 | 已持有 | 正在等待 |
+| --- | --- | --- |
+| A | L | B 持有的 R |
+| B | R | A 持有的 L |
+
+```text
+A ─waits for→ R ─held by→ B
+↑                        │
+└─held by─ L ←waits for───┘
+```
+
+两者都要等对方先释放，谁都不能到达释放位置，形成<Term id="deadlock">死锁</Term>（deadlock）。持续增加 CPU 或等待更久，不改变这个等待关系。
+
+如果所有执行者都遵守 L 在 R 之前的获取顺序，这个二锁环就不能发生：B 取得 R 前必须先取得 L，而 A 持有 L 时，B 无法进入持有 R 的状态。对更多锁也可以规定统一严格顺序；沿每条“持有当前锁、等待另一锁”的关系，锁的顺序只能增加，因此不能绕回起点。
+
+这个论证要求全部路径，包括异常处理和间接调用，都遵守顺序。把其中一条反向路径遗漏，仍可能形成环。在持锁期间等待外部 I/O，即使没有死锁，也会延长其他工作等待临界区的时间。缩短持锁范围时，又必须检查原来的状态判断是否仍然作为一个整体完成。
+
+## 练习
+
+以下代码把写回放在锁内。预测结果前，先判断完整递增操作是否受保护，再运行核对。`async with lock` 等待取得锁，并在离开代码块时释放；改变锁的位置时，也要判断等待的事件是否依赖另一个任务进入同一临界区。
+
+```python run id="program-execution.synchronization-and-deadlock.exercise"
+import asyncio
+
+count = 0
+
+
+async def add_one(lock, mine, other):
+    global count
+    old = count
+    mine.set()
+    await other.wait()
+    async with lock:
+        count = old + 1
+
+
+async def main():
+    lock = asyncio.Lock()
+    a_read = asyncio.Event()
+    b_read = asyncio.Event()
+    a = asyncio.create_task(add_one(lock, a_read, b_read))
+    b = asyncio.create_task(add_one(lock, b_read, a_read))
+    await a
+    await b
+
+
+await main()
+print(count)
+```
+
+系统规定三把锁按 L、M、R 获取。一条异常清理路径先取得 R，再取得 L；正常路径按统一顺序执行。构造可能的等待环，并判断“异常路径很少执行”能否作为排除死锁的证据。
