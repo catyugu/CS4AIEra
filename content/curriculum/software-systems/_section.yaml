@@ -1,0 +1,5 @@
+id: software-systems
+label: 应用系统
+order: 70
+summary: 画出组件、状态和运行边界，从容量与失败模型判断异步工作、复制、恢复和降级方案。
+status: active
