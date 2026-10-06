@@ -1,0 +1,93 @@
+---
+id: change-and-review.reviewing-diffs-and-evidence
+slug: /change-and-review/reviewing-diffs-and-evidence
+order: 60
+title: 用边界与证据审查改动
+status: published
+objectives:
+  - 从 diff 追踪新执行路径是否改变状态、权限或失败语义
+  - 区分实现者的声明与支持声明所需的证据
+  - 在一次具体审查中决定哪些问题必须由需求方判断
+---
+
+一次修改新增了缓存，正常样例更快，测试也通过。审查不能停在“用了缓存”或“减少了查询次数”，而要追踪新返回路径依赖了什么状态，省略了什么判断。
+
+## 先读变化，再读变化经过的边界
+
+下面是一份针对 Python 文档读取函数构造的有效 diff。行首 `-` 表示删除，`+` 表示加入，没有符号的行提供上下文；`---` 和 `+++` 标识改动前后的文件，`@@` 标识对应行的片段。
+
+```diff
+--- a/documents.py
++++ b/documents.py
+@@ -1,7 +1,12 @@
++cache = {}
++
+ def read_document(store, user_id, document_id):
++    if document_id in cache:
++        return cache[document_id]
+     document = store.get(document_id)
+     if document is None:
+         return None
+     if document["owner"] != user_id:
+         raise PermissionError("not allowed")
++    cache[document_id] = document["body"]
+     return document["body"]
+```
+
+`store` 是按文档编号保存记录的映射，`get` 在编号不存在时返回 `None`。原函数对已存在记录检查所有者，再返回正文。新增路径先按编号查缓存，命中后直接返回，未经过所有者检查。
+
+若所有者先读过文档，缓存已有内容，其他用户的后续读取就走新增路径。缺陷来自返回路径跨过权限判断，不来自字典查询本身。只用相同用户反复读取的性能测试，不会发现这项行为变化。
+
+审查者需要阅读调用方、状态位置和失败规则，而不必把每行都改写成自己的风格。若同一份改动还涉及前端提示、数据库与测试，可以按需求连接它们：客户端提供哪些信息，服务器相信哪些信息，状态由谁保存，失败后调用方得到什么。
+
+## 缓存键正确仍不代表状态永远正确
+
+把用户编号加入缓存键，解决了上述不同用户共用一个结果的问题。文档归属或共享权限以后还可能变化；缓存的结果也有时间范围。权限变更后如何验证、失效或重新检查，必须来自当前契约。
+
+若缓存放在某个页面里，页面刷新就可能丢失；若放在某个服务进程里，多实例也可能各有一份。为了满足跨进程或跨重启要求，需要检查实际状态位置，不能仅从变量名推断保证。
+
+这也是对 Agent 生成改动的判断方式：让它实现缓存、生成测试和列出调用方，可以减少操作工作；权限语义、允许多旧的结果和需要什么证据，仍要由能够承担要求的人决定。
+
+## 声明需要与失败条件相匹配的证据
+
+| 声明 | 需要追踪的条件 | 有限样例不能直接证明的结论 |
+| --- | --- | --- |
+| 读取更快 | 命中率、数据规模和实际等待来源 | 所有负载都更快 |
+| 修改不会重复 | 操作标识、并发和响应丢失 | 进程重启后也不会重复 |
+| 权限没有改变 | 每条返回路径和撤销后的状态 | 只测试所有者读取就足够 |
+| 超时处理完整 | 截止期限、已产生效果和结果查询 | 超时意味着修改未发生 |
+
+对“自动重试”的修改尤其要追踪效果。重试会新增执行路径；可能失败的调用需要保留失败语义与总预算，不能把捕获异常后再次调用当成可靠函数。保证与反例见 <CrossRef id="networks-and-web.latency-timeouts-and-retries" />。
+
+测试应覆盖改变的条件，判据来自独立要求，见 <CrossRef id="debugging-and-observability.test-criteria" />。一份失败轨迹、数据库实际状态或浏览器行为，可能比“所有单元测试通过”的一句话更能说明某项系统要求。
+
+## 报告缺陷要能让人复现与决定
+
+有效审查指出具体输入或状态、经过的执行路径、违背的要求和影响，并提供对应证据。例如“缓存命中时在所有者检查之前返回；所有者读取后，另一用户使用相同编号也能取得正文”。这比“缓存设计不安全”更容易验证和修正。
+
+修复后需要重新检查相关路径，并确认结果关联到最终版本。需求不明确时，应说明分歧对应的实际行为：权限撤销是否立即生效、过期内容最多允许多旧、重复标识保存多久。这些决定没有一个能从代码格式或已有测试数量中推出。
+
+## 练习
+
+下面把用户加入缓存键。服务要求文档转移所有者之后，原所有者立即失去读取权限。先判断这份实现满足什么、遗漏什么，再运行追踪状态；若修改，检查每条返回路径在什么时刻使用当前权限。
+
+```python run id="change-and-review.reviewing-diffs-and-evidence.cached-permission"
+cache = {}
+documents = {7: {"owner": "Ada", "body": "private"}}
+
+def read_document(user_id, document_id):
+    key = (user_id, document_id)
+    if key in cache:
+        return cache[key]
+    document = documents[document_id]
+    if document["owner"] != user_id:
+        raise PermissionError("not allowed")
+    cache[key] = document["body"]
+    return document["body"]
+
+print("before:", read_document("Ada", 7))
+documents[7]["owner"] = "Lin"
+print("after:", read_document("Ada", 7))
+```
+
+另一个改动报告只写“增加三次重试，失败率下降”。为了判断是否可以合入，需要补充哪些操作效果、失败条件和时间范围？哪些是实现者可以代为收集的事实，哪些是需求方必须决定的允许行为？

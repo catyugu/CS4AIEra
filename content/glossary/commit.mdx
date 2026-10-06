@@ -1,0 +1,12 @@
+---
+id: commit
+term: 提交
+english: commit
+short: Git 中记录项目快照、父提交及相关元数据的对象。
+related:
+  - merge-base
+---
+
+Git 提交对象引用一棵表示项目快照的树，并记录父提交、作者和提交说明等元数据。普通提交通常有一个父提交，合并提交可以有多个父提交。
+
+提交对象通过内容计算出的对象标识定位。改动快照、父关系或其他对象内容会生成不同标识；分支名是可移动的引用，不能当成固定提交身份。对象关系见 [Pro Git：Git 对象](https://git-scm.com/book/en/v2/Git-Internals-Git-Objects)。
