@@ -8,7 +8,6 @@ aliases:
 short: 多个名字指向同一个对象，因此通过任一个名字观察到的对象内容变化对所有名字都可见。
 related:
   - shallow-copy
-  - deep-copy
 ---
 
 两个名字指向同一个对象时，互为别名。比如 `view = samples` 不复制列表，而是让两个名字引用同一个列表。可以用 `samples is view` 检查是否为同一个对象；`==` 检查值是否相等，是另一个问题。

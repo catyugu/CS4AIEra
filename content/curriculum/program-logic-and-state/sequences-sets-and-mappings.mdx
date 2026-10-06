@@ -8,7 +8,6 @@ objectives:
   - 区分序列的位置、集合的成员关系与字典的键值对应
   - 说明把列表转成集合会丢失哪些信息，并根据需要保留的信息选择容器
   - 预测列表、集合与字典更新后的内容，以及列表下标越界或字典缺少键时的结果
-  - 区分复制外层容器与复制内部对象，追踪嵌套列表中的共享
 ---
 
 三次测量得到 `[4, 7, 4]`。需要计算平均值时，两次 4 都要保留；只问出现过哪些数时，重复次数可以忽略。列表、集合和字典都能容纳多个值，但保存的信息不同。
@@ -26,20 +25,13 @@ print("second:", values[1])
 values[1] = 8
 values.append(9)
 print("updated:", values)
-print("first two:", values[:2])
 ```
 
-最后一行使用切片：`values[:2]` 取得下标 2 之前的元素，`values[1:]` 从下标 1 取到末尾。一般写法 `values[start:stop]` 从 `start` 开始，在 `stop` 之前结束；省略起点表示从头开始，省略终点表示取到末尾。
-
-列表切片返回新列表。切片允许只取实际存在的部分；直接读取 `values[10]` 会报 `IndexError`，因为列表没有这个位置。空列表的长度为 0，也没有下标为 0 的元素。
-
-元组也属于序列，适合把几个相关值放在一起，例如坐标 `(3, 5)`。它的元素位置固定，创建后不能替换。`x, y = (3, 5)` 将两项分别赋给两个名字，称为解包；这里的名字数要与元素数一致。
-
-解包也可以处理由列表保存的一对值，例如 `x, y = [3, 5]`。
+直接读取 `values[10]` 会报 `IndexError`，因为列表没有这个位置。空列表的长度为 0，也没有下标为 0 的元素。
 
 ## 集合保存不同的值
 
-集合只保留互不相同的元素。`set(values)` 将列表转换成集合，`4 in unique` 判断 4 是否在集合里。观察转换后还剩哪些信息：
+集合只保留互不相同的元素。`{4, 7}` 直接创建一个集合，`set(values)` 将列表转换成集合，`4 in unique` 判断 4 是否在集合里。观察转换后还剩哪些信息：
 
 ```python run id="program-logic-and-state.sequences-sets-and-mappings.set-membership"
 values = [4, 7, 4]
@@ -52,7 +44,7 @@ print("list first:", values[0])
 
 列表长度为 3，集合大小为 2。集合仍能回答“有没有 4”，但两个 4 变成一项，已经无法恢复原来的次数与位置。集合没有第一个、第二个这样的下标，也不保证按加入顺序遍历。
 
-`{4, 7}` 可以直接创建集合，`set()` 创建空集合。空的 `{}` 则表示字典。`unique.add(9)` 把 9 加入集合，再加入相同的值也不会多出一项。`in` 是成员检查，也能用于列表，例如 `4 in values`；`not in` 检查是否不存在。
+`unique.add(9)` 把 9 加入集合，再加入相同的值也不会多出一项。`in` 检查某个值是否存在，也能用于列表。
 
 ## 映射保存键值对应
 
@@ -70,10 +62,6 @@ print("key count:", len(prices))
 
 `"apple" in prices` 检查键是否存在。直接读取没有保存的键会抛出 `KeyError`，如 `prices["banana"]`。键标识的是所查项目，不是它在容器中的第几个位置。
 
-这些例子使用字符串作为键；整数也能作键，列表不能。字典键与集合元素的限制见 [Python 术语表：可哈希](https://docs.python.org/3/glossary.html#term-hashable)。
-
-[Python 字典](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)保持键的插入顺序，更新已有键的值不改变它的位置。
-
 ## 哪些信息必须保留
 
 | 需要保留的信息 | 合适的基本容器 |
@@ -84,34 +72,9 @@ print("key count:", len(prices))
 
 如果原始数据是三次测量 `[4, 7, 4]`，转换为集合后就不能再计算同一份数据的平均值：少了一次 4。容器转换会改变可回答的问题。
 
-## 外层列表复制后，内部列表仍可能共享
-
-列表的元素也可以是列表。`batches[0]` 读取第一批数据，得到的仍是一个列表，因此可以继续调用它的 `append`。
-
-```python run id="program-logic-and-state.sequences-sets-and-mappings.copy-levels"
-batches = [[10, 20], [30, 40]]
-working = list(batches)
-working[0].append(50)
-print("batches:", batches)
-print("working:", working)
-print("same outer list:", batches is working)
-print("same first list:", batches[0] is working[0])
-```
-
-`list(batches)` 新建外层列表，但新列表的元素仍指向原来的内部列表。复制后、追加前的关系如下，C 与 D 分别表示两份内部列表：
-
-```text
-batches → 列表 A → [C, D]
-working → 列表 B → [C, D]
-C → [10, 20]
-D → [30, 40]
-```
-
-因此 `working[0].append(50)` 从两处都能看到。只复制外层、保留元素对象的这种复制称为<Term id="shallow-copy">浅拷贝</Term>，列表切片也如此。若要独立修改第一批数据，可以先执行 `working[0] = list(working[0])`，复制它，再追加；其他内部列表仍共享。递归复制内部对象的含义见<Term id="deep-copy">深拷贝</Term>。
-
 ## 练习
 
-下面按水果名保存报价。一天里同一种水果可以报价多次，现在的字典是否保留了全部报价？先预测输出，再运行。如果既要按水果查找，又要保留每次报价，应怎样改变字典里的值？
+下面按水果名保存报价。一天里同一种水果可以报价多次，现在的字典是否保留了全部报价？如果既要按水果查找，又要保留每次报价，应怎样改变字典里的值？另外，若要求恢复所有水果报价的先后次序，只按水果分组是否足够？
 
 ```python run id="program-logic-and-state.sequences-sets-and-mappings.exercise"
 prices = {}

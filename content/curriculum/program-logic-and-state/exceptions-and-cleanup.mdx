@@ -64,7 +64,7 @@ except ValueError as failure:
 
 ## 捕获位置与失败的含义
 
-如果要求“坏记录单独报告，其余记录继续处理”，就把捕获放在逐项处理的循环里。`entries` 的每项是一对值，`for name, text in entries` 在每轮将它们分别赋给 `name` 和 `text`：
+如果要求“坏记录单独报告，其余记录继续处理”，就把捕获放在逐项处理的循环里。`("entry 1", "12")` 是包含两项的元组，用来把名称与耗时放在一起。`for name, text in entries` 在每轮将这一对值分别赋给两个名字，这叫解包：
 
 ```python run id="program-logic-and-state.exceptions-and-cleanup.positions"
 entries = [("entry 1", "12"), ("entry 2", "fast"), ("entry 3", "5")]
@@ -81,7 +81,7 @@ print("total for valid entries:", total)
 
 这里报告的是**有效记录的总和**，失败记录另有输出。如果要求所有记录都有效才给出总和，就应让异常离开循环，由调用方报告整批失败。把未知耗时悄悄替换成 0，会让调用方误以为得到了完整总和。
 
-代码也可以主动拒绝不符合要求的值。`raise ValueError("duration must be nonnegative")` 创建并抛出异常；例如转换成功后发现 `seconds < 0`，便可以这样拒绝负耗时。捕获后单独写 `raise`，则重新抛出当前正在处理的异常。
+代码也可以主动拒绝不符合要求的值。`raise ValueError("duration must be nonnegative")` 创建并抛出异常；例如转换成功后发现 `seconds < 0`，便可以这样拒绝负耗时。
 
 ## 捕获过宽可能掩盖缺陷
 
@@ -115,7 +115,7 @@ print("narrow:", narrow(entry))
 
 `broad` 的 `except Exception` 捕获了许多不同类型的异常，把缺失值也当成了可处理的文本错误。`narrow` 只捕获 `ValueError`，数据类型不符合约定时，`TypeError` 继续传播。将耗时改成 `"fast"`，两者都返回 `None`；改成 `"12"`，两者都返回 12。
 
-如果业务允许缺失耗时，可以单独检查 `None`，给出相应结果。重点是先决定缺失数据应当怎样处理，再选择代码，而不是把所有异常都变成同一种结果。
+如果业务允许缺失耗时，可以单独检查 `None`，给出相应结果。缺失数据与无效文本可以需要不同的处理，捕获规则应保留这个区别。
 
 选择捕获类型，要依据这段代码能够处理哪些失败。即使类型选得窄，也要检查 `try` 内是不是有多个位置可能抛出同类异常，避免把无关错误当成预期失败。
 
@@ -145,21 +145,11 @@ print("log:", log)
 
 成功时，先计算返回值，再执行 `finally`，最后返回。失败时，先执行 `finally`，再继续传播异常。因此两次调用都记录了 `end`，失败那次仍然抛出异常。普通地把日志追加写在 `return` 之后，两种情况都执行不到它。
 
-日志让这两条执行路径可见。另一个用途是关闭已经打开的文件：读取内容或转换数值失败时，也需要关闭文件。假设 `duration.txt` 已经存在，程序可以写成：
-
-```python
-source = open("duration.txt", encoding="utf-8")
-try:
-    seconds = int(source.read())
-finally:
-    source.close()
-```
-
-`open` 打开文本文件，`read()` 读取文本，`close()` 关闭文件并释放相关资源。文件成功打开后，关闭动作放在 `finally` 中；若只写在转换之后，转换失败就会跳过它。文件操作见 [Python 教程：读写文件](https://docs.python.org/3/tutorial/inputoutput.html#reading-and-writing-files)，退出时的执行顺序见 [Python 的 try 语句](https://docs.python.org/3/reference/compound_stmts.html#the-try-statement)。`finally` 不是应对进程被强制终止或机器断电的保证。
+关闭已经打开的文件等清理操作，也需要在正常返回与异常传播时执行。执行顺序见 [Python 的 try 语句](https://docs.python.org/3/reference/compound_stmts.html#the-try-statement)。`finally` 不保证在进程被强制终止或机器断电时执行；点击单元格的“停止”会终止 Worker，也不能依赖它完成清理。
 
 ## 练习
 
-要求是“只要一条记录的耗时无效，就报告失败，不给出总和”。下面把捕获放在循环外，这样是否就满足了要求？先预测输出，再交换错误项与最后一项的位置，核对输出是否改变。若需要修改，应把输出总和的语句放在哪里？
+要求是“只要一条记录的耗时无效，就报告失败，不给出总和”。下面把捕获放在循环外，这样是否就满足了要求？审查错误项出现在不同位置时，程序是否仍只报告整批失败。若需要修改，应把输出总和的语句放在哪里？
 
 ```python run id="program-logic-and-state.exceptions-and-cleanup.exercise-batch"
 entries = [("entry 1", "12"), ("entry 2", "fast"), ("entry 3", "5")]

@@ -7,7 +7,7 @@ status: published
 objectives:
   - 追踪一次调用如何绑定参数、执行函数体和返回结果
   - 区分参数名的重新绑定与传入对象的修改
-  - 根据输入要求、返回值和副作用判断怎样使用一个函数
+  - 根据输入要求、返回值、副作用和失败约定判断怎样使用一个函数
 ---
 
 计算几个矩形的面积，每次都需要长乘以宽。可以把这个计算写成一个函数，再用不同的参数调用它。
@@ -24,13 +24,11 @@ large = area(5, 4)
 print(small, large)
 ```
 
-`def area(width, height):` 定义函数，下面缩进的语句是函数体。执行到定义时，Python 创建函数并绑定到名字 `area`，还没有执行里面的乘法。
+`def area(width, height):` 定义函数，下面缩进的语句是函数体。定义时创建函数并绑定到名字 `area`，乘法还没有执行。调用 `area(3, 2)` 时，3 和 2 分别绑定到参数名 `width` 和 `height`；`return` 算出 6，将它交回调用处，再赋给 `small`。
 
-执行 `area(3, 2)` 才开始一次调用：将 3 绑定到参数名 `width`，2 绑定到 `height`，执行函数体。`return` 后的表达式算出 6，将它返回调用处，再赋给 `small`。
+`area(5, 4)` 是另一次调用，有自己的参数绑定，返回 20。函数体中的局部名字只用于这次调用，不会变成调用方的名字。
 
-执行 `area(5, 4)` 时，新的一次调用有自己的参数绑定，返回 20。函数体中的这些局部名字只用于这次调用，不会变成调用方的名字。
-
-定义中的名字与调用时的值分别称为<Term id="parameter-and-argument">形参与实参</Term>。也可以按参数名传值：`area(height=2, width=3)` 与第一个调用结果相同。
+定义中的名字与调用时的值分别称为<Term id="parameter-and-argument">形参与实参</Term>。
 
 ## return 结束当前调用
 
@@ -106,32 +104,35 @@ print("updated:", updated)
 | `add_note(notes, text)` | 是，追加一条笔记 | `None` |
 | `with_note(notes, text)` | 否 | 追加后的新列表 |
 
-函数的<Term id="specification">规约</Term>写出允许什么输入、返回什么，以及会修改什么。例如 `with_note` 接收字符串列表与一个字符串，返回追加后的新列表，不修改输入。调用前输入必须满足的要求称为<Term id="precondition">前置条件</Term>。
+## 调用陌生函数前的四个问题
+
+- 它接受什么输入？
+- 返回什么？
+- 会修改什么？
+- 什么情况下失败？
+
+函数的<Term id="specification">规约</Term>应写清这些约定。例如 `with_note` 接收字符串列表与一个字符串，返回追加后的新列表，不修改输入。调用前输入必须满足的要求称为<Term id="precondition">前置条件</Term>。还要确认输入不符合要求时，是由调用方事先检查，还是由函数检测并报告失败；只看成功样例无法知道这个约定。
 
 ## 练习
 
-下面函数将列表中的每个数增加 `amount`。先判断调用后的两个输出。再把函数改成“返回调整后的新列表，保留原列表”，调用方应怎样接收结果？
+两份函数都“加入一条笔记”。哪一份适合保留原稿、生成修改稿的需求，哪一份适合让所有使用原列表的代码看到追加结果？分别写出输入、返回值和副作用的约定。如果调用方忽略返回值，会有什么后果？
 
-修改指定位置时，需要下标。`range(n)` 依次提供 0 到 `n - 1` 的整数，因此 `range(len(numbers))` 提供这个列表的全部有效下标。例如：
-
-```python
-numbers = [10, 20, 30]
-for i in range(len(numbers)):
-    print(i, numbers[i])
-```
-
-这里依次读取下标 0、1、2 上的值。练习里的 `numbers[i] += amount` 则更新该位置的值。
-
-只读取元素时可以直接写 `for number in numbers`；这里需要替换列表中的元素，所以遍历的是下标。只给循环变量 `number` 重新赋值，不会替换列表里的那一项。
-
-```python run id="program-logic-and-state.functions-and-side-effects.exercise-increase"
-def increase(numbers, amount):
-    for i in range(len(numbers)):
-        numbers[i] += amount
+```python run id="program-logic-and-state.functions-and-side-effects.exercise-contracts"
+def append_note(notes, text):
+    notes.append(text)
 
 
-numbers = [10, 20, 30]
-returned = increase(numbers, 5)
-print("numbers:", numbers)
+def with_note(notes, text):
+    updated = list(notes)
+    updated.append(text)
+    return updated
+
+
+draft = ["first idea"]
+result = with_note(draft, "revision")
+print("draft:", draft)
+print("result:", result)
+returned = append_note(draft, "shared addition")
+print("draft after append:", draft)
 print("returned:", returned)
 ```

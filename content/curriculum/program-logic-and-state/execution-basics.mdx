@@ -92,19 +92,6 @@ print("b:", b)
 
 `a = a + 1` 也遵循这个顺序：先用旧值计算，再把结果赋给 `a`。
 
-## 调用已有的函数
-
-函数提供可以反复调用的操作。Python 已经提供了 `print`、`round` 等函数，调用时在函数名后写括号，括号中放交给它处理的数据，称为参数。
-
-```python run id="program-logic-and-state.execution-basics.round-result"
-value = 11.87
-rounded = round(value)
-print("original:", value)
-print("rounded:", rounded)
-```
-
-`round(value)` 对这里的数取整，返回 12。“返回”表示将结果交回调用处，所以可以把它赋给 `rounded`。`print` 将数据写到输出区，也可以一次打印多个值，用逗号隔开。
-
 ## 值的类型决定可以做哪些运算
 
 字面量 `12` 给出整数，Python 的类型名是 `int`；`12.5` 给出浮点数，类型名是 `float`；`"12"` 给出字符串，类型名是 `str`。字符串里的字符即使都是数字，也不会自动成为数值。

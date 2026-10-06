@@ -7,6 +7,7 @@ status: published
 objectives:
   - 区分名字的重新赋值与对象的原地修改
   - 追踪列表的共享与复制，预测通过各个名字读取到的内容
+  - 区分复制外层容器与复制内部对象，追踪嵌套列表中的共享
   - 根据是否需要保留原列表，判断应共享列表还是创建副本
 ---
 
@@ -46,7 +47,7 @@ print("same object:", samples is view)
 
 ## 对象可以变，名字也可以换指向
 
-Python 中的值都是对象。每个对象都有身份（identity）、类型（type）和值：身份区分它与其他对象，在其存活期间不变；类型规定允许哪些操作；可变对象的值可以随操作改变。
+要判断一次修改会影响谁，需要区分三个问题：两个名字是否指向同一个对象，这个对象允许哪些操作，以及它当前保存什么内容。Python 中的值都是对象；这三个问题分别对应对象的身份（identity）、类型（type）和值。身份在对象存活期间不变，可变对象的内容可以改变。
 
 列表是可变对象，可以通过 `append` 等操作修改内容。整数、浮点数和字符串是不可变对象，不能就地改写自己的值。
 
@@ -60,7 +61,7 @@ print("kept:", kept)
 
 `number + 1` 算出另一个整数，再把 `number` 绑定到它。`kept` 仍指向原来的 `10`。原来的整数没有变成 `11`。
 
-对名字的赋值 `name = expression` 改变绑定。列表的 `append` 则修改对象本身。先区分这两种动作，就能追踪上面的变化。
+对名字的赋值 `name = expression` 改变绑定。列表的 `append` 则修改对象本身。`view = [40]` 改变名字的绑定，`view.append(30)` 修改它指向的列表。
 
 ## 复制列表
 
@@ -73,6 +74,31 @@ working.append(30)
 ```
 
 此时 `samples` 是 `[10, 20]`，`working` 是 `[10, 20, 30]`。
+
+## 外层列表复制后，内部列表仍可能共享
+
+列表的元素也可以是列表。下标从 0 开始，`batches[0]` 表示读取位置 0 上的元素；`working[0] = ...` 则替换这个位置的元素。`batches[0]` 读取第一批数据，得到的仍是一个列表，因此可以继续调用它的 `append`。
+
+```python run id="program-logic-and-state.names-objects-and-state.copy-levels"
+batches = [[10, 20], [30, 40]]
+working = list(batches)
+working[0].append(50)
+print("batches:", batches)
+print("working:", working)
+print("same outer list:", batches is working)
+print("same first list:", batches[0] is working[0])
+```
+
+`list(batches)` 新建外层列表，但新列表的元素仍指向原来的内部列表。复制后、追加前的关系如下，C 与 D 分别表示两份内部列表：
+
+```text
+batches → 列表 A → [C, D]
+working → 列表 B → [C, D]
+C → [10, 20]
+D → [30, 40]
+```
+
+因此 `working[0].append(50)` 从两处都能看到。只复制外层、保留元素对象的这种复制称为<Term id="shallow-copy">浅拷贝</Term>。若要独立修改第一批数据，可以先执行 `working[0] = list(working[0])`，复制它，再追加；其他内部列表仍共享。
 
 ## 共享是否符合要求
 

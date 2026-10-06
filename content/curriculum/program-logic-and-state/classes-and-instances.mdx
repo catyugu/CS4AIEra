@@ -1,6 +1,6 @@
 ---
-id: program-logic-and-state.classes-instances-and-modules
-slug: /program-logic-and-state/classes-instances-and-modules
+id: program-logic-and-state.classes-and-instances
+slug: /program-logic-and-state/classes-and-instances
 order: 70
 title: 类与实例：把状态和操作放在一起
 status: published
@@ -15,7 +15,7 @@ objectives:
 
 ## 一个类可以创建多个实例
 
-```python run id="program-logic-and-state.classes-instances-and-modules.instance-state"
+```python run id="program-logic-and-state.classes-and-instances.instance-state"
 class Notebook:
     def __init__(self, name):
         self.name = name
@@ -57,7 +57,7 @@ print("same list:", first.notes is second.notes)
 
 把 `notes = []` 移到类体，含义会变：
 
-```python run id="program-logic-and-state.classes-instances-and-modules.class-body-state"
+```python run id="program-logic-and-state.classes-and-instances.class-body-state"
 class Notebook:
     notes = []
 
@@ -78,30 +78,8 @@ print("same list:", first.notes is second.notes)
 
 类体中的 `notes = []` 在创建类时执行一次，列表保存在类对象上，这叫类属性。两个实例都没有自己的 `notes` 属性，读取时就找到类上的同一个列表。一次追加使两个笔记本都看到 `first idea`。
 
-如果再执行 `first.notes = []`，会在 `first` 上建立自己的同名属性。此后 `first.notes` 读到这个新列表，`second.notes` 仍读到类上的列表；这次赋值没有修改类属性。
-
-如果笔记列表属于各个笔记本，就在 `__init__` 中为每个实例新建列表；如果所有笔记本确实要共同维护一份笔记列表，才使用共享对象。判断依据是笔记列表应该由谁保存和修改。
+如果笔记列表属于各个笔记本，就在 `__init__` 中为每个实例新建列表；如果所有笔记本确实要共同维护一份笔记列表，才使用共享对象。
 
 ## 练习
 
-这个版本没有定义自己的 `__init__`，用不带参数的 `Notebook()` 创建实例。两个实例先使用类上的列表，再给其中一个设置同名属性。执行结束后，它们的笔记分别是什么？第三个实例会读取哪一份笔记？
-
-```python run id="program-logic-and-state.classes-instances-and-modules.exercise-own-notes"
-class Notebook:
-    notes = []
-
-    def add(self, text):
-        self.notes.append(text)
-
-
-first = Notebook()
-second = Notebook()
-first.add("shared note")
-first.notes = []
-first.add("private note")
-second.add("another note")
-third = Notebook()
-print("first:", first.notes)
-print("second:", second.notes)
-print("third:", third.notes)
-```
+一个类在类体中保存 `notes = []`，另一个类在 `__init__` 中执行 `self.notes = []`。比较上面两个单元格：哪一种能满足“每本笔记本的内容彼此独立”？哪一种适合所有实例共同追加到一份记录？指出列表分别在什么时候创建，并说明新建第三个实例时能否看到已有笔记。

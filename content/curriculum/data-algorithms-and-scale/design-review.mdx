@@ -54,7 +54,7 @@ objectives:
 
 下面实际比较全库扫描与分类索引。两次使用同一个查询函数，区别只在交给它检查的记录范围。
 
-排列规则约定为评分从高到低、同分时按编号从小到大。`ranking_key` 返回 `(-评分, 编号)`，`sorted` 据此返回排好序的新列表；键函数的用法见 <CrossRef id="data-algorithms-and-scale.representation-preprocessing-and-indexes" />。
+排列规则约定为评分从高到低、同分时按编号从小到大。`ranking_key` 返回 `(-评分, 编号)`，`sorted` 据此返回排好序的新列表；`key=ranking_key` 把函数交给排序操作，由它对每条记录调用；元组先比较第一项，相同时再比较第二项，负号让较高评分排在前面。规则见 [Python 排序指南：键函数](https://docs.python.org/3/howto/sorting.html#key-functions)。
 
 ```python run id="data-algorithms-and-scale.design-review.group-query"
 books = [
@@ -99,6 +99,31 @@ print("records checked:", len(books), len(category_books))
 
 借出一本书时，只修改它的 `available`，按分类索引仍有效，因为分类没变，查询也会重新检查可借状态。把一本书改到另一类，就要从旧分类列表移除，再加入新分类列表。共享记录对象不会自动维护这种分组关系。
 
+下面单独维护分类索引，假定每个编号唯一、记录确实在旧分组中：
+
+```python run id="data-algorithms-and-scale.design-review.index-update"
+books = [
+    {"id": "b1", "category": "science"},
+    {"id": "b2", "category": "history"},
+]
+by_category = {"science": [books[0]], "history": [books[1]]}
+
+
+def change_category(book, new_category):
+    by_category[book["category"]].remove(book)
+    book["category"] = new_category
+    if new_category not in by_category:
+        by_category[new_category] = []
+    by_category[new_category].append(book)
+
+
+change_category(books[0], "history")
+print("science:", by_category["science"])
+print("history:", by_category["history"])
+```
+
+`remove(book)` 移除列表中第一个与该记录相等的元素，找不到时失败。移除可能要扫描旧分组，不能因为分类用字典定位就把整次更新算成常数成本。移入记录追加在新分组末尾，也不保证主列表中的原次序。
+
 每个编号还必须唯一标识需求中的一本书。如果同一书目编号下要保存多册副本，单个字典值就要能表达这些副本；若每册分别编号，也要明确编号代表什么。先确定数据含义，再决定同名键该覆盖、合并还是拒绝。
 
 ## 练习
@@ -127,4 +152,4 @@ print("available science books:", matched_ids)
 再审查两个需求变化：
 
 - 分类很少变，可借状态每天变化很多次。与保存全部分类记录相比，只保存可借记录的方案增加了哪些维护工作？你会根据什么选择？
-- 查询只返回评分最高的十本。是否仍然必须排列全部命中记录？尝试用已学过的结构描述一种保留候选的方案，并说明同分时怎样处理。找到十本就立即停止扫描是否足够？
+- 查询只返回评分最高的十本。找到十本以后就停止扫描，能否保证返回最高评分的十本？构造一个反例。若不保存全部命中记录，在继续扫描时，已保留的十本至少需要支持什么替换操作？同分规则是否也要参与比较？

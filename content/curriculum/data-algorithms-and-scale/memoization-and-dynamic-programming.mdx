@@ -2,11 +2,11 @@
 id: data-algorithms-and-scale.memoization-and-dynamic-programming
 slug: /data-algorithms-and-scale/memoization-and-dynamic-programming
 order: 70
-title: 重复子问题、记忆化与动态规划
+title: 重复计算与状态复用
 status: published
 objectives:
   - 说明递归例子中哪些子问题被重复计算，以及记忆化省掉了什么
-  - 找出缓存键中遗漏的条件，并判断返回的可变对象是否会被调用方改坏
+  - 找出缓存键中遗漏的状态，并解释它为什么影响复用结果
   - 根据不同子问题的数量和每个子问题的操作次数，在给定成本模型下估算记忆化的工作量与保存的结果数
   - 说明递归记忆化与自底向上的循环如何按不同顺序复用同一组子问题结果
 ---
@@ -121,9 +121,13 @@ print("ways:", answers[distance])
 
 这里的状态指决定接下来如何计算的信息。旧规则下，只知道剩余距离就足够；新规则下，同样的剩余距离，因上一步不同而有不同的合法走法。
 
-如果仍沿用只按距离保存结果的旧表，两种状态就会占用同一个位置：
+完整状态只需保存会影响未来选择或答案的信息，无须记录全部历史。整数元组也可以作为字典键，用多个分量共同确定一个保存位置。若步长或限制发生变化，旧结果也不能直接沿用；规则要固定，或成为键的一部分。复用后的工作量取决于不同状态的数量，每个只算一次也可能做不完，见 <CrossRef id="data-algorithms-and-scale.search-pruning-and-branch-and-bound" />。
 
-```python run id="data-algorithms-and-scale.memoization-and-dynamic-programming.incomplete-key"
+## 练习
+
+下面的函数处理“不能连续跨两次 2 格”的规则。分别列出还剩 2 格、上一步为 1 格或 2 格时的合法走法，检查缓存是否能区分这两个问题。交换两次调用的次序后，结果还应满足什么要求？应把哪些信息放入键中？
+
+```python run id="data-algorithms-and-scale.memoization-and-dynamic-programming.exercise-cache-key"
 memo = {}
 
 
@@ -144,43 +148,3 @@ def ways(remaining, last_step):
 print("after step 2:", ways(2, 2))
 print("after step 1:", ways(2, 1))
 ```
-
-两次都返回 1。第二次本来有两种走法，却复用了第一次存下的 `memo[2]`，根本没有进入判断步长的代码。
-
-把键改成 `key = (remaining, last_step)` 后，再从空表开始运行，两次结果分别是 1 和 2。这两个整数组成的元组可以作为字典键，区分答案不同的子问题。交换两次调用的顺序，也应该得到各自正确的答案。
-
-完整状态不等于记录全部历史，只需要保存会影响未来选择或答案的部分。这里前面走过的完整路线不必保存，上一步的步长却不能省略。
-
-保存结果时还要留意规则是否变化。若步长或限制发生变化，旧表里的结果不能直接沿用；规则需要固定，或也成为键的一部分。
-
-复用减少的是重复计算。若问题本身包含很多不同状态，每个只算一次也可能做不完；这种规模风险见 <CrossRef id="data-algorithms-and-scale.search-pruning-and-branch-and-bound" />。
-
-## 练习
-
-下面已经把数列与门槛都放进缓存键。调用方取到结果后清空它，再做同一个查询。这次查询会返回什么，是否仍满足“返回达到门槛的数”这一要求？应如何修改返回方式，才能让调用方调整自己的结果而不影响缓存？
-
-`tuple(numbers)` 将列表转换成元组；这里的元素都是整数，因此这个元组可以作为字典键。
-
-```python run id="data-algorithms-and-scale.memoization-and-dynamic-programming.exercise-cache-key"
-memo = {}
-
-
-def qualifying(numbers, threshold):
-    key = (tuple(numbers), threshold)
-    if key not in memo:
-        result = []
-        for number in numbers:
-            if number >= threshold:
-                result.append(number)
-        memo[key] = result
-    return memo[key]
-
-
-numbers = [8, 3, 6]
-selected = qualifying(numbers, 5)
-print("first query:", selected)
-selected.clear()
-print("same query again:", qualifying(numbers, 5))
-```
-
-`clear()` 删除列表中的全部元素。再从成本考虑：每次查询都要把完整数列转换成元组、计算键的哈希值。这些工作随数列长度增长。对于只做一次简单筛选的函数，这份缓存是否一定更快？怎样的重复计算才更值得保存结果？
