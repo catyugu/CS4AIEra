@@ -7,8 +7,7 @@ status: published
 objectives:
   - 说明一个异常从抛出到被捕获经过了哪些位置
   - 判断一段代码应该在本地处理失败还是继续向上抛
-  - 比较捕获特定异常与捕获 Exception 时，哪些错误被处理、哪些继续传播
-  - 追踪正常返回与异常传播时 finally 的执行顺序，并说明强制终止时它不保证执行
+  - 追踪正常返回与异常传播时 finally 的执行顺序
 ---
 
 把字符串 `"12"` 转成整数可以得到 12；把 `"fast"` 转成整数则会失败。某一步无法正常完成时，Python 会抛出异常（exception）；异常携带类型和错误信息，供程序选择怎样处理。
@@ -83,42 +82,6 @@ print("total for valid entries:", total)
 
 代码也可以主动拒绝不符合要求的值。`raise ValueError("duration must be nonnegative")` 创建并抛出异常；例如转换成功后发现 `seconds < 0`，便可以这样拒绝负耗时。
 
-## 捕获过宽可能掩盖缺陷
-
-一条记录约定用字符串保存耗时，无法解析的文本可以报告为无效。但如果数据来源把“缺失”写成了 `None`，这与无效文本是不同的情况。`int(None)` 会抛出 `TypeError`。
-
-下面两种处理方式遇到这条记录时，会给调用方什么信息？
-
-```python run id="program-logic-and-state.exceptions-and-cleanup.scope"
-def seconds_from(entry):
-    return int(entry["duration"])
-
-
-def broad(entry):
-    try:
-        return seconds_from(entry)
-    except Exception:
-        return None
-
-
-def narrow(entry):
-    try:
-        return seconds_from(entry)
-    except ValueError:
-        return None
-
-
-entry = {"duration": None}
-print("broad:", broad(entry))
-print("narrow:", narrow(entry))
-```
-
-`broad` 的 `except Exception` 捕获了许多不同类型的异常，把缺失值也当成了可处理的文本错误。`narrow` 只捕获 `ValueError`，数据类型不符合约定时，`TypeError` 继续传播。将耗时改成 `"fast"`，两者都返回 `None`；改成 `"12"`，两者都返回 12。
-
-如果业务允许缺失耗时，可以单独检查 `None`，给出相应结果。缺失数据与无效文本可以需要不同的处理，捕获规则应保留这个区别。
-
-选择捕获类型，要依据这段代码能够处理哪些失败。即使类型选得窄，也要检查 `try` 内是不是有多个位置可能抛出同类异常，避免把无关错误当成预期失败。
-
 ## finally 在退出时执行
 
 无论转换成功还是失败，都想记录处理结束，就把记录放进 `finally`：
@@ -145,7 +108,7 @@ print("log:", log)
 
 成功时，先计算返回值，再执行 `finally`，最后返回。失败时，先执行 `finally`，再继续传播异常。因此两次调用都记录了 `end`，失败那次仍然抛出异常。普通地把日志追加写在 `return` 之后，两种情况都执行不到它。
 
-关闭已经打开的文件等清理操作，也需要在正常返回与异常传播时执行。执行顺序见 [Python 的 try 语句](https://docs.python.org/3/reference/compound_stmts.html#the-try-statement)。`finally` 不保证在进程被强制终止或机器断电时执行；点击单元格的“停止”会终止 Worker，也不能依赖它完成清理。
+关闭已经打开的文件等清理操作，也需要在正常返回与异常传播时执行。执行顺序见 [Python 的 try 语句](https://docs.python.org/3/reference/compound_stmts.html#the-try-statement)。`finally` 不保证在进程被强制终止或机器断电时执行。
 
 ## 练习
 

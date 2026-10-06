@@ -53,33 +53,18 @@ print("same list:", first.notes is second.notes)
 
 `self` 是约定的参数名，不是一个特殊的全局对象。对第二个笔记本调用方法时，这次调用中的 `self` 就是 `second`。
 
-## 类上的列表可能被多个实例共用
+## 列表在哪里创建，决定谁会共享它
 
-把 `notes = []` 移到类体，含义会变：
+如果把 `notes = []` 写在类体，而从 `__init__` 中移除 `self.notes = []`，列表只在创建类时建立一次。两个实例没有自己的 `notes` 属性，读取时就找到类上的同一个列表：
 
-```python run id="program-logic-and-state.classes-and-instances.class-body-state"
-class Notebook:
+```python
+class SharedNotebook:
     notes = []
 
-    def __init__(self, name):
-        self.name = name
 
-    def add(self, text):
-        self.notes.append(text)
-
-
-first = Notebook("draft")
-second = Notebook("release")
-first.add("first idea")
-print("first:", first.notes)
-print("second:", second.notes)
-print("same list:", first.notes is second.notes)
+first = SharedNotebook()
+second = SharedNotebook()
+first.notes.append("first idea")
 ```
 
-类体中的 `notes = []` 在创建类时执行一次，列表保存在类对象上，这叫类属性。两个实例都没有自己的 `notes` 属性，读取时就找到类上的同一个列表。一次追加使两个笔记本都看到 `first idea`。
-
-如果笔记列表属于各个笔记本，就在 `__init__` 中为每个实例新建列表；如果所有笔记本确实要共同维护一份笔记列表，才使用共享对象。
-
-## 练习
-
-一个类在类体中保存 `notes = []`，另一个类在 `__init__` 中执行 `self.notes = []`。比较上面两个单元格：哪一种能满足“每本笔记本的内容彼此独立”？哪一种适合所有实例共同追加到一份记录？指出列表分别在什么时候创建，并说明新建第三个实例时能否看到已有笔记。
+此时 `second.notes` 也包含 `first idea`。各本笔记本要有独立内容，就应在 `__init__` 中为每个实例创建列表。类把操作组织在一起，并不自动让所有状态彼此独立。

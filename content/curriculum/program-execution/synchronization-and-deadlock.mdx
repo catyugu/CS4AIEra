@@ -56,8 +56,6 @@ print(count)
 
 `global count` 表示函数里的赋值修改外部的 `count`。这里没有模拟操作系统线程；两个协作任务直接修改同一 Python 状态。事件等待契约见 [Python asyncio Event](https://docs.python.org/3/library/asyncio-sync.html#asyncio.Event)。
 
-普通 C 多线程若未经同步地读写同一非原子对象，且至少一个操作是写入，会形成语言定义的数据竞争，属于未定义行为，见 [WG14 N3096 的多线程执行规则](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n3096.pdf)。不能把上表中的 1 和 2 当作这类 C 程序唯一允许的结果。上表推理假定每个读写动作有明确语义；asyncio 示例满足这个观察模型。
-
 ## 互斥必须围住完整的状态判断
 
 互斥锁（mutex）规定同一时刻只有一个执行者进入受保护区域，其他执行者等待。持锁期间访问的代码称为临界区。若所有访问者都通过同一把锁，把“读取、计算、写回”整体放进临界区，就能排除两者同时使用同一旧值的交错。
@@ -89,37 +87,4 @@ A ─waits for→ R ─held by→ B
 
 这个论证要求全部路径，包括异常处理和间接调用，都遵守顺序。把其中一条反向路径遗漏，仍可能形成环。在持锁期间等待外部 I/O，即使没有死锁，也会延长其他工作等待临界区的时间。缩短持锁范围时，又必须检查原来的状态判断是否仍然作为一个整体完成。
 
-## 练习
-
-以下代码把写回放在锁内。预测结果前，先判断完整递增操作是否受保护，再运行核对。`async with lock` 等待取得锁，并在离开代码块时释放；改变锁的位置时，也要判断等待的事件是否依赖另一个任务进入同一临界区。
-
-```python run id="program-execution.synchronization-and-deadlock.exercise"
-import asyncio
-
-count = 0
-
-
-async def add_one(lock, mine, other):
-    global count
-    old = count
-    mine.set()
-    await other.wait()
-    async with lock:
-        count = old + 1
-
-
-async def main():
-    lock = asyncio.Lock()
-    a_read = asyncio.Event()
-    b_read = asyncio.Event()
-    a = asyncio.create_task(add_one(lock, a_read, b_read))
-    b = asyncio.create_task(add_one(lock, b_read, a_read))
-    await a
-    await b
-
-
-await main()
-print(count)
-```
-
-系统规定三把锁按 L、M、R 获取。一条异常清理路径先取得 R，再取得 L；正常路径按统一顺序执行。构造可能的等待环，并判断“异常路径很少执行”能否作为排除死锁的证据。
+系统规定三把锁按 L、M、R 获取，但异常清理路径先取得 R，再取得 L。正常路径与清理路径一起执行时，可能形成怎样的等待环？画出谁持有哪把锁、谁在等待谁。异常路径很少执行，能否排除这个环？

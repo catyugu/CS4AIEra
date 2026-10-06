@@ -10,9 +10,20 @@ objectives:
   - 区分统计行数与统计非空值的结果
 ---
 
-查询所有书的分类，是否应该得到两个分类，还是四行分类？这取决于所问的是“有哪些不同分类”，还是“每本书属于哪个分类”。SQL 默认保留重复结果，重复行有时正是需要计数的事件。
+从书表里找出库存大于 0 的书：
 
-## 结果默认保留重复
+```sql run id="persistence.queries.available" fixture="catalog"
+SELECT id, title, stock
+FROM books
+WHERE stock > 0
+ORDER BY id;
+```
+
+`WHERE` 用条件筛选行。这条查询说明要什么结果，数据库决定怎样找到这些行。选出的记录数、输出列的值与读取过程要分别看。
+
+## 同一分类为什么出现多次
+
+查询分类时，“每本书属于哪个分类”与“有哪些不同分类”需要不同结果：
 
 ```sql run id="persistence.queries.duplicates" fixture="catalog"
 SELECT category FROM books ORDER BY category;
@@ -21,7 +32,7 @@ SELECT DISTINCT category FROM books ORDER BY category;
 
 `DISTINCT` 删除输出列相同的重复行。普通查询的结果可以是多重集（bag）：相同的行可以出现多次。关系模型的集合思想并不意味着每条 SQL 查询都会自动去重。这里 computing 分类有两本书，两个相同分类值仍然来自两条不同记录。
 
-`WHERE` 用条件筛选行。SQL 以声明方式描述所需结果，引擎可以重排执行操作；[SQLite SELECT 文档](https://www.sqlite.org/lang_select.html)中的逻辑处理顺序用来解释结果，并不要求引擎照该顺序逐步执行。
+引擎可以重排执行操作；[SQLite SELECT 文档](https://www.sqlite.org/lang_select.html)中的逻辑处理顺序用来解释结果，并不要求引擎照该顺序逐步执行。
 
 ## NULL 怎样参与条件
 
@@ -58,9 +69,9 @@ ORDER BY category;
 
 computing 的平均价格来自有价格的那一本书。若需求是“全部书的平均定价”，缺失值意味着当前数据不足；把它自动填成零会改变所求的量。[SQLite 聚合函数文档](https://www.sqlite.org/lang_aggfunc.html)定义具体空输入与 NULL 行为。
 
-## 练习
+## 把未定价的书也找出来
 
-需求是列出“未达到高价条件的书，并包含尚未定价的书”。审查以下查询是否符合需求，先写出应出现的编号，再运行并修改条件。
+现在要列出价格不高于 60 的书，也包括尚未定价的书。先写出应出现的编号，再运行下面的查询。如果少了记录，应怎样修改条件？
 
 ```sql run id="persistence.queries.exercise-filter" fixture="catalog"
 SELECT id, title, price

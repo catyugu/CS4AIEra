@@ -10,20 +10,14 @@ objectives:
   - 判断页面刷新、连接重建与应用状态之间的关系
 ---
 
-一次 HTTP 交换由客户端发出请求（request），由服务器返回响应（response）。请求规定对哪个资源做什么，响应说明处理结果，并可以携带资源的表示。网络通信得到的并不是本地函数的返回值，而是一份需要解析和解释的报文。
-
-## 网址定位资源，方法规定操作
-
-`https://notes.example/items/7?format=text#details` 中，`https` 是方案，`notes.example` 是主机名，`/items/7` 是路径，`format=text` 是查询，`details` 是片段。查询的键和值怎样解释由应用规定。片段用于客户端定位表示的一部分，不进入发给服务器的请求目标，见 [RFC 3986：URI 组成与片段](https://www.rfc-editor.org/rfc/rfc3986.html#section-3.5)。
-
-下面是使用 HTTP/1.1 格式构造的最小请求和对应响应。它们展示合法的报文结构，不声称是某次线上抓包；真实 HTTP/1.1 的行结束使用回车加换行。HTTP/2 与 HTTP/3 使用不同的线格式，但仍表达方法、目标、字段与内容这些语义。
-
 ```http
 GET /items/7?format=text HTTP/1.1
 Host: notes.example
 Accept: text/plain
 
 ```
+
+这份 HTTP/1.1 示例请求要取得记录 7 的文本内容。客户端发出请求（request），服务器返回响应（response）：
 
 ```http
 HTTP/1.1 200 OK
@@ -33,9 +27,15 @@ Content-Length: 5
 hello
 ```
 
+这些是构造的报文示例，HTTP/1.1 的实际行结束使用回车加换行。HTTP/2 与 HTTP/3 的线格式不同，但仍表达方法、目标、字段与内容这些语义。
+
+## 从报文读出资源与内容
+
 请求行包含方法 `GET`、请求目标和协议版本。`Host` 指定目标主机；同一 IP 地址上可以承载多个主机名。字段（header fields）提供报文的附加语义；空行结束字段部分，之后是内容（body）。响应状态行中的 `200` 是状态码，`OK` 是可读短语，程序应根据状态码而非短语判断。
 
 `Accept` 表示客户端可接受的内容类型；`Content-Type` 声明响应内容的类型及这里使用的字符编码。`Content-Length: 5` 指定内容有五个字节，不是五个任意字符。内容长度也可以通过协议的其他成帧机制确定，解析器必须按具体协议规则找出报文终点，见 [RFC 9112：消息格式](https://www.rfc-editor.org/rfc/rfc9112.html#section-2.1)。
+
+浏览器地址 `https://notes.example/items/7?format=text#details` 还含有 `https` 方案和 `details` 片段。片段由客户端用于定位内容，不进入发给服务器的请求目标，见 [RFC 3986：URI 组成与片段](https://www.rfc-editor.org/rfc/rfc3986.html#section-3.5)。查询 `format=text` 怎样解释则由应用约定。
 
 ## 请求成功的含义由操作契约决定
 

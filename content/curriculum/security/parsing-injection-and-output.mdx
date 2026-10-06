@@ -64,8 +64,8 @@ element.textContent = userText;
 
 服务器生成 HTML 时，输出编码取决于插入位置：普通文本位置需要 HTML 文本编码，属性、URL、JavaScript 和 CSS 又有不同语法。通用地“替换几个特殊字符”不能覆盖所有位置；模板自动编码也不能保护开发者主动绕开的危险位置。如果产品允许富文本，需要维护中的清洗器保留允许的结构并删除不允许的行为。具体上下文规则见 [OWASP：XSS 防护](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html#output-encoding)。
 
-## 练习
+## 带单引号的姓名
 
 将单元格的姓名改为 `Ada` 和含单引号的普通姓名，比较拼接与绑定的语法和结果。若需要按 `name` 或 `email` 排序，审查“把列名作为 `?` 参数绑定”的方案能否表达这项选择。
 
-产品只允许评论显示普通文字，开发者选择把数据库中的评论赋给 `innerHTML`，理由是“保存时已经验证长度”。长度限制提供了什么保证？输出接口又需要什么保证？
+评论只应显示普通文字，代码却把保存的评论赋给 `innerHTML`。即使输入没有超过长度限制，哪些字符仍会被当成 HTML 结构？应选择怎样的输出接口？

@@ -50,9 +50,9 @@ SELECT id, stock FROM books ORDER BY id;
 
 `SET` 描述每条被选中记录的新值。条件把“库存足够”与减库存放在同一条修改中；调用方还要检查受影响行数，零行意味着没有完成这一项变更。将条件删去后，约束仍能拒绝负库存，但业务需要决定怎样表达失败。
 
-## 练习
+## 没有匹配订单的书去了哪里
 
-报表要求列出每本书，并计算数量大于 1 的订单数，包括零笔的书。判断以下查询的结果是否完整，把条件移动到另一位置后比较输出。
+报表要列出每本书，统计数量大于 1 的订单数，零笔也要显示。先找出下面的查询会返回哪些书，再把条件从 `WHERE` 移到 `ON` 中，比较输出。
 
 ```sql run id="persistence.joins.exercise-predicate" fixture="catalog"
 SELECT b.id, COUNT(o.id) AS large_orders
