@@ -1,0 +1,66 @@
+---
+id: persistence.joins-and-state-changes
+slug: /persistence/joins-and-state-changes
+order: 40
+title: 连接关系与修改状态
+status: published
+objectives:
+  - 根据匹配关系预测连接的输出行数
+  - 判断筛选条件是否保留没有匹配记录的行
+  - 说明变更语句怎样将允许的旧状态转换为新状态
+---
+
+一本书可以对应多笔订单。把书表与订单表连接后，一本书可能出现多次；如果随后累加书的库存，就会重复计数。连接的关键在于每条记录能匹配多少条记录。
+
+## 匹配关系决定行数
+
+`JOIN` 按 `ON` 给定的条件组合两边的行。别名 `b` 和 `o` 是表的短名字；`b.id` 指书表的编号，`o.book_id` 指订单里的书编号。
+
+```sql run id="persistence.joins.matches" fixture="catalog"
+SELECT b.id, b.title, o.id AS order_id, o.quantity
+FROM books AS b
+JOIN orders AS o ON b.id = o.book_id
+ORDER BY b.id, o.id;
+```
+
+书 1 匹配两笔订单，因此产生两行。内连接（inner join）只保留匹配成功的组合，书 2 和书 4 没有订单就不出现在结果中。外键保证每笔订单指向存在的书；它不保证每本书都有订单，也不限制一本书只能有一笔订单。
+
+左连接（left join）保留左表没有匹配的行，右表的列在这些行上补 NULL。要统计每本书的订单数，可以按书编号分组，并统计右边非空的订单编号：
+
+```sql run id="persistence.joins.left" fixture="catalog"
+SELECT b.id, b.title, COUNT(o.id) AS order_count
+FROM books AS b
+LEFT JOIN orders AS o ON b.id = o.book_id
+GROUP BY b.id, b.title
+ORDER BY b.id;
+```
+
+未匹配的书仍产生一行，`COUNT(*)` 会把这行也算进去，`COUNT(o.id)` 则不会。若把 `o.quantity > 1` 写在 `WHERE`，补 NULL 的行条件不为真，就会被删除；写在 `ON` 中则改变什么算作匹配。[SQLite 连接处理说明](https://www.sqlite.org/lang_select.html#determination_of_input_data_from_clause_processing)给出这两个位置的语义区别。
+
+## 变更语句有筛选条件
+
+`INSERT` 加入新记录，`UPDATE` 修改符合条件的记录，`DELETE` 删除符合条件的记录。修改也要满足表的约束。
+
+```sql run id="persistence.joins.conditional-update" fixture="catalog"
+UPDATE books
+SET stock = stock - 2
+WHERE id = 1 AND stock >= 2;
+SELECT id, stock FROM books ORDER BY id;
+```
+
+`SET` 描述每条被选中记录的新值。条件把“库存足够”与减库存放在同一条修改中；调用方还要检查受影响行数，零行意味着没有完成这一项变更。将条件删去后，约束仍能拒绝负库存，但业务需要决定怎样表达失败。
+
+## 练习
+
+报表要求列出每本书，并计算数量大于 1 的订单数，包括零笔的书。判断以下查询的结果是否完整，把条件移动到另一位置后比较输出。
+
+```sql run id="persistence.joins.exercise-predicate" fixture="catalog"
+SELECT b.id, COUNT(o.id) AS large_orders
+FROM books AS b
+LEFT JOIN orders AS o ON b.id = o.book_id
+WHERE o.quantity > 1
+GROUP BY b.id
+ORDER BY b.id;
+```
+
+一个报表连接书与订单后执行 `SUM(b.stock)`，希望得到当前库存总数。用当前数据判断这个统计对象是否正确，并说明换成每本书只有一笔订单的数据为何会掩盖问题。

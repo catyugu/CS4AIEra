@@ -1,0 +1,65 @@
+---
+id: persistence.relations-keys-and-constraints
+slug: /persistence/relations-keys-and-constraints
+order: 20
+title: 关系、键与完整性约束
+status: published
+objectives:
+  - 为一组记录选择能稳定标识记录的键
+  - 说明主键、外键与检查约束分别限制什么状态
+  - 判断一次修改被拒绝后数据库是否仍满足完整性规则
+---
+
+两本书可以同名，一本书也可以改名。如果订单只保存书名，改名之后订单指向谁就变得不清楚。数据需要一个稳定的身份，以及一条可检查的引用规则。
+
+## 把记录拆成关系
+
+关系模型把数据组织为有命名属性的元组；可把元组读成一条记录，把属性读成记录中的字段。书的属性是编号、标题、分类、价格和库存，订单的属性是订单编号、业务请求编号、书编号和数量。
+
+键是足以唯一确定一条记录的属性组合。候选键还要求没有多余属性；从候选键中选一个作为主键（primary key）。书编号与订单编号各自是主键，标题没有唯一性要求。订单里的书编号作为外键（foreign key），要求它指向存在的书。
+
+本章实验使用 SQLite，夹具 <LabRef id="catalog" /> 在每个独立单元格开始前重建。数据只存在于本次浏览器运行时，Reset 后不会保留修改。
+
+```sql run id="persistence.relations.tables" fixture="catalog"
+SELECT id, title, category, price, stock
+FROM books
+ORDER BY id;
+SELECT id, reference, book_id, quantity
+FROM orders
+ORDER BY id;
+```
+
+`SELECT` 指定输出列，`FROM` 指定读取的表，`ORDER BY id` 按编号排序。没有排序要求时，不能靠某次运行出现的顺序建立接口契约。
+
+## 哪些状态可以进入数据库
+
+表的创建语句同时声明数据形状和允许的状态。下面摘录夹具中订单表的真实定义：
+
+```sql
+CREATE TABLE orders (
+    id INTEGER PRIMARY KEY,
+    reference TEXT NOT NULL UNIQUE,
+    book_id INTEGER NOT NULL REFERENCES books(id),
+    quantity INTEGER NOT NULL CHECK (quantity > 0)
+) STRICT;
+```
+
+`INTEGER` 和 `TEXT` 声明整数与文本。夹具显式使用 SQLite 的 `STRICT` 表选项，不能无损转换为声明类型的值会被拒绝；可以无损转换的输入仍可能被转换。普通 SQLite 表的类型亲和性允许更宽松的存储，不能仅凭列名后写了 `INTEGER` 就认为存入的一定是整数，见 [SQLite STRICT 表文档](https://www.sqlite.org/stricttables.html)。
+
+`NOT NULL` 禁止缺失值，`UNIQUE` 禁止重复业务请求编号，`REFERENCES` 建立引用规则，`CHECK` 检验每行的条件。`quantity > 0` 与非空要求合起来保证数量是正的；SQLite 的 `CHECK` 在表达式结果为 NULL 时不拒绝该行，所以仅靠这个比较不能代替 `NOT NULL`。[SQLite CREATE TABLE 文档](https://www.sqlite.org/lang_createtable.html#check_constraints)说明了这一点。
+
+约束位于共同的写入入口。两个不同的应用、脚本与人工操作都可能写表，某个表单提前检查一次不能保证它们共同维护规则。SQLite 的外键检查还需要对连接启用 `PRAGMA foreign_keys = ON`，夹具已经显式启用；这项配置见 [SQLite 外键文档](https://www.sqlite.org/foreignkeys.html#fk_enable)。
+
+## 练习
+
+接口准备创建一笔新订单。先预测以下语句能否完成，再运行；分别把书编号换成 2、数量换成 0，审查被拒绝的原因是否相同。
+
+```sql run id="persistence.relations.exercise-reference" fixture="catalog"
+INSERT INTO orders (id, reference, book_id, quantity)
+VALUES (13, 'r13', 9, 1);
+SELECT id, book_id, quantity FROM orders ORDER BY id;
+```
+
+SQL 单元格遇到错误会停止执行后续语句，并显示错误。要查看原始状态，可以 Reset 后把插入语句暂时移除再运行查询。
+
+一个设计把 `reference` 改成普通可空文本列，只在应用中检查重复请求。另一个设计保留数据库唯一约束。假设两个进程可以同时提交同一编号，比较两者能够保证的状态。

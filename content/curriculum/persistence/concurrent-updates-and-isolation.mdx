@@ -1,0 +1,70 @@
+---
+id: persistence.concurrent-updates-and-isolation
+slug: /persistence/concurrent-updates-and-isolation
+order: 70
+title: 并发修改与隔离
+status: published
+objectives:
+  - 从交错读写中定位丢失更新
+  - 比较锁、条件更新与版本检查的保护范围
+  - 判断快照读是否足以维护跨行的业务规则
+---
+
+库存只有一件，两个请求都先读库存，再各自提交减一后的结果。每条语句都成功，库存最后是零，却可能创建了两笔订单。需要检查的是读取与修改之间允许发生什么。
+
+## 分开读取与写回
+
+| 步骤 | 请求 A | 请求 B | 库存 |
+| --- | --- | --- | --- |
+| 1 | 读到 1 | | 1 |
+| 2 | | 读到 1 | 1 |
+| 3 | 把库存写成 0，创建订单 | | 0 |
+| 4 | | 把库存写成 0，创建订单 | 0 |
+
+两个请求根据同一旧状态决定结果，后一次写回覆盖了前一次修改。这是丢失更新。表上 `stock >= 0` 的检查仍满足，说明单行的最终合法值不一定保证业务事件没有超卖。
+
+若数据库对冲突写入提供必要的协调，可以用一条条件更新把检查和减库存结合起来，再根据受影响行数决定是否创建订单。订单创建与库存修改还需在同一事务中。
+
+## 版本检查保护已读状态
+
+另一个方案为记录保存版本号。读取数量和版本，修改时要求版本仍等于读取值，成功后增加版本。这个比较与修改必须由数据库作为一个协调的操作执行。
+
+以下实验打开同一临时 SQLite 文件的两个连接，按确定顺序交错两次读写。它执行真实数据库操作；调度由源码固定，不用线程竞速。`TemporaryDirectory` 管理临时目录，退出 `with` 时清理文件；`rowcount` 是受影响行数。
+
+```python run id="persistence.isolation.version"
+import sqlite3
+import tempfile
+
+with tempfile.TemporaryDirectory() as directory:
+    a = sqlite3.connect(directory + "/inventory.db", isolation_level=None)
+    b = sqlite3.connect(directory + "/inventory.db", isolation_level=None)
+    a.execute("CREATE TABLE stock (id INTEGER PRIMARY KEY, quantity INTEGER, version INTEGER)")
+    a.execute("INSERT INTO stock VALUES (1, 1, 0)")
+    old_a = a.execute("SELECT quantity, version FROM stock WHERE id = 1").fetchone()
+    old_b = b.execute("SELECT quantity, version FROM stock WHERE id = 1").fetchone()
+    for label, db, old in [("A", a, old_a), ("B", b, old_b)]:
+        changed = db.execute(
+            "UPDATE stock SET quantity = ?, version = version + 1 WHERE id = 1 AND version = ?",
+            (old[0] - 1, old[1]),
+        ).rowcount
+        print(label, changed)
+    print(a.execute("SELECT quantity, version FROM stock").fetchall())
+    a.close()
+    b.close()
+```
+
+问号是参数占位符，后面的元组提供值；这里避免把值拼成 SQL。`isolation_level=None` 在这里采用的 Python sqlite3 默认事务控制模式中让独立语句自动提交，所以两个读取都已结束，才开始修改，见 [Python sqlite3 事务控制文档](https://docs.python.org/3/library/sqlite3.html#transaction-control-via-the-isolation-level-attribute)。它不表示数据库关闭了所有隔离保护。零行修改表示已读版本不再成立，应用必须重新判断，不能继续按旧值创建订单。
+
+## 隔离保证针对什么现象
+
+<Term id="isolation-level">隔离级别</Term> 规定并发事务允许观察哪些状态。采用 <Term id="mvcc">多版本并发控制</Term> 的系统可让读取看到某个快照，同时容许其他事务写入。快照使一次读取有一致的依据，却不自动使多个事务的全部业务决定等价于串行执行。
+
+例如两名值班人员各自看到另一人仍在岗，然后分别把自己的记录改成离岗。如果系统允许这两个事务基于各自快照提交不同记录，最后可能无人值班。这种跨行规则需要额外协调：锁住共同的规则记录、采用能检测此类冲突的可串行化事务，或者将规则重述为数据库能直接维护的约束。选择取决于引擎的具体保证。
+
+[PostgreSQL 事务隔离文档](https://www.postgresql.org/docs/current/transaction-iso.html)区分其可重复读与可串行化行为，并要求应用处理序列化失败。SQLite 的并发写入方式不同，不能拿上述快照交错断言它也接受同一执行；具体保证见 [SQLite 隔离文档](https://www.sqlite.org/isolation.html)。
+
+## 练习
+
+将版本实验的条件改成仅 `WHERE id = 1`，参数元组改成只含新数量。预测两次修改各自的受影响行数和最终库存，再运行。解释为什么只检查库存非负不能证明没有超卖。
+
+一个系统对序列化失败只重试最后一条写语句，继续使用事务开始时读到的值。另一个系统重启整个事务并重做判断。比较两者能否维护“至少一人值班”的规则。

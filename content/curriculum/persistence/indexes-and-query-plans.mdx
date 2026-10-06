@@ -1,0 +1,51 @@
+---
+id: persistence.indexes-and-query-plans
+slug: /persistence/indexes-and-query-plans
+order: 50
+title: 索引、访问路径与查询计划
+status: published
+objectives:
+  - 根据筛选与排序条件解释复合索引的访问范围
+  - 从查询计划区分扫描、索引查找与额外排序
+  - 比较增加索引后的读取收益与写入成本
+---
+
+表里有十万本书，页面每次只要 history 分类中价格最低的十本。返回十行不意味着只读取十行：若没有合适的访问路径，引擎仍可能检查整张表，再排序候选。
+
+## 索引保存另一种次序
+
+数据库索引维护键与记录位置之间的对应，使查找不必逐行读取全部记录。磁盘上的树通常按页组织，一页容纳许多键与子节点位置；节点可以有多个分支，这类有序结构称为 B 树。页的概念来自存储与访问成本：一次读取一页之后，可在页内判断应继续读取哪个子节点。
+
+复合索引 `(category, price)` 按分类优先、价格其次排列。相同分类占据一段连续范围；给定分类后，范围内已经按价格排列。只给价格而不给分类，所有符合价格的记录可能散落在不同分类段中，不能直接套用同一个连续范围论证。
+
+夹具 <LabRef id="catalog-indexes" /> 在 SQLite 内准备 2000 行记录，其中十分之一属于 history 分类。每次运行从没有额外索引的原始表开始，输出查询计划而不测耗时。
+
+```sql run id="persistence.indexes.plan" fixture="catalog-indexes"
+EXPLAIN QUERY PLAN
+SELECT id, price FROM entries
+WHERE category = 'history' ORDER BY price LIMIT 10;
+CREATE INDEX by_category_price ON entries(category, price);
+EXPLAIN QUERY PLAN
+SELECT id, price FROM entries
+WHERE category = 'history' ORDER BY price LIMIT 10;
+```
+
+`CREATE INDEX` 建立索引，`LIMIT 10` 限制返回行数，`EXPLAIN QUERY PLAN` 显示选定的访问方法。SQLite 的 `SCAN` 表示扫描，`SEARCH` 表示按条件访问某个范围，`USE TEMP B-TREE FOR ORDER BY` 表示为排序建立临时结构。[SQLite 查询计划文档](https://www.sqlite.org/eqp.html)说明这些字段，并提醒显示格式可能随版本变化。
+
+## 为什么优化器有时不选索引
+
+语句描述结果，引擎的优化器选择访问路径。它会估计候选数量，也就是 <Term id="cardinality">基数</Term>。若某分类只占少量记录，索引可能减少访问；若几乎所有记录都符合条件，索引查找后再读表可能比顺序扫描更贵。行宽、页是否已在缓存、输出列是否在索引中也影响成本。
+
+统计信息帮助估计数据分布；SQLite 用 `ANALYZE` 收集相关信息。[SQLite 查询规划文档](https://www.sqlite.org/queryplanner.html#multiple_indices)解释选择索引时如何使用统计信息。一次查询计划是该引擎、该数据与该配置下的证据，不能直接证明所有规模下都选同一路径。
+
+## 索引还参与写入
+
+加入一本书时，要把它写进表，也要把相关键插入每个索引。修改价格时，价格索引需要更新；删除书时，其索引项也要移除。更多索引增加持久空间、缓存占用和写入工作，并可能增加锁竞争。
+
+因此“所有列都建索引”没有统一收益。应当依据查询频率、候选比例与修改频率比较代价。表示选择的一般成本模型见 <CrossRef id="data-algorithms-and-scale.representation-preprocessing-and-indexes" />。
+
+## 练习
+
+把实验的筛选条件换成 `price < 10`，保留复合索引。先判断哪些记录可能连续，再看计划。SQLite 可能采用扫描或其他优化；解释应依据实际路径，不把“存在索引”直接写成“只访问十行”。
+
+现在系统每秒更新价格 2000 次，每小时只有一次按分类的报表。比较保留这个复合索引与仅为报表临时准备有序数据两种方案，还需要哪些工作负载证据？

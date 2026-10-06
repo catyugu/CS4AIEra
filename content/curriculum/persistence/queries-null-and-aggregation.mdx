@@ -1,0 +1,72 @@
+---
+id: persistence.queries-null-and-aggregation
+slug: /persistence/queries-null-and-aggregation
+order: 30
+title: 查询中的重复、NULL 与聚合
+status: published
+objectives:
+  - 预测保留重复与去重查询的结果行数
+  - 用三值逻辑解释缺失值对筛选的影响
+  - 区分统计行数与统计非空值的结果
+---
+
+查询所有书的分类，是否应该得到两个分类，还是四行分类？这取决于所问的是“有哪些不同分类”，还是“每本书属于哪个分类”。SQL 默认保留重复结果，重复行有时正是需要计数的事件。
+
+## 结果默认保留重复
+
+```sql run id="persistence.queries.duplicates" fixture="catalog"
+SELECT category FROM books ORDER BY category;
+SELECT DISTINCT category FROM books ORDER BY category;
+```
+
+`DISTINCT` 删除输出列相同的重复行。普通查询的结果可以是多重集（bag）：相同的行可以出现多次。关系模型的集合思想并不意味着每条 SQL 查询都会自动去重。这里 computing 分类有两本书，两个相同分类值仍然来自两条不同记录。
+
+`WHERE` 用条件筛选行。SQL 以声明方式描述所需结果，引擎可以重排执行操作；[SQLite SELECT 文档](https://www.sqlite.org/lang_select.html)中的逻辑处理顺序用来解释结果，并不要求引擎照该顺序逐步执行。
+
+## NULL 怎样参与条件
+
+第二本书价格还没有确定，表里用 `NULL` 表示缺失。NULL 不等于 0，也不等于字符串 `'NULL'`；“没有得到价格”不能当成“免费”。
+
+比较一个缺失价格与 60，结果是未知（unknown）。SQL 的三值逻辑有真、假、未知，`WHERE` 只保留条件为真的行。
+
+| 条件结果 p | NOT p | p AND 真 | p OR 真 |
+| --- | --- | --- | --- |
+| 真 | 假 | 真 | 真 |
+| 假 | 真 | 假 | 真 |
+| 未知 | 未知 | 未知 | 真 |
+
+```sql run id="persistence.queries.null" fixture="catalog"
+SELECT id, price, price > 60 AS expensive,
+       NOT (price > 60) AS not_expensive
+FROM books ORDER BY id;
+SELECT id, title FROM books WHERE price IS NULL ORDER BY id;
+```
+
+`AS` 给输出列命名；SQLite 在结果中以 1 和 0 表示这些布尔判断，未知显示为 NULL。`IS NULL` 专门检查缺失；`price = NULL` 不能用来找到缺失价格。[SQLite 表达式文档](https://www.sqlite.org/lang_expr.html#operators_and_parse_affecting_attributes)列出 NULL 与运算符的规则。
+
+## 聚合在统计什么
+
+`GROUP BY category` 把相同分类的行分到一组；`COUNT(*)` 统计组内行数，`COUNT(price)` 只统计非空价格，`SUM` 与 `AVG` 也忽略其参数中的 NULL。
+
+```sql run id="persistence.queries.aggregate" fixture="catalog"
+SELECT category, COUNT(*) AS books,
+       COUNT(price) AS priced_books, AVG(price) AS average_price
+FROM books
+GROUP BY category
+ORDER BY category;
+```
+
+computing 的平均价格来自有价格的那一本书。若需求是“全部书的平均定价”，缺失值意味着当前数据不足；把它自动填成零会改变所求的量。[SQLite 聚合函数文档](https://www.sqlite.org/lang_aggfunc.html)定义具体空输入与 NULL 行为。
+
+## 练习
+
+需求是列出“未达到高价条件的书，并包含尚未定价的书”。审查以下查询是否符合需求，先写出应出现的编号，再运行并修改条件。
+
+```sql run id="persistence.queries.exercise-filter" fixture="catalog"
+SELECT id, title, price
+FROM books
+WHERE NOT (price > 60)
+ORDER BY id;
+```
+
+另一个报表把 `COUNT(price)` 标成“书的总数”。选择一个合法的数据变更，使这个标题与实际统计对象的差别变得可见。
