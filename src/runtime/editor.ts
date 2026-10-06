@@ -8,7 +8,7 @@
  */
 
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { bracketMatching, indentOnInput, syntaxHighlighting } from "@codemirror/language";
+import { bracketMatching, indentOnInput, indentUnit, syntaxHighlighting } from "@codemirror/language";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, drawSelection, keymap } from "@codemirror/view";
 import { codeHighlighter, codeLanguage } from "./code-highlighting";
@@ -57,6 +57,8 @@ function extensions(language: "python" | "sql", onDocChange: (doc: string) => vo
   return [
     history(),
     drawSelection(),
+    EditorState.tabSize.of(4),
+    indentUnit.of("    "),
     indentOnInput(),
     bracketMatching(),
     syntaxHighlighting(codeHighlighter),
