@@ -54,7 +54,9 @@ await main()
 print(count)
 ```
 
-`global count` 表示函数里的赋值修改外部的 `count`。这里没有模拟操作系统线程；两个协作任务直接修改同一 Python 状态。事件等待契约见 [Python asyncio Event](https://docs.python.org/3/library/asyncio-sync.html#asyncio.Event)。
+`global count` 表示函数里的赋值修改外部的 `count`。两个协作任务直接修改同一 Python 状态。两个通知只用来稳定地重现表中的交错；真实代码也可能因为读取、写入之间等待了其他操作而出现相同问题。事件等待契约见 [Python asyncio Event](https://docs.python.org/3/library/asyncio-sync.html#asyncio.Event)。
+
+若同一事件循环里直接执行 `count += 1`，中间没有让出控制，其他协作任务就不能插入这个递增过程。本例证明的是读写之间允许交错时的风险，不能推成“所有 Python 递增都会丢失更新”。
 
 ## 互斥必须围住完整的状态判断
 

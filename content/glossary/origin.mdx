@@ -4,10 +4,10 @@ term: 源
 english: origin
 aliases:
   - 同源
-short: 通常的 HTTP 与 HTTPS URL 的方案、主机和有效端口组成的身份。
+short: 通常的 HTTP 与 HTTPS URL 的协议标识、主机和有效端口组成的身份。
 related: []
 ---
 
-对于通常的 HTTP 与 HTTPS URL，源由方案、主机和有效端口组成。两个 URL 的这三项相同，才是同源；路径和查询不同不会改变源。未写出的端口按方案的默认端口处理。
+对于通常的 HTTP 与 HTTPS URL，源由协议标识（scheme，如 http 或 https）、主机和有效端口组成。两个 URL 的这三项相同，才是同源；路径和查询不同不会改变源。未写出的端口按相应协议的默认端口处理。
 
 源用于浏览器的访问限制。两个主机解析到相同 IP 地址不让它们同源，同一个主机的 HTTP 和 HTTPS 地址也有不同源。某些其他 URL 有不同或不透明的源，不能直接套用普通网址的比较方式，见 [MDN：同源策略](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Same-origin_policy)。

@@ -16,7 +16,7 @@ objectives:
 
 关系数据库用表组织记录。书表的一行保存一本书，每列分别保存编号、标题、分类、价格和库存；订单表的一行保存一笔订单。
 
-本章使用 SQLite 夹具 <LabRef id="catalog" />。每个独立单元格开始前重建数据，Reset 后不保留修改。
+本章用 SQL 操作数据库；SQL 语句描述需要查询或修改什么，由数据库执行。实验使用 SQLite 引擎，预先准备的表和记录称为实验夹具，内容见 <LabRef id="catalog" />。每次运行独立单元格都会重建这份数据，同一格内的多条语句则共用一份数据库。
 
 ```sql run id="persistence.relations.tables" fixture="catalog"
 SELECT id, title, category, price, stock
@@ -66,4 +66,4 @@ VALUES (13, 'r13', 9, 1);
 SELECT id, book_id, quantity FROM orders ORDER BY id;
 ```
 
-SQL 单元格遇到错误会停下并显示错误。要查看原始数据，可以 Reset 后移除插入语句，只运行查询。
+SQL 单元格遇到错误会停下并显示错误。要查看原始数据，可以移除插入语句，只运行查询。用“恢复代码”取回原写法，再次运行时数据也从夹具重新建立。

@@ -76,13 +76,17 @@ def ordered(values):
 
 values = [3, 1, 3, 2]
 result = ordered(values)
-is_ordered = all(result[i] <= result[i + 1] for i in range(len(result) - 1))
+is_ordered = True
+for i in range(len(result) - 1):
+    if result[i] > result[i + 1]:
+        is_ordered = False
+        break
 print("ordered:", is_ordered)
 print("same occurrences:", Counter(result) == Counter(values))
 print(result)
 ```
 
-`Counter` 记录每个值的出现次数；`all(...)` 检查给出的条件是否全部成立，内部 `for` 逐项产生相邻比较。这个判据不用先写出完整的排序答案，仍能区分有序性与信息保留。
+`Counter` 记录每个值的出现次数；循环检查每一对相邻元素，遇到前一项较大的情况就判定未按非递减次序排列。这个判据不用先写出完整的排序答案，仍能区分有序性与信息保留。
 
 性质测试将“结果必须满足什么”用于多种输入。生成很多输入可以增加发现反例的机会，但生成规则覆盖了什么仍需审查。若所有输入都没有重复值，再多输入也无法发现这个缺陷。缩小反例的目标是保留同一种违规，只减少无关元素，使失效条件更清楚。
 

@@ -12,13 +12,13 @@ objectives:
 
 一个模块维护整数集合。调用方需要判断某个数是否存在，模块内部目前用列表保存。若调用方直接读取列表，改成集合就可能连带修改所有调用方；若调用方只调用 `contains(value)`，内部表示有机会独立变化。
 
-## 隐藏的是决定
+## 让调用方只依赖公开操作
 
 模块是组织相关定义与状态的单位。怎样导入与访问模块中的名字，见 <CrossRef id="program-logic-and-state.modules-and-imports" />。划分模块时，更重要的问题是：哪些决定可能变化，哪些行为要继续向外保证？
 
 <Term id="information-hiding">信息隐藏（information hiding）</Term>把内部表示、算法和资源管理等决定留在模块内部，只通过约定的操作使用它们。一个前导下划线可以提示某个名字供内部使用，但 Python 不把这种约定变成访问权限，见 [Python 教程：私有变量](https://docs.python.org/3/tutorial/classes.html#private-variables)。边界是否成立，要看调用方实际上依赖什么。
 
-下面的对象保存非重复整数，公开操作是 `add` 与 `snapshot`。`snapshot` 的约定是返回一份可独立修改的列表；这里的切片 `[:]` 复制外层列表，复制规则见 <CrossRef id="program-logic-and-state.names-objects-and-state" />。
+下面的对象保存非重复整数，公开操作是 `add`、`contains` 与 `snapshot`。`snapshot` 的约定是返回一份可独立修改的列表；`list(...)` 创建外层副本，复制规则见 <CrossRef id="program-logic-and-state.names-objects-and-state" />。
 
 ```python run id="program-composition.modules-and-boundaries.snapshot"
 class IntegerSet:
@@ -29,8 +29,11 @@ class IntegerSet:
         if value not in self._values:
             self._values.append(value)
 
+    def contains(self, value):
+        return value in self._values
+
     def snapshot(self):
-        return self._values[:]
+        return list(self._values)
 
 
 values = IntegerSet()
@@ -45,9 +48,9 @@ print("module:", values.snapshot())
 
 这里列表中只有整数，复制外层列表就够用。复制外层、仍引用原来的元素对象，称为<Term id="shallow-copy">浅拷贝</Term>。若元素是可变的字典或列表，修改元素仍会影响原对象。公开结果允许改到哪一层，需要写进契约。
 
-## 谁知道谁
+## 依赖方向决定哪些部分一起变化
 
-报表计算需要整数集合的“加入、判断成员、取出快照”这些行为，不必知道数据来自界面还是文件。让报表模块导入界面模块，会让计算依赖按钮与显示组件；换一个调用入口也必须带上界面。
+报表要统计不同的记录编号，使用整数集合的“加入、判断成员、取出快照”这些行为。不论编号来自界面还是文件，这些计算规则相同。让报表模块导入界面模块，会让计算依赖按钮与显示组件；换一个调用入口也必须带上界面。
 
 依赖方向可以直接画成“使用者指向所使用的定义”：
 
@@ -81,7 +84,7 @@ class Cache:
         self._values.append(value)
 
     def all_values(self):
-        return self._values[:]
+        return list(self._values)
 
 
 cache = Cache()

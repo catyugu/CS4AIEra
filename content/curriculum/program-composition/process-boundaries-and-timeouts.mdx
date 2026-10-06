@@ -2,7 +2,7 @@
 id: program-composition.process-boundaries-and-timeouts
 slug: /program-composition/process-boundaries-and-timeouts
 order: 50
-title: 进程边界：等待结束后知道了什么
+title: 进程调用与超时
 status: published
 objectives:
   - 比较进程内调用与进程间交互的数据、故障与生命周期边界
@@ -46,7 +46,7 @@ completed = subprocess.run(
 
 能启动并收到零退出状态，表示工具按退出状态约定报告成功。输出文件是否完整、输出格式是否正确，还取决于工具自身的契约。工具把警告打印在标准错误中，也不必然表示操作失败；退出状态、标准错误与业务结果是不同观察面。
 
-## 超时约束等待，不倒转历史
+## 超时后，输出文件可能已经改变
 
 超时表示约定的等待期限到了，调用方没有在期限内得到所需结果。它本身不能证明工具未执行操作。
 

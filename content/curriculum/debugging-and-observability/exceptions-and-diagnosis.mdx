@@ -14,7 +14,7 @@ objectives:
 
 ## 调用栈记录失败经过的位置
 
-下面有三层调用，输出会显示未捕获的 `KeyError` 及回溯：
+下面有三层调用。先运行，找到最后一行的异常类型，再从上到下读它经过的调用位置：
 
 ```python run id="debugging-and-observability.exceptions-and-diagnosis.traceback"
 def seconds(record):
@@ -35,7 +35,7 @@ def report(data):
 report([{"seconds": "12"}, {"duration": "5"}])
 ```
 
-回溯（traceback）给出异常传播经过的调用位置；异常类型和消息说明此次失败属于哪类操作。这里字段访问失败，转换尚未取得输入，因而优先检查记录的结构与字段约定。异常传播规则见 <CrossRef id="program-logic-and-state.exceptions-and-cleanup" />。
+回溯（traceback）给出异常传播经过的调用位置；异常类型和消息说明此次失败属于哪类操作。本例最后显示 `KeyError: 'seconds'`，说明字段访问失败，`int` 尚未取得输入。回溯中的 `report`、`summarize` 和 `seconds` 分别是外层到内层的调用位置，最后一个位置最接近本次失败。因而优先检查记录的结构与字段约定。异常传播规则见 <CrossRef id="program-logic-and-state.exceptions-and-cleanup" />。
 
 调用栈显示“错误在哪被观察到”，不必然显示“错误在哪被制造”。数据可能早在载入、转换或缓存时就丢了字段；当前行只是第一个要求该字段存在的位置。把当前行包进宽泛的异常捕获并返回 0，会改变结果，却没有修复输入与接口之间的约定。
 

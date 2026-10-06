@@ -10,6 +10,8 @@ objectives:
   - 判断页面刷新、连接重建与应用状态之间的关系
 ---
 
+浏览器向服务器请求一条记录，服务器返回一段文本。双方交换的是有规定格式的报文；下面按 HTTP/1.1 的形式展示这次请求与响应。
+
 ```http
 GET /items/7?format=text HTTP/1.1
 Host: notes.example
@@ -35,7 +37,7 @@ hello
 
 `Accept` 表示客户端可接受的内容类型；`Content-Type` 声明响应内容的类型及这里使用的字符编码。`Content-Length: 5` 指定内容有五个字节，不是五个任意字符。内容长度也可以通过协议的其他成帧机制确定，解析器必须按具体协议规则找出报文终点，见 [RFC 9112：消息格式](https://www.rfc-editor.org/rfc/rfc9112.html#section-2.1)。
 
-浏览器地址 `https://notes.example/items/7?format=text#details` 还含有 `https` 方案和 `details` 片段。片段由客户端用于定位内容，不进入发给服务器的请求目标，见 [RFC 3986：URI 组成与片段](https://www.rfc-editor.org/rfc/rfc3986.html#section-3.5)。查询 `format=text` 怎样解释则由应用约定。
+浏览器地址 `https://notes.example/items/7?format=text#details` 还含有 `https` 协议标识和 `details` 片段。片段由客户端用于定位内容，不进入发给服务器的请求目标，见 [RFC 3986：URI 组成与片段](https://www.rfc-editor.org/rfc/rfc3986.html#section-3.5)。查询 `format=text` 怎样解释则由应用约定。
 
 ## 请求成功的含义由操作契约决定
 
@@ -53,6 +55,8 @@ hello
 ```
 
 这里空行之后的五个字节提供新的标题表示。请求方法说明操作，内容类型说明怎样解释这些字节，具体资源契约说明允许哪些标题。字段齐全也不意味着内容一定通过应用校验。
+
+资源的“表示”是用于传送其当前内容的形式，例如这里的纯文本标题，或包含多个字段的 JSON。`GET` 取得这种表示；客户端修改后用 `PUT` 提交替换内容。资源是请求指向的对象，表示是双方交换的内容，两者需要区分。
 
 HTTP 把请求语义上不要求改变服务器状态的方法称为**安全方法**（safe methods）。记录访问日志等附带动作并不因此被禁止。HTTP 把重复相同请求与执行一次具有相同预期服务器效果的方法称为**幂等方法**（idempotent methods）；`GET`、`PUT` 和 `DELETE` 有这一语义，`POST` 没有一般的幂等保证，见 [RFC 9110：方法的共同属性](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2)。
 

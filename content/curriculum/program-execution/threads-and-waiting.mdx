@@ -30,7 +30,9 @@ objectives:
 
 <Term id="event-loop">事件循环</Term>（event loop）记录哪些任务能继续、哪些还在等待。协作任务在等待时交回控制，事件循环便可以选择另一项就绪任务。
 
-Python 用 `async def` 定义异步函数，调用后得到协程；`create_task` 把它安排给当前事件循环，`await` 等待结果。下面的 `sleep(0)` 明确让出一次执行机会，不测量真实耗时。浏览器单元格支持顶层 `await`，可以直接等待 `main()`：
+Python 用 `async def` 定义异步函数。调用它先得到一个协程对象，函数体不会仅因为调用就自动执行。`await work()` 让当前任务执行并等待这次异步工作；`asyncio.create_task(work())` 则创建一个可由事件循环另行调度的任务。任务创建后，调用方可以继续安排其他工作，再等待它的结果，见 [Python asyncio：协程与任务](https://docs.python.org/3/library/asyncio-task.html#coroutines)。
+
+下面先创建 A、B 两个任务，再依次等待结果。`sleep(0)` 明确让出一次执行机会，不测量真实耗时。浏览器单元格已有事件循环并支持顶层 `await`，可以直接等待 `main()`：
 
 ```python run id="program-execution.threads-and-waiting.cooperate"
 import asyncio
@@ -52,7 +54,7 @@ async def main():
 await main()
 ```
 
-两项工作可以交错，但每项自己的 `start` 必须在 `resume` 之前。具体的 A、B 次序不应当成所有调度器的约定。`await` 也不一定暂停：等待对象已完成时，可以继续执行。任务和 `sleep` 的规则见 [Python asyncio 任务文档](https://docs.python.org/3/library/asyncio-task.html#sleeping)。
+虽然 `await first` 和 `await second` 写成两行，B 不需要等第一行结束才开始：两个任务都已创建，A 等待时，B 就有机会执行。两项工作可以交错，但每项自己的 `start` 必须在 `resume` 之前。具体的 A、B 次序不应当成所有调度器的约定。`await` 也不一定暂停：等待对象已完成时，可以继续执行。任务和 `sleep` 的规则见 [Python asyncio 任务文档](https://docs.python.org/3/library/asyncio-task.html#sleeping)。
 
 如果在异步函数里直接做长时间计算，或调用阻塞读取而一直没有让出控制，事件循环中的其他任务仍要等待。把函数写成 `async def` 不会增加 CPU，也不会自动把所有操作变成非阻塞。
 

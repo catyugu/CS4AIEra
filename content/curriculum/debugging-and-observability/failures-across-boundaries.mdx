@@ -12,9 +12,9 @@ objectives:
 
 客户端没有收到成功响应，数据库里却已经出现一条新记录。两份观察可以同时成立：写入完成之后，返回路径仍可能失败。诊断跨边界故障时，先把“调用方知道什么”与“另一边实际完成什么”分开。
 
-## 超时之后保留允许状态
+## 用哪些证据确认创建结果
 
-假定调用方发起一次创建操作，随后超时。仅有这个信息，仍与多种状态相容：请求没有到达、仍在排队、执行失败、提交成功但响应没有到达。超时机制及重试条件见 <CrossRef id="networks-and-web.latency-timeouts-and-retries" />；接口失败状态的约定见 <CrossRef id="program-composition.process-boundaries-and-timeouts" />。
+诊断一份创建请求的超时报告，要查的是同一次操作在哪里停止、留下了什么状态。超时本身无法区分未到达、排队、执行失败或提交后响应丢失，机制见 <CrossRef id="networks-and-web.latency-timeouts-and-retries" />。不同观察位置能补充不同事实：
 
 | 新增证据 | 能确认或排除什么 | 无法单独确认什么 |
 | --- | --- | --- |

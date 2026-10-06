@@ -115,13 +115,9 @@ print("updated:", updated)
 
 ## 练习
 
-两份函数都“加入一条笔记”。哪一份适合保留原稿、生成修改稿的需求，哪一份适合让所有使用原列表的代码看到追加结果？分别写出输入、返回值和副作用的约定。如果调用方忽略返回值，会有什么后果？
+编辑功能要求保留原稿，预览稿增加一条笔记；确认修改后才用预览稿替换原稿。下面两次调用分别位于预览和确认阶段。先追踪它们结束后 `draft` 的内容，再判断是否符合要求。只修改调用方，怎样让两个阶段都完成所需的状态变化？
 
 ```python run id="program-logic-and-state.functions-and-side-effects.exercise-contracts"
-def append_note(notes, text):
-    notes.append(text)
-
-
 def with_note(notes, text):
     updated = list(notes)
     updated.append(text)
@@ -129,10 +125,9 @@ def with_note(notes, text):
 
 
 draft = ["first idea"]
-result = with_note(draft, "revision")
-print("draft:", draft)
-print("result:", result)
-returned = append_note(draft, "shared addition")
-print("draft after append:", draft)
-print("returned:", returned)
+preview = with_note(draft, "revision")
+print("original:", draft)
+print("preview:", preview)
+with_note(draft, "revision")
+print("confirmed:", draft)
 ```

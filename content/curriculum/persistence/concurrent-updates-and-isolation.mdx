@@ -29,7 +29,9 @@ objectives:
 
 另一个方案为记录保存版本号。读取数量和版本，修改时要求版本仍等于读取值，成功后增加版本。这个比较与修改必须由数据库作为一个协调的操作执行。
 
-以下实验打开同一临时 SQLite 文件的两个连接，按确定顺序交错两次读写。它执行真实数据库操作；调度由源码固定，不用线程竞速。`TemporaryDirectory` 管理临时目录，退出 `with` 时清理文件；`rowcount` 是受影响行数。
+以下实验打开同一临时 SQLite 文件的两个连接，按确定顺序交错两次读写。它执行真实数据库操作；调度由源码固定，不用线程竞速。先让 A、B 都读到数量 1、版本 0，再让 A 修改，最后让 B 尝试修改。`fetchone()` 读取一行，得到数量与版本组成的元组；`rowcount` 是受影响行数。
+
+`TemporaryDirectory` 管理临时目录；`with ... as directory` 进入它管理的使用范围，把目录名绑定到 `directory`，离开缩进范围时清理文件。这里的数据库只供实验，不保存到页面刷新之后。
 
 ```python run id="persistence.isolation.version"
 import sqlite3
