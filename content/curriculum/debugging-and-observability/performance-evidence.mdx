@@ -1,0 +1,78 @@
+---
+id: debugging-and-observability.performance-evidence
+slug: /debugging-and-observability/performance-evidence
+order: 50
+title: 从性能证据定位瓶颈
+status: published
+objectives:
+  - 区分经过时间、CPU 时间与调用次数各自支持的解释
+  - 从总耗时与阶段耗时推导局部优化的收益上限
+  - 将优化前后比较限定在相同结果与工作负载下
+---
+
+一项请求耗时一秒，循环只占其中一毫秒。即使把这个循环完全消除，也只能节省千分之一的总耗时。优化之前，先确定时间花在哪里，以及被修改部分占了多少。
+
+## 经过时间与计算时间不同
+
+经过时间包含计算、排队、I/O 等待与调度等待。CPU 时间统计执行占用的处理器时间，不能直接表示用户等待了多久。多个线程并行时，总 CPU 时间甚至可以超过墙上经过时间。
+
+测量短区间应使用适合计时的时钟。Python 的 `perf_counter` 用于高分辨率经过时间测量，包含等待；`process_time` 返回进程 CPU 时间，不包含睡眠，见 [Python time 的计时函数](https://docs.python.org/3/library/time.html#time.perf_counter)。不要用两台机器各自的墙上时间相减来推断精确阶段耗时。
+
+<Term id="profiling">剖析</Term>（profiling）把执行中的时间或活动归到函数、调用路径等位置。确定性剖析记录调用与返回，采样剖析按时刻观察执行位置；两者都有开销与观察限制。Python `cProfile` 提供函数调用统计，自身耗时与累计耗时的含义见 [Python 剖析器文档](https://docs.python.org/3/library/profile.html#instant-user-s-manual)。
+
+自身耗时衡量函数内部扣除所调用函数后的时间；累计耗时包含其下层调用。父函数与子函数的累计耗时有重叠，不能相加为总耗时。某函数自身耗时不高而累计耗时高，适合继续检查它调用的工作。
+
+## 局部优化的上限来自时间分配
+
+假定基线总时间为 $T$，其中比例 $f$ 属于可优化部分，其余部分保持不变。如果该部分加速 $s$ 倍，则新时间是
+
+$$T'=T(1-f)+Tf/s.$$
+
+即使让 $s$ 无限增大，新时间仍至少是 $T(1-f)$。若数据库等待占 90%，其余计算占 10%，只优化计算的理论上限是减少 10% 总时间。这个推导假定负载和其他阶段不受改动影响；若改动减少数据库调用次数，就已经改变了“其余部分保持不变”的前提，需要重新测量。
+
+## 构建、查询和整个工作负载都要计入
+
+下面比较重复扫描和预先建立索引。输入列表保存互不相同的整数，每项查询要求其位置。计时输出会随机器和当前运行负载变化；应观察阶段占比与改变查询次数后的趋势，不将某次毫秒数当作固定答案。
+
+```python run id="debugging-and-observability.performance-evidence.phases"
+from time import perf_counter
+
+values = list(range(4000))
+queries = [3999] * 200
+
+started = perf_counter()
+positions = []
+for wanted in queries:
+    for i in range(len(values)):
+        if values[i] == wanted:
+            positions.append(i)
+            break
+scan_time = perf_counter() - started
+
+started = perf_counter()
+index = {}
+for i in range(len(values)):
+    index[values[i]] = i
+build_time = perf_counter() - started
+
+started = perf_counter()
+indexed_positions = []
+for wanted in queries:
+    indexed_positions.append(index[wanted])
+query_time = perf_counter() - started
+
+print("same result:", positions == indexed_positions)
+print("scan seconds:", scan_time)
+print("build seconds:", build_time)
+print("indexed query seconds:", query_time)
+```
+
+`perf_counter()` 返回当前计时读数，两次差值得到本次经过时间。`[3999] * 200` 建立 200 次相同查询；它有意让扫描到达列表末尾。改成前面的值，会改变扫描量；减少查询次数，会提高构建成本在总成本中的比例。
+
+索引方案的比较成本是构建加全部查询；只展示查询阶段会遗漏真实工作。输入有重复值时，这份索引保留最后一次位置，而扫描返回第一次位置，就不能直接比较性能而宣称等价。表示与索引取舍见 <CrossRef id="data-algorithms-and-scale.representation-preprocessing-and-indexes" />。
+
+## 练习
+
+将查询次数改为 1，再改变查询值。分别比较两种方案的全部耗时，并判断重复查询的选择是否代表目标负载。结果很小时，计时器和调度噪声对比较有什么影响？
+
+一份剖析报告显示 `handle` 累计 800 毫秒、`query` 累计 600 毫秒，且 `query` 由 `handle` 调用。能否宣布两者合计需要 1400 毫秒？若只将 `query` 加速两倍，其余路径不变，估算这次请求总时间，并说明这个估算需要的前提。

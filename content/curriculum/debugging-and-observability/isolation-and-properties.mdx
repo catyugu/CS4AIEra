@@ -1,0 +1,93 @@
+---
+id: debugging-and-observability.isolation-and-properties
+slug: /debugging-and-observability/isolation-and-properties
+order: 20
+title: 独立测试、替身与性质
+status: published
+objectives:
+  - 判断测试结果是否依赖其他测试遗留的状态
+  - 说明测试替身能控制哪些边界，不能证明哪些真实行为
+  - 为变换结果选择互相补充的性质，并构造遗漏性质的反例
+---
+
+同一个测试，单独运行通过，整组运行却失败。函数源码没有改变；变化可能来自其他测试留下的列表、缓存、文件或数据库内容。要让测试结果可解释，起始状态必须明确。
+
+## 每个测试都要得到所需的起点
+
+下面两次检查都要求从没有记录的状态开始，但共同使用一个列表：
+
+```python run id="debugging-and-observability.isolation-and-properties.shared"
+records = []
+
+
+def check_empty_start():
+    assert records == []
+    records.append("entry")
+
+
+for label in ["first", "second"]:
+    try:
+        check_empty_start()
+        print(label, "pass")
+    except AssertionError:
+        print(label, "fail", records)
+```
+
+第一个测试的副作用改变了第二个测试的前提。重复运行失败测试之前，应确认是否重建同样的初始状态；仅增加重试次数可能把顺序依赖隐藏起来。
+
+隔离可以通过为每次测试创建新对象、准备独立数据库或临时目录来建立。真实资源还需要结束后的清理，即使测试失败也应清理。测试框架把这类准备与清理组织为测试夹具（fixture），见 [Python unittest 的测试组织](https://docs.python.org/3/library/unittest.html#organizing-test-code)。若测试本来就在检查跨调用历史，则明确记录这份历史，不应误将它重置。
+
+## 用替身控制一个外部输入
+
+函数依赖外部读取时，可以将读取操作作为参数传入。测试使用<Term id="test-double">测试替身</Term>提供规定的返回值或失败，不必真的请求网络：
+
+```python run id="debugging-and-observability.isolation-and-properties.double"
+def read_total(load):
+    data = load()
+    return int(data["total"])
+
+
+calls = []
+
+
+def fixed_load():
+    calls.append("load")
+    return {"total": "12"}
+
+
+assert read_total(fixed_load) == 12
+assert calls == ["load"]
+print(calls)
+```
+
+`load` 是可调用对象，`load()` 执行它；这里的调用记录能检查读取次数。改成抛出预期失败的替身，可以检查调用方怎样传播失败。这个测试证明的是调用方在规定返回和失败下的行为，真实 HTTP 解码、权限、连接与超时仍需要真实边界的集成验证。替身的契约若与实际依赖不一致，测试会在错误的前提上通过。
+
+## 性质需要共同限制结果
+
+排序结果应按非递减次序排列，还应保留每个输入值的出现次数。只检查有序，会把删除重复值的结果也判为正确：
+
+```python run id="debugging-and-observability.isolation-and-properties.properties"
+from collections import Counter
+
+
+def ordered(values):
+    return sorted(set(values))
+
+
+values = [3, 1, 3, 2]
+result = ordered(values)
+is_ordered = all(result[i] <= result[i + 1] for i in range(len(result) - 1))
+print("ordered:", is_ordered)
+print("same occurrences:", Counter(result) == Counter(values))
+print(result)
+```
+
+`Counter` 记录每个值的出现次数；`all(...)` 检查给出的条件是否全部成立，内部 `for` 逐项产生相邻比较。这个判据不用先写出完整的排序答案，仍能区分有序性与信息保留。
+
+性质测试将“结果必须满足什么”用于多种输入。生成很多输入可以增加发现反例的机会，但生成规则覆盖了什么仍需审查。若所有输入都没有重复值，再多输入也无法发现这个缺陷。缩小反例的目标是保留同一种违规，只减少无关元素，使失效条件更清楚。
+
+## 练习
+
+一份去重接口要求保留每个值第一次出现的次序。测试只检查“没有重复”和“结果值都来自输入”。给出满足这两个性质却违反要求的输出，并补一条能排除它的性质。
+
+一个测试替身总返回完整 JSON 对象，整组测试通过后，真实接口偶尔返回缺失字段的对象。审查这份证据能否支持“调用方处理所有合法返回”；需要修改的是替身、调用方契约，还是测试环境？先确定接口究竟允许哪些返回。
