@@ -1,0 +1,94 @@
+---
+id: program-composition.modules-and-boundaries
+slug: /program-composition/modules-and-boundaries
+order: 10
+title: 模块边界：哪些变化应该留在内部
+status: published
+objectives:
+  - 判断调用方依赖的是公开操作还是内部表示
+  - 从需要独立变化的决定划分模块，并画出依赖方向
+  - 区分模块、库、包与发布版本承担的职责
+---
+
+一个模块维护整数集合。调用方需要判断某个数是否存在，模块内部目前用列表保存。若调用方直接读取列表，改成集合就可能连带修改所有调用方；若调用方只调用 `contains(value)`，内部表示有机会独立变化。
+
+## 隐藏的是决定
+
+模块是组织相关定义与状态的单位。怎样导入与访问模块中的名字，见 <CrossRef id="program-logic-and-state.modules-and-imports" />。划分模块时，更重要的问题是：哪些决定可能变化，哪些行为要继续向外保证？
+
+<Term id="information-hiding">信息隐藏（information hiding）</Term>把内部表示、算法和资源管理等决定留在模块内部，只通过约定的操作使用它们。一个前导下划线可以提示某个名字供内部使用，但 Python 不把这种约定变成访问权限，见 [Python 教程：私有变量](https://docs.python.org/3/tutorial/classes.html#private-variables)。边界是否成立，要看调用方实际上依赖什么。
+
+下面的对象保存非重复整数，公开操作是 `add` 与 `snapshot`。`snapshot` 的约定是返回一份可独立修改的列表；这里的切片 `[:]` 复制外层列表，复制规则见 <CrossRef id="program-logic-and-state.names-objects-and-state" />。
+
+```python run id="program-composition.modules-and-boundaries.snapshot"
+class IntegerSet:
+    def __init__(self):
+        self._values = []
+
+    def add(self, value):
+        if value not in self._values:
+            self._values.append(value)
+
+    def snapshot(self):
+        return self._values[:]
+
+
+values = IntegerSet()
+values.add(3)
+result = values.snapshot()
+result.append(8)
+print("caller:", result)
+print("module:", values.snapshot())
+```
+
+返回独立列表，让调用方修改结果时不必知道模块怎样保存状态。若 `snapshot` 改成直接返回 `self._values`，调用方就获得了内部列表的别名，能够绕过 `add` 的重复检查。方法名称不变，边界已经变了。
+
+这里列表中只有整数，复制外层列表就够用。若元素本身可变，外层副本仍可能共享内部对象；公开结果是否允许修改，要写进契约，不能仅凭“做过复制”推断。
+
+## 谁知道谁
+
+报表计算需要整数集合的“加入、判断成员、取出快照”这些行为，不必知道数据来自界面还是文件。让报表模块导入界面模块，会让计算依赖按钮与显示组件；换一个调用入口也必须带上界面。
+
+依赖方向可以直接画成“使用者指向所使用的定义”：
+
+```text
+command-line ──> report ──> integer-set
+window-ui ─────> report
+```
+
+`report` 接收普通数据并返回结果，两种入口各自负责读取输入与展示输出。这样变更界面不会要求报表计算理解界面状态。若计算需要读取数据，可以把“读取函数”作为参数传入；依赖的是这个函数的输入输出约定。
+
+依赖图里有环意味着多个模块互相需要，独立加载、替换与理解都更困难；图中环的含义见 <CrossRef id="data-algorithms-and-scale.trees-graphs-and-dependencies" />。去掉一个 `import` 并不自动解决循环依赖：若两个模块仍通过共享全局对象彼此改变状态，行为上的耦合还在。
+
+## 代码组织与发布单位
+
+库是一组供其他程序使用的功能。包可以组织多个模块，也可以指可安装的发布单位；两种用法要根据上下文区分。在 Python 中，导入包用点分名称组织模块，安装的发行包则可能提供一个或多个导入包，名称也未必相同，见 [Python Packaging：发行包与导入包](https://packaging.python.org/en/latest/discussions/distribution-package-vs-import-package/)。
+
+发布版本标识一份具体的库内容。使用<Term id="semantic-versioning">语义化版本（Semantic Versioning）</Term>的项目，需要先声明公开 API，才有依据判断一次发布有没有破坏兼容，见 [Semantic Versioning 2.0.0](https://semver.org/)。版本号是项目对变更性质的声明；仅看到数字变大，不能推导某次调用的行为。
+
+把十个文件放进一个包，解决的是分发与命名组织问题。公开操作是否稳定、调用方是否读写内部状态，仍要逐条检查。
+
+## 练习
+
+缓存提供 `put` 和 `all_values`。需求是“调用方可以修改查询结果，但缓存中的记录只能通过 `put` 修改”。下面的实现满足这个要求吗？先比较修改列表长度与修改一条记录，再运行核对。若缓存允许保存任意可变对象，独立结果应当怎样约定？
+
+```python run id="program-composition.modules-and-boundaries.exercise-copy"
+class Cache:
+    def __init__(self):
+        self._values = []
+
+    def put(self, value):
+        self._values.append(value)
+
+    def all_values(self):
+        return self._values[:]
+
+
+cache = Cache()
+cache.put({"count": 1})
+result = cache.all_values()
+result.append({"count": 2})
+result[0]["count"] = 9
+print("caller:", result)
+print("cache:", cache.all_values())
+```

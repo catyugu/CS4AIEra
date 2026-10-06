@@ -1,0 +1,111 @@
+---
+id: program-composition.serialization-and-compatibility
+slug: /program-composition/serialization-and-compatibility
+order: 30
+title: 序列化：值怎样越过边界
+status: published
+objectives:
+  - 区分程序中的对象与传输中的表示，并解释往返转换可能丢失的信息
+  - 分别检查格式语法、数据结构与字段含义
+  - 从发送方与接收方的允许集合推导向后和向前兼容
+---
+
+Python 可以让两个名字指向同一个列表。把这个列表保存成 JSON，再读取回来，读取方得到的是新对象。原来的内存地址与共享关系没有跟着文本传过去。
+
+## 表示必须明确保留哪些信息
+
+<Term id="serialization">序列化（serialization）</Term>把程序中的值编码成可保存或传输的表示，反序列化从表示构造值。线格式（wire format）规定边界上的字节怎样解释；它需要独立于某次程序运行的内存地址。
+
+JSON 是文本格式，具有对象、数组、字符串、数值、布尔值和 `null` 等形式。JSON 对象的成员名是字符串，网络交换使用 UTF-8，见 [RFC 8259：对象与字符编码](https://www.rfc-editor.org/rfc/rfc8259.html#section-4)。这里的“对象”指名称到值的结构，不是任意 Python 实例。
+
+`json.dumps` 把可编码的 Python 值变成字符串，`json.loads` 从字符串解析值。Python 元组编码为 JSON 数组，读取回来是列表，见 [Python json：编码与解码](https://docs.python.org/3/library/json.html#encoders-and-decoders)。
+
+```python run id="program-composition.serialization-and-compatibility.roundtrip"
+import json
+
+original = {"point": (3, 4), "labels": {1: "first"}}
+wire = json.dumps(original)
+restored = json.loads(wire)
+print("wire:", wire)
+print("restored:", restored)
+print("same values:", original == restored)
+print("label keys:", list(restored["labels"]))
+```
+
+往返转换是否正确，要根据接口需要保留的性质判断。如果约定坐标是一对数，数组可以保留这项信息；若调用方依赖键是整数，就需要另定表示或在读取时转换。序列化格式支持某类值，不等于它保存了这类值在原语言中的全部语义。
+
+二进制格式同样需要规则：哪几个字节表示长度、字段怎样编号、整数用什么宽度。文本容易直接查看，二进制可以减少某些表示开销；两者都需要编码和解码，大小与解析成本要对具体数据测量，不能从“二进制”三个字推出普遍优势。
+
+## 字符串还需要编码成字节
+
+文本在程序里是字符组成的字符串，传输与存储最终处理的是字节。字符编码规定字符序列怎样变成字节序列；解码按同一规则恢复字符串。UTF-8 对不同字符使用不同数量的字节，因此字符数不能直接当作字节数。
+
+字符串的 `encode("utf-8")` 得到字节，字节的 `decode("utf-8")` 恢复字符串。`len` 对这里的字符串计数 Unicode 码点，对字节计数字节；一个视觉上的字符可能含多个码点，界面显示长度不能普遍等同于这两种计数，见 [Python Unicode 指南：编码](https://docs.python.org/3/howto/unicode.html#encodings)。
+
+```python run id="program-composition.serialization-and-compatibility.utf8"
+text = "A中"
+data = text.encode("utf-8")
+print("characters:", len(text))
+print("bytes:", len(data), list(data))
+print("utf8:", data.decode("utf-8"))
+print("latin1:", data.decode("latin-1"))
+try:
+    print("ascii:", data.decode("ascii"))
+except UnicodeDecodeError as failure:
+    print("failed:", failure)
+```
+
+`list(data)` 展示每个字节的数值。后两次解码刻意用了其他规则：错误规则可能拒绝这些字节，也可能接受字节却还原出不同文本。接收方成功解码，仍不足以证明双方使用了同一编码。可以把 `text` 改成纯 ASCII 文本再比较；只有覆盖双方会传送的字符，才能检查编码约定是否落实。
+
+JSON 字符串怎样表示值，与 JSON 文本怎样编码成字节，是两个层次。计算报文长度或设置长度字段时，应计数最终编码后的字节。
+
+## 解析成功只是第一步
+
+`{"duration": "fast"}` 是合法 JSON，但不满足“duration 是非负整数秒数”的约定。<Term id="schema">数据模式（schema）</Term>规定字段、类型与约束；字段含义还要规定单位、允许范围，以及省略字段意味着什么。
+
+判断一份消息时有三项不同的问题：格式是否能解析；结构与值是否满足模式；这些值是否表达双方约定的同一件事。把秒改成毫秒而保留字段名称，可以通过前两项检查，仍然造成含义错误。
+
+缺少字段与字段值为 `null` 也可以代表不同情况。例如省略 `label` 表示保持原值，`label: null` 表示清空。若读取方把两者都转换成 `None`，更新操作所需的信息就丢失了。
+
+## 兼容有方向
+
+考虑版本 1 发送 `{"duration": 8}`；版本 2 可以增加可选的 `label`，例如 `{"duration": 8, "label": "test"}`。
+
+<Term id="compatibility">兼容（compatibility）</Term>取决于谁发送、谁读取，以及读取方允许什么。这里固定使用以下方向：新读取方能读旧写入方的消息，称为向后兼容；旧读取方能读新写入方的消息，称为向前兼容。
+
+| 组合 | 需要核对的条件 |
+| --- | --- |
+| 旧写入方 → 新读取方 | 新读取方允许没有 `label`，并给出约定的默认含义 |
+| 新写入方 → 旧读取方 | 旧读取方允许未知字段，且新增字段不改变旧字段的含义 |
+
+为什么增加可选字段也可能失败？若旧读取方要求字段集合恰好只有 `duration`，新增字段就超出它允许的集合。为什么忽略未知字段也可能不足？若新写入方使用 `label` 改变 `duration` 的单位，旧读取方仍按秒解释，消息虽被接纳，结果却不符合共同含义。
+
+更一般地，设写入方可能产生的消息集合为 $W$，读取方能够正确处理的消息集合为 $R$。这对组合要求 $W \subseteq R$，且相同字段有一致含义。兼容检查需要同时比较表示集合与解释规则。
+
+## 练习
+
+两个读取方都曾用于版本 1。版本 2 提议新增可选 `label`，允许省略它；同时把 `duration` 改为毫秒。分别判断字段变化与单位变化对两种读取方的影响。只要没有异常就算兼容吗？输出中的 `reader.__name__` 读取函数名称，以区分两种结果。
+
+```python run id="program-composition.serialization-and-compatibility.exercise-reader"
+import json
+
+
+def strict_reader(text):
+    value = json.loads(text)
+    if set(value) != {"duration"}:
+        raise ValueError("unexpected fields")
+    return value["duration"]
+
+
+def tolerant_reader(text):
+    value = json.loads(text)
+    return value["duration"]
+
+
+message = '{"duration": 8000, "label": "test"}'
+for reader in [strict_reader, tolerant_reader]:
+    try:
+        print(reader.__name__, "seconds:", reader(message))
+    except ValueError as failure:
+        print(reader.__name__, "failed:", failure)
+```

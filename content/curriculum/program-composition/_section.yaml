@@ -1,0 +1,5 @@
+id: program-composition
+label: 软件组件与接口
+order: 40
+summary: 从模块内部实现到进程间报文，判断依赖方向、接口契约、格式兼容与失败责任。
+status: active
