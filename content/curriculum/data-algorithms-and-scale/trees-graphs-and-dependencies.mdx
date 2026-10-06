@@ -72,6 +72,15 @@ print("reachable, including start:", sorted(seen))
 
 `after[node]` 保存这个节点直接指向的后续节点。先从 `fetch` 发现 `build`，再从 `build` 发现 `test`；`config` 不在这条方向的路径上。`seen.add(next_node)` 把新发现的节点加入集合，`sorted(seen)` 将集合元素排好序后返回列表，让输出次序固定。
 
+| 刚取出的节点 | 检查后队列中的节点 | 已发现的节点 |
+| --- | --- | --- |
+| 尚未取出 | fetch | fetch |
+| fetch | build | fetch、build |
+| build | test | fetch、build、test |
+| test | 空 | fetch、build、test |
+
+队列保存已发现但还没检查后续边的节点，`seen` 保存所有已发现节点。二者用途不同；最终的排序输出只方便核对，不表示发现次序。
+
 这种使用先进先出队列、逐层发现可达节点的过程称为<Term id="breadth-first-traversal">广度优先遍历</Term>（BFS）。`seen` 避免同一个节点重复加入队列。输出包括起点本身。即使有限图里有环，每个节点也最多入队一次，遍历仍会结束。这里找的是“从起点能到哪里”，没有安排任务执行；`build` 是否已经等到全部前置完成，要另外判断。
 
 ## 依赖环与执行顺序

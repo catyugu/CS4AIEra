@@ -6,7 +6,7 @@ title: 名字、对象与可变状态
 status: published
 objectives:
   - 区分名字的重新赋值与对象的原地修改
-  - 追踪共享对象与浅拷贝中的修改，指出哪些使用方会看到变化
+  - 追踪共享列表与复制后的列表，指出哪些使用方会看到追加
   - 判断共享状态是否符合各使用方的要求
 ---
 
@@ -74,25 +74,11 @@ working.append(30)
 
 此时 `samples` 是 `[10, 20]`，`working` 是 `[10, 20, 30]`。
 
-但复制外层列表，并没有复制里面的对象。这叫<Term id="shallow-copy">浅拷贝</Term>。列表可以包含其他列表；`batches[0]` 读取第一个元素，下标从 0 开始。
-
-```python run id="program-logic-and-state.names-objects-and-state.copy-levels"
-batches = [[10, 20], [30, 40]]
-working = list(batches)
-working[0].append(50)
-print("batches:", batches)
-print("working:", working)
-print("same outer list:", batches is working)
-print("same first list:", batches[0] is working[0])
-```
-
-两个外层列表不同，第一个元素却指向同一个内部列表。因此 `working[0].append(50)` 从两处都能看到。需要独立修改这个内部列表时，还要复制它；递归复制的含义见<Term id="deep-copy">深拷贝</Term>。
-
 ## 共享是否符合要求
 
 共享本身可以是有意的。例如两处代码都要看到同一份记录，追加记录就应该在两处可见。如果一处要求保留原记录，另一处却把它当工作清单修改，共享就违反了这个要求。
 
-判断一次修改会影响谁，沿着名字和容器元素找到共享这个对象的使用方。
+判断一次追加会影响谁，先找出哪些名字指向同一个列表。
 
 ## 练习
 

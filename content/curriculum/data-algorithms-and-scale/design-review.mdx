@@ -25,8 +25,6 @@ objectives:
 | 追加书目、更新记录 | 每天约 200 次 |
 | 分类 | 20 个，各类书目数量尚未统计 |
 
-这是一个假设的工作负载，用来比较方案；增长率也只是估计。查询要求沿用章首的约定：返回目标分类中评分不低于门槛的可借书目，评分从高到低，同分时按编号升序。怎样判断初版方案够不够用？
-
 ## 字典加速了哪种查询
 
 按 `id` 取详情，确实可以利用字典的键。筛选需要分类、可借状态和评分，这些字段存在值里，字典没有按它们组织记录，因此仍要逐条检查。
@@ -54,7 +52,9 @@ objectives:
 
 这里的排序列表按分类排列，不能同时保证每次筛选的结果按评分排列。两种整理方法都减少了扫描范围，但都还有查询和更新成本。
 
-下面实际比较全库扫描与分类索引。两次使用同一个查询函数，区别只在交给它检查的记录范围：
+下面实际比较全库扫描与分类索引。两次使用同一个查询函数，区别只在交给它检查的记录范围。
+
+新增的排列要求由 `sorted(matched, key=ranking_key)` 完成：它返回排好序的新列表，不修改 `matched`。`key` 指定一个函数，为每本书生成比较用的值；这里把函数交给排序工具，不在这个位置自己调用它。`ranking_key` 返回元组 `(-评分, 编号)`，元组先比较第一项，再比较第二项。评分前加负号，升序排列便得到评分从高到低、同分编号从小到大的结果。规则见 [Python 排序指南：键函数](https://docs.python.org/3/howto/sorting.html#key-functions)。
 
 ```python run id="data-algorithms-and-scale.design-review.group-query"
 books = [
@@ -62,6 +62,8 @@ books = [
     {"id": "b2", "category": "science", "available": False, "rating": 4.9},
     {"id": "b3", "category": "history", "available": True, "rating": 4.7},
     {"id": "b4", "category": "science", "available": True, "rating": 4.5},
+    {"id": "b5", "category": "science", "available": True, "rating": 3.0},
+    {"id": "b6", "category": "science", "available": False, "rating": 4.8},
 ]
 by_category = {}
 for book in books:
@@ -89,11 +91,7 @@ print("category scan:", query(category_books, "science", 4.0))
 print("records checked:", len(books), len(category_books))
 ```
 
-`sorted(matched, key=ranking_key)` 返回排好序的新列表，不修改 `matched`。`key` 指定一个函数，为每本书生成比较用的值；这里把函数交给排序工具，不在这个位置自己调用它。
-
-`ranking_key` 返回元组 `(-评分, 编号)`。元组先比较第一项，同分时再比较第二项。评分前加负号，较高评分便有较小的比较值，因此升序排序得到“评分从高到低，编号从小到大”。规则见 [Python 排序指南：键函数](https://docs.python.org/3/howto/sorting.html#key-functions)。
-
-两次输出都先是 `b4`、再是 `b1`。分类索引让第二次只检查三条科学类书目，而全库扫描要检查四条。若目标分类包含绝大多数书目，$k$ 接近 $n$，就省不了多少。只有各类数量近似均匀时，才可以估计 $k\approx n/20$。
+两次输出都先是 `b4`、再是 `b1`。分类索引让第二次检查五条科学类书目，全库扫描检查六条；查历史类时则只需检查一条。类别数量没有说明每类包含多少记录。若目标分类包含绝大多数书目，$k$ 接近 $n$，就省不了多少。只有各类数量近似均匀时，才可以估计 $k\approx n/20$。
 
 ## 更新以后，哪些假设还要成立
 
@@ -103,21 +101,28 @@ print("records checked:", len(books), len(category_books))
 
 ## 练习
 
-书目系统收到两批数据，下面的导入方式是否符合需求？先预测保存的记录数和科学类查询结果，再运行。分别考虑“第二批是修正资料”和“第二批是另一册新书”两种情况：编号重复时应该覆盖、另分编号，还是报告冲突？`by_id.values()` 遍历字典的值，也就是这里的书目记录。
+为了进一步减少扫描，有人提出分类分组只保存当前可借的书，借出、归还时只修改原记录。下面的方案在两次状态更新后，查询是否仍符合要求？共享记录对象解决了哪些更新，又有哪些信息需要另外维护？
 
-```python run id="data-algorithms-and-scale.design-review.dict-drops-record"
-rows = [
-    {"id": "b1", "category": "science", "rating": 4.0},
-    {"id": "b2", "category": "science", "rating": 4.7},
-    {"id": "b1", "category": "history", "rating": 4.5},
+```python run id="data-algorithms-and-scale.design-review.exercise-availability-index"
+books = [
+    {"id": "b1", "category": "science", "available": True},
+    {"id": "b2", "category": "science", "available": False},
 ]
-by_id = {}
-for row in rows:
-    by_id[row["id"]] = row
-print("source count:", len(rows), "stored count:", len(by_id))
-matched = []
-for row in by_id.values():
-    if row["category"] == "science":
-        matched.append(row["id"])
-print("science:", matched)
+available_by_category = {"science": []}
+for book in books:
+    if book["available"]:
+        available_by_category[book["category"]].append(book)
+
+books[0]["available"] = False
+books[1]["available"] = True
+matched_ids = []
+for book in available_by_category["science"]:
+    if book["available"]:
+        matched_ids.append(book["id"])
+print("available science books:", matched_ids)
 ```
+
+再审查两个需求变化：
+
+- 分类很少变，可借状态每天变化很多次。与保存全部分类记录相比，只保存可借记录的方案增加了哪些维护工作？你会根据什么选择？
+- 查询只返回评分最高的十本。是否仍然必须排列全部命中记录？尝试用已学过的结构描述一种保留候选的方案，并说明同分时怎样处理。找到十本就立即停止扫描是否足够？

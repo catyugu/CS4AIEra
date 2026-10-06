@@ -53,6 +53,13 @@ except ValueError as failure:
 
 失败发生在 `parse_seconds` 里。它没有 `except`，异常离开这次调用；`process` 也没有捕获，因而不能执行打印或返回。最外层的 `except` 接住了异常，`batch complete` 不会输出。如果一直没有匹配的处理代码，这次执行就以未捕获异常结束，并显示回溯，列出经过的调用位置。
 
+| 位置 | 失败后的动作 |
+| --- | --- |
+| `int("fast")` | 抛出 `ValueError`，没有转换结果 |
+| `parse_seconds` | 没有处理代码，异常离开调用 |
+| `process` | 没有处理代码，打印和返回都被跳过 |
+| 外层 `try` | 跳过剩余语句，执行匹配的 `except` |
+
 异常不会撤销已经完成的修改和输出。若前一项任务已经加入结果列表，后一项失败并不会自动删除它。
 
 ## 捕获位置与失败的含义
@@ -138,7 +145,17 @@ print("log:", log)
 
 成功时，先计算返回值，再执行 `finally`，最后返回。失败时，先执行 `finally`，再继续传播异常。因此两次调用都记录了 `end`，失败那次仍然抛出异常。普通地把日志追加写在 `return` 之后，两种情况都执行不到它。
 
-关闭已打开的文件、释放已获得的资源，也常需要这样的清理。上述执行顺序见 [Python 的 try 语句](https://docs.python.org/3/reference/compound_stmts.html#the-try-statement)。`finally` 不是应对进程被强制终止或机器断电的保证。
+日志让这两条执行路径可见。另一个用途是关闭已经打开的文件：读取内容或转换数值失败时，也需要关闭文件。假设 `duration.txt` 已经存在，程序可以写成：
+
+```python
+source = open("duration.txt", encoding="utf-8")
+try:
+    seconds = int(source.read())
+finally:
+    source.close()
+```
+
+`open` 打开文本文件，`read()` 读取文本，`close()` 关闭文件并释放相关资源。文件成功打开后，关闭动作放在 `finally` 中；若只写在转换之后，转换失败就会跳过它。文件操作见 [Python 教程：读写文件](https://docs.python.org/3/tutorial/inputoutput.html#reading-and-writing-files)，退出时的执行顺序见 [Python 的 try 语句](https://docs.python.org/3/reference/compound_stmts.html#the-try-statement)。`finally` 不是应对进程被强制终止或机器断电的保证。
 
 ## 练习
 

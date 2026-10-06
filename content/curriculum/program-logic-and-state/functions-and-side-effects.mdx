@@ -60,19 +60,25 @@ print(first_above([], 5))
 调用时绑定参数名，并不复制参数对象。下面将一句笔记加入列表：
 
 ```python run id="program-logic-and-state.functions-and-side-effects.binding"
-def add_note(notes, text):
-    notes.append(text)
+def add_note(items, text):
+    items.append(text)
+
+
+def replace_notes(items, text):
+    items = [text]
 
 
 notes = ["first idea"]
 returned = add_note(notes, "another idea")
 print("notes:", notes)
 print("returned:", returned)
+replace_notes(notes, "replacement")
+print("after replacement:", notes)
 ```
 
-函数里的 `notes` 与调用方的 `notes` 指向同一个列表，`append` 修改了它。这个函数没有 `return`，所以调用结果为 `None`。
+调用 `add_note` 时，函数里的 `items` 与调用方的 `notes` 指向同一个列表，`append` 修改了它。这个函数没有 `return`，所以调用结果为 `None`。
 
-如果函数体改成 `notes = [text]`，则只改变局部参数名的绑定，不会改调用方的列表。修改与重新赋值的区别见 <CrossRef id="program-logic-and-state.names-objects-and-state" />。
+调用 `replace_notes` 时，`items = [text]` 新建列表，只改变局部参数名 `items` 的绑定。调用方的 `notes` 仍指向原列表。两个参数名都只在各自的调用中使用。修改与重新赋值的区别见 <CrossRef id="program-logic-and-state.names-objects-and-state" />。
 
 ## 返回新列表，还是修改原列表
 
@@ -91,7 +97,7 @@ print("original:", notes)
 print("updated:", updated)
 ```
 
-两个函数都能添加内容，但调用方式不同：`add_note` 修改原列表，调用方直接使用原来的名字；`with_note` 保留原列表，调用方需要接住返回的新列表。
+`add_note` 和 `with_note` 都能添加内容，但调用方式不同：`add_note` 修改原列表，调用方直接使用原来的名字；`with_note` 保留原列表，调用方需要把返回的新列表赋给一个名字。
 
 修改传入对象、写入输出、改变外部共享数据，这些对函数外部的影响叫<Term id="side-effect">副作用</Term>。函数返回什么、产生什么副作用，要分别读清楚。
 
@@ -106,7 +112,15 @@ print("updated:", updated)
 
 下面函数将列表中的每个数增加 `amount`。先判断调用后的两个输出。再把函数改成“返回调整后的新列表，保留原列表”，调用方应怎样接收结果？
 
-`range(len(numbers))` 依次提供有效下标 0、1、2，`numbers[i] += amount` 更新该位置的值。
+修改指定位置时，需要下标。`range(n)` 依次提供 0 到 `n - 1` 的整数，因此 `range(len(numbers))` 提供这个列表的全部有效下标。例如：
+
+```python
+numbers = [10, 20, 30]
+for i in range(len(numbers)):
+    print(i, numbers[i])
+```
+
+这里依次读取下标 0、1、2 上的值。练习里的 `numbers[i] += amount` 则更新该位置的值。
 
 ```python run id="program-logic-and-state.functions-and-side-effects.exercise-increase"
 def increase(numbers, amount):

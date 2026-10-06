@@ -38,7 +38,7 @@ print((12.5 + 11.5 + 12.0) / 3)
 
 写出所有数字适合一次计算；步骤变多时，可以给数据和结果取名：
 
-```python
+```python run id="program-logic-and-state.execution-basics.named-steps"
 a = 12.5
 b = 11.5
 c = 12.0
@@ -54,7 +54,9 @@ print(mean)
 
 执行 `total = a + b + c` 时，先取出三个名字当前的值，相加得到 `36.0`，再把 `total` 绑定到结果。随后读取 `total`，除以 3，得到 `mean`。名字的拼写由我们选择，`mean` 表示平均值；改名时，同一名字的所有使用位置也要一致。
 
-`12.5`、`a`、`a + b + c` 都是表达式：它们可以计算出一个值。这个计算过程叫求值。字面量直接给出值，名字读取它当前关联的值，运算表达式则用这些值计算结果。赋值语句先求右边表达式的值，再把结果绑定到左边的名字。
+把 `b` 改成另一个数，平均值会怎样变化？也可以在计算总和之后加入 `print(total)`，观察中间结果。打印放在赋值之前时，这个名字还没有得到值。
+
+`12.5`、`a`、`a + b + c` 都能计算出一个值，这样的代码称为表达式。计算表达式的值叫求值。赋值语句先计算右边，再把结果绑定到左边的名字。
 
 ## 变量名与字符串字面量不同
 
@@ -94,7 +96,7 @@ print("b:", b)
 
 函数是可以调用的一段程序。Python 提供了 `print`、`round` 等已有函数，调用时在函数名后写括号，括号中放交给它处理的数据，称为参数。
 
-```python
+```python run id="program-logic-and-state.execution-basics.round-result"
 value = 11.87
 rounded = round(value)
 print("original:", value)

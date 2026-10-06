@@ -62,30 +62,41 @@ print("found at:", found)
 
 索引保存从查询条件到记录的定位信息。主列表保留记录，额外字典保存“编号 → 记录”；如果查询按分类进行，还可以保存“分类 → 这一类的记录列表”。
 
+```python run id="data-algorithms-and-scale.representation-preprocessing-and-indexes.record-sharing"
+books = [{"id": "b1", "category": "science", "price": 30}]
+by_id = {}
+for book in books:
+    by_id[book["id"]] = book
+
+by_id["b1"]["price"] = 35
+print("price in original list:", books[0]["price"])
+print("same record:", books[0] is by_id["b1"])
+```
+
+`by_id` 保存的是原记录对象。通过索引修改价格，主列表也会读到新价格。
+
+分类索引除了共享记录，还保存了记录属于哪个分组：
+
 ```python run id="data-algorithms-and-scale.representation-preprocessing-and-indexes.index-update"
 books = [
     {"id": "b1", "category": "science", "price": 30},
     {"id": "b2", "category": "history", "price": 40},
     {"id": "b3", "category": "science", "price": 50},
 ]
-by_id = {}
 by_category = {}
 for book in books:
-    by_id[book["id"]] = book
     category = book["category"]
     if category not in by_category:
         by_category[category] = []
     by_category[category].append(book)
 
-book = by_id["b1"]
-book["price"] = 35
-print("price through index:", by_category["science"][0]["price"])
+book = books[0]
 book["category"] = "history"
 print("science entries:", by_category["science"])
 print("history entries:", by_category["history"])
 ```
 
-改变价格后，索引读取到新价格，因为保存的还是同一个记录对象。改变分类后，记录却没有自动从 `science` 移到 `history`。**共享记录与维护分组是两件事。** 修改分类时，还要从旧列表移除这条记录，并加入新列表。
+改变分类后，记录没有自动从 `science` 移到 `history`。**共享记录与维护分组是两件事。** 修改分类时，还要从旧列表移除这条记录，并加入新列表。
 
 按编号查询可以用 `by_id["b1"]`；允许编号不存在时，`by_id.get("missing")` 返回 `None`。`get` 的第二个参数可以指定默认值，例如 `by_category.get("art", [])` 在没有该类时返回空列表。直接遍历字典取得的是键。
 
@@ -95,11 +106,19 @@ print("history entries:", by_category["history"])
 
 本课程运行环境中的 Python `dict` 采用哈希表实现：从键计算<Term id="hash-value">哈希值</Term>，用它缩小要检查的位置范围，再比较键。不同键可能算出相同的哈希值，这时仍要比较键本身，不能把哈希值当成唯一编号。
 
+| 步骤 | 查找时做什么 |
+| --- | --- |
+| 计算哈希值 | 根据查询键计算一个整数 |
+| 确定候选位置 | 根据哈希值与表的内部结构确定要检查的位置 |
+| 比较键 | 确认候选位置保存的键是否等于查询键，匹配后取得值 |
+
+发生冲突时，需要继续检查其他候选位置。速度取决于能否把候选范围缩得足够小。
+
 在通常的哈希分布、固定成本的键处理假设下，按键查找的平均成本为 $O(1)$；最坏情况可能为 $O(n)$。平均成本描述某种输入分布下的总体表现，最坏成本则考虑最不利的合法输入。不能因为通常查得快，就保证每次都查得快，也不能从“映射”这个抽象名称直接推出查找成本。实现说明见 [Python FAQ：字典如何实现](https://docs.python.org/3/faq/design.html#how-are-dictionaries-implemented-in-cpython)。
 
 按分类索引后，一次查询只检查目标分类的 $k$ 条记录。它不能直接按价格筛选或排名；这些操作仍要检查分类内的记录，或者维护另一个适合价格查询的结构。
 
-## 查询节省的工作由空间和更新来换
+## 高效查询的成本：空间消耗和更新代价
 
 额外字典及分组列表占空间，建索引要读一遍数据，写入和分类修改要同步维护。查询频繁、单次能排除很多记录时，这些代价可能值得；目标分类包含大部分记录时，节省就有限。
 
@@ -107,4 +126,6 @@ print("history entries:", by_category["history"])
 
 ## 练习
 
-修复分类修改后的索引，使按分类查到的记录重新符合数据。然后考虑：如果经常改分类、很少按分类查询，还值得维护 `by_category` 吗？如果每个编号的历史价格都要保留，`by_id` 当前的值还够用吗？分别指出需要重新确认的需求与新增代价。
+修复分类修改后的索引，使按分类查到的记录重新符合数据。`group.remove(book)` 从列表中移除第一个等于 `book` 的元素；这里编号唯一，能确定要移除的记录。先保存旧分类，再思考移除和加入分别应该作用于哪个列表，新增分类不存在时又该怎样处理。
+
+如果经常改分类、很少按分类查询，还值得维护 `by_category` 吗？如果每个编号的历史价格都要保留，`by_id` 当前的值还够用吗？分别指出需要重新确认的需求与新增代价。

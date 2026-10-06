@@ -24,13 +24,18 @@ class Notebook:
     def add(self, text):
         self.notes.append(text)
 
+    def count(self):
+        return len(self.notes)
+
 
 first = Notebook("draft")
 second = Notebook("release")
 first.add("first idea")
+first.add("revised idea")
 second.add("another idea")
 print(first.name, first.notes)
 print(second.name, second.notes)
+print("counts:", first.count(), second.count())
 print("same list:", first.notes is second.notes)
 ```
 
@@ -40,9 +45,11 @@ print("same list:", first.notes is second.notes)
 
 `self.name = name` 在实例上建立属性 `name`，`self.notes = []` 建立属性 `notes`。每次初始化都新建列表，因此两个笔记本各有自己的笔记列表，最后一行打印 `False`。用点号访问属性，例如 `first.notes`，就能取得实例保存的对象。
 
+`first.count()` 返回 2，`second.count()` 返回 1。同一份 `add` 和 `count` 定义用于两本笔记本，每次操作的是接收到的实例。调用时不用另外传入笔记列表，实例上的 `notes` 属性保存了它。
+
 ## 方法接收到哪个实例
 
-`add` 是定义在类里的函数，作为实例的方法调用。`first.add("first idea")` 把 `first` 作为第一个参数传入，函数体中的 `self.notes` 因而访问第一个笔记本。`Notebook.add(first, "first idea")` 也能表达这个调用。
+`add` 是定义在类里的函数，作为实例的方法调用。`first.add("first idea")` 把 `first` 作为第一个参数传入，函数体中的 `self.notes` 因而访问第一个笔记本。
 
 `self` 是约定的参数名，不是一个特殊的全局对象。对第二个笔记本调用方法时，这次调用中的 `self` 就是 `second`。
 
@@ -77,4 +84,24 @@ print("same list:", first.notes is second.notes)
 
 ## 练习
 
-给第一个版本的 `Notebook` 增加 `count()` 方法，返回笔记数。创建两个实例，只给第一个加笔记，先预测两次调用的结果，再运行。然后把笔记列表移到类体，确认哪些结果改变，并说明原因。
+这个版本没有定义自己的 `__init__`，用不带参数的 `Notebook()` 创建实例。两个实例先使用类上的列表，再给其中一个设置同名属性。执行结束后，它们的笔记分别是什么？第三个实例会读取哪一份笔记？
+
+```python run id="program-logic-and-state.classes-instances-and-modules.exercise-own-notes"
+class Notebook:
+    notes = []
+
+    def add(self, text):
+        self.notes.append(text)
+
+
+first = Notebook()
+second = Notebook()
+first.add("shared note")
+first.notes = []
+first.add("private note")
+second.add("another note")
+third = Notebook()
+print("first:", first.notes)
+print("second:", second.notes)
+print("third:", third.notes)
+```

@@ -8,6 +8,7 @@ objectives:
   - 读懂列表、元组、集合与字典的常用操作
   - 说明转换容器时哪些次序、重复或对应关系被保留
   - 预测修改容器后得到的内容与访问不存在元素时的结果
+  - 区分复制外层容器与复制内部对象，追踪嵌套列表中的共享
 ---
 
 三次测量得到 `[4, 7, 4]`。需要计算平均值时，两次 4 都要保留；只问出现过哪些数时，重复次数可以忽略。列表、集合和字典都能容纳多个值，但保存的信息不同。
@@ -30,7 +31,7 @@ print("first two:", values[:2])
 
 最后一行使用切片：`values[:2]` 取得下标 2 之前的元素，`values[1:]` 从下标 1 取到末尾。一般写法 `values[start:stop]` 从 `start` 开始，在 `stop` 之前结束；省略起点表示从头开始，省略终点表示取到末尾。
 
-列表切片返回新列表，仍与原列表共享元素对象，是浅拷贝。切片允许只取实际存在的部分；直接读取 `values[10]` 会报 `IndexError`，因为列表没有这个位置。空列表的长度为 0，也没有下标为 0 的元素。
+列表切片返回新列表。切片允许只取实际存在的部分；直接读取 `values[10]` 会报 `IndexError`，因为列表没有这个位置。空列表的长度为 0，也没有下标为 0 的元素。
 
 元组也属于序列，适合把几个相关值放在一起，例如坐标 `(3, 5)`。它的元素位置固定，创建后不能替换。`x, y = (3, 5)` 将两项分别赋给两个名字，称为解包；这里的名字数要与元素数一致。
 
@@ -69,9 +70,9 @@ print("key count:", len(prices))
 
 `"apple" in prices` 检查键是否存在。直接读取没有保存的键会抛出 `KeyError`，如 `prices["banana"]`。键标识的是所查项目，不是它在容器中的第几个位置。
 
-字符串和整数可以作为字典键，也能作为集合元素。列表则不能，因为这两种容器要求键或元素支持稳定的<Term id="hash-value">哈希值</Term>。元组能否使用，取决于其中的元素是否都满足这个要求。具体规则见 [Python 术语表：可哈希](https://docs.python.org/3/glossary.html#term-hashable)。当前例子使用字符串或整数即可，查找机制在下一章再讨论。
+这些例子使用字符串作为键；整数也能作键，列表不能。字典键与集合元素的限制见 [Python 术语表：可哈希](https://docs.python.org/3/glossary.html#term-hashable)。
 
-[Python 字典](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)保持键的插入顺序，更新值不改变这个顺序。这是 Python 的语言保证，抽象的映射只要求键值对应，不必要求插入顺序。
+[Python 字典](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)保持键的插入顺序，更新已有键的值不改变它的位置。
 
 ## 哪些信息必须保留
 
@@ -82,6 +83,31 @@ print("key count:", len(prices))
 | 一个键对应什么值 | 映射，例如字典 |
 
 如果原始数据是三次测量 `[4, 7, 4]`，转换为集合后就不能再计算同一份数据的平均值：少了一次 4。容器转换会改变可回答的问题。
+
+## 外层列表复制后，内部列表仍可能共享
+
+列表的元素也可以是列表。`batches[0]` 读取第一批数据，得到的仍是一个列表，因此可以继续调用它的 `append`。
+
+```python run id="program-logic-and-state.sequences-sets-and-mappings.copy-levels"
+batches = [[10, 20], [30, 40]]
+working = list(batches)
+working[0].append(50)
+print("batches:", batches)
+print("working:", working)
+print("same outer list:", batches is working)
+print("same first list:", batches[0] is working[0])
+```
+
+`list(batches)` 新建外层列表，但新列表的元素仍指向原来的内部列表。复制后、追加前的关系如下，C 与 D 分别表示两份内部列表：
+
+```text
+batches → 列表 A → [C, D]
+working → 列表 B → [C, D]
+C → [10, 20]
+D → [30, 40]
+```
+
+因此 `working[0].append(50)` 从两处都能看到。只复制外层、保留元素对象的这种复制称为<Term id="shallow-copy">浅拷贝</Term>，列表切片也如此。若要独立修改第一批数据，可以先执行 `working[0] = list(working[0])`，复制它，再追加；其他内部列表仍共享。递归复制内部对象的含义见<Term id="deep-copy">深拷贝</Term>。
 
 ## 练习
 
