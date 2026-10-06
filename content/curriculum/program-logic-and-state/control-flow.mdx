@@ -30,6 +30,8 @@ print("checked")
 
 比较还可以使用 `>`、`<`、`<=`、`==`、`!=`，分别表示大于、小于、小于或等于、相等、不相等。多个情况可以用 `elif` 依次判断，第一个成立的分支执行，后面的分支不再判断。
 
+条件也可以直接使用已有的布尔值，如 `if available:`。Python 还允许用其他值作条件：空列表、空字符串和数值 0 按假处理，非空列表和非零数值按真处理。因此 `if numbers:` 可以检查列表是否非空，`while numbers:` 会在每轮开始前检查列表是否仍非空。规则见 [Python 标准类型：真值检测](https://docs.python.org/3/library/stdtypes.html#truth-value-testing)。
+
 ## for 逐项处理列表
 
 `for number in numbers:` 每轮从列表取下一个元素，赋给 `number`，再执行缩进的循环体。
@@ -50,7 +52,7 @@ print("sum:", total)
 
 ## while 每轮重新检查条件
 
-如果要一直重复到条件不成立，可以用 `while`。例如确定至少要翻倍多少次，才能从一份数据增长到目标数量：
+如果要一直重复到条件不成立，可以用 `while`。例如每次将容量翻倍，确定从容量 1 开始至少要扩充多少次，才能容纳 20 项数据：
 
 ```python run id="program-logic-and-state.control-flow.halving"
 target = 20

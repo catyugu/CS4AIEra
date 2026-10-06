@@ -6,7 +6,7 @@ title: 重复子问题、记忆化与动态规划
 status: published
 objectives:
   - 说明递归例子中哪些子问题被重复计算，以及记忆化省掉了什么
-  - 比较缓存键相同但正确答案不同的两次调用，找出键中遗漏的条件
+  - 找出缓存键中遗漏的条件，并判断返回的可变对象是否会被调用方改坏
   - 根据不同子问题的数量和每个子问题的操作次数，在给定成本模型下估算记忆化的工作量与保存的结果数
   - 说明递归记忆化与自底向上的循环如何按不同顺序复用同一组子问题结果
 ---
@@ -97,6 +97,10 @@ print("saved answers:", memo)
 
 对于距离 $n$，至多保存 $n+1$ 个结果。若把字典访问和整数加法按固定成本计，每个距离只需固定数量的操作，总工作与 $n$ 成正比。代价是多用一张表，而且递归调用仍有深度；终点非常远时，Python 的递归深度限制也需要考虑。
 
+这里数的是加法和表访问次数。走法数会随距离增大，保存一个结果所需的位数、相加的成本也会增加；“保存 $n+1$ 个结果”不等于占用固定倍数的 $n$ 字节。
+
+## 按依赖次序计算，也能复用结果
+
 也可以按距离从小到大计算，避免递归调用。先保存距离为 0 和 1 的答案，再依次求距离为 2、3、4 的答案，每个新值都使用已经保存的两个较小值：
 
 ```python run id="data-algorithms-and-scale.memoization-and-dynamic-programming.bottom-up"
@@ -117,7 +121,7 @@ print("ways:", answers[distance])
 
 这里的状态指决定接下来如何计算的信息。旧规则下，只知道剩余距离就足够；新规则下，同样的剩余距离，因上一步不同而有不同的合法走法。
 
-下面故意仍只用距离作键。先求“上一步跨了 2 格”的情况，再求“上一步跨了 1 格”的情况，预测第二次会发生什么：
+如果仍沿用只按距离保存结果的旧表，两种状态就会占用同一个位置：
 
 ```python run id="data-algorithms-and-scale.memoization-and-dynamic-programming.incomplete-key"
 memo = {}
@@ -153,7 +157,7 @@ print("after step 1:", ways(2, 1))
 
 ## 练习
 
-下面的函数检查哪些数达到门槛，并保存结果。两次调用的输入列表相同、门槛不同，它会分别返回什么？把第二个门槛改成 10，又会怎样？
+下面已经把数列与门槛都放进缓存键。调用方取到结果后清空它，再做同一个查询。这次查询会返回什么，是否仍满足“返回达到门槛的数”这一要求？应如何修改返回方式，才能让调用方调整自己的结果而不影响缓存？
 
 `tuple(numbers)` 将列表转换成元组；这里的元素都是整数，因此这个元组可以作为字典键。
 
@@ -162,7 +166,7 @@ memo = {}
 
 
 def qualifying(numbers, threshold):
-    key = tuple(numbers)
+    key = (tuple(numbers), threshold)
     if key not in memo:
         result = []
         for number in numbers:
@@ -173,6 +177,10 @@ def qualifying(numbers, threshold):
 
 
 numbers = [8, 3, 6]
-print("threshold 5:", qualifying(numbers, 5))
-print("threshold 7:", qualifying(numbers, 7))
+selected = qualifying(numbers, 5)
+print("first query:", selected)
+selected.clear()
+print("same query again:", qualifying(numbers, 5))
 ```
+
+`clear()` 删除列表中的全部元素。再从成本考虑：每次查询都要把完整数列转换成元组、计算键的哈希值。这些工作随数列长度增长。对于只做一次简单筛选的函数，这份缓存是否一定更快？怎样的重复计算才更值得保存结果？

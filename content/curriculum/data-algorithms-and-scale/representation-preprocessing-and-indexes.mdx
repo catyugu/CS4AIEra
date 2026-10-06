@@ -58,6 +58,21 @@ print("found at:", found)
 
 查询越多，越容易收回准备成本。只查一次时，排序通常没有优势；实际交叉点需要结合数据与实现测量。后续追加和修改也要计入成本，例如往有序列表末尾追加，可能破坏有序性。
 
+排序记录时，需要指定按哪个字段比较。`sorted(books, key=book_id)` 返回排好序的新列表，`book_id` 是一个接收记录、返回编号的函数。这里把函数交给 `sorted`，由它对每条记录调用；自己写 `book_id(book)` 则是立即调用一次。
+
+```python run id="data-algorithms-and-scale.representation-preprocessing-and-indexes.sort-key"
+def book_id(book):
+    return book["id"]
+
+
+books = [{"id": 8, "title": "B"}, {"id": 2, "title": "A"}]
+ordered = sorted(books, key=book_id)
+print("original:", books)
+print("ordered:", ordered)
+```
+
+原列表仍按 8、2 排列，新列表按 2、8 排列。若要按评分从高到低，再按编号处理同分记录，键函数可以返回 `(-book["rating"], book["id"])`：元组先比较第一项，相同时再比较第二项。负号把高评分放在升序排列的前面。规则见 [Python 排序指南：键函数](https://docs.python.org/3/howto/sorting.html#key-functions)。
+
 ## 按键索引避免反复扫描
 
 索引保存从查询条件到记录的定位信息。主列表保留记录，额外字典保存“编号 → 记录”；如果查询按分类进行，还可以保存“分类 → 这一类的记录列表”。
@@ -90,10 +105,15 @@ for book in books:
         by_category[category] = []
     by_category[category].append(book)
 
+
 def change_category(book, new_category):
     by_category[book["category"]].remove(book)
     book["category"] = new_category
-    
+    if new_category not in by_category:
+        by_category[new_category] = []
+    by_category[new_category].append(book)
+
+
 change_category(books[0], "history")
 print("science:", by_category["science"])
 print("history:", by_category["history"])
@@ -101,19 +121,15 @@ print("history:", by_category["history"])
 
 **共享记录与维护分组是两件事。** 修改分类时，还要从旧列表移除这条记录，并把记录加入新列表。
 
-> 列表的 `remove` 方法移除第一个与参数相等的元素，找不到时会报错。例如 `numbers = [10, 20]`，调用 `numbers.remove(10)` 后只剩 `[20]`。练习中的书目编号唯一，因此不同记录不会比较为相等。
+列表的 `remove` 方法移除第一个与参数相等的元素，找不到时会报错。例如 `numbers = [10, 20]`，调用 `numbers.remove(10)` 后只剩 `[20]`。这里书目编号唯一，因此不同记录不会比较为相等。这个更新函数假定记录确实在旧分组中；改到此前不存在的分类时，先创建空分组。
+
+这个函数维护了分组成员，但移入的记录追加在新分组末尾，不一定保持主列表中的原有次序。若查询要求按原有次序返回，还要按记录在主列表中的位置整理结果。
 
 ## 抽象保证与实现性能
 
 映射规定按键取值的结果，却不要求用某种存储方式实现。这种只规定操作与结果的模型称为<Term id="abstract-data-type">抽象数据类型</Term>。
 
 本课程运行环境中的 Python `dict` 采用哈希表实现：从键计算<Term id="hash-value">哈希值</Term>，用它缩小要检查的位置范围，再比较键。不同键可能算出相同的哈希值，这时仍要比较键本身，不能把哈希值当成唯一编号。
-
-| 步骤 | 查找时做什么 |
-| --- | --- |
-| 计算哈希值 | 根据查询键计算一个整数 |
-| 确定候选位置 | 根据哈希值与表的内部结构确定要检查的位置 |
-| 比较键 | 确认候选位置保存的键是否等于查询键，匹配后取得值 |
 
 发生冲突时，需要继续检查其他候选位置。速度取决于能否把候选范围缩得足够小。
 
@@ -129,9 +145,11 @@ print("history:", by_category["history"])
 
 ## 练习
 
-直接扫描时，每次查询需要检查全部书目；维护分类索引时，只需读取目标分类的记录，但每次修改分类都要维护分组。分别估算两种方案每天查询需要读取多少条记录，再比较以下两个使用情况：它们都保存 10000 条书目，每次按分类查询约返回 100 条，不要求排序。哪种方案适合场景甲？哪种方案适合场景乙？
+两种使用情况都保存 10000 条书目，每次只查询一个分类，目标分类约含 100 条记录，返回该分类的全部记录，不要求排序。分别估算全库扫描与分类索引每天需要检查多少条记录。
 
 | 使用情况 | 每天按分类查询 | 每天修改分类 |
 | --- | ---: | ---: |
 | 甲 | 10000 次 | 20 次 |
 | 乙 | 20 次 | 10000 次 |
+
+查询部分的差距能否直接决定方案？结合上面的 `change_category`，说明一次修改分类需要哪些操作、成本会受哪些分组大小影响。还需要测量什么，才能判断甲、乙各自是否值得维护索引？

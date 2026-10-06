@@ -42,6 +42,8 @@ print("same function:", math.ceil is ceil)
 
 两种写法引用的是同一个函数，最后一行输出 `True`。导入没有复制函数，也没有把 `math` 中的所有名字都放进当前代码。用 `math.ceil` 调用时，函数来自哪个模块也一目了然。导入规则见 [Python 教程：模块](https://docs.python.org/3/tutorial/modules.html)。
 
+导入也可能执行代码：Python 文件第一次在一个运行环境中被导入时，会执行文件最外层的语句，包括赋值和函数定义。再次导入通常复用已经加载的模块对象，不重新执行整份文件。因此模块最外层若写了打印或修改数据的语句，导入时就会产生这些副作用。
+
 ## 练习
 
 只保留 `from math import ceil`，`ceil(5 / 2)` 和 `math.ceil(5 / 2)` 是否都能使用？在第二个单元格中删去第一行，先预测，再运行。随后只保留 `import math`，检查同样的问题。

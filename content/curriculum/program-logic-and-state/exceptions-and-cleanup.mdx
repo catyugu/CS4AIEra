@@ -159,4 +159,15 @@ finally:
 
 ## 练习
 
-要求改成“只要一条记录的耗时无效，就报告失败，不给出总和”。在逐项处理的例子中，将 `try` 放到循环外，怎样改变失败后的执行？先预测有效记录在错误项前面与后面时的输出，再修改代码核对。此前已产生的输出能否自动撤回？
+要求是“只要一条记录的耗时无效，就报告失败，不给出总和”。下面把捕获放在循环外，这样是否就满足了要求？先预测输出，再交换错误项与最后一项的位置，核对输出是否改变。若需要修改，应把输出总和的语句放在哪里？
+
+```python run id="program-logic-and-state.exceptions-and-cleanup.exercise-batch"
+entries = [("entry 1", "12"), ("entry 2", "fast"), ("entry 3", "5")]
+total = 0
+try:
+    for name, text in entries:
+        total += int(text)
+except ValueError as failure:
+    print("batch failed:", failure)
+print("total:", total)
+```

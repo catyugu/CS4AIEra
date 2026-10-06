@@ -54,7 +54,7 @@ objectives:
 
 下面实际比较全库扫描与分类索引。两次使用同一个查询函数，区别只在交给它检查的记录范围。
 
-新增的排列要求由 `sorted(matched, key=ranking_key)` 完成：它返回排好序的新列表，不修改 `matched`。`key` 指定一个函数，为每本书生成比较用的值；这里把函数交给排序工具，不在这个位置自己调用它。`ranking_key` 返回元组 `(-评分, 编号)`，元组先比较第一项，再比较第二项。评分前加负号，升序排列便得到评分从高到低、同分编号从小到大的结果。规则见 [Python 排序指南：键函数](https://docs.python.org/3/howto/sorting.html#key-functions)。
+排列规则约定为评分从高到低、同分时按编号从小到大。`ranking_key` 返回 `(-评分, 编号)`，`sorted` 据此返回排好序的新列表；键函数的用法见 <CrossRef id="data-algorithms-and-scale.representation-preprocessing-and-indexes" />。
 
 ```python run id="data-algorithms-and-scale.design-review.group-query"
 books = [
@@ -90,6 +90,8 @@ print("whole scan:", query(books, "science", 4.0))
 print("category scan:", query(category_books, "science", 4.0))
 print("records checked:", len(books), len(category_books))
 ```
+
+`by_category.get("science", [])` 在分类存在时返回对应列表，不存在时返回给定的空列表。因此查询不存在的分类会得到空结果，而不会因为缺少键报错。`get` 不会把这个空列表存进字典，见 [Python 字典：get](https://docs.python.org/3/library/stdtypes.html#dict.get)。
 
 两次输出都先是 `b4`、再是 `b1`。分类索引让第二次检查五条科学类书目，全库扫描检查六条；查历史类时则只需检查一条。类别数量没有说明每类包含多少记录。若目标分类包含绝大多数书目，$k$ 接近 $n$，就省不了多少。只有各类数量近似均匀时，才可以估计 $k\approx n/20$。
 

@@ -15,7 +15,7 @@ objectives:
 
 ## 树表达层次
 
-有根的树有一个根节点，根没有上级；其余每个节点恰好有一个上级，从根沿父子关系可以到达全部节点。
+结构中的每个元素称为节点，连接两个节点的关系称为边。有根的树有一个根节点，根没有上级；其余每个节点恰好有一个上级，从根沿父子关系可以到达全部节点。
 
 ```text
 project
@@ -24,7 +24,7 @@ project
 └── tests
 ```
 
-节点是结构中的一个元素，连接父子节点的是边。这棵树里，`main.py` 的上级是 `source`，`source` 的上级是 `project`。沿上级追溯，不会绕回自己，而会停在根。
+这棵树里，`main.py` 的上级是 `source`，`source` 的上级是 `project`。沿上级追溯，不会绕回自己，而会停在根。
 
 ```python run id="data-algorithms-and-scale.trees-graphs-and-dependencies.layers"
 parent = {"project": None, "source": "project",
@@ -47,7 +47,8 @@ print("root:", node, "depth:", depth)
 
 ```text
 fetch → build → test
-config ───┘
+        ↑
+      config
 ```
 
 这里 `fetch` 表示下载内容，`config` 表示读取配置，`build` 表示生成页面，`test` 表示检查结果。`build` 同时等待 `fetch` 和 `config`，这种多个前置的关系不能用一个上级表达。箭头从前置指向后续任务，方向不能反过来读。

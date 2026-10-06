@@ -122,6 +122,8 @@ for i in range(len(numbers)):
 
 这里依次读取下标 0、1、2 上的值。练习里的 `numbers[i] += amount` 则更新该位置的值。
 
+只读取元素时可以直接写 `for number in numbers`；这里需要替换列表中的元素，所以遍历的是下标。只给循环变量 `number` 重新赋值，不会替换列表里的那一项。
+
 ```python run id="program-logic-and-state.functions-and-side-effects.exercise-increase"
 def increase(numbers, amount):
     for i in range(len(numbers)):
