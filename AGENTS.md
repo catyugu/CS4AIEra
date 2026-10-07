@@ -2,7 +2,7 @@
 
 ## Project mission
 
-This repository implements a content-first, self-hostable Web course for professional self-learners studying computer science in the AI era.
+This repository implements a content-first, self-hostable introductory Web course for non-specialist self-learners studying computer science in the AI era. It assumes no prior programming or CS knowledge; explanations build the models readers need to judge software designs and AI-assisted changes.
 
 The product is **not an LMS**. There are no accounts, progress records, grades, cohorts, instructor dashboards, or server-side code execution.
 

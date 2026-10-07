@@ -18,7 +18,7 @@ objectives:
 
 <Term id="information-hiding">信息隐藏（information hiding）</Term>把内部表示、算法和资源管理等决定留在模块内部，只通过约定的操作使用它们。一个前导下划线可以提示某个名字供内部使用，但 Python 不把这种约定变成访问权限，见 [Python 教程：私有变量](https://docs.python.org/3/tutorial/classes.html#private-variables)。边界是否成立，要看调用方实际上依赖什么。
 
-下面的对象保存非重复整数，公开操作是 `add`、`contains` 与 `snapshot`。`snapshot` 的约定是返回一份可独立修改的列表；`list(...)` 创建外层副本，复制规则见 <CrossRef id="program-logic-and-state.names-objects-and-state" />。
+下面的对象保存非重复整数，公开操作是 `add`、`contains` 与 `snapshot`。`snapshot` 的约定是返回包含全部整数的独立列表，不保证排列次序；`list(...)` 创建外层副本，复制规则见 <CrossRef id="program-logic-and-state.names-objects-and-state" />。
 
 ```python run id="program-composition.modules-and-boundaries.snapshot"
 class IntegerSet:
@@ -46,7 +46,7 @@ print("module:", values.snapshot())
 
 返回独立列表，让调用方修改结果时不必知道模块怎样保存状态。若 `snapshot` 改成直接返回 `self._values`，调用方就获得了内部列表的别名，能够绕过 `add` 的重复检查。方法名称不变，边界已经变了。
 
-这里列表中只有整数，复制外层列表就够用。复制外层、仍引用原来的元素对象，称为<Term id="shallow-copy">浅拷贝</Term>。若元素是可变的字典或列表，修改元素仍会影响原对象。公开结果允许改到哪一层，需要写进契约。
+示例假定 `add` 收到的都是整数；在这项输入约定下，复制外层列表就够用。复制外层、仍引用原来的元素对象，称为<Term id="shallow-copy">浅拷贝</Term>。若元素是可变的字典或列表，修改元素仍会影响原对象。公开结果允许改到哪一层，需要写进契约。
 
 ## 依赖方向决定哪些部分一起变化
 

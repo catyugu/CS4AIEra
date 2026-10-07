@@ -14,11 +14,11 @@ objectives:
 
 ## 经过时间与计算时间不同
 
-经过时间包含计算、排队、I/O 等待与调度等待。CPU 时间统计执行占用的处理器时间，不能直接表示用户等待了多久。多个线程并行时，总 CPU 时间甚至可以超过墙上经过时间。
+经过时间包含计算、排队、I/O 等待与调度等待。CPU 时间统计执行占用的处理器时间，不能直接表示用户等待了多久。多个线程并行时，总 CPU 时间甚至可以超过实际经过时间。
 
-测量短区间应使用适合计时的时钟。Python 的 `perf_counter` 用于高分辨率经过时间测量，包含等待；`process_time` 返回进程 CPU 时间，不包含睡眠，见 [Python time 的计时函数](https://docs.python.org/3/library/time.html#time.perf_counter)。不要用两台机器各自的墙上时间相减来推断精确阶段耗时。
+测量短区间应使用适合计时的时钟。Python 的 `perf_counter` 用于高分辨率经过时间测量，包含等待；`process_time` 返回进程 CPU 时间，不包含睡眠，见 [Python time 的计时函数](https://docs.python.org/3/library/time.html#time.perf_counter)。不要用两台机器各自的日历时间相减来推断精确阶段耗时。
 
-<Term id="profiling">剖析</Term>（profiling）把执行中的时间或活动归到函数、调用路径等位置。确定性剖析记录调用与返回，采样剖析按时刻观察执行位置；两者都有开销与观察限制。Python `cProfile` 提供函数调用统计，自身耗时与累计耗时的含义见 [Python 剖析器文档](https://docs.python.org/3/library/profile.html#instant-user-s-manual)。
+<Term id="profiling">性能剖析</Term>（profiling）把执行中的时间或活动归到函数、调用路径等位置。确定性剖析记录调用与返回，采样剖析按时刻观察执行位置；两者都有开销与观察限制。Python `cProfile` 提供函数调用统计，自身耗时与累计耗时的含义见 [Python 剖析器文档](https://docs.python.org/3/library/profile.html#instant-user-s-manual)。
 
 自身耗时衡量函数内部扣除所调用函数后的时间；累计耗时包含其下层调用。父函数与子函数的累计耗时有重叠，不能相加为总耗时。某函数自身耗时不高而累计耗时高，适合继续检查它调用的工作。
 
@@ -32,7 +32,7 @@ $$T'=T(1-f)+Tf/s.$$
 
 ## 构建、查询和整个工作负载都要计入
 
-下面比较重复扫描和预先建立索引。输入列表保存互不相同的整数，每项查询要求其位置。计时输出会随机器和当前运行负载变化；应观察阶段占比与改变查询次数后的趋势，不将某次毫秒数当作固定答案。
+下面比较重复扫描和预先建立索引。每项查询要求返回整数在列表中第一次出现的位置；实验中的查询值都存在。计时输出会随机器和当前运行负载变化；应观察阶段占比与改变查询次数后的趋势，不将某次毫秒数当作固定答案。
 
 ```python run id="debugging-and-observability.performance-evidence.phases"
 from time import perf_counter
@@ -52,7 +52,8 @@ scan_time = perf_counter() - started
 started = perf_counter()
 index = {}
 for i in range(len(values)):
-    index[values[i]] = i
+    if values[i] not in index:
+        index[values[i]] = i
 build_time = perf_counter() - started
 
 started = perf_counter()
@@ -69,7 +70,7 @@ print("indexed query seconds:", query_time)
 
 `perf_counter()` 返回当前计时读数，两次差值得到本次经过时间。`[3999] * 200` 建立 200 次相同查询；它有意让扫描到达列表末尾。改成前面的值，会改变扫描量；减少查询次数，会提高构建成本在总成本中的比例。
 
-索引方案的比较成本是构建加全部查询；只展示查询阶段会遗漏真实工作。输入有重复值时，这份索引保留最后一次位置，而扫描返回第一次位置，就不能直接比较性能而宣称等价。表示与索引取舍见 <CrossRef id="data-algorithms-and-scale.representation-preprocessing-and-indexes" />。
+索引方案的比较成本是构建加全部查询；只展示查询阶段会遗漏真实工作。构建索引时只保存某个值第一次出现的位置，因此加入重复值后，两种方案仍遵守同一要求。若改成每次都覆盖旧位置，索引会保存最后一次位置；这时即使更快，也不能作为等价优化。表示与索引取舍见 <CrossRef id="data-algorithms-and-scale.representation-preprocessing-and-indexes" />。
 
 ## 练习
 

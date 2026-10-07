@@ -66,7 +66,7 @@ await main()
 
 ## 两个调用是否已经开始
 
-先写出以下输出的相对顺序，再运行。与上面的代码相比，A 和 B 会不会都在任一项结束前开始？要改变这一点，需要改变哪一处调用？
+两项工作各自等待一次。先判断 A、B 的开始与结束次序，再运行核对。若 B 的输入需要用到 A 的结果，当前安排是否合适？若两项完全独立，怎样改动才能让等待重叠？
 
 ```python run id="program-execution.threads-and-waiting.exercise"
 import asyncio

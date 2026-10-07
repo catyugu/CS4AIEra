@@ -64,7 +64,7 @@ print(calls)
 
 ## 性质需要共同限制结果
 
-排序结果应按非递减次序排列，还应保留每个输入值的出现次数。只检查有序，会把删除重复值的结果也判为正确：
+排序结果应按非递减次序排列，还应保留每个输入值的出现次数。有人把“转成集合再排序”当作简化实现；它产生有序结果，但集合会删除重复值。要检查这样的改动，需要两个独立判据：
 
 ```python run id="debugging-and-observability.isolation-and-properties.properties"
 from collections import Counter

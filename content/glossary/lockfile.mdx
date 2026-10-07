@@ -7,6 +7,6 @@ related:
   - semantic-versioning
 ---
 
-锁文件记录某次依赖解析所选择的版本及相关获取信息。它让后续安装能够依据已确定的依赖图，而不是每次只根据版本范围重新选择。
+锁文件记录依赖解析时选定的版本和获取信息。例如项目允许某个库使用一段版本范围，锁文件可以记下这次实际选中的版本及其依赖，让后续安装复用这些选择。
 
-锁文件格式和安装行为由包管理工具规定。它不自动锁定操作系统、运行时、外部服务或构建时输入，也不证明所锁定的依赖没有漏洞。npm 的精确行为见 [npm：package-lock.json](https://docs.npmjs.com/cli/v11/configuring-npm/package-lock-json/)。
+锁文件的格式与使用方式由包管理工具规定。它主要固定项目依赖的选择；操作系统、运行时和其他构建输入仍需另外管理。npm 的具体规则见 [npm：package-lock.json](https://docs.npmjs.com/cli/v11/configuring-npm/package-lock-json/)。

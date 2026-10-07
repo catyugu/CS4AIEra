@@ -19,7 +19,7 @@ WHERE stock > 0
 ORDER BY id;
 ```
 
-`WHERE` 用条件筛选行。这条查询说明要什么结果，数据库决定怎样找到这些行。选出的记录数、输出列的值与读取过程要分别看。
+`WHERE` 用条件筛选行；`stock > 0` 表示库存大于零。语句末尾的分号结束这一条 SQL，同一单元格可以依次执行多条语句。这条查询说明要什么结果，数据库决定怎样找到这些行。选出的记录数、输出列的值与读取过程要分别看。
 
 ## 同一分类为什么出现多次
 
@@ -38,7 +38,7 @@ SELECT DISTINCT category FROM books ORDER BY category;
 
 第二本书价格还没有确定，表里用 `NULL` 表示缺失。NULL 不等于 0，也不等于字符串 `'NULL'`；“没有得到价格”不能当成“免费”。
 
-比较一个缺失价格与 60，结果是未知（unknown）。SQL 的三值逻辑有真、假、未知，`WHERE` 只保留条件为真的行。
+如果不知道价格，就无法判断它是否大于 60，也无法断定它不大于 60。比较一个缺失价格与 60，结果是未知（unknown）。SQL 的三值逻辑有真、假、未知，`WHERE` 只保留条件为真的行。
 
 | 条件结果 p | NOT p | p AND 真 | p OR 真 |
 | --- | --- | --- | --- |
@@ -57,7 +57,7 @@ SELECT id, title FROM books WHERE price IS NULL ORDER BY id;
 
 ## 聚合在统计什么
 
-`GROUP BY category` 把相同分类的行分到一组；`COUNT(*)` 统计组内行数，`COUNT(price)` 只统计非空价格，`SUM` 与 `AVG` 也忽略其参数中的 NULL。
+聚合把多行数据汇总成一个结果。`GROUP BY category` 把相同分类的行分到一组，每组输出一行；`COUNT(*)` 统计组内行数，`COUNT(price)` 只统计非空价格，`SUM` 与 `AVG` 也忽略其参数中的 NULL。
 
 ```sql run id="persistence.queries.aggregate" fixture="catalog"
 SELECT category, COUNT(*) AS books,

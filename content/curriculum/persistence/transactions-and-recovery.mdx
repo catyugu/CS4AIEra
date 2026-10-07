@@ -14,7 +14,9 @@ objectives:
 
 ## 哪些修改一起生效
 
-事务（transaction）把若干数据库操作组合为一次提交单位。原子性要求其修改共同生效或共同撤销；持久性要求已经成功提交的修改在约定的故障模型下可恢复。隔离性处理其他事务在并发期间能观察什么。一致性通常指事务前后满足业务规则，规则需要由约束和正确的事务逻辑共同实现。
+事务（transaction）把若干数据库操作组合为一次提交单位。在购买的例子里，需要保留“减库存且有订单”或“库存未减且无订单”，避免只留下一半。修改共同生效或共同撤销，称为原子性。
+
+事务还有其他需要分别检查的保证：持久性要求成功提交的修改在约定故障下可恢复；隔离性处理并发事务之间能观察什么；一致性要求事务前后满足业务规则。后者仍依赖约束与正确的操作逻辑，不能由“用了事务”自动推出。
 
 `BEGIN` 开始事务，`COMMIT` 提交，`ROLLBACK` 撤销尚未提交的修改。以下实验主动撤销一次购买，可把最后的 `ROLLBACK` 改为 `COMMIT` 比较结果。
 
@@ -53,7 +55,7 @@ try:
     db.execute("INSERT INTO orders VALUES ('r1')")
     db.commit()
 except sqlite3.IntegrityError as failure:
-    print(type(failure).__name__)
+    print(failure)
     db.rollback()
 print(db.execute("SELECT quantity FROM stock").fetchall())
 db.close()

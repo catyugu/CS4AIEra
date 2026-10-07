@@ -123,7 +123,7 @@ print("ways:", answers[distance])
 
 ## 练习
 
-下面的函数处理“不能连续跨两次 2 格”的规则。分别列出还剩 2 格、上一步为 1 格或 2 格时的合法走法，检查缓存是否能区分这两个问题。交换两次调用的次序后，结果还应满足什么要求？应把哪些信息放入键中？
+下面的函数处理“不能连续跨两次 2 格”的规则。先分别列出还剩 2 格、上一步为 1 格或 2 格时的合法走法，再预测两次调用的输出。交换两次调用的次序，结果是否还符合规则？如果需要修改，怎样让同一份缓存安全地服务这两次调用？
 
 ```python run id="data-algorithms-and-scale.memoization-and-dynamic-programming.exercise-cache-key"
 memo = {}

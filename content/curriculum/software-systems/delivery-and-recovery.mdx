@@ -22,7 +22,7 @@ objectives:
 
 ## 去重记录与业务修改需要共同提交
 
-沿用 <CrossRef id="networks-and-web.latency-timeouts-and-retries" /> 的操作标识：同一项逻辑工作在重试和重新投递时保持同一个标识。这里要把去重落实到数据库事务中。
+同一项逻辑工作在重试和重新投递时保持同一个操作标识，例如“生成任务 17 的报告”。另一次独立提交应有另一个标识；如果每次重试都换标识，消费方就无法识别重复。网络重试中的同一规则见 <CrossRef id="networks-and-web.latency-timeouts-and-retries" />。
 
 假设结果记录与去重记录都能放在同一个数据库事务里。可以把操作标识设为唯一键，并在同一事务中写入结果与完成状态；重复尝试发现已完成，就返回已有结果。唯一约束与事务分别处理重复标识和共同提交，见 <CrossRef id="persistence.relations-keys-and-constraints" /> 与 <CrossRef id="persistence.transactions-and-recovery" />。
 

@@ -23,7 +23,7 @@ JOIN orders AS o ON b.id = o.book_id
 ORDER BY b.id, o.id;
 ```
 
-书 1 匹配两笔订单，因此产生两行。内连接（inner join）只保留匹配成功的组合，书 2 和书 4 没有订单就不出现在结果中。外键保证每笔订单指向存在的书；它不保证每本书都有订单，也不限制一本书只能有一笔订单。
+可以把连接读成：对每本书，找出所有 `book_id` 等于其编号的订单，每个匹配各产生一行。书 1 匹配两笔订单，因此产生两行。内连接（inner join）只保留匹配成功的组合，书 2 和书 4 没有订单就不出现在结果中。外键保证每笔订单指向存在的书；它不保证每本书都有订单，也不限制一本书只能有一笔订单。
 
 左连接（left join）保留左表没有匹配的行，右表的列在这些行上补 NULL。要统计每本书的订单数，可以按书编号分组，并统计右边非空的订单编号：
 
@@ -35,7 +35,7 @@ GROUP BY b.id, b.title
 ORDER BY b.id;
 ```
 
-未匹配的书仍产生一行，`COUNT(*)` 会把这行也算进去，`COUNT(o.id)` 则不会。若把 `o.quantity > 1` 写在 `WHERE`，补 NULL 的行条件不为真，就会被删除；写在 `ON` 中则改变什么算作匹配。[SQLite 连接处理说明](https://www.sqlite.org/lang_select.html#determination_of_input_data_from_clause_processing)给出这两个位置的语义区别。
+未匹配的书仍产生一行，`COUNT(*)` 会把这行也算进去，`COUNT(o.id)` 则不会。筛选的位置也很重要：`ON` 决定哪些订单可以与书匹配，左连接随后为无匹配的书补一行；`WHERE` 筛选连接已经产生的结果。如果在 `WHERE` 要求订单数量大于 1，补 NULL 的行条件不为真，就会被删除。[SQLite 连接处理说明](https://www.sqlite.org/lang_select.html#determination_of_input_data_from_clause_processing)给出这两个位置的语义区别。
 
 ## 变更语句有筛选条件
 
@@ -48,11 +48,11 @@ WHERE id = 1 AND stock >= 2;
 SELECT id, stock FROM books ORDER BY id;
 ```
 
-`SET` 描述每条被选中记录的新值。条件把“库存足够”与减库存放在同一条修改中；调用方还要检查受影响行数，零行意味着没有完成这一项变更。将条件删去后，约束仍能拒绝负库存，但业务需要决定怎样表达失败。
+`SET` 描述每条被选中记录的新值；`AND` 要求编号与库存两个条件同时成立。条件把“库存足够”与减库存放在同一条修改中；调用方还要检查受影响行数，零行意味着没有完成这一项变更。将条件删去后，约束仍能拒绝负库存，但业务需要决定怎样表达失败。
 
 ## 没有匹配订单的书去了哪里
 
-报表要列出每本书，统计数量大于 1 的订单数，零笔也要显示。先找出下面的查询会返回哪些书，再把条件从 `WHERE` 移到 `ON` 中，比较输出。
+报表要列出每本书，统计数量大于 1 的订单数，零笔也要显示。先预测下面的查询会返回哪些书，再运行核对。如果不符合要求，应怎样修改查询？
 
 ```sql run id="persistence.joins.exercise-predicate" fixture="catalog"
 SELECT b.id, COUNT(o.id) AS large_orders
@@ -63,4 +63,11 @@ GROUP BY b.id
 ORDER BY b.id;
 ```
 
-一个报表连接书与订单后执行 `SUM(b.stock)`，希望得到当前库存总数。用当前数据判断这个统计对象是否正确，并说明换成每本书只有一笔订单的数据为何会掩盖问题。
+一个报表希望得到书表中的库存总数。分别预测下面两条查询的结果，再运行。在哪些订单分布下，两者会偶然相同？
+
+```sql run id="persistence.joins.exercise-stock" fixture="catalog"
+SELECT SUM(stock) AS total_stock FROM books;
+SELECT SUM(b.stock) AS total_stock
+FROM books AS b
+LEFT JOIN orders AS o ON b.id = o.book_id;
+```

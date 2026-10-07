@@ -34,6 +34,8 @@ services:
   db: {}
 ```
 
+这份配置用 YAML 的缩进表示包含关系：`services` 下声明两个服务，`api` 的 `ports` 指定端口映射，`environment` 给该进程传入环境变量。这里 `DB_HOST` 是应用约定读取的配置名称，并非 Docker 自动识别的数据库设置。
+
 默认 Compose 网络中，服务可以通过服务名称找到彼此，见 [Docker Compose：网络](https://docs.docker.com/compose/how-tos/networking/)。应用使用 `db`，表达的是同一网络中的数据库服务；从宿主机上的客户端访问 API，则使用宿主机地址与发布端口 8080。
 
 `8080:8000` 把主机端口映射到容器端口。发布端口与应用监听是两个条件：若应用只在容器内部的回环地址监听，端口映射不能代替它接受来自容器网络接口的连接。监听地址的含义见 <CrossRef id="networks-and-web.addressing-and-listening" />。

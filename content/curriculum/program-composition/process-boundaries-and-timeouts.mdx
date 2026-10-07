@@ -42,7 +42,7 @@ completed = subprocess.run(
 )
 ```
 
-列表中的字符串分别是程序名与参数；`capture_output=True` 收集标准输出与标准错误；`check=True` 将非零退出状态报告为 `CalledProcessError`；`timeout=2` 限定等待时间。这些是 [Python subprocess.run](https://docs.python.org/3/library/subprocess.html#subprocess.run) 的具体约定。
+列表中的字符串分别是程序名与参数。标准输出和标准错误是进程向外写字节的两个通道，工具通常用前者输出结果，用后者输出诊断。`capture_output=True` 收集这两个通道；`check=True` 将非零退出状态报告为 `CalledProcessError`；`timeout=2` 限定等待时间。这些是 [Python subprocess.run](https://docs.python.org/3/library/subprocess.html#subprocess.run) 的具体约定。
 
 能启动并收到零退出状态，表示工具按退出状态约定报告成功。输出文件是否完整、输出格式是否正确，还取决于工具自身的契约。工具把警告打印在标准错误中，也不必然表示操作失败；退出状态、标准错误与业务结果是不同观察面。
 
