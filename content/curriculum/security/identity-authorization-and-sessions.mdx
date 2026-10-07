@@ -18,11 +18,25 @@ objectives:
 
 同一个用户可以读取某份文档，却不能编辑。多人组织中的“管理员”“编辑者”是角色，它们概括一组权限，但权限还要有适用范围。例如一项服务同时供两家公司使用，每家公司都有自己的编辑者；只检查用户的角色是 `editor`，却不检查文档所属公司，会让一家公司的编辑者修改另一家公司的文档。
 
-| 身份 | 资源 | 动作 | 决策所需信息 |
-| --- | --- | --- | --- |
-| 用户 A | 文档 7 | 读取 | 所有者、共享规则、组织范围 |
-| 用户 A | 文档 7 | 修改 | 编辑许可及其当前有效性 |
-| 管理员 A | 用户 B | 禁用 | 管理员权限适用的组织 |
+一次权限判断至少要把三个对象接起来：已经认证的身份、请求选择的目标、要执行的动作。下面固定一项规则：只有同组织的编辑者可以修改文档。`identity` 假定来自服务端已验证的会话，文档的归属来自服务端记录；请求只提供目标编号。
+
+```python run id="security.identity-authorization-and-sessions.organization"
+identity = {"user": "Ada", "organization": "north", "role": "editor"}
+documents = {
+    7: {"organization": "north", "body": "north notes"},
+    8: {"organization": "south", "body": "south notes"},
+}
+
+def can_edit(identity, document):
+    return (identity["role"] == "editor"
+            and identity["organization"] == document["organization"])
+
+for document_id in [7, 8]:
+    document = documents[document_id]
+    print(document_id, can_edit(identity, document))
+```
+
+两次请求使用同一个合法身份、同一个角色，目标文档不同，判断就不同。删掉组织比较后，`editor` 会被解释成对所有组织都有效。若组织字段改为取自请求中自报的值，对手又能让比较成立；因此不仅要检查条件，还要追踪条件中的每份数据由谁建立。这段代码展示权限规则，不实现会话验证；真实接口必须先取得可信身份，再在执行修改前检查规则。
 
 权限检查应覆盖每个请求，并在没有明确允许规则时拒绝；页面、下载地址和批量接口必须保持相同边界，见 [OWASP：授权检查](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html#validate-the-permissions-on-every-request)。资源编号可以来自客户端，资源的真实归属和权限则需要可信数据。
 
@@ -61,6 +75,6 @@ Set-Cookie: session=example-opaque-id; Path=/; Secure; HttpOnly; SameSite=Lax
 
 ## 练习
 
-用户 A 的编辑权限刚被撤销。系统缓存了五分钟的权限判断，令牌还在有效期内。产品要求撤销立即生效。审查哪些现有机制不足以支持这项承诺，并提出需要验证的状态变化。
+用户 A 在 10:00 获得会话，10:02 被移出组织。一个下载接口每次都读取当前成员记录，另一个接口只验证会话未过期，并使用 10:00 保存的组织身份。产品要求移出组织后不能再读取该组织文档。列出两条读取路径在 10:03 各自依据的事实。应当怎样设计测试，才能区分“会话有效”和“当前仍有权限”？
 
 文档下载地址只包含难以猜测的长编号，访问时不检查身份。它可以符合“拿到链接的人都能读取”的共享规则吗？它可以同时符合“只有已授权成员能读取”的规则吗？分别说明所需的信任假设。
