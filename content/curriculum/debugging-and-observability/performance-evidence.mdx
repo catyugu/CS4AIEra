@@ -16,7 +16,7 @@ objectives:
 
 经过时间包含计算、排队、I/O 等待与调度等待。CPU 时间统计执行占用的处理器时间，不能直接表示用户等待了多久。多个线程并行时，总 CPU 时间甚至可以超过墙上经过时间。
 
-测量短区间应使用适合计时的时钟。Python 的 `perf_counter` 用于高分辨率经过时间测量，包含等待；`process_time` 返回进程 CPU 时间，不包含睡眠，见 [Python time 的计时函数](https://docs.python.org/3/library/time.html#time.perf_counter)。不要用两台机器各自的墙上时间相减来推断精确阶段耗时。
+测量短区间应使用适合计时的时钟。Python 的 `perf_counter` 用于高分辨率经过时间测量，包含等待；`process_time` 返回进程 CPU 时间，不包含睡眠，见 [Python time 的计时函数](https://docs.python.org/3/library/time.html#time.perf_counter)。跨机器的墙上时钟可能有偏差；测量某个阶段时，应尽量在同一计时环境中取得开始与结束读数。
 
 <Term id="profiling">剖析</Term>（profiling）把执行中的时间或活动归到函数、调用路径等位置。确定性剖析记录调用与返回，采样剖析按时刻观察执行位置；两者都有开销与观察限制。Python `cProfile` 提供函数调用统计，自身耗时与累计耗时的含义见 [Python 剖析器文档](https://docs.python.org/3/library/profile.html#instant-user-s-manual)。
 
@@ -69,7 +69,9 @@ print("indexed query seconds:", query_time)
 
 `perf_counter()` 返回当前计时读数，两次差值得到本次经过时间。`[3999] * 200` 建立 200 次相同查询；它有意让扫描到达列表末尾。改成前面的值，会改变扫描量；减少查询次数，会提高构建成本在总成本中的比例。
 
-索引方案的比较成本是构建加全部查询；只展示查询阶段会遗漏真实工作。输入有重复值时，这份索引保留最后一次位置，而扫描返回第一次位置，就不能直接比较性能而宣称等价。表示与索引取舍见 <CrossRef id="data-algorithms-and-scale.representation-preprocessing-and-indexes" />。
+如果每次任务都要重建索引，比较总成本时应把 `build_time` 与 `query_time` 相加。若索引可以跨任务复用，则应按实际复用次数分摊构建成本。
+
+输入有重复值时，这份索引保留最后一次位置，而扫描返回第一次位置，两种实现已经回答了不同的问题。此时应先统一“返回第一次还是最后一次位置”的要求，再比较耗时。表示与索引取舍见 <CrossRef id="data-algorithms-and-scale.representation-preprocessing-and-indexes" />。
 
 ## 练习
 
