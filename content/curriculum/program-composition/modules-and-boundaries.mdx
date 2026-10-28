@@ -10,7 +10,7 @@ objectives:
   - 区分模块、库、包与发布版本承担的职责
 ---
 
-一个模块维护整数集合。调用方需要判断某个数是否存在，模块内部目前用列表保存。若调用方直接读取列表，改成集合就可能连带修改所有调用方；若调用方只调用 `contains(value)`，内部表示有机会独立变化。
+一个模块维护整数集合。调用方需要判断某个数是否存在，模块内部目前用列表保存。若调用方直接读取列表，改成集合就可能连带修改所有调用方；若调用方只调用 `contains(value)`，就可以在保留查询行为的前提下替换内部表示。
 
 ## 让调用方只依赖公开操作
 
@@ -61,13 +61,13 @@ window-ui ─────> report
 
 `report` 接收普通数据并返回结果，两种入口各自负责读取输入与展示输出。这样变更界面不会要求报表计算理解界面状态。若计算需要读取数据，可以把“读取函数”作为参数传入；依赖的是这个函数的输入输出约定。
 
-依赖图里有环意味着多个模块互相需要，独立加载、替换与理解都更困难；图中环的含义见 <CrossRef id="data-algorithms-and-scale.trees-graphs-and-dependencies" />。去掉一个 `import` 并不自动解决循环依赖：若两个模块仍通过共享全局对象彼此改变状态，行为上的耦合还在。
+依赖图里有环意味着多个模块互相需要，独立加载、替换与理解都更困难；图中环的含义见 <CrossRef id="data-algorithms-and-scale.trees-graphs-and-dependencies" />。检查依赖时也要追踪共享状态：两个模块即使没有互相导入，仍可能通过同一个全局对象影响彼此。
 
 ## 代码组织与发布单位
 
 库是一组供其他程序使用的功能。包可以组织多个模块，也可以指可安装的发布单位；两种用法要根据上下文区分。在 Python 中，导入包用点分名称组织模块，安装的发行包则可能提供一个或多个导入包，名称也未必相同，见 [Python Packaging：发行包与导入包](https://packaging.python.org/en/latest/discussions/distribution-package-vs-import-package/)。
 
-发布版本标识一份具体的库内容。使用<Term id="semantic-versioning">语义化版本（Semantic Versioning）</Term>的项目，需要先声明公开 API，才有依据判断一次发布有没有破坏兼容，见 [Semantic Versioning 2.0.0](https://semver.org/)。版本号是项目对变更性质的声明；仅看到数字变大，不能推导某次调用的行为。
+发布版本标识一份具体的库内容。使用<Term id="semantic-versioning">语义化版本（Semantic Versioning）</Term>的项目，需要先声明公开 API，才有依据判断一次发布有没有破坏兼容，见 [Semantic Versioning 2.0.0](https://semver.org/)。版本号表达项目对变更性质的声明。升级时还要核对变更说明与契约，确认已有调用所需的行为得到保留。
 
 包组织文件的命名与分发；模块边界则取决于公开操作的约定，以及调用方如何访问状态。
 
