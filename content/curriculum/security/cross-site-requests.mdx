@@ -25,7 +25,7 @@ objectives:
 </form>
 ```
 
-这是不可执行的静态攻击路径材料，地址和邮件都是示例。表单规定提交目标与方法，隐藏字段提供对手选择的内容。用户点击按钮时，浏览器提交表单；能否附带 cookie 由 cookie 和浏览器规则决定。
+这段 HTML 供阅读，地址和邮件均为示例；它展示浏览器提交表单时会发送哪些信息。表单规定提交目标与方法，隐藏字段提供对手选择的内容。用户点击按钮时，浏览器提交表单；能否附带 cookie 由 cookie 和浏览器规则决定。
 
 | 步骤 | 发起动作的参与者 | 服务器可能看到的内容 |
 | --- | --- | --- |
@@ -34,7 +34,7 @@ objectives:
 | 附带适用 cookie | 浏览器 | 有效登录会话 |
 | 处理请求 | 文档服务 | 已认证用户与修改内容 |
 
-身份验证证明请求携带有效会话，不能证明用户理解并同意这项修改。
+服务器在最后一步验证到了有效会话，还需要检查这份修改请求是否来自允许的发起流程。
 
 ## 读不到响应仍能产生副作用
 
@@ -48,7 +48,7 @@ objectives:
 
 来源检查可以验证请求的 `Origin`，在规定条件下使用 `Referer` 等来源信息；缺失字段如何处理、代理之后怎样确定预期源，需要统一策略。控制必须部署在服务器，因为攻击者控制的页面没有义务配合客户端检查。机制与条件见 [OWASP：CSRF 防护](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)。
 
-`SameSite` 属性限制某些跨站情形下 cookie 的发送。这里的“站”按方案和可注册域名等规则判断，与源的方案、主机、端口三元组不同：两个子域可以不同源却同站。`Lax` 仍允许特定顶层导航携带 cookie；`None` 允许跨站发送并要求 `Secure`。具体行为见 [MDN：Set-Cookie 的 SameSite](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#samesitesamesite-value)。因此同站子域受对手控制等情况，还需要结合威胁模型判断，不能只看到属性存在就结束审查。
+`SameSite` 属性限制某些跨站情形下 cookie 的发送。这里的“站”按方案和可注册域名等规则判断，与源的方案、主机、端口三元组不同：两个子域可以不同源却同站。`Lax` 仍允许特定顶层导航携带 cookie；`None` 允许跨站发送并要求 `Secure`。具体行为见 [MDN：Set-Cookie 的 SameSite](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#samesitesamesite-value)。如果对手控制同站子域，SameSite 可能仍允许发送 cookie；应按这个实际来源继续检查令牌或来源验证是否覆盖请求。
 
 如果攻击者已经通过 XSS 控制合法页面脚本，它可能读取 CSRF 令牌或直接发起合法同源请求。这解释了 CSRF 防护为何仍依赖页面脚本的信任边界；不同控制应共同覆盖实际攻击路径。
 

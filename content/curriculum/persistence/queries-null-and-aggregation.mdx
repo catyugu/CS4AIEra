@@ -19,7 +19,7 @@ WHERE stock > 0
 ORDER BY id;
 ```
 
-`WHERE` 用条件筛选行。这条查询说明要什么结果，数据库决定怎样找到这些行。选出的记录数、输出列的值与读取过程要分别看。
+`WHERE` 用条件筛选行。这条查询说明要什么结果，数据库决定怎样找到这些行。阅读查询时，可以先按筛选与排序规则推导输出，再通过查询计划了解引擎怎样读取数据。
 
 ## 同一分类为什么出现多次
 
@@ -30,13 +30,13 @@ SELECT category FROM books ORDER BY category;
 SELECT DISTINCT category FROM books ORDER BY category;
 ```
 
-`DISTINCT` 删除输出列相同的重复行。普通查询的结果可以是多重集（bag）：相同的行可以出现多次。关系模型的集合思想并不意味着每条 SQL 查询都会自动去重。这里 computing 分类有两本书，两个相同分类值仍然来自两条不同记录。
+`DISTINCT` 删除输出列相同的重复行。普通查询保留这些重复，结果可以是多重集（bag）。这里 computing 分类有两本书，第一条查询为每本书输出一次分类，第二条查询则只保留一个 computing。
 
 引擎可以重排执行操作；[SQLite SELECT 文档](https://www.sqlite.org/lang_select.html)中的逻辑处理顺序用来解释结果，并不要求引擎照该顺序逐步执行。
 
 ## NULL 怎样参与条件
 
-第二本书价格还没有确定，表里用 `NULL` 表示缺失。NULL 不等于 0，也不等于字符串 `'NULL'`；“没有得到价格”不能当成“免费”。
+第二本书价格还没有确定，表里用 `NULL` 表示缺失。这里的 `NULL` 表示尚未得到价格，0 表示已知价格为零，字符串 `'NULL'` 则只是文字。
 
 比较一个缺失价格与 60，结果是未知（unknown）。SQL 的三值逻辑有真、假、未知，`WHERE` 只保留条件为真的行。
 
@@ -53,7 +53,7 @@ FROM books ORDER BY id;
 SELECT id, title FROM books WHERE price IS NULL ORDER BY id;
 ```
 
-`AS` 给输出列命名；SQLite 在结果中以 1 和 0 表示这些布尔判断，未知显示为 NULL。`IS NULL` 专门检查缺失；`price = NULL` 不能用来找到缺失价格。[SQLite 表达式文档](https://www.sqlite.org/lang_expr.html#operators_and_parse_affecting_attributes)列出 NULL 与运算符的规则。
+`AS` 给输出列命名；SQLite 在结果中以 1 和 0 表示这些布尔判断，未知显示为 NULL。价格缺失时，`price > 60` 为未知，取反后仍为未知，所以 `NOT (price > 60)` 也会漏掉这本书。`IS NULL` 专门检查缺失；`price = NULL` 不能用来找到缺失价格。[SQLite 表达式文档](https://www.sqlite.org/lang_expr.html#operators_and_parse_affecting_attributes)列出 NULL 与运算符的规则。
 
 ## 聚合在统计什么
 
