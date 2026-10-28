@@ -1,0 +1,91 @@
+---
+id: debugging-and-observability.test-criteria
+slug: /debugging-and-observability/test-criteria
+order: 10
+title: 测试究竟检查什么
+status: published
+objectives:
+  - 从允许输入、输出条件与副作用约定推导测试判据
+  - 构造普通样例通过而合法边界输入失败的测试
+  - 区分测试通过、语句执行到与满足完整规约的证据
+---
+
+一个函数运行完毕没有抛异常，只证明这次执行到达了正常返回路径。返回的是正确结果吗？原数据有没有被意外修改？非法输入有没有按约定拒绝？这些问题需要独立的判断条件。
+
+## 先确定什么结果算正确
+
+假定函数接收一个非空整数列表，返回其中最大的整数，不修改列表；空列表应抛出 `ValueError`。这份<Term id="specification">规约</Term>决定三个可观察结果：返回值、输入状态以及失败类型。
+
+能区分实际结果是否符合要求的依据，称为<Term id="test-oracle">测试判据</Term>。小输入可以人工算出答案；复杂结果可能更适合检查必须成立的性质。判据应来自需求或独立推理，直接把当前实现的输出保存成期望值，会把现有缺陷也保存下来。
+
+下面用 `assert` 检查返回值与输入状态；条件为假时抛出 `AssertionError`。捕获它只是为了在这里同时显示各个样例的检查结果：
+
+```python run id="debugging-and-observability.test-criteria.boundaries"
+def largest(values):
+    if not values:
+        raise ValueError("empty input")
+    best = 0
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+for values, expected in [([2, 7, 3], 7), ([0], 0), ([-3, -8], -3)]:
+    before = values.copy()
+    try:
+        assert largest(values) == expected
+        assert values == before
+        print(values, "pass")
+    except AssertionError:
+        print(values, "fail")
+```
+
+初始化值 0 给实现偷偷加入了“结果至少为 0”的条件；规约允许负数，所以这个条件没有依据。仅添加更多含正数样例，无法覆盖这个失效模式。测试设计的价值在于划出输入中可能改变程序行为的条件，而不是不断增加相似样例。
+
+## 失败路径也有可检验的要求
+
+测试预期失败，应确认指定操作确实失败，并保留失败类型。下面的检查只接受空输入导致的 `ValueError`，正常返回会产生明确的测试失败：
+
+```python run id="debugging-and-observability.test-criteria.expected-error"
+def largest(values):
+    if not values:
+        raise ValueError("empty input")
+    return max(values)
+
+
+try:
+    largest([])
+except ValueError:
+    print("expected ValueError")
+else:
+    raise AssertionError("empty input returned normally")
+```
+
+`else` 接在 `try` 的处理结构后，表示没有异常时执行。`max(values)` 返回最大元素。实际测试框架提供类似能力，例如 [Python unittest 的 assertRaises](https://docs.python.org/3/library/unittest.html#unittest.TestCase.assertRaises)。只捕获任意 `Exception` 并宣称“失败符合预期”，会让名字写错等无关错误也通过检查。
+
+返回值正确而输入被修改，也可能违反契约。若函数允许排序原列表，测试就不应要求保持输入；若要求保留原始次序，就需要检查调用前后状态。对修改和返回值的分工见 <CrossRef id="program-logic-and-state.functions-and-side-effects" />。
+
+## 覆盖执行路径与覆盖要求不同
+
+语句覆盖率告诉你测试期间哪些语句执行过。一条比较语句被执行过，不表示比较条件的两种结果都试过；两种结果都试过，也不表示所有整数范围、列表长度和状态组合都试过。
+
+有限测试能发现反例，却通常不能穷尽全部允许输入。若能给出一般性推理，应把它与样例互相补充，见 <CrossRef id="data-algorithms-and-scale.correctness-and-invariants" />。测试通过支持“这些条件下没有发现违规”，其范围由输入、环境、状态和判据共同决定。
+
+## 练习
+
+一个接口要求返回输入中最大整数的第一次出现位置，空输入返回 `None`。已有样例 `[1, 8, 3]` 返回 1，`[4]` 返回 0。为了区分“最大值的位置”“最后一次最大值的位置”和“最大值本身”这三种实现，应添加怎样的输入与期望结果？
+
+审查以下测试：它在什么接口要求下充分，在什么要求下遗漏了状态变化？修改要求时，应该修改判据还是仅增加运行次数？
+
+```python run id="debugging-and-observability.test-criteria.exercise"
+def largest(values):
+    values.sort()
+    return values[-1]
+
+
+values = [3, 1, 2]
+assert largest(values) == 3
+print("pass")
+print(values)
+```

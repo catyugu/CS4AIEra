@@ -1,0 +1,89 @@
+---
+id: program-execution.threads-and-waiting
+slug: /program-execution/threads-and-waiting
+order: 60
+title: 线程与等待中的工作
+status: published
+objectives:
+  - 区分线程的运行、就绪与阻塞状态
+  - 解释并发如何利用等待时间，以及它与并行的区别
+  - 预测协作任务何时允许其他任务执行
+---
+
+一份程序要取得两份网络数据。发送第一项请求后，要等对方返回，才能继续使用结果。这段时间里，它可以先发出第二项请求，让两项等待重叠。要解释这种安排，先区分执行工作与等待条件。
+
+## 线程是可以独立调度的执行流
+
+同一进程中的多个<Term id="thread">线程</Term>共享内存和打开的资源，各自保留执行到哪里、有哪些尚未返回的调用。操作系统选择可运行的线程使用 CPU。
+
+| 状态 | 此时在做什么 |
+| --- | --- |
+| 运行 | 正在 CPU 上执行指令 |
+| 就绪 | 可以继续，但还没得到 CPU |
+| 阻塞 | 等待数据、锁或其他条件，暂时不能继续 |
+
+阻塞读取可以让线程等待，CPU 转去执行别的就绪线程。条件满足后，线程成为就绪，何时运行由调度决定。不断循环询问“数据到了吗”则会持续占用 CPU，这叫忙等。
+
+并发（concurrency）表示多项工作在重叠的时间段里进行；并行（parallelism）要求同一时刻实际执行多项工作。单核交替执行也能并发，多核才提供更多同时计算的机会。
+
+## 一个线程也能管理多项等待
+
+<Term id="event-loop">事件循环</Term>（event loop）记录哪些任务能继续、哪些还在等待。协作任务在等待时交回控制，事件循环便可以选择另一项就绪任务。
+
+Python 用 `async def` 定义异步函数。读下面的代码时，分三步追踪：
+
+- 调用 `work()`，得到描述这次异步工作的协程对象。函数体此时尚未执行。
+- 用 `asyncio.create_task(work())` 把它安排成任务，交给事件循环调度。
+- 用 `await task` 等待该任务的结果；任务尚未完成时，当前任务可以让其他就绪任务执行。
+
+也可以直接写 `await work()`，由当前任务执行并等待这次异步工作，无须另建任务。任务创建与等待的规则见 [Python asyncio：协程与任务](https://docs.python.org/3/library/asyncio-task.html#coroutines)。
+
+下面先创建 A、B 两个任务，再依次等待结果。`sleep(0)` 明确让出一次执行机会，不测量真实耗时。浏览器单元格已有事件循环并支持顶层 `await`，可以直接等待 `main()`：
+
+```python run id="program-execution.threads-and-waiting.cooperate"
+import asyncio
+
+
+async def step(label):
+    print(label, "start")
+    await asyncio.sleep(0)
+    print(label, "resume")
+
+
+async def main():
+    first = asyncio.create_task(step("A"))
+    second = asyncio.create_task(step("B"))
+    await first
+    await second
+
+
+await main()
+```
+
+虽然 `await first` 和 `await second` 写成两行，B 不需要等第一行结束才开始：两个任务都已创建，A 等待时，B 就有机会执行。两项工作可以交错，但每项自己的 `start` 必须在 `resume` 之前。具体的 A、B 次序不应当成所有调度器的约定。`await` 也不一定暂停：等待对象已完成时，可以继续执行。任务和 `sleep` 的规则见 [Python asyncio 任务文档](https://docs.python.org/3/library/asyncio-task.html#sleeping)。
+
+如果在异步函数里直接做长时间计算，或调用阻塞读取而一直没有让出控制，事件循环中的其他任务仍要等待。把函数写成 `async def` 不会增加 CPU，也不会自动把所有操作变成非阻塞。
+
+## 两个调用是否已经开始
+
+先写出以下输出的相对顺序，再运行。与上面的代码相比，A 和 B 会不会都在任一项结束前开始？要改变这一点，需要改变哪一处调用？
+
+```python run id="program-execution.threads-and-waiting.exercise"
+import asyncio
+
+
+async def work(label):
+    print(label, "start")
+    await asyncio.sleep(0)
+    print(label, "end")
+
+
+async def main():
+    await work("A")
+    await work("B")
+
+
+await main()
+```
+
+等待多的工作常能从并发中受益，计算多的工作则需要实际的计算资源。线程还有调度开销，语言运行时也可能限制并行执行。选择执行方式时，应先分清时间花在计算还是等待；线程数不能直接换算成速度倍数。

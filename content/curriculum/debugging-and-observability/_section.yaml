@@ -1,0 +1,5 @@
+id: debugging-and-observability
+label: 调试与验证
+order: 80
+summary: 把要求变成测试判据，从输入、异常、日志、指标、追踪与性能测量中排除故障假设，并判断证据覆盖了哪些状态与失败路径。
+status: active

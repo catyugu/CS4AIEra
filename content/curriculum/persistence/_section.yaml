@@ -1,0 +1,5 @@
+id: persistence
+label: 持久化与数据库
+order: 60
+summary: 区分写入与持久保存，从关系、查询、索引与事务推导数据在修改、并发和故障后的状态，并判断缓存与对象存储的职责。
+status: active

@@ -1,0 +1,5 @@
+id: catalog-indexes
+engine: sqlite
+source: seed.sql
+reset: recreate
+max_result_rows: 100

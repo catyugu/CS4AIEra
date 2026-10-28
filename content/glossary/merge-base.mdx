@@ -1,0 +1,12 @@
+---
+id: merge-base
+term: 合并基点
+english: merge base
+short: Git 中用于合并比较的最佳共同祖先提交。
+related:
+  - commit
+---
+
+合并基点是两个或多个提交之间用于三方合并的最佳共同祖先。若一个共同祖先是另一个共同祖先的祖先，后者更适合作为基点。
+
+简单分叉历史通常只有一个最佳共同祖先，复杂合并历史可以有多个。基点到分支头的变化帮助区分两条分支各自引入的改动；它不同于直接比较两个分支头。定义见 [Git：merge-base](https://git-scm.com/docs/git-merge-base)。

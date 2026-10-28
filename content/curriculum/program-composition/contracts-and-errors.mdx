@@ -1,0 +1,95 @@
+---
+id: program-composition.contracts-and-errors
+slug: /program-composition/contracts-and-errors
+order: 20
+title: API 契约：结果、状态与失败
+status: published
+objectives:
+  - 为一个操作写出允许的输入、成功结果与状态变化
+  - 区分输入无效、目标不存在与内部故障的处理责任
+  - 判断接口替换是否增加前置条件或削弱原有保证
+---
+
+查找记录的函数在“没有这条记录”时返回什么？如果返回空字典，调用方怎么区分“记录存在但内容为空”？如果抛出异常，调用方应该捕获哪一种？只有函数名和参数类型，还不足以回答这些问题。
+
+## 调用双方共同依赖的规则
+
+应用程序接口（<Term id="api">API，Application Programming Interface</Term>）是组件向使用者提供的操作及其约定。契约（contract）写清调用方必须满足什么，以及组件在这些条件下保证什么。它包含成功结果、状态变化和失败行为。
+
+例如 `get_record(key)` 可以约定：
+
+| 条件 | 结果与状态 |
+| --- | --- |
+| `key` 是非空字符串，记录存在 | 返回记录字典的外层副本；字段值限定为不可变值，不修改已有记录 |
+| `key` 是非空字符串，记录不存在 | 抛出 `KeyError`，不修改已有记录 |
+| `key` 的类型或内容无效 | 抛出 `ValueError`，不开始查询 |
+| 存储组件无法完成读取 | 继续报告读取故障，不当作记录不存在 |
+
+允许的输入是<Term id="precondition">前置条件</Term>，成功后应成立的性质是后置条件。失败也有后置条件，例如“拒绝输入时不修改任何记录”。超出前置条件后的行为可以另行规定；写清如何拒绝无效输入，比让调用方猜测更容易使用。
+
+这些规则说明调用方可以依赖什么。实现用了列表、字典还是文件，并不属于这个调用方所需的保证。
+
+## 失败不能悄悄变成正常数据
+
+下面的查找允许合法记录内容恰好是空字典。字典的 `copy()` 创建一份外层副本。
+
+```python run id="program-composition.contracts-and-errors.missing-record"
+records = {"a": {}, "b": {"count": 2}}
+
+
+def get_record(key):
+    if not isinstance(key, str) or key == "":
+        raise ValueError("key must be a nonempty string")
+    return records[key].copy()
+
+
+for key in ["a", "missing", ""]:
+    try:
+        print(key, get_record(key))
+    except KeyError:
+        print(key, "not found")
+    except ValueError as failure:
+        print(key, "invalid:", failure)
+```
+
+`isinstance(key, str)` 检查值是不是字符串；`or` 在左边已经为真时跳过右边。正常数据、目标不存在、输入无效，在这里经过不同路径。调用方可以据此展示空内容、提示换一个键，或要求改正输入。
+
+若把所有异常都转换成 `{}`，三种情况得到同样的值，调用方失去了作出不同决定所需的信息。异常如何沿调用关系传播，见 <CrossRef id="program-logic-and-state.exceptions-and-cleanup" />。
+
+## 在边界翻译错误
+
+底层读取可能报告操作系统错误，上层只关心“记录目前无法读取”。组件可以把底层故障翻译成自己的错误类型，使调用方不依赖具体存储实现。翻译要保留失败含义，内部诊断还应能追溯原因。Python 的 `raise NewError(...) from failure` 把新异常与原异常关联起来，见 [Python 语言参考：raise 语句](https://docs.python.org/3/reference/simple_stmts.html#the-raise-statement)。
+
+翻译位置取决于谁有足够信息。例如读取函数知道“文件不存在”，却未必知道文件是否代表一条不存在的记录，还是一份意外丢失的索引。只有知道这层映射的组件，才有依据将它翻译成“记录不存在”。
+
+异常也不撤销已经完成的副作用。若 `add_record` 先加入记录，再更新索引，更新失败后的契约必须说明记录是否已加入。可以保证整项失败不留修改，也可以明确报告部分完成；仅写“失败时抛异常”不能让调用方判断是否能再次调用。
+
+## 替换实现时保留什么
+
+旧接口接受任意非空字符串。新实现只接受长度至少为三的字符串，增加了前置条件：旧调用方原本合法的输入现在会失败。旧接口返回记录字典的外层副本，新实现返回内部记录，削弱了后置条件：旧调用方原本安全的字段替换现在会改变组件状态。
+
+要保留原契约，新实现必须接纳旧契约允许的输入，并在这些输入上兑现旧保证。内部工作量可以变化，新的可选操作也可以增加；已有调用方依赖的结果、修改规则和失败含义需要逐项核对。
+
+## 练习
+
+下面的库存操作约定：“请求正整数数量；库存不足时报错；失败时库存不变。”分别用 `2`、`5`、`0` 与 `-1` 审查它。哪些是合法请求，哪些应该被拒绝？单次调用失败之后，再调用一次，观察到的状态是否符合约定？`global stock` 让函数中的赋值更新函数外的 `stock`。
+
+```python run id="program-composition.contracts-and-errors.exercise-reserve"
+stock = 3
+
+
+def reserve(quantity):
+    global stock
+    stock -= quantity
+    if stock < 0:
+        raise ValueError("insufficient stock")
+    return stock
+
+
+quantity = 5
+try:
+    print("remaining:", reserve(quantity))
+except ValueError as failure:
+    print("failed:", failure)
+print("stock:", stock)
+```

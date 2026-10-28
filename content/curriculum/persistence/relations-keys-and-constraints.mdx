@@ -1,0 +1,69 @@
+---
+id: persistence.relations-keys-and-constraints
+slug: /persistence/relations-keys-and-constraints
+order: 20
+title: 表、主键与数据约束
+status: published
+objectives:
+  - 说明表、行、列怎样组织记录
+  - 用主键和外键标识记录并连接相关数据
+  - 解释数据库约束为何要覆盖所有写入者
+---
+
+两本书可以同名，一本书也可以改名。订单如果只保存书名，改名之后就难以确定它买的是哪本书。给书一个稳定编号，再让订单保存这个编号，关联就不依赖书名了。
+
+## 每行是一条记录，每列保存一种字段
+
+关系数据库用表组织记录。书表的一行保存一本书，每列分别保存编号、标题、分类、价格和库存；订单表的一行保存一笔订单。
+
+本章用 SQL 操作数据库；SQL 语句描述需要查询或修改什么，由数据库执行。实验使用 SQLite 引擎，预先准备的表和记录称为实验夹具，内容见 <LabRef id="catalog" />。每次运行独立单元格都会重建这份数据，同一格内的多条语句则共用一份数据库。
+
+```sql run id="persistence.relations.tables" fixture="catalog"
+SELECT id, title, category, price, stock
+FROM books
+ORDER BY id;
+SELECT id, reference, book_id, quantity
+FROM orders
+ORDER BY id;
+```
+
+`SELECT` 指定输出的列，`FROM` 指定表，`ORDER BY id` 按编号排序。没有明确排序时，不应依赖某次输出的先后次序。
+
+## 编号标识记录，也连接两张表
+
+主键（primary key）唯一标识表里的一行。`books.id` 是书的主键，`orders.id` 是订单的主键；同一张表不能有两行使用同一个主键。书名可以重复或修改，编号仍能找到原记录。
+
+订单中的 `book_id` 是外键（foreign key），引用书表的 `id`。订单 10 和 11 都引用书 1：它们是两笔不同订单，买的是同一本书。外键要求被引用的书存在，不要求每本书都已被购买。
+
+```text
+orders                 books
+id 10 ── book_id 1 ─┐
+                    ├── id 1
+id 11 ── book_id 1 ─┘
+id 12 ── book_id 3 ──── id 3
+```
+
+## 约束让错误修改被拒绝
+
+数据库约束规定哪些记录允许写入。夹具为订单声明了这些规则：
+
+| 列与规则 | 拒绝什么 |
+| --- | --- |
+| `id` 是主键 | 重复订单编号 |
+| `reference` 必填且唯一 | 缺失或重复的业务请求编号 |
+| `book_id` 必填并引用书表 | 没有书编号，或引用不存在的书 |
+| `quantity` 必填且大于 0 | 没有数量，或数量不为正 |
+
+创建表时，`NOT NULL` 表示不允许缺失值，`UNIQUE` 表示唯一，`REFERENCES` 声明引用，`CHECK` 检查条件。具体语法见 [SQLite CREATE TABLE 文档](https://www.sqlite.org/lang_createtable.html)。实验已经配置好类型和外键检查，可以先观察这些规则怎样拒绝修改。
+
+网页表单也可以提前检查数量，但写入者还可能是另一个应用、导入脚本或人工操作。把共同规则放进数据库，才能让这些路径接受同一项检查。
+
+下面尝试新增一笔订单。`INSERT INTO` 列出要写入的表和列，`VALUES` 提供对应的值。先在书表里找到它要引用的编号，再运行；将书编号改为 2、数量改为 0 后，拒绝原因是否相同？
+
+```sql run id="persistence.relations.exercise-reference" fixture="catalog"
+INSERT INTO orders (id, reference, book_id, quantity)
+VALUES (13, 'r13', 9, 1);
+SELECT id, book_id, quantity FROM orders ORDER BY id;
+```
+
+SQL 单元格遇到错误会停下并显示错误。要查看原始数据，可以移除插入语句，只运行查询。用“恢复代码”取回原写法，再次运行时数据也从夹具重新建立。

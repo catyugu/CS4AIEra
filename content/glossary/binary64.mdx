@@ -1,0 +1,13 @@
+---
+id: binary64
+term: binary64
+english: binary64
+aliases:
+  - 双精度浮点数
+short: IEEE 754 定义的 64 位二进制浮点格式，使用符号、指数与有效数字表示有限精度的数值。
+related: []
+---
+
+binary64 用 1 位符号、11 位指数和 52 位显式小数位编码数值。正常数通过一个隐含的首位提供 53 位有效精度；非正规数、零、无穷与非数值采用专门编码。
+
+它的数值间距随数量级改变。能够精确表示某个范围内的整数，不意味着在更大数量级仍能区分相邻整数；也不意味着能精确表示任意十进制小数。Python 常见实现采用这种格式，见 [Python 浮点表示误差](https://docs.python.org/3/tutorial/floatingpoint.html#representation-error)。

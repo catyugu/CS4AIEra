@@ -1,0 +1,12 @@
+---
+id: lockfile
+term: 锁文件
+english: lockfile
+short: 记录依赖解析结果及获取信息，供后续安装复用的文件。
+related:
+  - semantic-versioning
+---
+
+锁文件记录某次依赖解析所选择的版本及相关获取信息。它让后续安装能够依据已确定的依赖图，而不是每次只根据版本范围重新选择。
+
+锁文件格式和安装行为由包管理工具规定。它不自动锁定操作系统、运行时、外部服务或构建时输入，也不证明所锁定的依赖没有漏洞。npm 的精确行为见 [npm：package-lock.json](https://docs.npmjs.com/cli/v11/configuring-npm/package-lock-json/)。
