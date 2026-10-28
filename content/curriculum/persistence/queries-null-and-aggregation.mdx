@@ -30,7 +30,7 @@ SELECT category FROM books ORDER BY category;
 SELECT DISTINCT category FROM books ORDER BY category;
 ```
 
-`DISTINCT` 删除输出列相同的重复行。普通查询的结果可以是多重集（bag）：相同的行可以出现多次。关系模型的集合思想并不意味着每条 SQL 查询都会自动去重。这里 computing 分类有两本书，两个相同分类值仍然来自两条不同记录。
+`DISTINCT` 删除输出列相同的重复行。普通查询保留这些重复，结果可以是多重集（bag）。这里 computing 分类有两本书，第一条查询为每本书输出一次分类，第二条查询则只保留一个 computing。
 
 引擎可以重排执行操作；[SQLite SELECT 文档](https://www.sqlite.org/lang_select.html)中的逻辑处理顺序用来解释结果，并不要求引擎照该顺序逐步执行。
 
