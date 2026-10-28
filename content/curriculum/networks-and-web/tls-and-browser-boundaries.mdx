@@ -26,13 +26,13 @@ objectives:
 
 用于签名的一对密钥具有不同用途：私钥由持有者保密，用来产生签名；配对公钥可以公开，用来验证签名。证书把名称和公钥关联起来，客户端根据受信任的签发体系、目标名称和有效性规则验证证书。
 
-服务器还要使用对应私钥对当前握手的记录产生签名，客户端用证书中的公钥验证，见 [RFC 8446：CertificateVerify](https://www.rfc-editor.org/rfc/rfc8446.html#section-4.4.3)。因此只复制一张公开的有效证书，仍缺少产生当前握手签名的私钥。握手与消息保护见 [RFC 8446：TLS 1.3 协议概述](https://www.rfc-editor.org/rfc/rfc8446.html#section-2)。
+服务器还要使用对应私钥对当前握手的记录产生签名，客户端用证书中的公钥验证，见 [RFC 8446：CertificateVerify](https://www.rfc-editor.org/rfc/rfc8446.html#section-4.4.3)。客户端既检查证书，也验证当前握手的签名，才能确认对方持有证书对应的私钥。握手与消息保护见 [RFC 8446：TLS 1.3 协议概述](https://www.rfc-editor.org/rfc/rfc8446.html#section-2)。
 
 这些保证成立于 TLS 的两个端点之间。若浏览器先连接到代应用接收请求的反向代理，再由代理转发到应用，浏览器认证的是这个 TLS 端点；代理后面的连接需要另行保护。应用还要负责校验业务结果、检查用户权限，并控制其他程序对已保存数据的访问。
 
 ## 同源按三个字段比较
 
-浏览器把通常的 HTTP 与 HTTPS URL 的<Term id="origin">源</Term>定义为协议标识、主机、有效端口组成的三元组。同源策略（same-origin policy）限制一个源上的脚本访问另一个源的资源。这个限制让打开一个页面不会顺便把其他站点的数据交给它的脚本。
+浏览器把通常的 HTTP 与 HTTPS URL 的<Term id="origin">源</Term>定义为协议标识、主机、有效端口组成的三元组。同源策略（same-origin policy）限制一个源上的脚本访问另一个源的资源。例如，一个新打开页面的脚本，不能任意读取你在另一站点登录后才能查看的内容。
 
 以 `https://notes.example/items/7` 为基准：
 
@@ -72,7 +72,7 @@ hello
 
 某些方法或请求字段会先触发预检（preflight）：浏览器先发送 `OPTIONS`，询问目标是否允许该源使用拟发送的方法和字段。预检被拒绝时，实际请求不会发送；允许之后才继续发送。详细条件见 [MDN：CORS 与预检](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS#preflighted_requests)。
 
-例如拟发送一个带 `Content-Type: application/json` 的 `PUT` 请求，浏览器可以先询问：
+例如拟发送一个带 `Content-Type: application/json` 的 `PUT` 请求，在没有可复用预检许可时，浏览器会先询问：
 
 ```http
 OPTIONS /items/7 HTTP/1.1

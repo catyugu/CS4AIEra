@@ -27,7 +27,7 @@ FROM orders
 ORDER BY id;
 ```
 
-`SELECT` 指定输出的列，`FROM` 指定表，`ORDER BY id` 按编号排序。没有明确排序时，不应依赖某次输出的先后次序。
+`SELECT` 指定输出的列，`FROM` 指定表，`ORDER BY id` 按编号排序。需要稳定输出顺序时，应像这里一样写出 `ORDER BY`；引擎更换访问路径后，未指定的行顺序可能变化。
 
 ## 编号标识记录，也连接两张表
 
@@ -54,7 +54,7 @@ id 12 ── book_id 3 ──── id 3
 | `book_id` 必填并引用书表 | 没有书编号，或引用不存在的书 |
 | `quantity` 必填且大于 0 | 没有数量，或数量不为正 |
 
-创建表时，`NOT NULL` 表示不允许缺失值，`UNIQUE` 表示唯一，`REFERENCES` 声明引用，`CHECK` 检查条件。具体语法见 [SQLite CREATE TABLE 文档](https://www.sqlite.org/lang_createtable.html)。实验已经配置好类型和外键检查，可以先观察这些规则怎样拒绝修改。
+创建表时，`NOT NULL` 表示不允许缺失值，`UNIQUE` 表示唯一，`REFERENCES` 声明引用，`CHECK` 检查条件。具体语法见 [SQLite CREATE TABLE 文档](https://www.sqlite.org/lang_createtable.html)。实验表使用严格类型，并已启用外键检查；这些设置使下面的类型和引用规则实际参与写入校验。可以先观察约束怎样拒绝修改。
 
 网页表单可以提前检查数量，及时向用户反馈错误。另一个应用、导入脚本或人工操作也可能写入同一张表；数据库约束让这些写入路径都接受相同的检查。
 
