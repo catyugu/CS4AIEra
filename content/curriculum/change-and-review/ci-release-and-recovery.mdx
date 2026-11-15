@@ -24,7 +24,7 @@ GitHub Actions 的工作流以事件触发任务，任务可以顺序或并行�
 
 来自外部贡献的改动可能修改测试和构建脚本。执行这些脚本就是执行尚未信任的代码；让它取得发布密钥，会把发布能力交给它。通常的验证任务应使用所需的最少权限，并把需要秘密的发布步骤放在适当的信任条件下。
 
-发布步骤需要的凭据应与普通检查分开管理，验证任务使用所需的最少权限。工作流安全规则见 [GitHub 文档](https://docs.github.com/en/actions/reference/security/secure-use)。
+发布步骤需要的凭据应与普通检查分开管理。工作流安全规则见 [GitHub 文档](https://docs.github.com/en/actions/reference/security/secure-use)。
 
 ## 从验证到上线
 
