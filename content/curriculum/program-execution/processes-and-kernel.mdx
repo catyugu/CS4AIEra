@@ -24,7 +24,7 @@ objectives:
 
 进程执行函数调用时，要传入参数，并记住返回后从哪里继续。尚未完成的调用还需要各自的参数和局部状态。组织这些调用信息的区域称为调用栈，每次调用的记录称为栈帧。
 
-例如 `main` 调用 `twice(21)`：`main` 等待结果，`twice` 计算并返回 42，随后 `main` 从调用之后继续。递归时，多次调用同一个函数也各有自己的局部状态，调用与返回的追踪见 <CrossRef id="data-algorithms-and-scale.memoization-and-dynamic-programming" />。这是理解调用的模型；编译器可以内联函数或省去记录，源码中的每次调用不一定都产生独立的机器栈帧。
+例如 `main` 调用 `twice(21)`：`main` 等待结果，`twice` 计算并返回 42，随后 `main` 从调用之后继续。递归时，多次调用同一个函数也各有自己的局部状态，调用与返回的追踪见 <CrossRef id="data-algorithms-and-scale.memoization-and-dynamic-programming" />。
 
 ## 地址要放在所属进程里解释
 
