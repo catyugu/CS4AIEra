@@ -95,3 +95,10 @@ result[0]["count"] = 9
 print("caller:", result)
 print("cache:", cache.all_values())
 ```
+
+<details>
+<summary>参考推理</summary>
+
+外层列表是副本，所以追加第二条记录不会改变缓存的列表长度。但第一条记录仍是同一个字典，`result[0]["count"] = 9` 会改变缓存中的记录。若允许任意可变对象，就需要明确独立性覆盖哪一层；可以按约定复制整个可变结构，也可以只接收不可变记录，或返回受限的查询结果。仅把属性名前加下划线不能阻止共享对象被修改。
+
+</details>
