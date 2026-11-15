@@ -11,7 +11,7 @@
 | 运行时报文、会话与输出类型的精确结构 | `src/runtime/protocol.ts`、`src/workers/pyodide.worker.ts`、`src/runtime/python-runtime.py` |
 | 仓库不变量、文档职责与完成标准 | `AGENTS.md` |
 | 一节课怎么写 | `doc/CONTENT_GUIDE.md` |
-| 教什么、模块顺序与每个模块要形成的认知 | `doc/CURRICULUM.md` |
+| 课程面向谁、学习目标与内容组织原则 | `doc/CURRICULUM.md` |
 
 新增一节课、拆分一个章节、给单元格增加一个选项、推进发布状态，都不应该要求修改本文件。只有架构本身变化时才修改它。
 

@@ -1,8 +1,8 @@
 ---
 id: change-and-review.git-history-and-change-scope
 slug: /change-and-review/git-history-and-change-scope
-order: 10
-title: Git 历史与改动范围
+order: 30
+title: Git 与版本控制
 status: published
 objectives:
   - 区分工作区、暂存内容、提交快照与分支引用
@@ -22,9 +22,9 @@ A ── B ── C ───── M  main
 
 ## 提交保存快照，分支记录位置
 
-Git 用对象保存内容。文件内容由 blob 对象表示；树对象记录文件名、目录与内容对象的关系；<Term id="commit">提交</Term>对象引用一棵快照树，并记录父提交、作者和说明等元数据。对象标识由对象内容计算；分支名则是可以移动的引用，指向某个提交。对象模型见 [Pro Git：Git 对象](https://git-scm.com/book/en/v2/Git-Internals-Git-Objects)。
+<Term id="commit">提交</Term>保存某个时刻的项目快照，记录父提交和说明等信息；分支名指向一个提交，并随新提交移动。例如功能分支 `topic` 当前指向 E，继续提交后就指向新的结果。
 
-分支可能在验证之后继续前进，因此验证结果应记录当时的提交标识，以及是否包含未提交修改。
+提交标识固定一份历史记录，分支名则表示发展中的位置，见 [Pro Git：分支简介](https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell)。
 
 | 位置 | 保存的内容 | 对审查的含义 |
 | --- | --- | --- |
@@ -39,11 +39,9 @@ Git 用对象保存内容。文件内容由 blob 对象表示；树对象记录�
 
 图中 A 到 B 是共享历史，M 有 C 和 E 两个父提交。
 
-B 是 C 与 E 的<Term id="merge-base">合并基点</Term>。B 到 E 的快照差异表示功能分支引入的变化，B 到 C 则表示主分支的变化。若直接比较 C 与 E，还会看到主分支独有变化在 E 中缺失的差异，不能把它们都算成功能分支主动删除的内容。复杂历史可能有多个最佳共同祖先，见 [Git：merge-base](https://git-scm.com/docs/git-merge-base)。
+B 是 C 与 E 的<Term id="merge-base">合并基点</Term>。B 到 E 的快照差异表示功能分支引入的变化，B 到 C 则表示主分支的变化。若直接比较 C 与 E，还会看到主分支独有变化在 E 中缺失的差异，不能把它们都算成功能分支主动删除的内容。合并基点的进一步规则见 [Git：merge-base](https://git-scm.com/docs/git-merge-base)。
 
 三方合并综合共同起点与两边结果。当变化不能自动结合时，需要人工处理冲突；没有文本冲突也可能存在语义冲突。例如一边把接口的时间单位改成秒，另一边新增一个仍按毫秒解释的调用方，文件不同也能形成错误组合。合并结构见 [Pro Git：分支与合并](https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging)。
-
-若主分支只是功能分支头的祖先，整合可以只让主分支引用前进，这叫快进（fast-forward），不必产生新的合并提交。是否出现合并节点，由历史关系与整合策略决定，不能把每次整合都画成同一个形状。
 
 ## 撤销源码不会撤销外部效果
 

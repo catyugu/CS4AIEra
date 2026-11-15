@@ -1,8 +1,8 @@
 ---
 id: change-and-review.compatibility-and-migration
 slug: /change-and-review/compatibility-and-migration
-order: 30
-title: 共存版本与数据迁移
+order: 50
+title: 版本兼容与数据迁移
 status: published
 objectives:
   - 为读写方列出版本兼容矩阵，并据此安排发布顺序
@@ -16,7 +16,7 @@ objectives:
 
 <Term id="compatibility">兼容</Term>要指定版本组合及保留的语义。假设旧读取方只读取 `duration_ms`，允许多余字段；新读取方只读取 `duration_s`；过渡读取方同时接受两种字段，并统一换算为秒。两个字段都出现时必须一致，不一致时拒绝。
 
-矩阵比较的是示例中的 1500 毫秒与 1.5 秒，以及它们的字段组合。一般转换还须核对数值表示和允许范围，不能从字段能解析推断精度无损。写入方可以只写旧字段、同时写两份一致字段，或者只写新字段：
+示例中，1500 毫秒对应 1.5 秒。写入方可以只写旧字段、同时写两份一致字段，或只写新字段。先列出每种读取方能否正确解释：
 
 | 写入格式 | 旧读取方 | 过渡读取方 | 新读取方 |
 | --- | --- | --- | --- |
@@ -47,7 +47,7 @@ objectives:
 
 <Term id="migration">迁移</Term>把已有数据或使用方式转向新约定。增加新列后，通常还要为历史记录填写换算后的值，这个过程称为回填。新旧写入方共存时，回填可能与在线修改交错，需要防止旧值覆盖新修改或两列失去对应。
 
-数据库实现对结构修改的锁、扫描和约束检查有具体规则。例如 PostgreSQL 的不同 `ALTER TABLE` 操作有不同锁需求和执行成本，见 [PostgreSQL：ALTER TABLE](https://www.postgresql.org/docs/current/sql-altertable.html)。不能根据开发数据库里几行记录的成功，断言大表上线时没有等待。
+转换大量历史记录可能占用数据库资源，影响在线请求。应在接近实际规模的数据上检查所需时间和并发影响，具体结构修改规则可查阅 [PostgreSQL：ALTER TABLE](https://www.postgresql.org/docs/current/sql-altertable.html)。
 
 分批转换需要记录进度，并明确失败后从哪里继续。若某批执行完成但进度记录丢失，重复该批必须有可解释的效果；否则“重新跑脚本”可能再次改变数据。数据转换的成功条件应该检查实际值和约束，不只是脚本退出码。
 
