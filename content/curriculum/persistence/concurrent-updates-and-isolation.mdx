@@ -1,8 +1,8 @@
 ---
 id: persistence.concurrent-updates-and-isolation
 slug: /persistence/concurrent-updates-and-isolation
-order: 70
-title: 并发修改与隔离
+order: 80
+title: 并发更新与事务隔离
 status: published
 objectives:
   - 从交错读写中定位丢失更新
@@ -29,35 +29,37 @@ objectives:
 
 另一个方案为记录保存版本号。读取数量和版本，修改时要求版本仍等于读取值，成功后增加版本。数据库需要在同一次条件更新中检查版本并写入新值，使两个请求无法都凭版本 0 修改成功。
 
-以下实验用两个连接访问同一个临时 SQLite 文件。代码安排 A、B 先读到数量 1、版本 0，再让 A 修改，最后让 B 尝试修改。这样每次运行都能观察到相同的交错。`fetchone()` 读取一行，得到数量与版本组成的元组；`rowcount` 是受影响行数。
+将每条记录增加一个 `version` 字段。两个请求先读到数量 1、版本 0：
 
-`TemporaryDirectory` 管理临时目录；`with ... as directory` 进入它管理的使用范围，把目录名绑定到 `directory`，离开缩进范围时清理文件。这里的数据库只供实验，不保存到页面刷新之后。
+| 操作 | 条件 | 数据库中的结果 |
+| --- | --- | --- |
+| A 更新 | 版本仍为 0 | 数量改为 0，版本改为 1 |
+| B 更新 | 版本仍为 0 | 条件不成立，零行修改 |
+
+版本检查与写入必须在同一条更新中完成。下面用 SQLite 重放表中的顺序。两个旧值代表两次请求各自读到的数据；单元格按固定顺序执行，便于观察条件，而不依赖线程调度。
 
 ```python run id="persistence.isolation.version"
 import sqlite3
-import tempfile
 
-with tempfile.TemporaryDirectory() as directory:
-    a = sqlite3.connect(directory + "/inventory.db", isolation_level=None)
-    b = sqlite3.connect(directory + "/inventory.db", isolation_level=None)
-    a.execute("CREATE TABLE stock (id INTEGER PRIMARY KEY, quantity INTEGER, version INTEGER)")
-    a.execute("INSERT INTO stock VALUES (1, 1, 0)")
-    old_a = a.execute("SELECT quantity, version FROM stock WHERE id = 1").fetchone()
-    old_b = b.execute("SELECT quantity, version FROM stock WHERE id = 1").fetchone()
-    for label, db, old in [("A", a, old_a), ("B", b, old_b)]:
-        changed = db.execute(
-            "UPDATE stock SET quantity = ?, version = version + 1 WHERE id = 1 AND version = ?",
-            (old[0] - 1, old[1]),
-        ).rowcount
-        print(label, changed)
-    print(a.execute("SELECT quantity, version FROM stock").fetchall())
-    a.close()
-    b.close()
+db = sqlite3.connect(":memory:")
+db.execute("CREATE TABLE stock (id INTEGER PRIMARY KEY, quantity INTEGER, version INTEGER)")
+db.execute("INSERT INTO stock VALUES (1, 1, 0)")
+old_a = db.execute("SELECT quantity, version FROM stock WHERE id = 1").fetchone()
+old_b = db.execute("SELECT quantity, version FROM stock WHERE id = 1").fetchone()
+
+for label, old in [("A", old_a), ("B", old_b)]:
+    changed = db.execute(
+        "UPDATE stock SET quantity = ?, version = version + 1 WHERE id = 1 AND version = ?",
+        (old[0] - 1, old[1]),
+    ).rowcount
+    print(label, changed)
+print(db.execute("SELECT quantity, version FROM stock").fetchall())
+db.close()
 ```
 
-问号是参数占位符，后面的元组提供值；这里避免把值拼成 SQL。`isolation_level=None` 在这里采用的 Python sqlite3 默认事务控制模式中让独立语句自动提交，所以两个读取都已结束，才开始修改，见 [Python sqlite3 事务控制文档](https://docs.python.org/3/library/sqlite3.html#transaction-control-via-the-isolation-level-attribute)。
+`fetchone()` 读取一行，结果元组包含数量与版本；`rowcount` 是修改影响的行数。SQL 中的问号是值参数占位符，后面的元组依次提供新数量和原版本，见 [Python sqlite3 参数绑定](https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders)。
 
-这里两次读取和两次更新是分别提交的语句；A 更新后，B 的条件会与数据库中的新版本比较。零行修改表示已读版本不再成立，应用必须重新判断，不能继续按旧值创建订单。
+A 使版本增加，B 再按旧版本修改便影响零行。应用需要重新读取和判断，不能继续按原值创建订单。实际购买还应把成功的库存修改与订单插入放在同一事务中。
 
 ## 隔离保证针对什么现象
 

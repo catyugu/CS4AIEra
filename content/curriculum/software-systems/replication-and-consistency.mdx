@@ -2,7 +2,7 @@
 id: software-systems.replication-and-consistency
 slug: /software-systems/replication-and-consistency
 order: 60
-title: 复制与一致性：有副本后读到了什么
+title: 数据复制与一致性
 status: published
 objectives:
   - 从复制传播轨迹解释陈旧读取与故障切换的数据风险
@@ -39,7 +39,7 @@ writer ──> primary ── replication ──> replica
 
 “写入成功后，同一个客户端的后续读取至少看到自己的这次写入”是一项具体要求。可以让相关读取回到主节点，或让读取端等待副本到达相应版本；两种方案都需要知道这次成功写入的范围，并处理主节点不可达或副本无法追上的情况。
 
-更强的一种要求是线性一致性：每项完成操作可看成在调用与返回之间某一时刻生效，且共同顺序尊重真实时间中已经完成的先后关系。若某次写入成功返回后才开始读取，读取就不能返回这次写入之前的值，除非期间有其他合法写入改变了它。具体产品也会区分默认读取与允许陈旧的读取选项，例如 [etcd 3.6：API 保证](https://etcd.io/docs/v3.6/learning/api_guarantees/#linearizability)。
+更强的要求可以约定：一次写入成功返回后才开始的读取，必须看到这次写入或更晚的结果。线性一致性还要求所有操作能按尊重实际完成先后的统一顺序解释。这里先用写入后读取的例子理解它；具体产品的保证可查阅 [etcd API 文档](https://etcd.io/docs/v3.6/learning/api_guarantees/#linearizability)。
 
 若只要求“更新停止后，通信恢复并持续传播，副本最终取得相同状态”，则是最终一致性的条件。这项要求没有给出每一次读取的最大陈旧时间，更不能直接支持“取消返回后立刻刷新应显示已取消”。
 
