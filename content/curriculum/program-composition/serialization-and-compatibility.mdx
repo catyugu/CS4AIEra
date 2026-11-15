@@ -2,110 +2,89 @@
 id: program-composition.serialization-and-compatibility
 slug: /program-composition/serialization-and-compatibility
 order: 30
-title: 序列化：值怎样越过边界
+title: 序列化与数据格式
 status: published
 objectives:
-  - 区分程序中的对象与传输中的表示，并解释往返转换可能丢失的信息
-  - 分别检查格式语法、数据结构与字段含义
-  - 从发送方与接收方的允许集合推导向后和向前兼容
+  - 追踪一条记录从程序中的值变成 JSON 文本和 UTF-8 字节，再恢复为值
+  - 区分格式、字段类型与字段含义
+  - 解释格式转换可能丢失哪些程序内信息
 ---
 
-Python 用元组保存坐标，用整数作为字典键。把这些值写成 JSON，再读取回来，坐标却成为列表，键也可能成为字符串。保存了数字和文字，不一定保存了原程序所依赖的类型。
+一个笔记程序要把记录交给另一个程序。直接传“字典的内存地址”没有用：另一个进程有自己的地址空间。双方需要约定一份独立于当前内存布局的表示。
 
-## 表示必须明确保留哪些信息
+## 从记录到字节，再恢复为记录
 
-<Term id="serialization">序列化（serialization）</Term>把程序中的值编码成可保存或传输的表示，反序列化从表示构造值。线格式（wire format）规定边界上的字节怎样解释；它需要独立于某次程序运行的内存地址。
+<Term id="serialization">序列化</Term>把程序中的值转换成可保存或传输的表示；反序列化按约定的格式恢复值。JSON 是常用的文本格式，可以表达名称到值的结构、数组、字符串、数值、布尔值和 `null`。
 
-JSON 是文本格式，具有对象、数组、字符串、数值、布尔值和 `null` 等形式。JSON 对象的成员名是字符串，网络交换使用 UTF-8，见 [RFC 8259：对象与字符编码](https://www.rfc-editor.org/rfc/rfc8259.html#section-4)。这里的“对象”指名称到值的结构，不是任意 Python 实例。
-
-`json.dumps` 把可编码的 Python 值变成字符串，`json.loads` 从字符串解析值。Python 元组编码为 JSON 数组，读取回来是列表，见 [Python json：编码与解码](https://docs.python.org/3/library/json.html#encoders-and-decoders)。
+下面让一条记录完成往返。`json.dumps` 生成 JSON 字符串，`encode` 将字符串编码为字节；接收方先解码，再用 `json.loads` 解析：
 
 ```python run id="program-composition.serialization-and-compatibility.roundtrip"
 import json
 
-original = {"point": (3, 4), "labels": {1: "first"}}
-wire = json.dumps(original)
-restored = json.loads(wire)
-print("wire:", wire)
+note = {"id": 7, "title": "读书", "done": False}
+text = json.dumps(note, ensure_ascii=False)
+data = text.encode("utf-8")
+received = data.decode("utf-8")
+restored = json.loads(received)
+
+print("JSON:", text)
+print("bytes:", list(data))
 print("restored:", restored)
-print("same values:", original == restored)
-print("label keys:", list(restored["labels"]))
+print("same values:", restored == note)
 ```
 
-往返转换是否正确，要根据接口需要保留的性质判断。如果约定坐标是一对数，数组可以保留这项信息；若调用方依赖键是整数，就需要另定表示或在读取时转换。这里需要保留的既有数字，也有类型信息；选定格式后，应逐项核对这些要求。读取方也会建立新对象，普通 JSON 不记录原程序中的内存地址或多个引用之间的共享关系。
+`ensure_ascii=False` 让 JSON 字符串直接显示中文，便于观察。实际传输的 `data` 是字节序列。JSON 对象的字段名为字符串，网络交换的 JSON 使用 UTF-8，见 [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259.html#section-8.1)。
 
-二进制格式同样需要规则：哪几个字节表示长度、字段怎样编号、整数用什么宽度。文本容易直接查看，二进制可以减少某些表示开销。比较两种格式时，需要用具体数据测量编码后的大小与解析成本。
+| 阶段 | 本例的对象 | 使用的规则 |
+| --- | --- | --- |
+| 程序内部 | Python 字典 | Python 对象与类型 |
+| 文本表示 | JSON 字符串 | JSON 格式 |
+| 保存或传输 | 字节序列 | UTF-8 字符编码 |
+| 接收方内部 | 新建的字典 | JSON 解析与 Python 类型映射 |
 
-## 字符串还需要编码成字节
+接收方创建了新的对象。两份记录可以具有相同的字段值，但修改接收方字典不会自动改动发送方的字典。
 
-文本在程序里是字符组成的字符串，传输与存储最终处理的是字节。字符编码规定字符序列怎样变成字节序列；解码按同一规则恢复字符串。UTF-8 对不同字符使用不同数量的字节，因此字符数不能直接当作字节数。
+## 字符数与字节数
 
-字符串的 `encode("utf-8")` 得到字节，字节的 `decode("utf-8")` 恢复字符串。`len` 对这里的字符串计数 Unicode 码点，对字节计数字节；一个视觉上的字符可能含多个码点，界面显示长度不能普遍等同于这两种计数，见 [Python Unicode 指南：编码](https://docs.python.org/3/howto/unicode.html#encodings)。
+字符编码规定文本怎样变成字节。UTF-8 对不同字符使用不同数量的字节；ASCII 字符 `A` 占一个字节，汉字“中”占三个：
 
 ```python run id="program-composition.serialization-and-compatibility.utf8"
 text = "A中"
 data = text.encode("utf-8")
-print("characters:", len(text))
-print("bytes:", len(data), list(data))
-print("utf8:", data.decode("utf-8"))
-print("latin1:", data.decode("latin-1"))
-try:
-    print("ascii:", data.decode("ascii"))
-except UnicodeDecodeError as failure:
-    print("failed:", failure)
+print("text length:", len(text))
+print("byte length:", len(data))
+print("decoded:", data.decode("utf-8"))
 ```
 
-`list(data)` 展示每个字节的数值。后两次解码刻意用了其他规则：错误规则可能拒绝这些字节，也可能接受字节却还原出不同文本。接收方成功解码，仍不足以证明双方使用了同一编码。可以把 `text` 改成纯 ASCII 文本再比较；只有覆盖双方会传送的字符，才能检查编码约定是否落实。
+这里 `len(text)` 统计 Unicode 码点，`len(data)` 统计字节，见 [Python Unicode 指南](https://docs.python.org/3/howto/unicode.html#encodings)。设置消息的字节长度、限制文件大小时，应计数编码后的数据。解码也必须使用发送方采用的编码，否则可能报错或出现乱码。
 
-JSON 字符串怎样表示值，与 JSON 文本怎样编码成字节，是两个层次。计算报文长度或设置长度字段时，应计数最终编码后的字节。
+## 格式还要表达字段含义
 
-## 解析成功只是第一步
+`{"duration": "fast"}` 是合法 JSON，但不满足“duration 是非负整数秒数”的接口要求。<Term id="schema">数据模式</Term>描述字段、类型和允许范围；接口还需要说明单位和缺失字段的含义。
 
-`{"duration": "fast"}` 是合法 JSON，但不满足“duration 是非负整数秒数”的约定。<Term id="schema">数据模式（schema）</Term>规定字段、类型与约束；字段含义还要规定单位、允许范围，以及省略字段意味着什么。
+例如，两方都接受 `{"duration": 8000}`，一方按秒处理，另一方按毫秒处理，解析过程可以完全成功，计算结果却相差一千倍。数据交换需要共同的格式与共同的解释。
 
-接收消息时，先解析格式，再检查结构与取值，最后按约定的单位和缺省规则解释字段。把秒改成毫秒而保留字段名称，可以通过前两项检查，仍然造成含义错误。
+二进制格式也需要这些约定，只是用字节位置、长度或字段编号表达结构。选择格式时，可以比较可读性、编码大小、解析成本以及已有工具支持。
 
-缺少字段与字段值为 `null` 也可以代表不同情况。例如省略 `label` 表示保持原值，`label: null` 表示清空。若读取方把两者都转换成 `None`，更新操作所需的信息就丢失了。
+## 往返会保留什么
 
-## 哪个版本写，哪个版本读
+JSON 不能直接保留任意 Python 类型。把坐标元组编码为 JSON 数组，解析后得到列表，见 [Python json 类型转换表](https://docs.python.org/3/library/json.html#encoders-and-decoders)。
 
-考虑版本 1 发送 `{"duration": 8}`；版本 2 可以增加可选的 `label`，例如 `{"duration": 8, "label": "test"}`。
+```python run id="program-composition.serialization-and-compatibility.types"
+import json
 
-<Term id="compatibility">兼容（compatibility）</Term>取决于谁发送、谁读取，以及读取方允许什么。这里固定使用以下方向：新读取方能读旧写入方的消息，称为向后兼容；旧读取方能读新写入方的消息，称为向前兼容。
+point = (3, 4)
+restored = json.loads(json.dumps(point))
+print(point, type(point).__name__)
+print(restored, type(restored).__name__)
+```
 
-| 组合 | 需要核对的条件 |
-| --- | --- |
-| 旧写入方 → 新读取方 | 新读取方允许没有 `label`，并给出约定的默认含义 |
-| 新写入方 → 旧读取方 | 旧读取方允许未知字段，且新增字段不改变旧字段的含义 |
+如果接口只要求一对坐标，这种表示可以满足需求；调用方若依赖元组类型，就要在读取后恢复。普通 JSON 也不记录对象地址或共享引用关系。
 
-若旧读取方要求字段集合恰好只有 `duration`，新增的可选字段也会被拒绝。允许未知字段的读取方可以接纳这份消息，但字段含义仍需一致：如果新写入方用 `label` 改变 `duration` 的单位，旧读取方继续按秒解释，就会得到错误结果。
-
-更一般地，设写入方可能产生的消息集合为 $W$，读取方能够正确处理的消息集合为 $R$。这对组合要求 $W \subseteq R$，且相同字段有一致含义。兼容检查需要同时比较允许的消息集合与字段的解释规则。
+格式随版本变化时，新旧读写方还要相互配合。完整的兼容检查与发布安排见 <CrossRef id="change-and-review.compatibility-and-migration" />。
 
 ## 练习
 
-两个读取方都曾用于版本 1。版本 2 提议新增可选 `label`，允许省略它；同时把 `duration` 改为毫秒。分别判断字段变化与单位变化对两种读取方的影响。只要没有异常就算兼容吗？输出中的 `reader.__name__` 读取函数名称，以区分两种结果。
+为一条“计时记录”选择字段，至少包含编号、耗时和备注。写明耗时的类型与单位、备注是否允许省略，再修改第一个单元格完成往返。
 
-```python run id="program-composition.serialization-and-compatibility.exercise-reader"
-import json
-
-
-def strict_reader(text):
-    value = json.loads(text)
-    if set(value) != {"duration"}:
-        raise ValueError("unexpected fields")
-    return value["duration"]
-
-
-def tolerant_reader(text):
-    value = json.loads(text)
-    return value["duration"]
-
-
-message = '{"duration": 8000, "label": "test"}'
-for reader in [strict_reader, tolerant_reader]:
-    try:
-        print(reader.__name__, "seconds:", reader(message))
-    except ValueError as failure:
-        print(reader.__name__, "failed:", failure)
-```
+将记录分别改成备注含中文、耗时为字符串、缺少耗时字段。哪些变化会让 JSON 解析失败？哪些要由接收程序另外检查？构造一条合法 JSON，让双方因单位不同而得到不同结果。

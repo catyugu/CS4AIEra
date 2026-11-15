@@ -2,7 +2,7 @@
 
 ## Project mission
 
-This repository implements a content-first, self-hostable Web course for professional self-learners studying computer science in the AI era.
+This repository implements a content-first, self-hostable Web course for self-learners without prior computer science training in the AI era.
 
 The product is **not an LMS**. There are no accounts, progress records, grades, cohorts, instructor dashboards, or server-side code execution.
 
@@ -28,12 +28,12 @@ One normative fact has exactly one home. Link to it instead of restating it.
 | What is invariant about this repository, and how is a change verified? | this file |
 | How are the product and its runtime built, and why? | `doc/DESIGN.md` |
 | How is a lesson written? | `doc/CONTENT_GUIDE.md` |
-| What is taught, in what order, and why? | `doc/CURRICULUM.md` |
-| Which lessons exist, in what order, and what is published? | `_section.yaml` and lesson frontmatter |
+| Who is the course for, and which teaching principles guide it? | `doc/CURRICULUM.md` |
+| What does each section teach, in what order, and what is published? | `_section.yaml`, lesson frontmatter and lesson bodies |
 | What metadata, cell options and references are legal? | `src/content-model/schema.ts`, the markdown pipeline, the content validator |
 | What changed, and when? | Git history |
 
-Documents hold decisions and intent; code, schema, frontmatter and tests hold the precise current facts; Git holds history. Adding a lesson, moving or splitting a section, changing a cell option or advancing publication state must not require editing any of these documents. Where a document and the repository disagree about a current fact, the repository is right and the document is a defect — with one exception: `doc/CURRICULUM.md` states design intent and may describe a module's direction before its lessons reach that shape.
+Documents hold decisions and intent; code, schema, frontmatter and tests hold the precise current facts; Git holds history. Adding a lesson, moving or splitting a section, changing a cell option or advancing publication state must not require editing any of these documents. Where a document and the repository disagree about a current fact, the repository is right and the document is a defect.
 
 Baseline technology choices are in `doc/DESIGN.md` (技术基线). Do not replace them merely because another library is fashionable; a replacement must reduce complexity or satisfy a concrete unmet requirement.
 
@@ -48,7 +48,7 @@ Baseline technology choices are in `doc/DESIGN.md` (技术基线). Do not replac
 
 ## Change discipline
 
-- A change to the architecture — the content model, the browser execution model, routing or the term system's semantics — updates `doc/DESIGN.md`. Implementing an existing design decision does not. A new authoring convention updates `doc/CONTENT_GUIDE.md`. A change to what is taught, or to a module's boundaries, updates `doc/CURRICULUM.md`. Reference another document by name, never by section number.
+- A change to the architecture — the content model, the browser execution model, routing or the term system's semantics — updates `doc/DESIGN.md`. Implementing an existing design decision does not. A new authoring convention updates `doc/CONTENT_GUIDE.md`. Changes to audience, course-wide learning goals or teaching principles update `doc/CURRICULUM.md`; section content and boundaries belong in section metadata and lessons. Reference another document by name, never by section number.
 - Never silently migrate content semantics. Provide a migration script when a schema change touches more than a few files.
 - Never restate a current fact in a document. An ID, an order, a status, a field list or a message shape has one home, and it is the file or the code that the build already reads.
 

@@ -2,7 +2,7 @@
 id: program-composition.modules-and-boundaries
 slug: /program-composition/modules-and-boundaries
 order: 10
-title: 模块边界：哪些变化应该留在内部
+title: 模块与信息隐藏
 status: published
 objectives:
   - 判断调用方依赖的是公开操作还是内部表示
@@ -67,9 +67,7 @@ window-ui ─────> report
 
 库是一组供其他程序使用的功能。包可以组织多个模块，也可以指可安装的发布单位；两种用法要根据上下文区分。在 Python 中，导入包用点分名称组织模块，安装的发行包则可能提供一个或多个导入包，名称也未必相同，见 [Python Packaging：发行包与导入包](https://packaging.python.org/en/latest/discussions/distribution-package-vs-import-package/)。
 
-发布版本标识一份具体的库内容。使用<Term id="semantic-versioning">语义化版本（Semantic Versioning）</Term>的项目，需要先声明公开 API，才有依据判断一次发布有没有破坏兼容，见 [Semantic Versioning 2.0.0](https://semver.org/)。版本号表达项目对变更性质的声明。升级时还要核对变更说明与契约，确认已有调用所需的行为得到保留。
-
-选择包怎样分发时，考虑安装与版本管理；划分模块时，先找出哪些实现决定应当能独立改变。
+发布版本标识一份具体的库内容。包的安装、版本选择和升级验证见 <CrossRef id="change-and-review.dependencies-and-reproducible-builds" />。划分模块时，先找出哪些实现应当能独立改变，再选择怎样发布。
 
 ## 练习
 

@@ -103,7 +103,7 @@ doc/                架构、课程地图与写作规范
 
 - [AGENTS.md](AGENTS.md)：仓库不变量、修改纪律与完成标准；
 - [doc/CONTENT_GUIDE.md](doc/CONTENT_GUIDE.md)：一节课应该怎样组织、论证和使用实验；
-- [doc/CURRICULUM.md](doc/CURRICULUM.md)：课程教什么、模块怎样分工；
+- [doc/CURRICULUM.md](doc/CURRICULUM.md)：课程宗旨、学习成果与整体组织原则；
 - [doc/DESIGN.md](doc/DESIGN.md)：产品架构、内容模型与浏览器运行时设计。
 
 其中，一条事实只应有一个权威来源。

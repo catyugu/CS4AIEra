@@ -1,7 +1,7 @@
 ---
 id: program-execution.bytes-and-numbers
 slug: /program-execution/bytes-and-numbers
-order: 10
+order: 20
 title: 字节、整数与浮点数
 status: published
 objectives:
@@ -22,23 +22,18 @@ objectives:
 
 保存 256 需要第 9 位。如果要求结果仍用 8 位保存，就要约定超出范围时怎样处理：可以报告错误，也可以只保留低 8 位，得到 0。这种回绕相当于对 $2^w$ 取余。业务要求“总数不能减少”时，回绕即使符合表示规则，也违反业务条件。
 
-C 的变量声明把类型写在名字前面。下面是一份供阅读的完整 C 程序，浏览器里的 Python 单元格不执行 C。`#include` 引入类型声明，`uint8_t` 在提供它的平台上表示恰好 8 位的无符号整数；`main` 是程序入口，花括号围住函数体，分号结束语句：
+Python 的整数可以按需要使用更多存储空间，见 [Python 内置数值类型](https://docs.python.org/3/library/stdtypes.html#numeric-types-int-float-complex)。写入固定宽度时，格式仍有上限。下面的 `to_bytes` 把整数保存到指定数量的字节中，装不下时抛出 `OverflowError`：
 
-```c
-#include <stdint.h>
-
-int main(void) {
-    uint8_t count = 255;
-    count = count + 1;
-    return count;
-}
+```python run id="program-execution.bytes-and-numbers.width"
+for count in [255, 256]:
+    try:
+        data = count.to_bytes(1, byteorder="big")
+        print(count, list(data))
+    except OverflowError:
+        print(count, "out of range")
 ```
 
-`void` 表示没有参数，`return` 返回结果。这里没有打印：`main` 返回的 0 成为程序的退出状态。
-
-加法先将这里的小整数提升为 `int`，算出 256，再转回 `uint8_t`，保存为 0。C 的无符号规则允许这种模转换；有符号加法超出其结果类型范围则属于<Term id="undefined-behavior">未定义行为</Term>，不能从某台机器上观察到的回绕推定保证，见 [WG14 C 工作草案 N3096 的整数类型、整数转换与表达式规则](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n3096.pdf)。判断溢出要先确定表达式的类型，不能只看接收结果的变量。
-
-Python 整数按需要增加表示空间，没有固定 8 位上限，见 [Python 内置数值类型](https://docs.python.org/3/library/stdtypes.html#numeric-types-int-float-complex)。写入定宽格式时，保存函数应先检查值是否落在格式的范围内。C 的类型则直接规定了这里使用的表示宽度和转换规则。
+本例采用拒绝越界的规则。如果文件格式使用回绕，就会得到前面分析的 0。判断数值结果时，要同时知道表示宽度和超出范围时的规则；具体语言的整数运算规则可在使用该语言时查阅。
 
 ## 字节的顺序也是规则
 

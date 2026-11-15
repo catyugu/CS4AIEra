@@ -2,7 +2,7 @@
 id: program-execution.threads-and-waiting
 slug: /program-execution/threads-and-waiting
 order: 60
-title: 线程与等待中的工作
+title: 线程、并发与异步
 status: published
 objectives:
   - 区分线程的运行、就绪与阻塞状态
@@ -30,13 +30,9 @@ objectives:
 
 <Term id="event-loop">事件循环</Term>（event loop）记录哪些任务能继续、哪些还在等待。协作任务在等待时交回控制，事件循环便可以选择另一项就绪任务。
 
-Python 用 `async def` 定义异步函数。异步函数的调用、调度和等待分别发生在以下位置：
+线程和异步任务是两种组织并发的方式。线程可以由操作系统切换；同一事件循环中的协作任务在交出控制后，其他任务才有机会运行。因此，一个线程也能同时管理许多等待中的请求。
 
-- 调用 `work()`，得到描述这次异步工作的协程对象。函数体此时尚未执行。
-- 用 `asyncio.create_task(work())` 把它安排成任务，交给事件循环调度。
-- 用 `await task` 等待该任务的结果；任务尚未完成时，当前任务可以让其他就绪任务执行。
-
-也可以直接写 `await work()`，由当前任务执行并等待这次异步工作，无须另建任务。任务创建与等待的规则见 [Python asyncio：协程与任务](https://docs.python.org/3/library/asyncio-task.html#coroutines)。
+下面只用 Python 的一个短例子观察交错。`async def` 定义异步工作，`create_task` 把工作交给事件循环安排，`await` 等待结果。API 的详细规则见 [Python asyncio 任务文档](https://docs.python.org/3/library/asyncio-task.html)。
 
 下面先创建 A、B 两个任务，再依次等待结果。`sleep(0)` 明确让出一次执行机会，不测量真实耗时。浏览器单元格已有事件循环并支持顶层 `await`，可以直接等待 `main()`：
 
@@ -66,26 +62,10 @@ await main()
 
 异步函数也在执行它的线程上运行。如果它长时间计算，或调用阻塞读取而一直没有让出控制，事件循环中的其他任务就要等它交回控制后才能继续。
 
-## 两个调用是否已经开始
+## 练习
 
-先写出以下输出的相对顺序，再运行。与上面的代码相比，A 和 B 会不会都在任一项结束前开始？要改变这一点，需要改变哪一处调用？
+两份请求各需本机计算 10 毫秒，再等待远端 90 毫秒。忽略其他开销，串行执行需多少时间？若第一份等待时就开始第二份，两者在单核上可以怎样交错？写出一份可能的时间安排。
 
-```python run id="program-execution.threads-and-waiting.exercise"
-import asyncio
-
-
-async def work(label):
-    print(label, "start")
-    await asyncio.sleep(0)
-    print(label, "end")
-
-
-async def main():
-    await work("A")
-    await work("B")
-
-
-await main()
-```
+再看单元格：把 `main` 中的两次任务创建改成依次 `await step("A")`、`await step("B")`。预测 A、B 的开始和结束次序，再运行。哪一段等待不再重叠？
 
 等待多的工作常能从并发中受益，计算多的工作则需要实际的计算资源。线程还有调度开销，语言运行时也可能限制并行执行。选择执行方式时，应先分清时间花在计算还是等待；再通过测量判断增加线程后节省的等待时间能否抵消调度开销。

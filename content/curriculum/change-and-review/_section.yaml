@@ -1,5 +1,5 @@
 id: change-and-review
-label: 修改与审查软件
+label: 软件开发与维护
 order: 90
-summary: 确定改动范围与验收要求，安排兼容迁移和发布恢复，并用边界与验证证据审查已有系统的修改。
+summary: 从需求与验收进入测试、版本控制和依赖管理，再安排兼容迁移、代码审查与软件发布。
 status: active

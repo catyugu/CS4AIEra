@@ -2,7 +2,7 @@
 id: security.cross-site-requests
 slug: /security/cross-site-requests
 order: 50
-title: 自动携带凭据的跨站请求
+title: 跨站请求伪造（CSRF）
 status: published
 objectives:
   - 追踪攻击页面如何利用浏览器自动携带的凭据发起请求
@@ -38,7 +38,7 @@ objectives:
 
 ## 读不到响应仍能产生副作用
 
-浏览器的<Term id="origin">源</Term>与 CORS 限制见 <CrossRef id="networks-and-web.tls-and-browser-boundaries" />。攻击网页不需要读出响应，只要修改完成就达到目的。普通表单提交也不等同于脚本需要预检的跨源请求。因此“API 没有允许跨源读取”不能独立防止 CSRF。
+浏览器的<Term id="origin">源</Term>与 CORS 限制见 <CrossRef id="networks-and-web.browser-and-frontend" />。攻击网页不需要读出响应，只要修改完成就达到目的。普通表单提交也不等同于脚本需要预检的跨源请求。因此“API 没有允许跨源读取”不能独立防止 CSRF。
 
 修改操作应使用适合的非安全方法，但改成 `POST` 本身没有解决表单跨站提交。使用 `GET` 修改状态更危险，因为链接跳转等普通访问也可能触发它。
 
@@ -48,9 +48,9 @@ objectives:
 
 来源检查可以验证请求的 `Origin`，在规定条件下使用 `Referer` 等来源信息；缺失字段如何处理、代理之后怎样确定预期源，需要统一策略。控制必须部署在服务器，因为攻击者控制的页面没有义务配合客户端检查。机制与条件见 [OWASP：CSRF 防护](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)。
 
-`SameSite` 属性限制某些跨站情形下 cookie 的发送。这里的“站”按方案和可注册域名等规则判断，与源的方案、主机、端口三元组不同：两个子域可以不同源却同站。`Lax` 仍允许特定顶层导航携带 cookie；`None` 允许跨站发送并要求 `Secure`。具体行为见 [MDN：Set-Cookie 的 SameSite](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#samesitesamesite-value)。如果对手控制同站子域，SameSite 可能仍允许发送 cookie；应按这个实际来源继续检查令牌或来源验证是否覆盖请求。
+`SameSite` 限制某些跨站请求携带 cookie，可以作为额外保护。其具体适用条件与登录、跳转流程有关，应按框架与浏览器规则配置，见 [MDN：SameSite](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#samesitesamesite-value)。服务器应对所有相关修改入口采用一致的令牌或来源检查。
 
-如果攻击者已经通过 XSS 控制合法页面脚本，它可能读取 CSRF 令牌或直接发起合法同源请求。这解释了 CSRF 防护为何仍依赖页面脚本的信任边界；不同控制应共同覆盖实际攻击路径。
+CSRF 防护还依赖合法页面脚本没有被攻击者控制；若页面存在 XSS，攻击者可能直接使用页面的能力。这将上一课的输出安全与本课的请求检查连接起来。
 
 ## 留下一个表单入口会怎样
 

@@ -1,8 +1,8 @@
 ---
 id: change-and-review.ci-release-and-recovery
 slug: /change-and-review/ci-release-and-recovery
-order: 50
-title: 验证管道、发布与恢复
+order: 70
+title: 持续集成与软件发布
 status: published
 objectives:
   - 将持续集成结果关联到源码、环境和制品身份
@@ -18,24 +18,17 @@ objectives:
 
 GitHub Actions 的工作流以事件触发任务，任务可以顺序或并行运行，并通过依赖关系安排先后，见 [GitHub：工作流、任务与执行器](https://docs.github.com/en/actions/get-started/understand-github-actions)。这些任务需要记录使用的输入和检查结果，才能确认正在发布的制品来自哪次构建。
 
-| 对象 | 必须能追踪到的信息 |
-| --- | --- |
-| 源码 | 固定提交及是否混入其他修改 |
-| 验证运行 | 工具版本、配置和检查结果 |
-| 发布制品 | 构建输入及制品标识 |
-| 部署实例 | 制品、运行配置和数据版本 |
-
-如果测试通过之后重新构建，环境输入可能改变，验证对象与部署对象便不再天然相同。可以把同一份制品逐步推广到不同环境，同时对各环境配置单独验证。
+流程中保留源码提交、工具版本、检查结果与制品标识，发布时直接使用已验证的制品。不同环境的配置仍分别验证，构建输入的处理见 <CrossRef id="change-and-review.dependencies-and-reproducible-builds" />。
 
 ## 验证代码也有权限边界
 
 来自外部贡献的改动可能修改测试和构建脚本。执行这些脚本就是执行尚未信任的代码；让它取得发布密钥，会把发布能力交给它。通常的验证任务应使用所需的最少权限，并把需要秘密的发布步骤放在适当的信任条件下。
 
-第三方自动化组件也属于执行的依赖。固定可验证身份、限制令牌权限和避免把不可信输入拼成脚本，是管道中的具体控制；相关条件见 [GitHub：安全使用工作流](https://docs.github.com/en/actions/reference/security/secure-use)。检查输出时还要考虑转换或编码后的秘密，确认它们没有通过日志或制品泄露。
+发布步骤需要的凭据应与普通检查分开管理。工作流安全规则见 [GitHub 文档](https://docs.github.com/en/actions/reference/security/secure-use)。
 
-## 进程存在不等于可以接流量
+## 从验证到上线
 
-**部署**把某份制品及配置放到执行环境中；**发布**让它开始承担用户可见的行为。一个进程可以已经启动，却仍未加载配置或完成初始化。就绪检查应判断是否可以处理所需请求，不能只检查“进程还在”。
+**部署**把某份制品及配置放到执行环境中；**发布**让它开始承担用户可见的行为。上线前可按 <CrossRef id="software-systems.deployment-boundaries" /> 中的路径检查：读取一条记录、访问一份文件，再提交代表性任务，确认程序能够在目标环境工作。
 
 滚动发布逐步替换实例，在过渡期内新旧版本共存。需要验证共同使用的数据格式、协议和配置均兼容；以 Kubernetes Deployment 为例，滚动更新安排逐步建立和替换副本，回退记录针对工作负载模板，见 [Kubernetes：Deployment 更新与回退](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)。恢复数据库业务数据仍需由应用的迁移、备份或补偿方案处理。
 

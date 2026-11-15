@@ -1,5 +1,5 @@
 id: networks-and-web
 label: 网络与 Web
 order: 50
-summary: 从寻址、传输和 HTTP 报文推导通信的保证，判断浏览器边界、缓存与失败后的重试。
+summary: 沿一个 Web 应用认识网络请求、浏览器、后端与数据，理解页面渲染、常见技术栈、构建部署和排错。
 status: active

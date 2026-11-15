@@ -1,0 +1,65 @@
+---
+id: persistence.data-changes
+slug: /persistence/data-changes
+order: 60
+title: 数据修改与条件更新
+status: published
+objectives:
+  - 用 INSERT、UPDATE 和 DELETE 说明记录怎样变化
+  - 根据筛选条件预测修改范围
+  - 用受影响行数判断条件更新是否完成
+---
+
+查询从已有记录计算结果。创建订单、修改价格和扣减库存，则要改变数据库保存的状态。修改语句既要说明新值，也要限定哪些记录可以改变。
+
+## 新增、修改和删除
+
+下面使用本章的 SQLite 书目数据。每次运行单元格都会重建 <LabRef id="catalog" />，因此可以反复比较修改前后的状态。
+
+```sql run id="persistence.changes.insert" fixture="catalog"
+INSERT INTO orders (id, reference, book_id, quantity)
+VALUES (13, 'r13', 1, 2);
+SELECT id, reference, book_id, quantity FROM orders ORDER BY id;
+DELETE FROM orders WHERE id = 13;
+SELECT id, reference, book_id, quantity FROM orders ORDER BY id;
+```
+
+`INSERT` 加入一行，列名与 `VALUES` 中的值依次对应。`DELETE` 删除满足 `WHERE` 的行。外键、唯一约束和其他数据规则仍会检查这些操作。
+
+`UPDATE` 的 `SET` 描述新值，`WHERE` 选择记录。下面把书 1 的价格设为 70：
+
+```sql run id="persistence.changes.update" fixture="catalog"
+SELECT id, price FROM books ORDER BY id;
+UPDATE books SET price = 70 WHERE id = 1;
+SELECT id, price FROM books ORDER BY id;
+```
+
+没有 `WHERE` 时，所有行都会参与修改。执行前可以先用相同条件查询，核对选择的是哪些记录；并发情况下，最终修改仍以执行时的条件为准。
+
+## 条件可以保护状态变化
+
+购买两本书，要求库存至少为 2。可以让检查与扣减由一条条件更新完成：
+
+```sql run id="persistence.joins.conditional-update" fixture="catalog"
+UPDATE books
+SET stock = stock - 2
+WHERE id = 1 AND stock >= 2;
+SELECT changes() AS changed_rows;
+SELECT id, stock FROM books WHERE id = 1;
+```
+
+这里 `SET` 使用记录当前库存计算新库存。`changes()` 返回 SQLite 最近一条相应修改语句影响的行数，见 [SQLite changes](https://www.sqlite.org/lang_corefunc.html#changes)。
+
+本例中，一行受影响表示找到书 1 且库存足够；零行表示没有完成扣减，可能是记录不存在或库存不足。应用应根据需要继续查询原因，不能收到零行结果后仍向用户报告购买成功。
+
+将购买数量改为 100 再运行，观察库存与受影响行数。如果删除库存条件，修改将尝试违反库存非负约束，得到的会是错误。条件未满足与约束报错是两种不同结果。
+
+## 多步业务需要共同完成
+
+扣库存之后，还要创建订单。两条语句分别执行，中间出错就可能只完成一步。下一课用事务把它们组织为共同提交单位，见 <CrossRef id="persistence.transactions-and-recovery" />。
+
+## 练习
+
+需求是“只对库存为零的书降价 10 元，未定价的书保持未定价”。先列出夹具中会被选中的编号，再修改第二个单元格的条件和新值，核对结果。
+
+一段购买代码扣减库存影响零行后，仍插入订单。写出一个能够触发它的输入，并说明测试应同时检查哪些记录。

@@ -164,12 +164,13 @@ async function handleRequest(request: RuntimeRequest): Promise<void> {
         return;
 
       case "run-python":
+        // Pyodide maps undefined to None; null is the distinct jsnull value.
         if (request.packages.length > 0) {
           // Names are pinned by the build, so this loads a wheel from the
           // self-hosted distribution rather than fetching arbitrary code.
           await instance!.loadPackage(request.packages);
         }
-        emit(await run({ type: "run-python", source: request.source, session: request.session ?? null }));
+        emit(await run({ type: "run-python", source: request.source, session: request.session }));
         return;
 
       case "run-sql":
@@ -177,7 +178,7 @@ async function handleRequest(request: RuntimeRequest): Promise<void> {
           await run({
             type: "run-sql",
             source: request.source,
-            session: request.session ?? null,
+            session: request.session,
             fixtureSql: await fixtureSql(request.fixtureUrl),
             maxRows: request.maxResultRows,
           }),

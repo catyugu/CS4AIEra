@@ -1,5 +1,5 @@
 id: program-execution
 label: 程序执行
 order: 30
-summary: 从字节、地址和机器指令追踪程序执行，解释内存生命周期、进程隔离、内核调用与并发等待，判断故障发生在哪个边界。
+summary: 从 Python 运行时连接到机器代码，理解数值表示、内存与调用栈、进程和操作系统，再分析并发、等待与同步。
 status: active
