@@ -1,0 +1,75 @@
+---
+id: networks-and-web.browser-and-frontend
+slug: /networks-and-web/browser-and-frontend
+order: 30
+title: 浏览器与前端程序
+status: published
+objectives:
+  - 说明 HTML、CSS 和 JavaScript 怎样共同形成界面
+  - 追踪事件处理、数据请求与页面更新的过程
+  - 解释前端框架、页面状态与浏览器同源策略的作用
+---
+
+笔记列表已经显示，用户点击“刷新”，列表随新数据变化，却没有重新打开整个页面。页面中的程序接收了点击、请求数据，再更新界面。
+
+## 浏览器把资源变成界面
+
+HTML 描述内容结构，CSS 描述布局与样式，JavaScript 描述交互和计算。浏览器解析 HTML，建立文档对象模型（DOM），脚本通过它访问页面元素；样式与布局处理决定元素怎样显示。
+
+下面是一段供阅读的 HTML。它声明标题、按钮和列表区域，并加载脚本：
+
+```html
+<h1>我的笔记</h1>
+<button id="refresh">刷新</button>
+<ul id="notes"></ul>
+<script type="module" src="/app.js"></script>
+```
+
+这里只需要看出元素与脚本的关系。HTML 标签、CSS 属性的完整用法可在实际编写界面时查阅。
+
+## 一次点击怎样更新列表
+
+下面的浏览器 JavaScript 片段假定后端 `/api/notes` 返回笔记数组。它不是 Python 单元格：
+
+```javascript
+const button = document.querySelector("#refresh");
+const list = document.querySelector("#notes");
+
+button.addEventListener("click", async () => {
+  const response = await fetch("/api/notes");
+  if (!response.ok) throw new Error("读取笔记失败");
+  const notes = await response.json();
+  list.replaceChildren();
+  for (const note of notes) {
+    const item = document.createElement("li");
+    item.textContent = note.title;
+    list.append(item);
+  }
+});
+```
+
+`querySelector` 找到元素，`addEventListener` 注册点击时执行的处理。`fetch` 发出 HTTP 请求，`await` 等待结果；读取 JSON 后，代码创建列表项并把标题作为文字显示。数据变化最终通过 DOM 更新反映到界面。实际页面还应向用户展示等待和失败状态。
+
+`fetch` 收到 404 或 500 时仍可返回响应对象，所以代码先检查 `response.ok`，再解析正文，见 [MDN：使用 Fetch](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)。
+
+## 前端框架组织反复发生的界面更新
+
+页面复杂后，列表、筛选框、编辑器等部分都维护状态，并影响显示。React、Vue 等工具帮助将界面拆成组件，并根据状态组织更新，见 [MDN：客户端框架介绍](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Frameworks_libraries/Introduction)。
+
+例如，筛选条件改变，应更新列表；编辑内容保存成功，应更新状态提示。框架帮助组织这些关联，网络请求和后端保存仍是应用需要安排的工作。
+
+页面变量保存着这次页面运行的状态。刷新重新创建页面时，这些变量通常重新初始化。要找回已经保存的笔记，前端需要重新读取持久数据。
+
+## 页面脚本受浏览器规则约束
+
+页面的<Term id="origin">源</Term>由方案、主机和端口组成。`https://notes.example` 与 `https://api.example` 不同源。浏览器的同源策略限制脚本读取其他源的某些资源；后端可以通过 CORS（跨源资源共享）声明允许哪些源读取响应，见 [MDN：CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS)。
+
+例如，开发页面在一个端口运行，API 在另一个端口运行，就可能需要 CORS 配置，或由开发代理提供同源入口。某些请求会先发预检请求，询问服务端是否允许该方式的跨源访问。
+
+CORS 由浏览器执行。服务端判断谁能读取笔记，仍要进行身份认证与授权。跨站请求如何利用浏览器凭据，见 <CrossRef id="security.cross-site-requests" />。
+
+## 练习
+
+按代码写出点击后的顺序：发送请求、取得响应、检查状态、解析 JSON、创建元素。后端返回 500 且正文是 HTML 错误页时，代码会在哪一步停止？如果删除状态检查，又可能在哪一步出错？
+
+筛选输入框只修改当前页面的变量。刷新页面后要恢复筛选条件，应选择什么保存方式？如果需求改成“所有设备共用筛选设置”，保存位置又要怎样变化？

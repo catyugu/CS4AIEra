@@ -1,83 +1,67 @@
 ---
 id: networks-and-web.http-messages-and-operations
 slug: /networks-and-web/http-messages-and-operations
-order: 30
-title: HTTP 报文与操作语义
+order: 40
+title: 服务器与后端程序
 status: published
 objectives:
-  - 从 HTTP 请求和响应中读出资源、操作、内容类型与结果
-  - 区分安全方法、幂等方法与一次响应的业务含义
-  - 判断页面刷新、连接重建与应用状态之间的关系
+  - 追踪请求经过路由、业务处理和数据访问的过程
+  - 区分 Web 服务器、后端框架、运行时与数据库
+  - 根据操作效果解释 API 的方法、结果和幂等性
 ---
 
-浏览器向服务器请求一条记录，服务器返回一段文本。双方交换的是有规定格式的报文；下面按 HTTP/1.1 的形式展示这次请求与响应。
+前端已经发出 `GET /api/notes/7`。服务器怎样知道应该运行哪段代码，又怎样把数据库中的记录变成响应？
 
-```http
-GET /items/7?format=text HTTP/1.1
-Host: notes.example
-Accept: text/plain
+## 路由把请求交给处理函数
 
-```
+后端框架提供路由：根据请求方法与路径选择处理代码。例如：
 
-这份 HTTP/1.1 示例请求要取得记录 7 的文本内容。客户端发出请求（request），服务器返回响应（response）：
-
-```http
-HTTP/1.1 200 OK
-Content-Type: text/plain; charset=utf-8
-Content-Length: 5
-
-hello
-```
-
-这些是构造的报文示例，HTTP/1.1 的实际行结束使用回车加换行。HTTP/2 与 HTTP/3 的线格式不同，但仍表达方法、目标、字段与内容这些语义。
-
-## 从报文读出资源与内容
-
-请求行包含方法 `GET`、请求目标和协议版本。`Host` 指定目标主机；同一 IP 地址上可以承载多个主机名。字段（header fields）提供报文的附加语义；空行结束字段部分，之后是内容（body）。响应状态行中的 `200` 是状态码，`OK` 是可读短语，程序应根据状态码而非短语判断。
-
-`Accept` 表示客户端可接受的内容类型；`Content-Type` 声明响应内容的类型及这里使用的字符编码。`Content-Length: 5` 指定内容有五个字节；这里 `hello` 的每个字符恰好各占一个 UTF-8 字节。内容长度也可以通过协议的其他成帧机制确定，解析器必须按具体协议规则找出报文终点，见 [RFC 9112：消息格式](https://www.rfc-editor.org/rfc/rfc9112.html#section-2.1)。
-
-浏览器地址 `https://notes.example/items/7?format=text#details` 还含有 `https` 协议标识和 `details` 片段。片段由客户端用于定位内容，不进入发给服务器的请求目标，见 [RFC 3986：URI 组成与片段](https://www.rfc-editor.org/rfc/rfc3986.html#section-3.5)。查询 `format=text` 怎样解释则由应用约定。
-
-## 请求成功的含义由操作契约决定
-
-方法区分对资源请求的操作。`GET` 请求取得表示；`PUT` 请求创建或替换目标资源的状态；`POST` 请求让目标资源按自己的语义处理内容。判断请求是否修改数据，需要结合方法与资源契约。
-
-如果 `/items/7/title` 这个资源的表示就是纯文本标题，替换标题的请求可以携带内容：
-
-```http
-PUT /items/7/title HTTP/1.1
-Host: notes.example
-Content-Type: text/plain; charset=utf-8
-Content-Length: 5
-
-hello
-```
-
-这里空行之后的五个字节提供新的标题表示。服务器按请求方法确定操作，按内容类型解释这些字节，再按资源契约检查标题是否有效。
-
-资源的“表示”是用于传送其当前内容的形式，例如这里的纯文本标题，或包含多个字段的 JSON。`GET` 取得这种表示；客户端修改后用 `PUT` 提交替换内容。资源是请求指向的对象，表示是双方交换的内容，两者需要区分。
-
-HTTP 把请求语义上不要求改变服务器状态的方法称为**安全方法**（safe methods）。记录访问日志等附带动作并不因此被禁止。HTTP 把重复相同请求与执行一次具有相同预期服务器效果的方法称为**幂等方法**（idempotent methods）；`GET`、`PUT` 和 `DELETE` 有这一语义，`POST` 没有一般的幂等保证，见 [RFC 9110：方法的共同属性](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2)。
-
-幂等比较的是预期效果，响应不必相同。例如第一次删除已存在的资源后，再次删除可能得到“已不存在”；两次都把资源留在不存在的状态。一个把 `GET /delete-item/7` 实现为删除记录的应用，违背了安全方法的语义，链接预取或缓存就可能触发开发者没有预期的修改。
-
-状态码只表达 HTTP 层的结果种类，业务含义仍需与契约结合。`202 Accepted` 表示请求已接受处理，处理尚未完成；客户端若要知道任务最终结果，需要后续查询或其他通知机制。`404` 表示目标资源没有可提供的当前表示，或服务器不愿说明它存在。`500` 表示服务器遇到妨碍完成请求的意外状况，不能据此推断此前已经完成的修改被撤销。
-
-## 请求之间的状态由应用保存
-
-HTTP 的每份请求携带可独立解释的语义；连接复用只是传输安排。应用仍可以在服务器保存记录，并让多份请求访问它，也可以通过 cookie 等显式信息关联请求。
-
-| 状态的位置 | 刷新页面之后 | 服务器进程重启之后 |
+| 方法与路径 | 处理工作 | 可能返回的结果 |
 | --- | --- | --- |
-| 当前页面脚本中的普通变量 | 重新创建页面时丢失 | 与服务器重启无直接关系 |
-| 服务器进程的内存变量 | 若服务器仍运行，可以保留 | 原进程的内存状态丢失 |
-| 服务器使用的持久存储 | 页面可重新请求取得 | 是否保留取决于存储与完成写入的保证 |
+| `GET /api/notes/7` | 查询并读取笔记 7 | 笔记 JSON，或不存在、无权限 |
+| `POST /api/notes` | 创建笔记 | 新笔记编号 |
+| `PUT /api/notes/7/title` | 替换标题 | 更新结果 |
+| `DELETE /api/notes/7` | 删除笔记 | 删除结果 |
 
-排查刷新后丢失的状态，可以先沿表格找到它的保存位置：页面是否只是改了本地变量，是否已经发送更新请求，服务器是否承诺在返回成功前持久保存。每一步都需要对应的证据。
+下面用接近 Python 的伪代码说明一次读取，省略框架的具体声明语法：
+
+```python
+def get_note(request, note_id):
+    user = authenticate(request)
+    note = database.find_note(note_id)
+    if note is None:
+        return response(status=404)
+    if note.owner != user.id:
+        return response(status=403)
+    return json_response({"id": note.id, "title": note.title})
+```
+
+`authenticate`、`database` 和响应函数表示由应用或框架提供的操作。请求携带身份信息，程序找到记录并检查权限，最后将结果编码为 JSON。数据库怎样组织与修改记录，下一章会展开。
+
+## 框架、运行时与 Web 服务器
+
+Python 需要运行时执行代码；Django、FastAPI 等后端框架在运行时之上组织路由、请求解析、响应等功能。不同框架还可能提供模板、会话和数据访问工具，见 [MDN：服务端框架](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Server-side/First_steps/Web_frameworks)。
+
+Node.js 则是 JavaScript 运行时，可以在浏览器之外执行 JavaScript 后端或开发工具，见 [Node.js 介绍](https://nodejs.org/en/learn/getting-started/introduction-to-nodejs)。浏览器和 Node.js 可以使用同一种语言，但宿主接口不同；后端没有当前用户页面的 DOM。
+
+Web 服务器接收 HTTP 通信，直接返回静态文件，或将动态请求交给应用处理。实际部署中可能由同一个程序提供这些能力，也可能由反向代理、应用服务器与后端分别承担。程序的名称要与正在承担的职责一起理解。
+
+## 业务规则要落实在服务端
+
+浏览器可以提示标题为空、禁用重复点击。服务器仍需检查实际请求，因为请求可以由其他客户端直接构造。
+
+业务处理还要决定何时返回成功。例如创建笔记要求保存后才能跨设备查询，后端就应在完成相应保存后返回成功。若只把记录放进进程字典，进程退出时会丢失，见 <CrossRef id="persistence.files-and-durability" />。
+
+## 方法要与操作效果对应
+
+HTTP 的 `GET` 用于读取，属于安全方法；`PUT` 和 `DELETE` 具有<Term id="idempotence">幂等性</Term>语义：重复相同请求的预期效果与执行一次相同。把标题设为“reading”，执行两次仍得到这个标题；阅读次数加一，执行两次则增加两次。
+
+`POST` 没有一般的幂等保证。创建操作需要安全重试时，应用可约定使用稳定操作标识识别重复提交。方法属性见 [RFC 9110：共同属性](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2)。
+
+资源的业务结果也要与状态对应：返回 `202` 的报告任务可能还在等待，客户端应按任务地址查询；返回文件正文则表明此次响应已提供内容。后台处理见 <CrossRef id="software-systems.queues-and-background-work" />。
 
 ## 练习
 
-一个 API 通过 `POST /exports` 创建导出任务，返回 `202` 和任务地址；另一个 API 返回 `200` 及已经生成的文件内容。客户端能否在两种响应之后都立即显示“文件已生成”？各自还缺什么证据？
+为“修改笔记标题”列出后端依次需要取得的信息、检查和保存的内容。页面已经隐藏其他用户的编辑按钮，服务端能否据此省略权限检查？构造一个绕过页面的请求说明原因。
 
-审查两种更新操作：“把记录 7 的标题设为 hello”和“在记录 7 的阅读次数上加一”。在没有其他并发修改时，重复相同请求分别会怎样改变状态？选择方法时，怎样让协议语义和实际操作保持一致？
+比较“将计数设为 10”和“将计数加 1”。响应丢失后再次执行，各自会留下什么状态？为需要重试的操作写出明确的 API 约定。

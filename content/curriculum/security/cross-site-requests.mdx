@@ -38,7 +38,7 @@ objectives:
 
 ## 读不到响应仍能产生副作用
 
-浏览器的<Term id="origin">源</Term>与 CORS 限制见 <CrossRef id="networks-and-web.tls-and-browser-boundaries" />。攻击网页不需要读出响应，只要修改完成就达到目的。普通表单提交也不等同于脚本需要预检的跨源请求。因此“API 没有允许跨源读取”不能独立防止 CSRF。
+浏览器的<Term id="origin">源</Term>与 CORS 限制见 <CrossRef id="networks-and-web.browser-and-frontend" />。攻击网页不需要读出响应，只要修改完成就达到目的。普通表单提交也不等同于脚本需要预检的跨源请求。因此“API 没有允许跨源读取”不能独立防止 CSRF。
 
 修改操作应使用适合的非安全方法，但改成 `POST` 本身没有解决表单跨站提交。使用 `GET` 修改状态更危险，因为链接跳转等普通访问也可能触发它。
 

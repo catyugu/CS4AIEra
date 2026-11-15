@@ -13,6 +13,12 @@ import { mathKatex } from "./src/markdown/math-katex";
 // execution on the host. See doc/DESIGN.md, 安全与可复现性 and 关键设计决策.
 export default defineConfig({
   output: "static",
+  // Retired lessons were folded into the Web overview; preserve incoming links.
+  redirects: {
+    "/networks-and-web/transport-and-connections": "/networks-and-web/addressing-and-listening/",
+    "/networks-and-web/tls-and-browser-boundaries": "/networks-and-web/browser-and-frontend/",
+    "/networks-and-web/http-caching": "/networks-and-web/latency-timeouts-and-retries/",
+  },
   integrations: [mdx(), contentValidation(), labAssets(), runtimeAssets()],
   markdown: {
     processor: satteri({
