@@ -39,7 +39,7 @@ A ── B ── C ───── M  main
 
 图中 A 到 B 是共享历史，M 有 C 和 E 两个父提交。
 
-B 是 C 与 E 的<Term id="merge-base">合并基点</Term>。B 到 E 的快照差异表示功能分支引入的变化，B 到 C 则表示主分支的变化。若直接比较 C 与 E，还会看到主分支独有变化在 E 中缺失的差异，不能把它们都算成功能分支主动删除的内容。合并基点的进一步规则见 [Git：merge-base](https://git-scm.com/docs/git-merge-base)。
+B 是 C 与 E 的<Term id="merge-base">最佳共同祖先</Term>（merge base，也称合并基点）。B 到 E 的快照差异表示功能分支引入的变化，B 到 C 则表示主分支的变化。若直接比较 C 与 E，还会看到主分支独有变化在 E 中缺失的差异，不能把它们都算成功能分支主动删除的内容。最佳共同祖先的进一步规则见 [Git：merge-base](https://git-scm.com/docs/git-merge-base)。
 
 三方合并综合共同起点与两边结果。当变化不能自动结合时，需要人工处理冲突；没有文本冲突也可能存在语义冲突。例如一边把接口的时间单位改成秒，另一边新增一个仍按毫秒解释的调用方，文件不同也能形成错误组合。合并结构见 [Pro Git：分支与合并](https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging)。
 

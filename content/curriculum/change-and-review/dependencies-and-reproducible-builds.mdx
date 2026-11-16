@@ -12,11 +12,11 @@ objectives:
 
 一个项目除了自己的源码，还使用框架、库和构建工具。取得同一份源码之后，要准备这些输入，才能构建出可运行的程序或可发布文件。
 
-## 依赖声明与锁文件
+## 依赖声明与依赖锁文件
 
 直接依赖是项目主动使用的包，传递依赖是这些包继续使用的包。包管理工具根据声明解析它们，选择具体版本并取得内容。
 
-依赖声明可以允许一段版本范围，<Term id="lockfile">锁文件</Term>则记录已选定的依赖图。以 npm 为例，`package-lock.json` 保存确切依赖树和完整性等信息，见 [npm 锁文件](https://docs.npmjs.com/cli/v11/configuring-npm/package-lock-json/)。
+依赖声明可以允许一段版本范围，<Term id="lockfile">依赖锁文件</Term>则记录已选定的依赖图。以 npm 为例，`package-lock.json` 保存确切依赖树和完整性等信息，见 [npm 锁文件](https://docs.npmjs.com/cli/v11/configuring-npm/package-lock-json/)。
 
 `npm ci` 按锁文件进行干净安装，声明与锁文件不一致时失败，见 [npm ci](https://docs.npmjs.com/cli/v11/commands/npm-ci/)。因此，一次依赖升级通常要同时审查声明和锁定结果，再验证应用实际调用的功能。
 
