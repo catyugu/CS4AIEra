@@ -30,11 +30,9 @@ objectives:
 
 <Term id="event-loop">事件循环</Term>（event loop）记录哪些任务能继续、哪些还在等待。协作任务在等待时交回控制，事件循环便可以选择另一项就绪任务。
 
-线程和异步任务是两种组织并发的方式。线程可以由操作系统切换；同一事件循环中的协作任务在交出控制后，其他任务才有机会运行。因此，一个线程也能同时管理许多等待中的请求。
+线程和异步任务都可以组织并发。操作系统负责调度线程；在同一线程运行的协作任务通常要主动等待或让出控制，事件循环才能继续执行其他任务。因此，一个线程也能在多个请求之间交错推进，让它们的等待时间重叠。
 
-下面只用 Python 的一个短例子观察交错。`async def` 定义异步工作，`create_task` 把工作交给事件循环安排，`await` 等待结果。任务调度的规则见 [Python asyncio 任务文档](https://docs.python.org/3/library/asyncio-task.html)。
-
-下面先创建 A、B 两个任务，再依次等待结果。`sleep(0)` 明确让出一次执行机会，不测量真实耗时。浏览器单元格已有事件循环并支持顶层 `await`，可以直接等待 `main()`：
+Python 的 `async def` 定义异步函数，`create_task` 安排异步任务，`await` 等待结果。先创建 A、B 两个任务，再依次等待它们。任务调度的规则见 [Python asyncio 任务文档](https://docs.python.org/3/library/asyncio-task.html)。`sleep(0)` 明确让出一次执行机会，不测量真实耗时。浏览器单元格已有事件循环并支持顶层 `await`，可以直接等待 `main()`：
 
 ```python run id="program-execution.threads-and-waiting.cooperate"
 import asyncio
@@ -56,7 +54,7 @@ async def main():
 await main()
 ```
 
-虽然 `await first` 和 `await second` 写成两行，B 不需要等第一行结束才开始：两个任务都已创建，A 等待时，B 就有机会执行。这个单元格展示当前运行时的一次调度顺序。分析程序时，可以依赖每项自己的 `start` 在 `resume` 之前，以及 `sleep(0)` 会让出控制的约定。
+虽然 `await first` 和 `await second` 写成两行，B 不需要等第一行结束才开始：两个任务都已创建，A 等待时，B 就有机会执行。具体输出次序由任务调度决定；可以确定的是，每项任务先输出自己的 `start`，经过 `sleep(0)` 让出控制后，才输出自己的 `resume`。
 
 `await` 也不一定暂停：等待对象已完成时，可以继续执行。任务和 `sleep` 的规则见 [Python asyncio 任务文档](https://docs.python.org/3/library/asyncio-task.html#sleeping)。
 
