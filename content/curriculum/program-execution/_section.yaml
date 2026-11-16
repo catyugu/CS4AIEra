@@ -1,5 +1,5 @@
 id: program-execution
-label: 程序执行
+label: 计算机与程序运行
 order: 30
-summary: 从 Python 运行时连接到机器代码，理解数值表示、内存与调用栈、进程和操作系统，再分析并发、等待与同步。
+summary: 连接源码、运行时与机器指令，理解数值、内存、进程和操作系统，再分析并发与同步。
 status: active

@@ -1,13 +1,13 @@
 ---
 id: networks-and-web.development-and-deployment
 slug: /networks-and-web/development-and-deployment
-order: 60
-title: 开发工具、构建与部署
+order: 70
+title: 前端构建与服务入口
 status: published
 objectives:
-  - 将常见技术名称对应到语言、运行时、框架和构建工具
-  - 区分源码、开发服务器、发布文件和运行中的后端
-  - 追踪静态资源和 API 请求经过反向代理与 CDN 的路径
+  - 把语言、运行时、框架和构建工具对应到具体工作
+  - 区分开发服务器、发布资源和线上后端进程
+  - 沿静态资源与 API 请求说明反向代理和 CDN 的作用
 ---
 
 一个前端项目包含 TypeScript、组件文件和许多依赖。开发时启动工具，浏览器就能看到页面；发布时却常得到一个装着 HTML、CSS 和 JavaScript 的目录。这两种使用方式怎样对应？
@@ -36,7 +36,7 @@ Node.js 常在开发机上执行构建工具。构建完成后，如果只发布
 
 开发服务器可能替前端转发 `/api` 请求。复制静态文件并不会复制这个开发代理，线上需要安排等效入口。Vite 的预览服务用于本地检查构建结果，部署方式应依据目标环境选择，见 [Vite：静态部署](https://vite.dev/guide/static-deploy)。
 
-构建时写入脚本的 API 地址随产物一起交给浏览器。服务端后来修改环境变量，不会改动已经生成的文件；构建配置与启动配置的区别见 <CrossRef id="change-and-review.dependencies-and-reproducible-builds" />。
+构建产物就是浏览器实际取得的文件。构建输入与依赖版本的管理见 <CrossRef id="change-and-review.dependencies-and-reproducible-builds" />。
 
 ## 一个入口可以连接多个程序
 

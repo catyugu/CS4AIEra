@@ -32,7 +32,7 @@ objectives:
 
 线程和异步任务是两种组织并发的方式。线程可以由操作系统切换；同一事件循环中的协作任务在交出控制后，其他任务才有机会运行。因此，一个线程也能同时管理许多等待中的请求。
 
-下面只用 Python 的一个短例子观察交错。`async def` 定义异步工作，`create_task` 把工作交给事件循环安排，`await` 等待结果。API 的详细规则见 [Python asyncio 任务文档](https://docs.python.org/3/library/asyncio-task.html)。
+下面只用 Python 的一个短例子观察交错。`async def` 定义异步工作，`create_task` 把工作交给事件循环安排，`await` 等待结果。任务调度的规则见 [Python asyncio 任务文档](https://docs.python.org/3/library/asyncio-task.html)。
 
 下面先创建 A、B 两个任务，再依次等待结果。`sleep(0)` 明确让出一次执行机会，不测量真实耗时。浏览器单元格已有事件循环并支持顶层 `await`，可以直接等待 `main()`：
 

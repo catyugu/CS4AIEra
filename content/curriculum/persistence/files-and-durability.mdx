@@ -5,9 +5,9 @@ order: 10
 title: 文件与数据持久化
 status: published
 objectives:
-  - 区分进程内存、文件和数据库各自保存什么
-  - 为需要跨重启恢复的数据选择保存位置
-  - 区分正常读回、崩溃恢复和备份分别能验证或解决的问题
+  - 将程序中的记录写入文件并重新读取
+  - 根据查询和修改需求比较文件与数据库
+  - 区分正常重启、崩溃恢复和备份的用途
 ---
 
 待办清单放在 Python 列表里，添加和查询都很方便。程序退出再启动，列表却重新变成空的。代码文件仍在，但上次运行创建的对象已经随进程退出而消失。
@@ -24,11 +24,27 @@ objectives:
 
 文件按路径读取和写入字节，格式由程序约定。例如 JSON 文件可以保存整份清单。数据库则还提供记录的查询、约束和事务，应用不必每次读出全部内容再自行改写。
 
+下面把清单编码为 JSON，写入文件，再重新读取。`Path` 表示文件路径，`write_text` 和 `read_text` 分别写入和读取文本，`encoding` 指定字符编码：
+
+```python run id="persistence.files-and-durability.roundtrip"
+import json
+from pathlib import Path
+
+path = Path("todo.json")
+tasks = [{"title": "读一章书", "done": False}]
+path.write_text(json.dumps(tasks, ensure_ascii=False), encoding="utf-8")
+restored = json.loads(path.read_text(encoding="utf-8"))
+print(restored)
+print("same values:", restored == tasks)
+```
+
+写入后，程序可以释放原列表，再从文件建立新的列表。这正是跨次运行恢复数据的基本过程。文件 API 见 [Python pathlib](https://docs.python.org/3/library/pathlib.html#pathlib.Path.read_text)。
+
 数据库能保存多久，取决于实际存储位置及其管理方式。内存数据库随运行结束而消失，临时目录也可能被清理。需要确认数据文件放在哪里、谁会删除它，以及部署后是否仍能保留。
 
 浏览器里的 SQL 实验会重建夹具，文件实验使用浏览器运行时的文件系统。它们能展示读写和查询，刷新页面后不承诺保留数据。
 
-## 保存成功，应当能应对什么故障
+## 重启、崩溃与备份
 
 程序的写入可能先进入库或操作系统的内存缓冲，再交给存储设备。写入调用返回时，数据可能仍在内存中。重新读取可以取得这些缓冲内容，而断电会丢失易失内存中的数据。因此，正常读回与断电恢复需要分别验证。
 
@@ -39,7 +55,7 @@ objectives:
 | 崩溃后能恢复已确认的修改 | 明确存储的提交与同步规则，在目标环境做故障恢复检查 |
 | 设备损坏或误删后能找回数据 | 从独立备份恢复并核对 |
 
-刷新缓冲的 API 要按文档理解。例如 Python 的 `flush()` 将文件对象的缓冲交给底层流，不能单独承诺断电恢复，见 [Python io 文档](https://docs.python.org/3/library/io.html#io.IOBase.flush)。需要处理多条记录的共同提交时，应使用数据库的 <CrossRef id="persistence.transactions-and-recovery" />。
+数据库提供提交与恢复机制，帮助多条记录一起保存，见 <CrossRef id="persistence.transactions-and-recovery" />。实际持久性取决于存储配置和设备能承受的故障。
 
 如果误删除已被持久保存，重启后恢复的就是删除后的状态。备份需要与原数据分开保留，并实际验证能否恢复。
 
