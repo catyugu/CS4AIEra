@@ -1,13 +1,13 @@
 ---
 id: security.parsing-injection-and-output
 slug: /security/parsing-injection-and-output
-order: 40
-title: SQL 注入与跨站脚本攻击
+order: 30
+title: 不可信输入：SQL 注入与 XSS
 status: published
 objectives:
-  - 追踪不可信输入怎样改变 SQL 查询或在页面中执行
-  - 用参数化查询保持数据与 SQL 语法的边界
-  - 根据输出上下文选择文本输出、编码或受限 HTML 清洗
+  - 追踪输入怎样改变 SQL 或网页的解释结果
+  - 用参数化查询把姓名作为数据传入
+  - 选择文本输出或受限富文本处理方式
 ---
 
 用户输入一个姓名，程序把它拼接进 SQL；用户输入一条评论，程序把它拼接进 HTML。两个接口原本都只想接收文本，但解析器看到的是合并后的整个语句或页面。输入里的语法字符可能改变结构。

@@ -1,5 +1,5 @@
 id: persistence
-label: 持久化与数据库
+label: 数据存储与数据库
 order: 60
-summary: 从文件保存进入数据库，用查询、连接、索引、修改与事务理解数据管理，再处理并发更新和缓存。
+summary: 从文件保存进入表与数据关系，学习查询、关联和修改，再理解事务、索引与并发更新。
 status: active

@@ -1,5 +1,5 @@
 id: software-systems
-label: 应用架构与部署
+label: 应用架构与可靠性
 order: 70
-summary: 从简单应用引入后台任务，连续分析交接、故障与恢复，再讨论容量、数据复制和运行环境。
+summary: 先建立应用的运行结构与状态模型，再引入后台任务、容量限制、缓存、副本和故障恢复。
 status: active

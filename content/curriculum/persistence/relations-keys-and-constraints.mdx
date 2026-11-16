@@ -2,12 +2,12 @@
 id: persistence.relations-keys-and-constraints
 slug: /persistence/relations-keys-and-constraints
 order: 20
-title: 表、主键与数据约束
+title: 表、数据关系与约束
 status: published
 objectives:
-  - 说明表、行、列怎样组织记录
-  - 用主键和外键标识记录并连接相关数据
-  - 解释数据库约束为何要覆盖所有写入者
+  - 用表、行和列组织记录
+  - 用主键与外键表达记录之间的关系
+  - 解释数据库约束怎样维护所有写入路径的数据规则
 ---
 
 两本书可以同名，一本书也可以改名。订单如果只保存书名，改名之后就难以确定它买的是哪本书。给书一个稳定编号，再让订单保存这个编号，关联就不依赖书名了。
@@ -16,7 +16,7 @@ objectives:
 
 关系数据库用表组织记录。书表的一行保存一本书，每列分别保存编号、标题、分类、价格和库存；订单表的一行保存一笔订单。
 
-本章用 SQL 操作数据库；SQL 语句描述需要查询或修改什么，由数据库执行。实验使用 SQLite 引擎，预先准备的表和记录称为实验夹具，内容见 <LabRef id="catalog" />。每次运行独立单元格都会重建这份数据，同一格内的多条语句则共用一份数据库。
+本章用 SQL 操作数据库；SQL 语句描述需要查询或修改什么，由数据库执行。实验使用 SQLite 引擎，预先准备的表和记录见 <LabRef id="catalog" />。每次运行独立单元格都会重建这份数据，同一格内的多条语句则共用一份数据库。
 
 ```sql run id="persistence.relations.tables" fixture="catalog"
 SELECT id, title, category, price, stock
@@ -54,7 +54,7 @@ id 12 ── book_id 3 ──── id 3
 | `book_id` 必填并引用书表 | 没有书编号，或引用不存在的书 |
 | `quantity` 必填且大于 0 | 没有数量，或数量不为正 |
 
-创建表时，`NOT NULL` 表示不允许缺失值，`UNIQUE` 表示唯一，`REFERENCES` 声明引用，`CHECK` 检查条件。具体语法见 [SQLite CREATE TABLE 文档](https://www.sqlite.org/lang_createtable.html)。实验表使用严格类型，并已启用外键检查；这些设置使下面的类型和引用规则实际参与写入校验。可以先观察约束怎样拒绝修改。
+创建表时，`NOT NULL` 表示不允许缺失值，`UNIQUE` 表示唯一，`REFERENCES` 声明引用，`CHECK` 检查条件。具体语法见 [SQLite CREATE TABLE 文档](https://www.sqlite.org/lang_createtable.html)。实验表使用严格类型，并已启用外键检查，因此这些规则会在实际写入时检查。
 
 网页表单可以提前检查数量，及时向用户反馈错误。另一个应用、导入脚本或人工操作也可能写入同一张表；数据库约束让这些写入路径都接受相同的检查。
 

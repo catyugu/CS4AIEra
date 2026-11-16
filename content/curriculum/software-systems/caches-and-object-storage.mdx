@@ -1,12 +1,13 @@
 ---
 id: persistence.caches-and-object-storage
 slug: /persistence/caches-and-object-storage
-order: 90
-title: 数据缓存与失效
+order: 60
+title: 应用缓存与数据更新
 status: published
 objectives:
-  - 为缓存确定权威数据来源与允许的陈旧程度
-  - 从读写交错解释缓存删除后旧值重新出现的条件
+  - 追踪缓存命中、未命中与填充的过程
+  - 根据允许的陈旧程度选择读取位置
+  - 用读写交错解释缓存更新问题
 ---
 
 书价已经从 80 改成 70，页面仍显示 80。数据库保存了新价格，缓存里却可能还留着旧结果。要让页面在允许的时间内读到新值，就需要安排这份副本何时更新或失效。

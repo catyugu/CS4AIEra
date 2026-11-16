@@ -1,5 +1,5 @@
 id: networks-and-web
-label: 网络与 Web
+label: 网络与 Web 应用
 order: 50
-summary: 沿一个 Web 应用认识网络请求、浏览器、后端与数据，理解页面渲染、常见技术栈、构建部署和排错。
+summary: 从应用组成进入网络通信与 HTTP，追踪前端、后端和页面生成，再沿请求定位性能与运行问题。
 status: active

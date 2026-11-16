@@ -1,13 +1,13 @@
 ---
 id: persistence.data-changes
 slug: /persistence/data-changes
-order: 60
+order: 50
 title: 数据修改与条件更新
 status: published
 objectives:
-  - 用 INSERT、UPDATE 和 DELETE 说明记录怎样变化
-  - 根据筛选条件预测修改范围
-  - 用受影响行数判断条件更新是否完成
+  - 用 INSERT、UPDATE 和 DELETE 追踪记录变化
+  - 根据 WHERE 条件确定修改范围
+  - 根据受影响行数判断条件更新是否完成
 ---
 
 查询从已有记录计算结果。创建订单、修改价格和扣减库存，则要改变数据库保存的状态。修改语句既要说明新值，也要限定哪些记录可以改变。

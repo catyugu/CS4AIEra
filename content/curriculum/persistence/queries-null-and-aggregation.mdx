@@ -2,15 +2,15 @@
 id: persistence.queries-null-and-aggregation
 slug: /persistence/queries-null-and-aggregation
 order: 30
-title: 查询中的重复、NULL 与聚合
+title: SQL 查询、排序与统计
 status: published
 objectives:
-  - 预测保留重复与去重查询的结果行数
-  - 用三值逻辑解释缺失值对筛选的影响
-  - 区分统计行数与统计非空值的结果
+  - 根据 SELECT、WHERE 和 ORDER BY 推导查询结果
+  - 用 DISTINCT、GROUP BY 和聚合函数回答不同统计问题
+  - 解释缺失值怎样影响筛选与计数
 ---
 
-从书表里找出库存大于 0 的书：
+从书表中列出有库存的书，需要指定要读的表、要显示的列、筛选条件和输出顺序：
 
 ```sql run id="persistence.queries.available" fixture="catalog"
 SELECT id, title, stock
@@ -19,45 +19,22 @@ WHERE stock > 0
 ORDER BY id;
 ```
 
-`WHERE` 用条件筛选行。这条查询说明要什么结果，数据库决定怎样找到这些行。阅读查询时，可以先按筛选与排序规则推导输出，再通过查询计划了解引擎怎样读取数据。
+`FROM books` 指定表，`WHERE stock > 0` 筛选有库存的行，`SELECT` 选择输出列，`ORDER BY id` 按编号排列。查询描述所需结果，数据库选择实际读取这些数据的方法。
 
-## 同一分类为什么出现多次
+## 查询结果与去重
 
-查询分类时，“每本书属于哪个分类”与“有哪些不同分类”需要不同结果：
+列出每本书的分类，与列出所有不同分类，得到的行数不同：
 
 ```sql run id="persistence.queries.duplicates" fixture="catalog"
 SELECT category FROM books ORDER BY category;
 SELECT DISTINCT category FROM books ORDER BY category;
 ```
 
-`DISTINCT` 删除输出列相同的重复行。普通查询保留这些重复，结果可以是多重集（bag）。这里 computing 分类有两本书，第一条查询为每本书输出一次分类，第二条查询则只保留一个 computing。
+computing 分类有两本书，第一条查询输出两次 computing。`DISTINCT` 按输出列去重，所以第二条只保留一次。需要每本书的分类时保留重复，需要分类列表时才去重。
 
-引擎可以重排执行操作；[SQLite SELECT 文档](https://www.sqlite.org/lang_select.html)中的逻辑处理顺序用来解释结果，并不要求引擎照该顺序逐步执行。
+## 分组与统计
 
-## NULL 怎样参与条件
-
-第二本书价格还没有确定，表里用 `NULL` 表示缺失。这里的 `NULL` 表示尚未得到价格，0 表示已知价格为零，字符串 `'NULL'` 则只是文字。
-
-比较一个缺失价格与 60，结果是未知（unknown）。SQL 的三值逻辑有真、假、未知，`WHERE` 只保留条件为真的行。
-
-| 条件结果 p | NOT p | p AND 真 | p OR 真 |
-| --- | --- | --- | --- |
-| 真 | 假 | 真 | 真 |
-| 假 | 真 | 假 | 真 |
-| 未知 | 未知 | 未知 | 真 |
-
-```sql run id="persistence.queries.null" fixture="catalog"
-SELECT id, price, price > 60 AS expensive,
-       NOT (price > 60) AS not_expensive
-FROM books ORDER BY id;
-SELECT id, title FROM books WHERE price IS NULL ORDER BY id;
-```
-
-`AS` 给输出列命名；SQLite 在结果中以 1 和 0 表示这些布尔判断，未知显示为 NULL。价格缺失时，`price > 60` 为未知，取反后仍为未知，所以 `NOT (price > 60)` 也会漏掉这本书。`IS NULL` 专门检查缺失；`price = NULL` 不能用来找到缺失价格。[SQLite 表达式文档](https://www.sqlite.org/lang_expr.html#operators_and_parse_affecting_attributes)列出 NULL 与运算符的规则。
-
-## 聚合在统计什么
-
-`GROUP BY category` 把相同分类的行分到一组；`COUNT(*)` 统计组内行数，`COUNT(price)` 只统计非空价格，`SUM` 与 `AVG` 也忽略其参数中的 NULL。
+`GROUP BY category` 把相同分类的行分到一组。`COUNT(*)` 计算每组行数，`AVG(price)` 计算已有价格的平均值，`AS` 为输出列命名：
 
 ```sql run id="persistence.queries.aggregate" fixture="catalog"
 SELECT category, COUNT(*) AS books,
@@ -67,11 +44,26 @@ GROUP BY category
 ORDER BY category;
 ```
 
-computing 的平均价格来自有价格的那一本书。若需求是“全部书的平均定价”，缺失值意味着当前数据不足；把它自动填成零会改变所求的量。[SQLite 聚合函数文档](https://www.sqlite.org/lang_aggfunc.html)定义具体空输入与 NULL 行为。
+history 分类有两本定价 50 的书，平均价格是 50。computing 分类有一本定价 80，另一本未定价，所以 `COUNT(*)` 是 2，`COUNT(price)` 是 1，平均价格是 80。行数与已有价格的数量回答了不同问题。
 
-## 把未定价的书也找出来
+## 缺失值怎样参与查询
 
-现在要列出价格不高于 60 的书，也包括尚未定价的书。先写出应出现的编号，再运行下面的查询。如果少了记录，应怎样修改条件？
+表用 `NULL` 表示缺失。本例中，它表示价格尚未确定；0 表示已知价格为零。SQL 比较缺失价格与 60 时，得到未知（unknown）。`WHERE` 只保留条件为真的行，因此缺失价格既不会通过 `price > 60`，也不会通过它的取反条件。
+
+```sql run id="persistence.queries.null" fixture="catalog"
+SELECT id, price, price > 60 AS expensive,
+       NOT (price > 60) AS not_expensive
+FROM books ORDER BY id;
+SELECT id, title FROM books WHERE price IS NULL ORDER BY id;
+```
+
+`IS NULL` 检查缺失值。实验中 SQLite 用 1、0 和 NULL 显示真、假、未知。完整表达式规则见 [SQLite 表达式](https://www.sqlite.org/lang_expr.html)。
+
+`COUNT(price)`、`SUM(price)` 和 `AVG(price)` 忽略缺失价格。若需要“全部书的平均定价”，缺失数据意味着还无法计算这个量；把缺失值填成零会改变问题。聚合规则见 [SQLite 聚合函数](https://www.sqlite.org/lang_aggfunc.html)。
+
+## 练习
+
+列出价格不高于 60 的书，也包括尚未定价的书。先按原始数据写出编号，再运行下面的查询，补齐漏掉的记录：
 
 ```sql run id="persistence.queries.exercise-filter" fixture="catalog"
 SELECT id, title, price
@@ -80,4 +72,4 @@ WHERE NOT (price > 60)
 ORDER BY id;
 ```
 
-另一个报表把 `COUNT(price)` 标成“书的总数”。选择一个合法的数据变更，使这个标题与实际统计对象的差别变得可见。
+另一个报表把 `COUNT(price)` 标为“书的总数”。修改一条记录的价格，使这个标题与实际统计对象的差别显现出来。

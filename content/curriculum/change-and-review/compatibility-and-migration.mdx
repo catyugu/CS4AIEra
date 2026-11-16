@@ -1,13 +1,13 @@
 ---
 id: change-and-review.compatibility-and-migration
 slug: /change-and-review/compatibility-and-migration
-order: 50
+order: 70
 title: 版本兼容与数据迁移
 status: published
 objectives:
-  - 为读写方列出版本兼容矩阵，并据此安排发布顺序
-  - 解释扩展、转换和删除旧格式为什么需要分阶段
-  - 判断回退程序版本能否继续读取已经迁移的数据
+  - 列出新旧读写方的版本兼容关系
+  - 根据兼容矩阵安排扩展、转换与删除的顺序
+  - 解释信息损失怎样影响旧版本恢复
 ---
 
 服务把耗时字段从 `duration_ms` 改为 `duration_s`，旧客户端仍在运行；服务器实例也不一定在同一时刻升级。新版本自己读写成功，只证明一种组合，不能证明过渡阶段的其他组合。
@@ -47,9 +47,7 @@ objectives:
 
 <Term id="migration">迁移</Term>把已有数据或使用方式转向新约定。增加新列后，通常还要为历史记录填写换算后的值，这个过程称为回填。新旧写入方共存时，回填可能与在线修改交错，需要防止旧值覆盖新修改或两列失去对应。
 
-转换大量历史记录可能占用数据库资源，影响在线请求。应在接近实际规模的数据上检查所需时间和并发影响，具体结构修改规则可查阅 [PostgreSQL：ALTER TABLE](https://www.postgresql.org/docs/current/sql-altertable.html)。
-
-分批转换需要记录进度，并明确失败后从哪里继续。若某批执行完成但进度记录丢失，重复该批必须有可解释的效果；否则“重新跑脚本”可能再次改变数据。数据转换的成功条件应该检查实际值和约束，不只是脚本退出码。
+大量数据可以分批转换，保存进度并检查实际字段值。迁移的成功条件是新旧数据都符合预定规则；具体结构修改方式可查阅 [PostgreSQL：ALTER TABLE](https://www.postgresql.org/docs/current/sql-altertable.html)。
 
 ## 回退还依赖数据仍可理解
 

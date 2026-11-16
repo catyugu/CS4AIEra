@@ -2,12 +2,12 @@
 id: program-composition.modules-and-boundaries
 slug: /program-composition/modules-and-boundaries
 order: 10
-title: 模块与信息隐藏
+title: 模块、依赖与信息隐藏
 status: published
 objectives:
-  - 判断调用方依赖的是公开操作还是内部表示
-  - 从需要独立变化的决定划分模块，并画出依赖方向
-  - 区分模块、库、包与发布版本承担的职责
+  - 用公开操作隔离内部数据表示
+  - 沿依赖方向说明界面与计算怎样分开
+  - 区分代码模块、库与可安装的包
 ---
 
 一个模块维护整数集合。调用方需要判断某个数是否存在，模块内部目前用列表保存。若调用方直接读取列表，改成集合就可能连带修改所有调用方；若调用方只调用 `contains(value)`，就可以在保留查询行为的前提下替换内部表示。
@@ -46,7 +46,7 @@ print("module:", values.snapshot())
 
 返回独立列表，让调用方修改结果时不必知道模块怎样保存状态。若 `snapshot` 改成直接返回 `self._values`，调用方就获得了内部列表的别名，能够绕过 `add` 的重复检查。方法名称不变，边界已经变了。
 
-这里列表中只有整数，复制外层列表就够用。复制外层、仍引用原来的元素对象，称为<Term id="shallow-copy">浅拷贝</Term>。若元素是可变的字典或列表，修改元素仍会影响原对象。公开结果允许改到哪一层，需要写进契约。
+本例只保存整数，创建外层列表就能让两份结果独立增删。若列表里保存的是可变记录，还要考虑记录是否共享；下面的练习会观察这种差别。
 
 ## 依赖方向决定哪些部分一起变化
 
@@ -67,7 +67,7 @@ window-ui ─────> report
 
 库是一组供其他程序使用的功能。包可以组织多个模块，也可以指可安装的发布单位；两种用法要根据上下文区分。在 Python 中，导入包用点分名称组织模块，安装的发行包则可能提供一个或多个导入包，名称也未必相同，见 [Python Packaging：发行包与导入包](https://packaging.python.org/en/latest/discussions/distribution-package-vs-import-package/)。
 
-发布版本标识一份具体的库内容。包的安装、版本选择和升级验证见 <CrossRef id="change-and-review.dependencies-and-reproducible-builds" />。划分模块时，先找出哪些实现应当能独立改变，再选择怎样发布。
+模块决定代码怎样组织，发布版本标识交给使用者的一份具体内容。包的安装和升级见 <CrossRef id="change-and-review.dependencies-and-reproducible-builds" />。
 
 ## 练习
 
