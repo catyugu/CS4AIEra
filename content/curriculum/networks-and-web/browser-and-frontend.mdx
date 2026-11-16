@@ -12,7 +12,7 @@ objectives:
 
 笔记列表已经显示，用户点击“刷新”，列表随新数据变化，却没有重新打开整个页面。页面中的程序接收了点击、请求数据，再更新界面。
 
-## 浏览器把资源变成界面
+## HTML、CSS 与 DOM
 
 HTML 描述内容结构，CSS 描述布局与样式，JavaScript 描述交互和计算。浏览器解析 HTML，建立文档对象模型（DOM），脚本通过它访问页面元素；样式与布局处理决定元素怎样显示。
 
@@ -27,7 +27,7 @@ HTML 描述内容结构，CSS 描述布局与样式，JavaScript 描述交互和
 
 这里只需要看出元素与脚本的关系。HTML 标签、CSS 属性的完整用法可在实际编写界面时查阅。
 
-## 一次点击怎样更新列表
+## 事件处理与界面更新
 
 下面的浏览器 JavaScript 片段假定后端 `/api/notes` 返回笔记数组。它不是 Python 单元格：
 
@@ -52,7 +52,7 @@ button.addEventListener("click", async () => {
 
 `fetch` 收到 404 或 500 时仍可返回响应对象，所以代码先检查 `response.ok`，再解析正文，见 [MDN：使用 Fetch](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)。
 
-## 前端框架组织反复发生的界面更新
+## 前端框架与组件
 
 页面复杂后，列表、筛选框、编辑器等部分都维护状态，并影响显示。React、Vue 等工具帮助将界面拆成组件，并根据状态组织更新，见 [MDN：客户端框架介绍](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Frameworks_libraries/Introduction)。
 
@@ -60,7 +60,7 @@ button.addEventListener("click", async () => {
 
 页面变量保存着这次页面运行的状态。刷新重新创建页面时，这些变量通常重新初始化。要找回已经保存的笔记，前端需要重新读取持久数据。
 
-## 页面脚本受浏览器规则约束
+## 浏览器同源策略与 CORS
 
 页面的<Term id="origin">源</Term>由方案、主机和端口组成。`https://notes.example` 与 `https://api.example` 不同源。浏览器的同源策略限制脚本读取其他源的某些资源；后端可以通过 CORS（跨源资源共享）声明允许哪些源读取响应，见 [MDN：CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS)。
 

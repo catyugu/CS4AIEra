@@ -12,7 +12,7 @@ objectives:
 
 计算几个矩形的面积，每次都需要长乘以宽。可以把这个计算写成一个函数，再用不同的参数调用它。
 
-## 定义函数，再调用它
+## 函数定义与调用
 
 ```python run id="program-logic-and-state.functions-and-side-effects.return"
 def area(width, height):
@@ -30,7 +30,7 @@ print(small, large)
 
 定义中的名字与调用时的值分别称为<Term id="parameter-and-argument">形参与实参</Term>。
 
-## return 结束当前调用
+## 返回值与调用结束
 
 函数可以根据条件提前返回。下面找出列表中第一个超过上限的数：
 
@@ -49,11 +49,11 @@ print(first_above([], 5))
 
 找到 8 时，`return` 结束整个调用，12 不再检查。没有找到时返回 `None`，这是 Python 表示没有结果或缺失的特殊值；它与数值 0 和空列表不同。`return None` 和 `return number` 使用相同的返回机制，只是返回的值不同。
 
-返回值和输出不同。`area(3, 2)` 返回 6，但自己不打印；`print(6)` 写出文字，它的返回值则是 `None`。函数执行到末尾而没有 `return`，也会返回 `None`。因此看见输出，不能据此判断函数返回了什么。
+返回值交给调用方，打印输出则显示在输出区。`area(3, 2)` 返回 6，但自己不打印；`print(6)` 写出文字，它的返回值是 `None`。函数执行到末尾而没有 `return`，也会返回 `None`。
 
 不带值的 `return` 也返回 `None`。检查结果是否为这个值，通常写作 `result is None`；`result is not None` 则检查它不是 `None`。
 
-## 修改参数对象会影响调用方
+## 可变参数与副作用
 
 调用时绑定参数名，并不复制参数对象。下面将一句笔记加入列表：
 
@@ -78,7 +78,7 @@ print("after replacement:", notes)
 
 调用 `replace_notes` 时，`items = [text]` 新建列表，只改变局部参数名 `items` 的绑定。调用方的 `notes` 仍指向原列表。两个参数名都只在各自的调用中使用。修改与重新赋值的区别见 <CrossRef id="program-logic-and-state.names-objects-and-state" />。
 
-## 返回新列表，还是修改原列表
+## 返回新对象与原地修改
 
 另一种做法是保留输入，返回加上新笔记的列表：
 
@@ -104,7 +104,7 @@ print("updated:", updated)
 | `add_note(notes, text)` | 是，追加一条笔记 | `None` |
 | `with_note(notes, text)` | 否 | 追加后的新列表 |
 
-## 调用陌生函数前的四个问题
+## 函数的输入输出与失败约定
 
 - 它接受什么输入？
 - 返回什么？

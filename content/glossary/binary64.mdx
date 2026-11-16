@@ -10,4 +10,4 @@ related: []
 
 binary64 用 1 位符号、11 位指数和 52 位显式小数位编码数值。正常数通过一个隐含的首位提供 53 位有效精度；非正规数、零、无穷与非数值采用专门编码。
 
-它的数值间距随数量级改变。能够精确表示某个范围内的整数，不意味着在更大数量级仍能区分相邻整数；也不意味着能精确表示任意十进制小数。Python 常见实现采用这种格式，见 [Python 浮点表示误差](https://docs.python.org/3/tutorial/floatingpoint.html#representation-error)。
+它的数值间距随数量级改变。数量级增大后，相邻可表示值的间距也会增大，可能超过 1；十进制小数则可能需要舍入为附近的可表示值。Python 常见实现采用这种格式，见 [Python 浮点表示误差](https://docs.python.org/3/tutorial/floatingpoint.html#representation-error)。
