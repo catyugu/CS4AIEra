@@ -12,7 +12,7 @@ objectives:
 
 一个笔记程序要把记录交给另一个程序。直接传“字典的内存地址”没有用：另一个进程有自己的地址空间。双方需要约定一份独立于当前内存布局的表示。
 
-## 从记录到字节，再恢复为记录
+## 序列化与反序列化
 
 <Term id="serialization">序列化</Term>把程序中的值转换成可保存或传输的表示；反序列化按约定的格式恢复值。JSON 是常用的文本格式，可以表达名称到值的结构、数组、字符串、数值、布尔值和 `null`。
 
@@ -58,7 +58,7 @@ print("decoded:", data.decode("utf-8"))
 
 这里 `len(text)` 统计 Unicode 码点，`len(data)` 统计字节，见 [Python Unicode 指南](https://docs.python.org/3/howto/unicode.html#encodings)。设置消息的字节长度、限制文件大小时，应计数编码后的数据。解码也必须使用发送方采用的编码，否则可能报错或出现乱码。
 
-## 格式还要表达字段含义
+## 数据模式与字段语义
 
 `{"duration": "fast"}` 是合法 JSON，但不满足“duration 是非负整数秒数”的接口要求。<Term id="schema">数据模式</Term>描述字段、类型和允许范围；接口还需要说明单位和缺失字段的含义。
 
@@ -66,7 +66,7 @@ print("decoded:", data.decode("utf-8"))
 
 二进制格式也需要这些约定，只是用字节位置、长度或字段编号表达结构。选择格式时，可以比较可读性、编码大小、解析成本以及已有工具支持。
 
-## 往返会保留什么
+## 类型转换与信息保留
 
 JSON 不能直接保留任意 Python 类型。把坐标元组编码为 JSON 数组，解析后得到列表，见 [Python json 类型转换表](https://docs.python.org/3/library/json.html#encoders-and-decoders)。
 

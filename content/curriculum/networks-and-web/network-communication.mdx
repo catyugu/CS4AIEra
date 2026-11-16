@@ -12,7 +12,7 @@ objectives:
 
 浏览器访问 `https://notes.example:8443/notes/7`，先要找到目标服务，再把请求送过去。这里有两个不同的问题：网络怎样找到接收者，接收者怎样解释所需资源。
 
-## 从名字找到服务
+## DNS、地址与端口
 
 域名 `notes.example` 是便于使用的名称。<Term id="dns">DNS</Term> 将域名解析为网络地址等信息；<Term id="ip">IP</Term> 地址用于网络寻址，数据经过中间设备转发，到达目标网络端点。
 
@@ -37,7 +37,7 @@ TCP 为应用提供有序、可靠的字节流，用序号、确认和重传处�
 
 例如，浏览器可以通过 TCP 连接发送 HTTP 请求。连接被拒绝，说明尚未走到应用处理请求的阶段；收到应用的错误响应，则说明通信已经到达了能解释请求的程序。
 
-## HTTPS 保护传输
+## HTTPS 与传输安全
 
 HTTPS 使用 TLS 保护通信内容的保密性和完整性，并通常通过证书验证服务器身份。浏览器检查证书是否适用于当前主机名，以及是否有可信的认证链，见 [MDN：TLS](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Transport_Layer_Security)。
 

@@ -11,7 +11,7 @@ objectives:
 
 程序常常需要使用已经写好的函数。例如五项内容每页放两项，需要三页；普通除法得到 2.5，还需要向上取整。Python 的 `math` 模块已经提供了这个函数，不必再写一份。
 
-## 通过模块名找到函数
+## 模块导入与名称访问
 
 模块把一组相关定义放在一起。`import math` 加载数学模块，并建立名字 `math`，指向这个模块对象：
 
@@ -28,7 +28,7 @@ print("pages:", pages)
 
 Python 文件作为模块加载时，文件最外层定义的函数、类和变量，都在模块的<Term id="namespace">命名空间</Term>中。自己的文件也是如此：若 `notebook.py` 定义了 `Notebook`，其他文件使用 `import notebook` 后，可以调用 `notebook.Notebook("draft")`。本页的单元格不创建这些文件，只使用运行环境已有的模块。
 
-## 也可以直接导入一个名字
+## 名称导入
 
 `from math import ceil` 在当前位置建立名字 `ceil`，于是可以直接调用它：
 

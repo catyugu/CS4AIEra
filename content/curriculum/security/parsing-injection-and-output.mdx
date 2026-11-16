@@ -12,13 +12,13 @@ objectives:
 
 用户输入一个姓名，程序把它拼接进 SQL；用户输入一条评论，程序把它拼接进 HTML。两个接口原本都只想接收文本，但解析器看到的是合并后的整个语句或页面。输入里的语法字符可能改变结构。
 
-## 输入与使用它的语言
+## 输入验证与语言解析
 
 姓名可以合法地包含单引号，评论也可以包含尖括号。问题出在应用把这些文字直接拼进另一种语言的结构：数据库会按 SQL 解释，浏览器会按 HTML 解释。
 
 输入验证用于检查类型、长度和业务范围。即使姓名合法，程序仍要选择能够把它作为值传入的接口。下面分别看数据库查询和页面显示。
 
-## SQL 参数让输入继续作为数据
+## SQL 注入与参数化查询
 
 SQLite 可以忠实展示这个差别。`connect(":memory:")` 创建当前单元格内的内存数据库；`execute` 执行语句，`fetchall` 取得全部结果行。这里的表只保存两条示例记录。
 
@@ -44,27 +44,27 @@ db.close()
 
 拼接后的输入结束了原来的字符串值，加入恒真的 `OR 1=1`，再用 SQL 注释符 `--` 让剩余部分成为注释。查询选择范围因此改变，这是 SQL 注入。
 
-参数化调用则把 SQL 结构与值分别提供给数据库接口。`?` 是 SQLite 值参数占位符，`(name,)` 是含一个元素的元组；`executemany` 将多个参数元组依次绑定到同一条插入语句。输入里的引号和 SQL 词语作为一个姓名值处理。接口契约见 [Python sqlite3：参数占位符](https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders)。
+参数化调用则把 SQL 结构与值分别提供给数据库接口。`?` 是 SQLite 值参数占位符，`(name,)` 是含一个元素的元组；`executemany` 将多个参数元组依次绑定到同一条插入语句。输入里的引号和 SQL 词语作为一个姓名值处理。参数绑定的规则见 [Python sqlite3：参数占位符](https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders)。
 
 参数通常不能替代表名、列名或排序方向等 SQL 结构。需要用户选择排序列时，可以将 `name`、`email` 等允许选项映射到固定的列名，再构造必要结构；查询中的姓名值仍通过参数传入。防护原则见 [OWASP：SQL 注入防护](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html#primary-defenses)。
 
-## HTML 的文本位置与可执行位置
+## XSS 与安全输出
 
 HTML 是浏览器解释页面结构的语言。把用户内容作为 HTML 插入时，内容可能建立元素、事件处理或其他主动行为；当攻击者内容在受信任页面环境中执行时，就是<Term id="xss">跨站脚本</Term>（XSS）。内容来自数据库，仍不改变它最初受谁控制。
 
-只想显示文字时，应使用文本输出。例如真实浏览器代码可以写：
+只想显示文字时，应使用文本输出。下面的 JavaScript 在浏览器中设置元素的文字内容：
 
 ```javascript
 element.textContent = userText;
 ```
 
-`element` 代表目标页面元素，`textContent` 将内容作为文本节点设置，不把其中的标记解析成 HTML，见 [MDN：textContent](https://developer.mozilla.org/en-US/docs/Web/API/Node/textContent)。这段代码是静态浏览器材料，不在 Python 单元格里模拟执行。
+`element` 代表目标页面元素，`textContent` 将内容作为文本节点设置，不把其中的标记解析成 HTML，见 [MDN：textContent](https://developer.mozilla.org/en-US/docs/Web/API/Node/textContent)。
 
 服务器用模板生成 HTML 时，应采用模板提供的自动输出编码，让普通文字中的标记字符按文字显示。编码需要匹配插入位置：普通文本、URL 和脚本代码的语法不同，不能到处套用同一种替换规则。
 
 如果产品允许富文本，则用维护中的清洗器保留允许的结构，删除危险行为。具体规则可在实际使用时查阅 [OWASP：XSS 防护](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html#output-encoding)。
 
-## 带单引号的姓名
+## 练习：查询参数与页面输出
 
 将单元格的姓名改为 `Ada` 和含单引号的普通姓名，比较拼接与绑定的语法和结果。若需要按 `name` 或 `email` 排序，审查“把列名作为 `?` 参数绑定”的方案能否表达这项选择。
 
