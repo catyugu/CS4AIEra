@@ -45,7 +45,7 @@ completed = subprocess.run(
 
 参数列表的第一项是程序名，其余项交给程序。`capture_output=True` 收集两个输出通道；`check=True` 在非零退出状态时抛出 `CalledProcessError`；`timeout=2` 限定等待时间，见 [Python subprocess.run](https://docs.python.org/3/library/subprocess.html#subprocess.run)。
 
-正常返回时，`completed.stdout` 和 `completed.stderr` 保存收集到的字节。例子里的转换工具以 `output.webp` 为文件输出目标，成功时标准输出也可能为空。如果另一个工具约定将 UTF-8 JSON 写到标准输出，调用方才需要解码、解析并检查字段：
+正常返回时，`completed.stdout` 和 `completed.stderr` 保存收集到的字节。例子里的转换工具以 `output.webp` 为文件输出目标，成功时标准输出也可能为空。如果所用转换工具额外约定将 UTF-8 JSON 写到标准输出，调用方才需要解码、解析并检查字段：
 
 ```python
 import json
