@@ -10,7 +10,7 @@ objectives:
   - 区分代码模块、库与可安装的包
 ---
 
-一个模块维护整数集合。调用方需要判断某个数是否存在，模块内部目前用列表保存。若调用方直接读取列表，改成集合就可能连带修改所有调用方；若调用方只调用 `contains(value)`，就可以在保留查询行为的前提下替换内部表示。
+一个组件需要保存一组不重复的整数，并提供“加入元素”和“判断成员”的操作。内部可以用列表，也可以用集合。调用方如果依赖内部列表的下标和遍历方式，改用集合就会影响它们；若调用方只依赖公开操作，就有机会在保持行为一致的前提下替换表示。
 
 ## 模块接口与信息隐藏
 
@@ -18,7 +18,7 @@ objectives:
 
 <Term id="information-hiding">信息隐藏（information hiding）</Term>把内部表示、算法和资源管理等决定留在模块内部，只通过约定的操作使用它们。一个前导下划线可以提示某个名字供内部使用，但 Python 不把这种约定变成访问权限，见 [Python 教程：私有变量](https://docs.python.org/3/tutorial/classes.html#private-variables)。如果调用方仍直接读取内部列表，把列表换成集合时，它们仍可能需要修改。
 
-下面的对象保存非重复整数，公开操作是 `add`、`contains` 与 `snapshot`。`snapshot` 的约定是返回一份可独立修改的列表；`list(...)` 创建外层副本，复制规则见 <CrossRef id="program-logic-and-state.names-objects-and-state" />。
+下面用一个类表示保存状态的组件，公开操作是 `add`、`contains` 与 `snapshot`。调用方按约定向它加入整数；`snapshot` 返回一份可以独立增删元素的列表。`list(...)` 创建外层副本，复制规则见 <CrossRef id="program-logic-and-state.names-objects-and-state" />。
 
 ```python run id="program-composition.modules-and-boundaries.snapshot"
 class IntegerSet:
@@ -44,9 +44,9 @@ print("caller:", result)
 print("module:", values.snapshot())
 ```
 
-返回独立列表，让调用方修改结果时不必知道模块怎样保存状态。若 `snapshot` 改成直接返回 `self._values`，调用方就获得了内部列表的别名，能够绕过 `add` 的重复检查。方法名称不变，边界已经变了。
+调用方对快照追加 8，组件内部仍只保存 3。若 `snapshot` 直接返回 `self._values`，调用方就能绕过 `add` 的去重规则，修改组件内部状态。这里通过类的方法演示组件接口；在独立模块中，也可以用函数和模块内部状态建立同样的边界。
 
-本例只保存整数，创建外层列表就能让两份结果独立增删。若列表里保存的是可变记录，还要考虑记录是否共享；下面的练习会观察这种差别。
+这里的元素是整数，创建外层列表已经足以隔离增删。如果元素换成字典，复制外层列表仍会共享字典对象。还有一项接口约定需要说清：`snapshot` 是否保证元素顺序？当前列表会保留添加顺序，若换成集合，这项行为就需要重新决定。
 
 ## 依赖方向与模块耦合
 
