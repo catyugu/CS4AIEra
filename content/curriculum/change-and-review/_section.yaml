@@ -1,5 +1,5 @@
 id: change-and-review
 label: 软件开发与维护
 order: 90
-summary: 从需求与验收进入测试、版本控制和依赖管理，再安排兼容迁移、代码审查与软件发布。
+summary: 沿一次功能修改学习需求、版本控制、测试调试和审查，再处理依赖、发布与版本迁移。
 status: active
