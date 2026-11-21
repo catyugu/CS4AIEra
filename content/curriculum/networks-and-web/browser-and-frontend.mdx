@@ -2,7 +2,7 @@
 id: networks-and-web.browser-and-frontend
 slug: /networks-and-web/browser-and-frontend
 order: 40
-title: 浏览器界面与前端程序
+title: 浏览器与前端程序
 status: published
 objectives:
   - 把页面结构、样式和交互代码对应到浏览器中的工作
@@ -12,7 +12,7 @@ objectives:
 
 笔记页面已经打开。用户点“重新读取”，浏览器要取回笔记 7 的最新内容，并替换阅读区显示的文字。其他部分留在原处。
 
-## 从 HTML 到界面
+## HTML、CSS 与 DOM
 
 HTML 声明按钮、标题和正文区域。浏览器解析 HTML，建立文档对象模型（DOM）。CSS 决定这些元素的样式和布局，JavaScript 可以通过 DOM 读取或更新元素。下面是页面的一个片段。
 
@@ -24,7 +24,7 @@ HTML 声明按钮、标题和正文区域。浏览器解析 HTML，建立文档�
 <script type="module" src="/app.js"></script>
 ```
 
-## 一次点击如何更新内容
+## 事件处理与界面状态
 
 `app.js` 中的代码监听按钮点击。它在浏览器里执行，下面的片段供阅读。
 
@@ -58,9 +58,9 @@ button.addEventListener("click", async () => {
 
 界面再复杂一些，标题、正文、编辑状态和错误提示会有各自的显示规则。React、Vue 等前端工具常把每一块界面组织成组件，再根据状态更新显示。在这段例子里，等待、完成和失败就是会影响显示的三个状态。
 
-## 前端怎样找到 API
+## 同源策略与 CORS
 
-`/api/notes/7` 是相对于当前站点的路径。网页来自 `https://notes.example`，请求就发往同一个<Term id="origin">源</Term>。源由 URL 方案、主机和端口决定；把 API 移到 `https://api.notes.example` 就会形成跨源访问。此时浏览器按同源策略和 API 返回的 CORS 响应首部判断脚本能否读取响应。CORS 是浏览器的访问规则，笔记读写权限仍由应用处理。具体规则见 [MDN 的 CORS 指南](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS)。
+`/api/notes/7` 是相对于当前站点的路径。网页来自 `https://notes.example`，请求就发往同一个<Term id="origin">源</Term>。源由 URL 方案、主机和端口决定；把 API 移到 `https://api.notes.example` 就会形成跨源访问。此时浏览器根据同源策略和 API 的跨源资源共享（CORS）规则决定脚本能否读取响应。有些跨源请求还要先经过浏览器发出的预检请求。对到达笔记应用的请求，应用按用户和资源检查读写权限。具体规则见 [MDN 的 CORS 指南](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS)。
 
 ## 练习
 

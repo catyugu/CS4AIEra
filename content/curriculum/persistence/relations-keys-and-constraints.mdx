@@ -12,7 +12,7 @@ objectives:
 
 同名书可以同时在售，书名也可能修改。书店给每本书分配一个唯一编号，订单保存这个编号。改过书名以后，原来的订单仍然指向同一条书目记录。
 
-## 商品目录和订单表
+## 表、主键与外键
 
 关系数据库用表组织记录。书表 `books` 的一行代表一种在售书目，各列记录编号、书名、分类、价格和库存。订单表 `orders` 的一行表示一笔订单。这里每笔订单只购买一种书，可以购买多册。
 
@@ -32,7 +32,7 @@ ORDER BY id;
 
 每张表的主键（primary key）唯一标识该表里的一行。订单 10 和 11 用不同的 `id` 区分，它们的 `book_id` 都是 1，表示两次购买都指向书 1。这个引用列是外键（foreign key）。书表中的一行可被多个订单引用，也可以暂时没有订单。
 
-## 建表与写入订单
+## 数据库约束与写入
 
 下面用与 `orders` 相同的列和约束新建一张实验表 `trial_orders`，再写入一笔订单。SQLite 的 `STRICT` 选项要求存入的值符合列声明的类型，预置脚本也为当前连接开启了外键检查。[SQLite 建表文档](https://www.sqlite.org/lang_createtable.html) · [SQLite 严格类型表](https://www.sqlite.org/stricttables.html) · [SQLite 外键文档](https://www.sqlite.org/foreignkeys.html#fk_enable)
 

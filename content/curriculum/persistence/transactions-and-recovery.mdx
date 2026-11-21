@@ -12,7 +12,7 @@ objectives:
 
 结账需要扣库存并创建订单。应用把两次写入放进同一个数据库事务，提交成功后才确认购买。订单写入失败时，应用可以通过撤销事务恢复库存。
 
-## 提交与撤销
+## 事务提交与原子性
 
 事务把一组操作组织成一次提交。`BEGIN` 开始事务，`COMMIT` 提交修改，`ROLLBACK` 撤销未提交的修改。一个事务中的修改共同生效或撤销，这个性质叫原子性。
 
@@ -41,7 +41,7 @@ SELECT id, reference FROM orders WHERE id = 13;
 
 把 `ROLLBACK` 换成 `COMMIT`，最后两次查询会读取提交后的库存和订单。
 
-## 结账失败时回滚
+## 回滚与异常处理
 
 实际结账需要在同一事务里判断扣减是否成功。库存不足时条件更新影响零行，应用应结束事务、返回库存不足。假设扣减成功而订单插入遇到唯一约束错误，SQLite 的默认冲突处理会撤销失败语句，先前的扣减仍留在事务里。应用需要显式回滚才能撤销它。[SQLite 冲突处理文档](https://www.sqlite.org/lang_conflict.html)
 
@@ -72,11 +72,11 @@ db.close()
 
 `execute` 遇到约束错误时抛出 `IntegrityError`，由异常处理执行 `rollback()`。程序最终输出库存 3。把 `db.rollback()` 改成 `db.commit()` 再运行，库存会变成 2，订单仍只有原来一笔。
 
-## 提交与崩溃恢复
+## 持久性与崩溃恢复
 
-磁盘数据库要写入多个数据页，中途可能断电。SQLite 的回滚日志保存改写前的数据页，重启后可用它恢复未完成事务改动的页面。使用<Term id="write-ahead-log">预写日志</Term>模式时，SQLite 先将修改写到日志，之后再写回主数据库文件。已提交数据能承受哪些故障，由日志模式、同步配置和存储设备共同决定。[SQLite 原子提交文档](https://www.sqlite.org/atomiccommit.html) · [SQLite WAL 文档](https://www.sqlite.org/wal.html)
+持久性关心已提交的修改能否在故障后恢复。数据库用日志区分已提交的修改和中途停止的写入。以 SQLite 为例，回滚日志保存改写前的数据页，重启后可用它恢复未完成事务改动的页面。使用<Term id="write-ahead-log">预写日志</Term>模式时，SQLite 先将修改写到日志，之后再写回主数据库文件。已提交数据能承受哪些故障，由日志模式、同步配置和存储设备共同决定。[SQLite 原子提交文档](https://www.sqlite.org/atomiccommit.html) · [SQLite WAL 文档](https://www.sqlite.org/wal.html)
 
-结账后的确认邮件由邮件服务发送。数据库事务管理的是自己的写入，通知如何与提交后的订单协调会在应用系统章讨论。
+结账后的确认邮件由邮件服务发送。数据库事务管理的是自己的写入，通知如何与提交后的订单协调，见 <CrossRef id="software-systems.delivery-and-recovery" />。
 
 ## 练习
 

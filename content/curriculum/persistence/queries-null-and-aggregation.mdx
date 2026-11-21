@@ -27,7 +27,7 @@ ORDER BY id;
 
 `WHERE` 决定哪些行进入结果，`SELECT` 决定显示哪些列，`ORDER BY` 规定结果的顺序。需要稳定排序的页面应在查询中写明排序列。数据库选择怎样读取记录，访问路径在 <CrossRef id="persistence.indexes-and-query-plans" /> 展开。
 
-## 分类筛选菜单
+## 查询、排序与去重
 
 首页还有一个分类下拉菜单，每个分类只出现一次。直接查询 `category` 会为每本书返回一行，两个分类各出现两次。加上 `DISTINCT`，相同的输出行合并为一行。
 
@@ -36,7 +36,7 @@ SELECT category FROM books ORDER BY category;
 SELECT DISTINCT category FROM books ORDER BY category;
 ```
 
-## 定价看板
+## 分组与聚合
 
 管理员在看板上同时查看各分类的书目数、已定价书目数和已定价书目的均价。`GROUP BY category` 按分类分组，聚合函数为每组算出统计值。`AS` 给输出列命名。
 
@@ -55,7 +55,7 @@ ORDER BY category;
 
 computing 组两本书的价格分别是 80 和 `NULL`。这里的 `NULL` 表示待定价。`COUNT(*)` 数所有行，`COUNT(price)` 只数价格有值的行，`AVG(price)` 也只用有值的价格计算。已知价格为 0 时，该行会同时计入书目数和已定价书目数，0 也会参与均价计算。[SQLite 聚合函数](https://www.sqlite.org/lang_aggfunc.html)
 
-## 待定价书目
+## NULL 与缺失值
 
 价格待定时，`price > 60` 与它的取反都得到未知。SQLite 用 `1`、`0`、`NULL` 显示真、假、未知。`WHERE` 只保留为真的行，因此要单独找出待定价书目，应写 `WHERE price IS NULL`。[SQLite 表达式](https://www.sqlite.org/lang_expr.html) · [SQLite SELECT 文档](https://www.sqlite.org/lang_select.html#whereclause)
 

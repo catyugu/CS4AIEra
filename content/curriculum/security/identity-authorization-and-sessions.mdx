@@ -2,7 +2,7 @@
 id: security.identity-authorization-and-sessions
 slug: /security/identity-authorization-and-sessions
 order: 30
-title: 会话与文档访问权限
+title: 身份认证、授权与会话
 status: published
 objectives:
   - 追踪从登录成功到请求正文和退出的会话过程
@@ -10,9 +10,9 @@ objectives:
   - 比较成员共享与持有链接即可读取的两种规则
 ---
 
-阿岚登录后打开笔记 7。登录服务先完成**身份认证**，验证来访者是阿岚。随后，笔记接口对请求执行**授权**，判断阿岚是否拥有读取这篇笔记的权限。两项判断分别使用账户凭据和笔记的共享规则。
+阿岚登录后打开笔记 7。登录服务先根据来访者提交的凭据验证身份，这一步称为**身份认证**。随后，笔记接口对请求执行**授权**，判断阿岚是否拥有读取这篇笔记的权限。两项判断分别使用账户凭据和笔记的共享规则。
 
-## 用会话关联后续请求
+## 会话建立、查找与撤销
 
 | 操作 | 浏览器与应用服务之间传递的信息 | 服务端的处理 |
 | --- | --- | --- |
@@ -22,9 +22,11 @@ objectives:
 
 这个方案把账号和有效期保存在服务端。浏览器只保存随机标识，服务端根据标识查找**会话**。标识本身也是凭据，排查问题时可以用请求编号关联相关日志。参见 [OWASP 会话管理指南](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)。
 
+## 会话 cookie 的属性
+
 会话 cookie 通常设置 `Secure`，让浏览器通过 HTTPS 发送，并设置 `HttpOnly`，使页面脚本无法通过脚本接口读取其值。`SameSite` 控制它在跨站请求中的发送条件。对写操作的具体影响见 <CrossRef id="security.cross-site-requests" />。属性细则见 [MDN 对 Set-Cookie 的说明](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie)。
 
-## 从文档正文到共享入口
+## 资源授权与共享
 
 应用每次访问资源时都要核对当前权限。笔记 7 的授权表规定小林是所有者、阿岚是只读成员。应用把 cookie 对应的账号、请求中的笔记编号、接口代表的操作合在一起判断。相同的规则也要用在附件下载和预览接口上，页面按钮则按权限显示可用操作。参见 [OWASP 授权检查原则](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html#validate-the-permissions-on-every-request)。
 

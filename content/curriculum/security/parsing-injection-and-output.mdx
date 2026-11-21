@@ -2,7 +2,7 @@
 id: security.parsing-injection-and-output
 slug: /security/parsing-injection-and-output
 order: 50
-title: 笔记查询与页面输出安全
+title: SQL 注入与跨站脚本
 status: published
 objectives:
   - 追踪笔记标题进入数据库和浏览器时采用的两种解释规则
@@ -12,7 +12,7 @@ objectives:
 
 同事创建了一篇标题为 `Ada's draft` 的笔记，又在正文里写了 `<draft>` 这个词。搜索时，引号应当是标题的一部分。打开笔记时，浏览器应当原样显示尖括号。开发者需要在数据库查询和页面渲染这两处明确告诉接收方，哪些内容是程序结构，哪些是普通数据。
 
-## 让标题作为查询值进入 SQLite
+## SQL 注入与参数绑定
 
 服务先检查输入符合业务要求，例如标题是文本且长度符合限制。数据库接口还要正确接收这个值。将用户输入直接拼进查询语句会让 SQL 解析器把数据中的字符当成语法。外部输入改变了数据库解析出的语句结构，就出现了 **SQL 注入**。应用使用**参数化查询**将固定的 SQL 结构和标题值分别传给 SQLite。
 
@@ -36,7 +36,7 @@ db.close()
 
 第一次运行会查到笔记 7。把查找值改为 `"Daily log"` 会取得笔记 8，改为 `"Missing"` 会得到空列表。排序功能若允许选择标题或创建时间，应用可以把页面选项映射到预先写好的 SQL 排序方式，继续绑定搜索值。参见 [Python sqlite3 参数占位符](https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders)和 [OWASP SQL 注入防护指南](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html#primary-defenses)。
 
-## 让正文作为文本进入页面
+## 跨站脚本与输出处理
 
 应用将笔记返回浏览器后，页面代码把普通正文写入文本节点。例如在前端 JavaScript 中，`noteBody.textContent = body` 让浏览器在对应元素显示 `body` 的字符，尖括号也会照常显示。如果页面将保存的正文当作 HTML 解析，其中的标记就有机会引入页面行为。外部内容由此在应用网页的环境中执行脚本，属于<Term id="xss">跨站脚本</Term>（XSS）。数据库保存的是原始文本，显示规则在输出到页面时生效。
 

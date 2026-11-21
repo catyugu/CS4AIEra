@@ -2,7 +2,7 @@
 id: networks-and-web.development-and-deployment
 slug: /networks-and-web/development-and-deployment
 order: 70
-title: 前端构建与线上服务入口
+title: 前端构建与服务入口
 status: published
 objectives:
   - 区分开发服务器、发布资源和线上后端进程
@@ -12,13 +12,13 @@ objectives:
 
 小林在本机开发笔记应用时，从 5173 端口打开网页。浏览器请求 `/api/notes/7`，开发服务器把它转给 8000 端口的后端。上线后，浏览器访问的是 `https://notes.example`。这时谁提供网页，谁把同一个 API 路径交给后端？
 
-## 从前端源码到发布目录
+## 前端构建与静态资源
 
 前端源码可能包括 TypeScript、界面组件和样式。构建工具在开发机或构建环境中处理这些输入，输出浏览器可加载的 HTML、脚本和样式。例如，Node.js 可以运行 Vite，Vite 负责本机开发服务和生产构建。生产构建的产物可以交给静态 Web 服务器提供。工具和产物的关系见 [Vite 的生产构建指南](https://vite.dev/guide/build)。
 
 浏览器收到的是构建后的文件。如果发布时把后端地址写入脚本，用户也能从脚本中读取该值。需要保密的数据库口令等配置应由后端在自己的运行环境中读取。如何固定生成这些文件所需的工具与依赖，见 <CrossRef id="change-and-review.dependencies-and-reproducible-builds" />。
 
-## 同一个域名下的两类请求
+## 反向代理与 CDN
 
 一台 Web 服务器可以区分静态文件和 API 路径。它向浏览器交付文件，也可以作为反向代理，把请求交给负责处理的后端进程。
 

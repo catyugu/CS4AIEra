@@ -2,7 +2,7 @@
 id: networks-and-web.network-communication
 slug: /networks-and-web/network-communication
 order: 20
-title: URL、DNS 与 HTTPS 连接
+title: 网络寻址与传输
 status: published
 objectives:
   - 从 URL 读出主机、端口、路径和查询参数
@@ -12,6 +12,8 @@ objectives:
 
 浏览器准备请求 `https://notes.example/api/notes/7`。先看它如何找到笔记服务的入口。本课以一次新建的 TCP 连接上的 HTTP/1.1 通信为例。
 
+## URL 的组成
+
 | URL 部分 | 本例 | 谁使用它 |
 | --- | --- | --- |
 | 方案 | `https` | 浏览器按 HTTPS 的规则建立安全通信 |
@@ -20,15 +22,17 @@ objectives:
 | 路径 | `/api/notes/7` | Web 服务器和后端据此分发、处理请求 |
 | 查询部分 | 可附加 `?format=json` | 应用按约定读取请求参数 |
 
-## 找到地址并建立连接
+## 域名解析、寻址与传输
 
-浏览器通常通过<Term id="dns">DNS</Term> 查找主机名对应的地址，也可以复用缓存。<Term id="ip">IP 地址</Term> 用于跨网络寻址，途中路由设备据此转发数据包。TCP 端口让通信抵达目标机器后由相应服务接收。开发时若服务监听 8443，访问者须使用 `https://notes.example:8443/...` 或经过一个能转发请求的入口。
+浏览器通常通过<Term id="dns">DNS</Term> 查找主机名对应的地址，也可以复用缓存。<Term id="ip">IP 地址</Term> 用于跨网络寻址，途中路由设备据此转发数据包。抵达目标地址的 TCP 流量由操作系统交给监听相应端口的服务。开发时若服务监听 8443，访问者须使用 `https://notes.example:8443/...` 或经过一个能转发请求的入口。
 
 IP 网络按数据包转发流量，这种方式称为<Term id="packet-switching">分组交换</Term>。数据包可能丢失或乱序。连接建立后，TCP 用确认和重传等机制提供可靠的双向字节流，应用可以按写入顺序读到字节，也可能在连接失败时收到错误。HTTP 在这条字节流上解释一份请求的起止和内容。
 
 ## TLS 握手
 
 发送 HTTP 请求前，浏览器和入口服务器通过 TLS 建立加密通信。典型的 Web 访问中，浏览器会验证服务器证书及其中的主机名。握手成功后，连接上的内容有保密性和完整性保护。这里验证的是浏览器所连接的服务，笔记由谁访问则由应用检查。细节见 [MDN 的 TLS 介绍](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Transport_Layer_Security)。
+
+## 连接阶段与故障定位
 
 | 浏览器观察 | 首先检查 |
 | --- | --- |

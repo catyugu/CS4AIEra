@@ -2,7 +2,7 @@
 id: change-and-review.git-history-and-change-scope
 slug: /change-and-review/git-history-and-change-scope
 order: 20
-title: Git 分支与提交
+title: Git 与改动组织
 status: published
 objectives:
   - 通过 Git 输出区分工作区、暂存区和提交
@@ -18,7 +18,7 @@ git switch -c export-by-category
 
 <Term id="commit">提交</Term>保存暂存区为这次记录准备的项目快照，并记录父提交、作者和说明。分支是指向提交的名字。新建分支时，它指向当前提交；随后在功能分支上产生的提交会移动这个分支的指针。
 
-## 查看准备提交的内容
+## 工作区、暂存区与提交
 
 编辑 `export.sql` 之后，在终端运行 `git status --short`，得到下面一行。行首两列分别表示暂存区和工作区的状态，`M` 表示已修改。参见 [Git status 的短格式](https://git-scm.com/docs/git-status#_short_format)。
 
@@ -52,7 +52,7 @@ git log -1 --oneline
 
 末行的前缀是示例提交的缩写标识。后续测试报告可以用提交标识记录当时的源码版本。暂存与差异的命令语义见 [Git diff 文档](https://git-scm.com/docs/git-diff)。
 
-## 比较与合并
+## 合并基点与三方合并
 
 在功能分支上运行 `git diff main...HEAD --stat`，可查看从功能分支与 `main` 的共同起点到当前提交的差异统计。去掉 `--stat` 即可读到逐行修改。这个共同起点在本例中就是分支分开时的提交，Git 称为<Term id="merge-base">合并基点</Term>。
 

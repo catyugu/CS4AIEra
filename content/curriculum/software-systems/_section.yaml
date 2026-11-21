@@ -1,5 +1,5 @@
 id: software-systems
 label: 应用架构与可靠性
 order: 70
-summary: 以报告生成为例，沿着提交、后台计算、进度查询和结果下载，理解任务队列、缓存、多实例和故障恢复。
+summary: 先建立应用的运行结构与状态模型，再引入后台任务、容量限制、缓存、副本和故障恢复。
 status: active

@@ -12,7 +12,7 @@ objectives:
 
 管理后台允许补录订单和调整价格。修改前先确认目标记录，执行后用同样的查询查看状态。下面每格都从 SQLite 的 <LabRef id="catalog" /> 数据开始。
 
-## 补录与撤销误录
+## 插入与删除
 
 管理员补录订单 13，随后发现这条记录录错了，要将它移除。`INSERT INTO` 给出表名和列名，`VALUES` 按对应顺序提供值。`DELETE FROM` 用 `WHERE` 选中要删除的行。
 
@@ -35,7 +35,7 @@ SELECT id, reference, book_id, quantity FROM orders WHERE id = 13;
 | 新增后 | 订单 13，请求编号 `r13`，书 1，共 2 册 |
 | 删除后 | 空结果 |
 
-## 调整价格
+## 按条件修改记录
 
 `UPDATE` 中的 `SET` 给出新值，`WHERE` 选中要改的行。下面把书 1 的价格从 80 改成 70。省略 `WHERE` 会将整张表的价格设为 70。如果按分类批量调价，可以先用相同的条件查询，确认范围。
 
@@ -54,7 +54,7 @@ SELECT id, price FROM books ORDER BY id;
 | 3 | 50 | 50 |
 | 4 | 50 | 50 |
 
-## 库存扣减
+## 条件更新与受影响行数
 
 购买两册书要求库存至少为 2。把这个条件写进 `WHERE`，再用当前库存计算扣减后的值。`changes()` 返回前一条修改语句直接影响的行数。[SQLite changes 函数](https://www.sqlite.org/lang_corefunc.html#changes)
 

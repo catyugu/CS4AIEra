@@ -2,7 +2,7 @@
 id: networks-and-web.addressing-and-listening
 slug: /networks-and-web/addressing-and-listening
 order: 30
-title: HTTP 报文、方法与状态码
+title: HTTP 请求与响应
 status: published
 objectives:
   - 从 HTTP 报文读出方法、目标、状态码和正文格式
@@ -10,7 +10,11 @@ objectives:
   - 说明条件请求如何复用浏览器已有的响应
 ---
 
-浏览器与笔记服务的入口建立通信后，要告诉对方读哪条笔记、希望收到何种数据。下面是一组构造的 HTTP/1.1 报文。为便于阅读，省略身份凭据等字段，响应正文按 UTF-8 编码且末尾没有换行。
+浏览器与笔记服务的入口建立通信后，要告诉对方读哪条笔记、希望收到何种数据。
+
+## 报文结构
+
+下面用一组 HTTP/1.1 示例说明请求与响应的结构。响应正文按 UTF-8 编码，末尾无换行。
 
 ```http
 GET /api/notes/7 HTTP/1.1
@@ -29,7 +33,7 @@ Content-Length: 44
 
 请求行的 `GET` 是方法，`/api/notes/7` 是请求目标。响应行的 `200` 是状态码。后面是首部字段，空行之后是正文。请求的 `Accept` 表示客户端希望收到的格式，响应的 `Content-Type` 声明实际的格式。这里 `Content-Length` 计的是字节，本例的汉字各占三个字节，参见 <CrossRef id="program-composition.serialization-and-compatibility" />。
 
-## 怎样表达读写操作
+## HTTP 方法与幂等性
 
 | 笔记操作 | 方法与路径 | 可能的成功响应 |
 | --- | --- | --- |
@@ -40,11 +44,11 @@ Content-Length: 44
 
 创建笔记时，请求也可以带正文。客户端在其中提交标题和内容，并用 `Content-Type` 声明格式。结果不成功时，状态码给出第一条线索，正文可以提供具体原因。例如 `404` 表示服务器找不到可提供的目标，`403` 表示服务器拒绝当前请求，`500` 表示遇到意外的服务端故障。接到 `202 Accepted` 表示处理已受理。应用若提供进度接口，客户端可以按响应告知的地址继续查询。
 
-HTTP 的安全方法以读取为预期语义，例如 `GET`。服务端可能为读取操作写访问日志，但客户端不应靠发送 `GET` 来要求改变笔记。<Term id="idempotence">幂等性</Term>关心相同请求重复执行的预期效果。把标题设为“读书”两次，结果仍是“读书”；为每个提交创建一条新笔记，则会多出一条记录。重复删除的状态码可以不同，最终都只剩下“原笔记已不存在”这一结果。方法和状态码的完整语义见 [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html)。
+HTTP 把预期语义为只读的方法称为安全方法。例如，客户端通过 `GET` 读取笔记，服务端可以记录访问日志。<Term id="idempotence">幂等性</Term>关心相同请求重复执行的预期效果。把标题设为“读书”两次，结果仍是“读书”；为每个提交创建一条新笔记，则会多出一条记录。重复删除的状态码可以不同，最终都只剩下“原笔记已不存在”这一结果。方法和状态码的完整语义见 [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html)。
 
-## 重读未修改的笔记
+## 条件请求与缓存
 
-服务器可以用 `ETag` 给响应附上版本标记。浏览器手上有一份旧响应，再读取时可以带 `If-None-Match`。如果当前内容仍匹配标记，服务端返回 `304 Not Modified`，浏览器继续用旧正文。如果内容变了，服务端返回新的正文和标记。条件请求省去未修改正文的传输，仍需通信。对于允许浏览器保留、但每次都须重新验证的私人笔记，可以使用 `Cache-Control: private, no-cache`。服务端应先核对本次请求的访问权限，再判断能否返回 304。具体字段见 [RFC 9111](https://www.rfc-editor.org/rfc/rfc9111.html)。
+服务器可以用 `ETag` 标识返回的内容版本。浏览器手上有一份旧响应，再读取时可以带 `If-None-Match`。如果当前内容仍匹配标记，服务端返回 `304 Not Modified`，浏览器继续用旧正文。如果内容变了，服务端返回新的正文和标记。条件请求省去未修改正文的传输，仍需通信。对于允许浏览器保留、但每次都须重新验证的私人笔记，可以使用 `Cache-Control: private, no-cache`。服务端应先核对本次请求的访问权限，再判断能否返回 304。[RFC 9110 的条件请求](https://www.rfc-editor.org/rfc/rfc9110.html#section-13) · [RFC 9111 的缓存规则](https://www.rfc-editor.org/rfc/rfc9111.html)
 
 ## 练习
 

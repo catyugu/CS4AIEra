@@ -2,7 +2,7 @@
 id: software-systems.delivery-and-recovery
 slug: /software-systems/delivery-and-recovery
 order: 80
-title: 任务重投与故障恢复
+title: 部分失败与任务恢复
 status: published
 objectives:
   - 根据持久记录判断任务从哪一步恢复
@@ -12,9 +12,9 @@ objectives:
 
 新提交的任务 31 已经显示“处理中”十分钟了。工作进程生成 PDF 时退出，其他进程和队列还在运行。这类**部分失败**需要分开看数据库、消息和文件已经到达哪一步，再决定重做什么。
 
-## 工作进程退出后怎样接手
+## 重投、重复处理与恢复
 
-队列把消息交给一个工作进程，并等待确认。以带可见性超时的队列为例，消息会在投递后暂时隐藏，等到期限届满仍未确认时，就可能重新交给工作进程。这个约定属于队列的 <Term id="delivery-semantics">投递语义</Term>。见 [Amazon SQS：可见性超时](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html)。
+队列把消息交给一个工作进程，并等待确认。以带可见性超时的队列为例，消息会在投递后暂时隐藏，等到期限届满仍未确认时，就可能重新交给工作进程。这种队列采用允许重复送达的 <Term id="delivery-semantics">消息投递语义</Term>。至少一次投递描述的是消息在规定条件下的送达次数。报告是否只发布一次，取决于应用如何保存和核对处理结果。见 [Amazon SQS：可见性超时](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html)。
 
 收到任务 31 的另一进程先读数据库。如果任务已完成，它复用已有结果并确认消息。任务已经取消或失败时，也可以根据保存的状态结束处理并确认消息。
 
@@ -30,7 +30,7 @@ objectives:
 
 之后可以核对数据库记录和对象存储，清理尝试已结束且未被引用的文件。这样的跨系统状态核对与修正，也叫 <Term id="reconciliation">对账</Term>。
 
-## 提交成功后怎样补发消息
+## 事务性发件箱
 
 API 保存任务与队列收到消息是两个操作。如果进程在两步之间退出，数据库里会留下一项没人来领的任务。可以在创建任务的同一数据库事务内写入一条待发送记录。后台发送程序扫描记录，投递成功后标记已发送。这个做法叫**事务性发件箱**。见 [AWS：Transactional outbox pattern](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html)。
 

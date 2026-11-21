@@ -1,5 +1,5 @@
 id: program-execution
 label: 计算机与程序运行
 order: 30
-summary: 从运行源码和读写字节出发，理解运行时、操作系统、进程内存、硬件缓存与共享状态同步各自的职责。
+summary: 连接源码、运行时与机器指令，理解数值、内存、进程和操作系统，再分析并发与同步。
 status: active
