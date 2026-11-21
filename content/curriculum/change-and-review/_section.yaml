@@ -1,5 +1,5 @@
 id: change-and-review
 label: 软件开发与维护
 order: 90
-summary: 沿一次功能修改学习需求、版本控制、测试调试和审查，再处理依赖、发布与版本迁移。
+summary: 从一次书目导出功能的修改出发，追踪需求、Git 提交、测试、审查、构建、迁移与发布。
 status: active

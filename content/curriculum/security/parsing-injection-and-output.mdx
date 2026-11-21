@@ -1,71 +1,47 @@
 ---
 id: security.parsing-injection-and-output
 slug: /security/parsing-injection-and-output
-order: 30
-title: 不可信输入：SQL 注入与 XSS
+order: 50
+title: 笔记查询与页面输出安全
 status: published
 objectives:
-  - 追踪输入怎样改变 SQL 或网页的解释结果
-  - 用参数化查询把姓名作为数据传入
-  - 选择文本输出或受限富文本处理方式
+  - 追踪笔记标题进入数据库和浏览器时采用的两种解释规则
+  - 用参数绑定提交含引号的查询值
+  - 根据普通文本和富文本的要求选择输出方式
 ---
 
-一个姓名字段本来只应参与数据库匹配，一条评论本来只应作为文字显示。如果程序直接把姓名拼进 SQL、把评论拼进 HTML，输入中的引号和标记就可能被数据库或浏览器当成语法解释。问题发生在数据进入另一种语言的解析位置。
+同事创建了一篇标题为 `Ada's draft` 的笔记，又在正文里写了 `<draft>` 这个词。搜索时，引号应当是标题的一部分。打开笔记时，浏览器应当原样显示尖括号。开发者需要在数据库查询和页面渲染这两处明确告诉接收方，哪些内容是程序结构，哪些是普通数据。
 
-## 输入验证与语言解析
+## 让标题作为查询值进入 SQLite
 
-姓名可以合法地包含单引号，评论也可以包含尖括号。问题出在应用把这些文字直接拼进另一种语言的结构：数据库会按 SQL 解释，浏览器会按 HTML 解释。
+服务先检查输入符合业务要求，例如标题是文本且长度符合限制。数据库接口还要正确接收这个值。将用户输入直接拼进查询语句会让 SQL 解析器把数据中的字符当成语法。外部输入改变了数据库解析出的语句结构，就出现了 **SQL 注入**。应用使用**参数化查询**将固定的 SQL 结构和标题值分别传给 SQLite。
 
-输入验证用于检查类型、长度和业务范围。即使姓名合法，程序仍要选择能够把它作为值传入的接口。下面分别看数据库查询和页面显示。
-
-## SQL 注入与参数化查询
-
-SQLite 可以忠实展示这个差别。`connect(":memory:")` 创建当前单元格内的内存数据库；`execute` 执行语句，`fetchall` 取得全部结果行。这里的表只保存两条示例记录。
+下面的单元格在内存中准备两篇示例笔记，模拟按完整标题查找。查找调用中，`?` 是值的占位符，第二个参数 `(title,)` 提供只有一个值的元组。数据库会把标题中的引号保留为文本的一部分。
 
 ```python run id="security.parsing-injection-and-output.sql-boundary"
 import sqlite3
 
 db = sqlite3.connect(":memory:")
-db.execute("CREATE TABLE people (name TEXT, email TEXT)")
-db.executemany(
-    "INSERT INTO people VALUES (?, ?)",
-    [("Ada", "ada@example.test"), ("Lin", "lin@example.test")],
-)
+db.execute("CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT)")
+db.execute("INSERT INTO notes VALUES (?, ?)", (7, "Ada's draft"))
+db.execute("INSERT INTO notes VALUES (?, ?)", (8, "Daily log"))
 
-name = "' OR 1=1 --"
-joined = "SELECT name, email FROM people WHERE name = '" + name + "'"
-print("query:", joined)
-print("joined:", db.execute(joined).fetchall())
-print("bound:", db.execute(
-    "SELECT name, email FROM people WHERE name = ?", (name,)
-).fetchall())
+title = "Ada's draft"
+matches = db.execute(
+    "SELECT id, title FROM notes WHERE title = ?", (title,)
+).fetchall()
+print(matches)
 db.close()
 ```
 
-构造的姓名先用单引号结束原来的字符串，再加入恒真的 `OR 1=1`，最后用 `--` 注释掉语句余下部分。结果是本来只查询一个姓名的语句返回了两条记录。这是输入改变了 SQL 语法结构的具体例子。
+第一次运行会查到笔记 7。把查找值改为 `"Daily log"` 会取得笔记 8，改为 `"Missing"` 会得到空列表。排序功能若允许选择标题或创建时间，应用可以把页面选项映射到预先写好的 SQL 排序方式，继续绑定搜索值。参见 [Python sqlite3 参数占位符](https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders)和 [OWASP SQL 注入防护指南](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html#primary-defenses)。
 
-参数化调用则把 SQL 结构与值分别提供给数据库接口。`?` 是 SQLite 值参数占位符，`(name,)` 是含一个元素的元组；`executemany` 将多个参数元组依次绑定到同一条插入语句。输入里的引号和 SQL 词语作为一个姓名值处理。参数绑定的规则见 [Python sqlite3：参数占位符](https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders)。
+## 让正文作为文本进入页面
 
-参数通常不能替代表名、列名或排序方向等 SQL 结构。需要用户选择排序列时，可以将 `name`、`email` 等允许选项映射到固定的列名，再构造必要结构；查询中的姓名值仍通过参数传入。防护原则见 [OWASP：SQL 注入防护](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html#primary-defenses)。
+应用将笔记返回浏览器后，页面代码把普通正文写入文本节点。例如在前端 JavaScript 中，`noteBody.textContent = body` 让浏览器在对应元素显示 `body` 的字符，尖括号也会照常显示。如果页面将保存的正文当作 HTML 解析，其中的标记就有机会引入页面行为。外部内容由此在应用网页的环境中执行脚本，属于<Term id="xss">跨站脚本</Term>（XSS）。数据库保存的是原始文本，显示规则在输出到页面时生效。
 
-## XSS 与安全输出
+若笔记支持富文本，浏览器需要解析受限的 HTML，应用应当在输出前用维护中的 HTML 清洗器，只保留允许的元素和属性。服务端模板则使用模板引擎对相应输出位置提供的处理。URL、HTML 属性与普通正文各有自己的语法，需要采用适用的接口。参见 [MDN 对 textContent 的说明](https://developer.mozilla.org/en-US/docs/Web/API/Node/textContent)和 [OWASP XSS 防护指南](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)。
 
-浏览器会把 HTML 解释成元素和可执行的页面行为。若未经安全处理的评论被当作 HTML 插入，它就可能引入元素、事件处理代码等内容；攻击者借此在网站页面的执行环境中运行脚本，属于<Term id="xss">跨站脚本</Term>（XSS）。评论即使经过数据库保存，仍然是原先由用户控制的内容。
+## 练习
 
-只想显示文字时，应使用文本输出。下面的 JavaScript 在浏览器中设置元素的文字内容：
-
-```javascript
-element.textContent = userText;
-```
-
-`element` 代表目标页面元素，`textContent` 将内容作为文本节点设置，不把其中的标记解析成 HTML，见 [MDN：textContent](https://developer.mozilla.org/en-US/docs/Web/API/Node/textContent)。
-
-服务端模板输出普通文字时，应使用模板引擎针对 HTML 文本位置提供的编码机制。将用户内容放进 HTML 属性、URL 或 JavaScript 代码时，解析上下文不同，必须分别采用适用的安全接口与编码规则。最简单的文字展示应尽量使用文本节点。
-
-如果产品允许富文本，则用维护中的清洗器保留允许的结构，删除危险行为。具体规则可在实际使用时查阅 [OWASP：XSS 防护](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html#output-encoding)。
-
-## 练习：查询参数与页面输出
-
-将单元格的姓名改为 `Ada` 和含单引号的普通姓名，比较拼接与绑定的语法和结果。若需要按 `name` 或 `email` 排序，审查“把列名作为 `?` 参数绑定”的方案能否表达这项选择。
-
-评论只应显示普通文字，代码却把保存的评论赋给 `innerHTML`。即使输入没有超过长度限制，哪些字符仍会被当成 HTML 结构？应选择怎样的输出接口？
+给标题搜索和正文显示各选一个正常、但含有引号或尖括号的输入。先写下读者应该看到的结果，再指出应用在哪个接口把输入作为数据交给数据库或浏览器。

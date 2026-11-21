@@ -5,88 +5,35 @@ order: 40
 title: 代码审查
 status: published
 objectives:
-  - 从 diff 追踪新增执行路径与状态访问
-  - 根据原要求选择能检验改动的证据
-  - 把缺陷写成可重复的输入、步骤和结果
+  - 从新增的调用追踪数据范围和已有组件的约定
+  - 写出会暴露漏导出的输入与预期结果
 ---
 
-一个文档服务新增缓存后，重复读取更快，原有测试也通过了。但修改后的函数在缓存命中时会提前返回，绕过后面的权限检查。审查 diff 时，需要沿新增执行路径检查原有的行为约束是否仍然成立。
+按分类导出的合并请求已经附上测试，两个分类都能下载 CSV。审查者看到新增的导出函数复用了列表查询，便去看这条查询如何选择记录。
 
-## 缓存读取与权限检查
+## 从 diff 追到分页查询
 
-下面是一份针对 Python 文档读取函数构造的有效 diff。行首 `-` 表示删除，`+` 表示加入，没有符号的行提供上下文；`---` 和 `+++` 标识改动前后的文件，`@@` 标识对应行的片段。
+下面是 `catalog.py` 的一段 diff。以 `+` 开头的行是新加的内容，其他行提供上下文。
 
 ```diff
---- a/documents.py
-+++ b/documents.py
-@@ -1,7 +1,12 @@
-+cache = {}
+@@ -12,2 +12,7 @@
+ def list_books(db, category, page=1):
+     return query_page(db, category, limit=20, offset=(page - 1) * 20)
 +
- def read_document(store, user_id, document_id):
-+    if document_id in cache:
-+        return cache[document_id]
-     document = store.get(document_id)
-     if document is None:
-         return None
-     if document["owner"] != user_id:
-         raise PermissionError("not allowed")
-+    cache[document_id] = document["body"]
-     return document["body"]
++
++def export_books(db, category):
++    rows = list_books(db, category)
++    return render_csv(rows)
 ```
 
-`store` 是按文档编号保存记录的映射，`get` 在编号不存在时返回 `None`。原函数对已存在记录检查所有者，再返回正文。新增路径先按编号查缓存，命中后直接返回，未经过所有者检查。
+原先的 `list_books` 为浏览页面取一页数据，每页最多 20 行。新增函数省略 `page` 参数，沿用默认的第 1 页。只要分类里有第 21 本书，导出文件就会漏行。此前测试选中的两个分类各只有几本书，分页从未截断测试数据。
 
-Ada 先读取自己拥有的文档 7，缓存记录正文。随后 Lin 请求同一个编号，函数直接返回缓存内容，未执行所有者检查。要复现缺陷，测试必须先建立缓存，再换一个用户请求同一文档。
+列表与导出都按分类筛选，再按编号升序。列表查询需要分页，导出查询则要读取全部匹配记录。把筛选和排序留在两者共用的查询逻辑里，再由调用方决定怎样读取结果。
 
-审查时可以先标出新增的条件判断和 `return`，再沿每条可能返回正文的路径检查权限判断。若缓存由其他模块管理，还要查明键的构成、失效时机，以及文档归属发生变化时的处理方式。
+## 审查意见与验证结果
 
-## 权限变更与缓存失效
+具体的审查意见可以写在 `list_books(db, category)` 这一行。
 
-把用户编号也放入缓存键，可以隔离不同用户的缓存条目。文档所有者随后可能改变：文档 7 从 Ada 转交给 Lin 时，Ada 已有的缓存条目仍在。如果服务要求转移后立即撤销旧所有者的读取权限，就必须在每次读取时核验当前权限，或者在权限变更时使相关缓存条目失效。
+> 在测试库中准备编号 1–21 的 21 本 computing 类书目，再点击导出。当前文件只有编号 1–20 的记录，验收要求包含 21 本。请补一条跨分页边界的测试，并调整导出查询。
 
-对应测试应按顺序建立缓存、转移文档所有权，再由 Ada 读取。这样可以检验权限变更与缓存命中共同作用时的行为。
-
-## 改动的验证方法
-
-本次缓存改动改变了返回路径与状态位置，验证也应覆盖这些变化：
-
-| 需要检查的行为 | 对应操作 |
-| --- | --- |
-| 首次读取正常 | 所有者读取未缓存的文档 |
-| 其他用户被拒绝 | 所有者读过后，其他用户请求相同编号 |
-| 撤销权限立即生效 | 缓存已命中，再改变文档归属并读取 |
-## 缺陷复现与报告
-
-缺陷报告需要给出足够的信息，让其他人重复执行并看到相同结果。例如：
-
-> 初始条件：文档 7 属于 Ada，缓存为空。
-> 操作：Ada 读取文档 7，再由 Lin 读取同一编号。
-> 实际结果：Lin 得到了正文。
-> 预期结果：Lin 的读取请求因权限不足而被拒绝。
-
-修复后，使用同样的初始条件重新运行测试。对于权限转移问题，还应明确“撤销立即生效”的要求，并测试缓存已建立时的读取结果。
-
-## 练习：权限撤销后的缓存读取
-
-下面把用户加入缓存键。服务要求文档转移所有者之后，原所有者立即失去读取权限。先判断这份实现满足什么、遗漏什么，再运行追踪状态；若修改，检查每条返回路径在什么时刻使用当前权限。
-
-```python run id="change-and-review.reviewing-diffs-and-evidence.cached-permission"
-cache = {}
-documents = {7: {"owner": "Ada", "body": "private"}}
-
-def read_document(user_id, document_id):
-    key = (user_id, document_id)
-    if key in cache:
-        return cache[key]
-    document = documents[document_id]
-    if document["owner"] != user_id:
-        raise PermissionError("not allowed")
-    cache[key] = document["body"]
-    return document["body"]
-
-print("before:", read_document("Ada", 7))
-documents[7]["owner"] = "Lin"
-print("after:", read_document("Ada", 7))
-```
-
-再考虑一个与安全无关的改动：书目导出功能只附带了一条正常下载测试。根据 <CrossRef id="change-and-review.requirements-and-acceptance" /> 的验收表，选择两项还应检查的行为，指出对应的实现位置或需要补充的测试。
+合并请求更新后，检查新增测试的输入确实超过 20 条，再看实际文件中是否恰好包含这 21 本书。保留另一分类的一本书还可以一并检查分类筛选。这样，审查意见指出了源码中改变结果的调用，测试则展示了修复后用户实际能拿到的文件。

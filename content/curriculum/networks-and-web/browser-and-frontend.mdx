@@ -2,74 +2,66 @@
 id: networks-and-web.browser-and-frontend
 slug: /networks-and-web/browser-and-frontend
 order: 40
-title: 浏览器与前端程序
+title: 浏览器界面与前端程序
 status: published
 objectives:
-  - 说明 HTML、CSS 与 JavaScript 怎样形成可交互界面
-  - 追踪点击、数据请求和 DOM 更新的过程
-  - 解释前端框架与同源策略各自的作用
+  - 把页面结构、样式和交互代码对应到浏览器中的工作
+  - 追踪一次点击怎样发出 HTTP 请求并更新页面
+  - 根据部署地址判断两个 URL 是否同源
 ---
 
-笔记列表已经显示，用户点击“刷新”，列表随新数据变化，却没有重新打开整个页面。页面中的程序接收了点击、请求数据，再更新界面。
+笔记页面已经打开。用户点“重新读取”，浏览器要取回笔记 7 的最新内容，并替换阅读区显示的文字。其他部分留在原处。
 
-## HTML、CSS 与 DOM
+## 从 HTML 到界面
 
-HTML 描述内容结构，CSS 描述布局与样式，JavaScript 描述交互和计算。浏览器解析 HTML，建立文档对象模型（DOM），脚本通过它访问页面元素；样式与布局处理决定元素怎样显示。
-
-下面是一段供阅读的 HTML。它声明标题、按钮和列表区域，并加载脚本：
+HTML 声明按钮、标题和正文区域。浏览器解析 HTML，建立文档对象模型（DOM）。CSS 决定这些元素的样式和布局，JavaScript 可以通过 DOM 读取或更新元素。下面是页面的一个片段。
 
 ```html
-<h1>我的笔记</h1>
-<button id="refresh">刷新</button>
-<ul id="notes"></ul>
+<button id="reload" type="button">重新读取</button>
+<p id="status" role="status"></p>
+<h1 id="title"></h1>
+<pre id="body"></pre>
 <script type="module" src="/app.js"></script>
 ```
 
-这里只需要看出元素与脚本的关系。HTML 标签、CSS 属性的完整用法可在实际编写界面时查阅。
+## 一次点击如何更新内容
 
-## 事件处理与界面更新
-
-下面的浏览器 JavaScript 片段假定后端 `/api/notes` 返回笔记数组。它不是 Python 单元格：
+`app.js` 中的代码监听按钮点击。它在浏览器里执行，下面的片段供阅读。
 
 ```javascript
-const button = document.querySelector("#refresh");
-const list = document.querySelector("#notes");
+const button = document.querySelector("#reload");
+const status = document.querySelector("#status");
+const title = document.querySelector("#title");
+const body = document.querySelector("#body");
 
 button.addEventListener("click", async () => {
-  const response = await fetch("/api/notes");
-  if (!response.ok) throw new Error("读取笔记失败");
-  const notes = await response.json();
-  list.replaceChildren();
-  for (const note of notes) {
-    const item = document.createElement("li");
-    item.textContent = note.title;
-    list.append(item);
+  button.disabled = true;
+  status.textContent = "正在读取";
+  try {
+    const response = await fetch("/api/notes/7");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const note = await response.json();
+    title.textContent = note.title;
+    body.textContent = note.body;
+    status.textContent = "已更新";
+  } catch {
+    status.textContent = "读取失败，请重试";
+  } finally {
+    button.disabled = false;
   }
 });
 ```
 
-`querySelector` 找到元素，`addEventListener` 注册点击时执行的处理。`fetch` 发出 HTTP 请求，`await` 等待结果；读取 JSON 后，代码创建列表项并把标题作为文字显示。数据变化最终通过 DOM 更新反映到界面。实际页面还应向用户展示等待和失败状态。
+`querySelector` 找到 HTML 里的元素，`addEventListener` 指定点击后要做的事。`await fetch` 等待 HTTP 响应，`await response.json()` 再读取并解析正文。只有解析成功后，代码才更新标题和内容。`textContent` 把笔记内容作为文字显示。
 
-`fetch` 收到 404 或 500 时仍可返回响应对象，所以代码先检查 `response.ok`，再解析正文，见 [MDN：使用 Fetch](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)。
+收到 404 时，`fetch` 仍可返回响应对象，`response.ok` 此时为假。如果网络故障使浏览器拿不到响应，`await fetch` 就会进入错误处理。两种情况下都保留旧内容，显示失败提示并恢复按钮。接口行为见 [MDN 的 Fetch 指南](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)。
 
-## 前端框架与组件
+界面再复杂一些，标题、正文、编辑状态和错误提示会有各自的显示规则。React、Vue 等前端工具常把每一块界面组织成组件，再根据状态更新显示。在这段例子里，等待、完成和失败就是会影响显示的三个状态。
 
-页面复杂后，列表、筛选框、编辑器等部分都维护状态，并影响显示。React、Vue 等工具帮助将界面拆成组件，并根据状态组织更新，见 [MDN：客户端框架介绍](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Frameworks_libraries/Introduction)。
+## 前端怎样找到 API
 
-例如，筛选条件改变，应更新列表；编辑内容保存成功，应更新状态提示。框架帮助组织这些关联，网络请求和后端保存仍是应用需要安排的工作。
-
-页面变量保存着这次页面运行的状态。刷新重新创建页面时，这些变量通常重新初始化。要找回已经保存的笔记，前端需要重新读取持久数据。
-
-## 浏览器同源策略与 CORS
-
-页面的<Term id="origin">源</Term>由方案、主机和端口组成。`https://notes.example` 与 `https://api.example` 不同源。浏览器的同源策略限制脚本读取其他源的某些资源；后端可以通过 CORS（跨源资源共享）声明允许哪些源读取响应，见 [MDN：CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS)。
-
-例如，开发页面在一个端口运行，API 在另一个端口运行，就可能需要 CORS 配置，或由开发代理提供同源入口。某些请求会先发预检请求，询问服务端是否允许该方式的跨源访问。
-
-因此，前端与 API 分开部署时，要同时安排可达的服务地址和浏览器允许的读取关系。身份与权限将在安全章展开。
+`/api/notes/7` 是相对于当前站点的路径。网页来自 `https://notes.example`，请求就发往同一个<Term id="origin">源</Term>。源由 URL 方案、主机和端口决定；把 API 移到 `https://api.notes.example` 就会形成跨源访问。此时浏览器按同源策略和 API 返回的 CORS 响应首部判断脚本能否读取响应。CORS 是浏览器的访问规则，笔记读写权限仍由应用处理。具体规则见 [MDN 的 CORS 指南](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS)。
 
 ## 练习
 
-按代码写出点击后的顺序：发送请求、取得响应、检查状态、解析 JSON、创建元素。后端返回 500 且正文是 HTML 错误页时，代码会在哪一步停止？如果删除状态检查，又可能在哪一步出错？
-
-列表读取期间，按钮应显示等待状态。沿代码指出应在哪一步开始等待提示、在哪一步显示成功，以及失败后应向用户呈现什么。
+请求在网络面板里显示 200，正文却是一段 HTML。代码会在哪一步进入错误处理，阅读区会显示哪一份内容？你会在网络面板里查看哪项信息？

@@ -5,12 +5,12 @@ order: 30
 title: SQL 查询、排序与统计
 status: published
 objectives:
-  - 根据 SELECT、WHERE 和 ORDER BY 推导查询结果
-  - 用 DISTINCT、GROUP BY 和聚合函数回答不同统计问题
-  - 解释缺失值怎样影响筛选与计数
+  - 写出商品列表所需的筛选、输出列和排列顺序
+  - 区分分类去重、分组计数和平均价格
+  - 根据 NULL 的含义判断哪些行通过筛选、哪些值参与统计
 ---
 
-从书表中列出有库存的书，需要指定要读的表、要显示的列、筛选条件和输出顺序：
+书店首页要按编号列出有货书目，显示书名和剩余库存。查询从 `books` 取出库存大于零的行，再选择页面需要的三列。
 
 ```sql run id="persistence.queries.available" fixture="catalog"
 SELECT id, title, stock
@@ -19,57 +19,62 @@ WHERE stock > 0
 ORDER BY id;
 ```
 
-`FROM books` 指定表，`WHERE stock > 0` 筛选有库存的行，`SELECT` 选择输出列，`ORDER BY id` 按编号排列。查询描述所需结果，数据库选择实际读取这些数据的方法。
+| id | title | stock |
+| --- | --- | --- |
+| 1 | 程序与状态 | 3 |
+| 3 | 历史资料 | 5 |
+| 4 | 历史索引 | 2 |
 
-## 查询结果与去重
+`WHERE` 决定哪些行进入结果，`SELECT` 决定显示哪些列，`ORDER BY` 规定结果的顺序。需要稳定排序的页面应在查询中写明排序列。数据库选择怎样读取记录，访问路径在 <CrossRef id="persistence.indexes-and-query-plans" /> 展开。
 
-列出每本书的分类，与列出所有不同分类，得到的行数不同：
+## 分类筛选菜单
+
+首页还有一个分类下拉菜单，每个分类只出现一次。直接查询 `category` 会为每本书返回一行，两个分类各出现两次。加上 `DISTINCT`，相同的输出行合并为一行。
 
 ```sql run id="persistence.queries.duplicates" fixture="catalog"
 SELECT category FROM books ORDER BY category;
 SELECT DISTINCT category FROM books ORDER BY category;
 ```
 
-computing 分类有两本书，第一条查询输出两次 computing。`DISTINCT` 按输出列去重，所以第二条只保留一次。需要每本书的分类时保留重复，需要分类列表时才去重。
+## 定价看板
 
-## 分组与统计
-
-`GROUP BY category` 把相同分类的行分到一组。`COUNT(*)` 计算每组行数，`AVG(price)` 计算已有价格的平均值，`AS` 为输出列命名：
+管理员在看板上同时查看各分类的书目数、已定价书目数和已定价书目的均价。`GROUP BY category` 按分类分组，聚合函数为每组算出统计值。`AS` 给输出列命名。
 
 ```sql run id="persistence.queries.aggregate" fixture="catalog"
-SELECT category, COUNT(*) AS books,
-       COUNT(price) AS priced_books, AVG(price) AS average_price
+SELECT category, COUNT(*) AS titles,
+       COUNT(price) AS priced_titles, AVG(price) AS average_price
 FROM books
 GROUP BY category
 ORDER BY category;
 ```
 
-history 分类有两本定价 50 的书，平均价格是 50。computing 分类有一本定价 80，另一本未定价，所以 `COUNT(*)` 是 2，`COUNT(price)` 是 1，平均价格是 80。行数与已有价格的数量回答了不同问题。
+| category | titles | priced_titles | average_price |
+| --- | --- | --- | --- |
+| computing | 2 | 1 | 80 |
+| history | 2 | 2 | 50 |
 
-## NULL 与缺失值
+computing 组两本书的价格分别是 80 和 `NULL`。这里的 `NULL` 表示待定价。`COUNT(*)` 数所有行，`COUNT(price)` 只数价格有值的行，`AVG(price)` 也只用有值的价格计算。已知价格为 0 时，该行会同时计入书目数和已定价书目数，0 也会参与均价计算。[SQLite 聚合函数](https://www.sqlite.org/lang_aggfunc.html)
 
-表用 `NULL` 表示缺失。本例中，它表示价格尚未确定；0 表示已知价格为零。SQL 比较缺失价格与 60 时，得到未知（unknown）。`WHERE` 只保留条件为真的行，因此缺失价格既不会通过 `price > 60`，也不会通过它的取反条件。
+## 待定价书目
+
+价格待定时，`price > 60` 与它的取反都得到未知。SQLite 用 `1`、`0`、`NULL` 显示真、假、未知。`WHERE` 只保留为真的行，因此要单独找出待定价书目，应写 `WHERE price IS NULL`。[SQLite 表达式](https://www.sqlite.org/lang_expr.html) · [SQLite SELECT 文档](https://www.sqlite.org/lang_select.html#whereclause)
 
 ```sql run id="persistence.queries.null" fixture="catalog"
-SELECT id, price, price > 60 AS expensive,
-       NOT (price > 60) AS not_expensive
-FROM books ORDER BY id;
+SELECT id, price, price > 60 AS above_60,
+       NOT (price > 60) AS not_above_60
+FROM books
+ORDER BY id;
+
 SELECT id, title FROM books WHERE price IS NULL ORDER BY id;
 ```
 
-`IS NULL` 检查缺失值。实验中 SQLite 用 1、0 和 NULL 显示真、假、未知。完整表达式规则见 [SQLite 表达式](https://www.sqlite.org/lang_expr.html)。
-
-`COUNT(price)`、`SUM(price)` 和 `AVG(price)` 忽略缺失价格。若需要“全部书的平均定价”，缺失数据意味着还无法计算这个量；把缺失值填成零会改变问题。聚合规则见 [SQLite 聚合函数](https://www.sqlite.org/lang_aggfunc.html)。
-
 ## 练习
 
-列出价格不高于 60 的书，也包括尚未定价的书。先按原始数据写出编号，再运行下面的查询，补齐漏掉的记录：
+活动页面要列出价格不高于 60 元的书，也要显示待定价的书。先列出期望返回的编号，再用 `OR` 补充下面的筛选条件，核对结果。
 
 ```sql run id="persistence.queries.exercise-filter" fixture="catalog"
 SELECT id, title, price
 FROM books
-WHERE NOT (price > 60)
+WHERE price <= 60
 ORDER BY id;
 ```
-
-另一个报表把 `COUNT(price)` 标为“书的总数”。修改一条记录的价格，使这个标题与实际统计对象的差别显现出来。

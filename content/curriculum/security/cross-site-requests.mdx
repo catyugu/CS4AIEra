@@ -1,59 +1,31 @@
 ---
 id: security.cross-site-requests
 slug: /security/cross-site-requests
-order: 50
-title: 跨站请求伪造（CSRF）
+order: 40
+title: 编辑请求与跨站请求伪造
 status: published
 objectives:
-  - 追踪恶意页面利用自动凭据提交修改的过程
-  - 区分读取响应与产生操作效果
-  - 解释 CSRF 令牌、来源检查和 SameSite 的作用
+  - 解释 cookie 自动发送为何使修改接口需要核对请求来源
+  - 区分跨源读取响应与服务器写入数据
+  - 说明会话关联的 CSRF 令牌、来源检查与 SameSite 分别承担什么职责
 ---
 
-用户登录了文档服务，随后又打开一个其他网站。那个网站构造了一次指向文档服务的修改请求。若浏览器在请求中附带登录 cookie，服务端可能看到合法会话，却无法仅凭会话判断这次操作是否来自文档服务允许的页面流程。
+小林编辑笔记后点击「保存」。服务端从会话认出小林，从权限表确认他可以修改笔记 7。服务还要判断这次修改是否经由允许的页面发起。浏览器会按规则附带 cookie，而另一个网站也可能让浏览器向笔记服务提交请求。
 
-## CSRF 的攻击过程
+## 请求到了服务器会怎样
 
-<Term id="csrf">跨站请求伪造</Term>（CSRF）利用浏览器自动携带凭据的行为，让受害者的浏览器对目标服务提交攻击者选择的操作。资产是用户账户下的修改能力，对手控制的是另一个网页。
+<Term id="csrf">跨站请求伪造</Term>（CSRF）利用浏览器自动携带凭据的行为，借已登录用户的浏览器发起用户无意执行的操作。考虑一个用 cookie 登录、支持表单修改的旧接口。若外站发起的提交携带了有效 cookie，而服务只核对会话和编辑权限，数据库就可能接受这次修改。
 
-假设文档服务用 cookie 识别会话，浏览器的当前 cookie 配置允许它随这次跨站表单提交发送。修改接口接受普通表单编码，而且没有令牌或来源检查。攻击页面可以写出这样的 HTML：
+浏览器的同源策略和 CORS 影响一个<Term id="origin">源</Term>上的脚本能否读取另一源的响应。对于普通表单等浏览器可以直接发送的请求，即使外站脚本无法读取响应，服务器也可能已执行写入。检查一次修改是否生效，要看服务端返回的结果和数据库状态。浏览器如何处理跨源响应见 <CrossRef id="networks-and-web.browser-and-frontend" />。
 
-```html
-<form action="https://notes.example/settings/email" method="post">
-  <input type="hidden" name="email" value="other@example.test">
-  <button type="submit">查看文档</button>
-</form>
-```
+## 增加服务端的请求检查
 
-这段 HTML 供阅读，地址和邮件均为示例；它展示浏览器提交表单时会发送哪些信息。表单规定提交目标与方法，隐藏字段提供对手选择的内容。用户点击按钮时，浏览器提交表单；能否附带 cookie 由 cookie 和浏览器规则决定。
+一种常见做法是由服务端生成不可预测的 CSRF 令牌，将它关联到小林的会话，并交给笔记页。笔记页在保存时把令牌显式提交，例如放在表单字段中。服务端比对通过后才允许执行修改。会话 cookie 提供用户身份，令牌提供第二项证据，外站通常无法读取笔记页中的令牌。应选用框架内置防护，让网页表单和 API 的相关写操作都遵守同一套规则。
 
-| 步骤 | 发起动作的参与者 | 服务器可能看到的内容 |
-| --- | --- | --- |
-| 打开攻击页面 | 用户 | 尚无修改请求 |
-| 提交表单 | 攻击页面的结构与用户点击 | 目标地址、对手选择的邮件 |
-| 附带适用 cookie | 浏览器 | 有效登录会话 |
-| 处理请求 | 文档服务 | 已认证用户与修改内容 |
+服务端也可按部署约定核对请求的 `Origin`。会话 cookie 的 `SameSite` 属性在浏览器端限制某些跨站请求携带凭据，两处共同减少请求被接受的机会。**同站**与**同源**是两套判断，同一个站点下的不同子域可以属于不同源。实际采用的规则取决于应用的登录方式和受支持的入口。参见 [OWASP CSRF 防护指南](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)和 [MDN 对 SameSite 的说明](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#samesitesamesite-value)。
 
-服务器在最后一步验证到了有效会话，还需要检查这份修改请求是否来自允许的发起流程。
+把保存、删除和创建分享链接设为写操作，读取链接继续使用 `GET`。验收时固定一个有效会话，分别检查带有效令牌的修改和缺少令牌的修改，并用数据库中的正文确认只有获准的修改生效。
 
-## 跨源读取限制与请求副作用
+## 练习
 
-浏览器的<Term id="origin">源</Term>与 CORS 规则见 <CrossRef id="networks-and-web.browser-and-frontend" />。CORS 主要约束跨源脚本能否读取响应；普通 HTML 表单仍可以向其他站点提交请求。即使攻击页面读不到响应，服务器也可能已经修改邮箱。跨源与跨站的判定不同：相同站点的两个子域名也可以属于不同源。
-
-修改状态的接口应使用 `POST` 等适合的方法，并验证请求来源或 CSRF 令牌。上面的攻击表单使用的就是 `POST`。`GET` 用于读取，把修改放在 `GET` 中还可能让普通链接访问触发状态变化。
-
-## CSRF 令牌与请求来源检查
-
-服务可以向合法页面提供一个不可预测、与当前会话关联的 CSRF 令牌。合法页面在修改请求里显式提交令牌，服务器据此验证请求。攻击页面即使能让浏览器自动携带会话 cookie，通常也无法读取合法页面上的令牌；只检查一项会自动发送的 cookie 是否存在，无法证明请求来自合法页面。令牌不应只依赖一个会自动随请求发送的 cookie，也不应进入 URL 或日志。
-
-服务器还可以检查请求的 `Origin` 等来源信息，拒绝来自未允许页面的修改。采用框架提供的完整防护机制，可以统一处理各个入口，见 [OWASP：CSRF 防护](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)。
-
-`SameSite` 限制某些跨站请求携带 cookie，可以作为额外保护。其具体适用条件与登录、跳转流程有关，应按框架与浏览器规则配置，见 [MDN：SameSite](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#samesitesamesite-value)。服务器应对所有相关修改入口采用一致的令牌或来源检查。
-
-若合法页面存在 XSS，攻击者可能直接使用页面的请求能力。因此，CSRF 防护也依赖 <CrossRef id="security.parsing-injection-and-output" /> 中的输出处理。
-
-## 练习：跨站表单与令牌验证
-
-一个修改接口同时接受表单和 JSON，团队只对 JSON 请求验证 CSRF 令牌，并声称“攻击页面无法通过 CORS 读取响应”。按上述攻击路径审查剩余的入口与可观察效果。
-
-客户端把 CSRF 令牌放在 cookie 中，服务器只检查这个 cookie 是否存在；会话 cookie 和令牌 cookie 都会在目标跨站请求中被发送。与“合法页面读取令牌，并显式写入请求内容后由服务器关联验证”相比，这个方案多验证了什么事实？
+同一个保存接口接受网页表单和 JSON，现有验收只覆盖 JSON 入口。为表单入口补两条验收用例，分别写出请求条件、预期响应和保存前后的正文。

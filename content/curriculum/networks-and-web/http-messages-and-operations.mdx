@@ -2,61 +2,51 @@
 id: networks-and-web.http-messages-and-operations
 slug: /networks-and-web/http-messages-and-operations
 order: 50
-title: 服务器与后端程序
+title: 后端路由与业务处理
 status: published
 objectives:
-  - 沿路由、处理函数和数据访问追踪一次请求
+  - 根据方法和路径找出负责处理请求的函数
+  - 追踪读取和保存经过的身份校验、业务校验与数据访问
   - 区分 Web 服务器、后端框架与语言运行时
-  - 解释后端怎样将业务处理结果变成响应
 ---
 
-前端已经发出 `GET /api/notes/7`。服务器怎样知道应该运行哪段代码，又怎样把数据库中的记录变成响应？
+请求 `GET /api/notes/7` 已到达 Web 服务器，并被交给笔记应用。后端框架用请求方法和路径选择处理函数。这组匹配规则称为路由。
 
-## 路由与请求处理函数
-
-后端框架提供路由：根据请求方法与路径选择处理代码。例如：
-
-| 方法与路径 | 处理工作 | 可能返回的结果 |
+| 方法 | 路由规则 | 框架交给应用的工作 |
 | --- | --- | --- |
-| `GET /api/notes/7` | 查询并读取笔记 7 | 笔记 JSON，或不存在、无权限 |
-| `POST /api/notes` | 创建笔记 | 新笔记编号 |
-| `PUT /api/notes/7/title` | 替换标题 | 更新结果 |
-| `DELETE /api/notes/7` | 删除笔记 | 删除结果 |
+| `GET` | `/api/notes/{note_id}` | 把编号 7 交给读取函数 |
+| `POST` | `/api/notes` | 把提交的正文交给创建函数 |
+| `PUT` | `/api/notes/{note_id}/title` | 把编号和正文交给标题更新函数 |
 
-下面用接近 Python 的伪代码说明一次读取，省略框架的具体声明语法：
+## 读取笔记
+
+下面是接近 Python 的伪代码，路由已把路径参数解析为编号。框架提供请求和响应对象，应用提供登录身份、访问权限和数据查询。
 
 ```python
 def get_note(request, note_id):
-    user = authenticate(request)
+    user = signed_in_user(request)
+    if user is None:
+        return sign_in_required()
+
     note = database.find_note(note_id)
     if note is None:
         return response(status=404)
-    if note.owner != user.id:
+    if not can_read(user, note):
         return response(status=403)
-    return json_response({"id": note.id, "title": note.title})
+
+    return json_response({"id": note.id, "title": note.title, "body": note.body})
 ```
 
-`authenticate`、`database` 和响应函数表示由应用或框架提供的操作。请求携带身份信息，程序找到记录并检查权限，最后将结果编码为 JSON。数据库怎样组织与修改记录，下一章会展开。
+应用先确定当前用户，再按编号取得记录并判断他能否读取这条笔记。允许读取时，框架把选中的字段编码为 JSON，连同状态和首部交给 Web 服务器。后端使用数据库里的权限关系作决定，前端即使隐藏了某个入口，也仍由后端在读取时执行同一规则。笔记共享规则见 <CrossRef id="security.identity-authorization-and-sessions" />。
 
-## 框架、运行时与 Web 服务器
+在这条路径上，Web 服务器负责接收和发送 HTTP 消息，框架负责路由、解析与封装响应，Python 运行时执行处理函数。Django、FastAPI 属于框架，Node.js 是另一种语言运行时。实际部署可由一个程序承担多项职责。服务端框架提供的常见功能见 [MDN 的服务端框架介绍](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Server-side/First_steps/Web_frameworks)。
 
-Python 需要运行时执行代码；Django、FastAPI 等后端框架在运行时之上组织路由、请求解析、响应等功能。不同框架还可能提供模板、会话和数据访问工具，见 [MDN：服务端框架](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Server-side/First_steps/Web_frameworks)。
+## 保存标题
 
-Node.js 则是 JavaScript 运行时，可以在浏览器之外执行 JavaScript 后端或开发工具，见 [Node.js 介绍](https://nodejs.org/en/learn/getting-started/introduction-to-nodejs)。浏览器和 Node.js 可以使用同一种语言，但宿主接口不同；后端没有当前用户页面的 DOM。
+更新标题的处理函数还要读请求正文，检查标题的类型和内容，再判断用户能否编辑这条笔记。最后把修改交给数据库，并在写入成功后返回 `204 No Content`。浏览器可提前提示标题为空，后端仍要对收到的实际数据执行业务校验。
 
-Web 服务器接收 HTTP 通信，直接返回静态文件，或将动态请求交给应用处理。实际部署中可能由同一个程序提供这些能力，也可能由反向代理、应用服务器与后端分别承担。程序的名称要与正在承担的职责一起理解。
-
-## 服务端业务校验
-
-浏览器可以提示标题为空、禁用重复点击。服务器仍需检查实际请求，因为请求可以由其他客户端直接构造。
-
-业务处理还要决定何时返回成功。例如创建笔记要求保存后才能跨设备查询，后端就应在完成相应保存后返回成功。若只把记录放进进程字典，进程退出时会丢失，见 <CrossRef id="persistence.files-and-durability" />。
-
-
-## 响应生成
-
-读取操作返回记录，创建操作先保存再返回编号。框架把处理结果编码为响应，Web 服务器将响应传回客户端。前端收到响应后，再更新页面。一次完整操作因此经过事件处理、HTTP、后端函数和存储，而非只发生在按钮代码中。
+校验失败、笔记找不到、数据库写入故障分别代表三种事情。应用可以为无效标题返回带字段错误的响应，为找不到的笔记返回 404，为失败的数据库操作返回服务端错误并留下诊断记录。前端由此知道该请用户改输入、离开当前页面，还是提示保存失败。
 
 ## 练习
 
-为“修改笔记标题”列出处理函数需要的输入、检查、修改和响应。若数据库没有目标笔记，应返回什么结果？若数据库不可用，应怎样将这次故障与“目标不存在”区分？
+用户提交 `PUT /api/notes/7/title`，正文中标题为一个数字。沿处理函数写出请求应当在哪一步被拒绝，数据库里的标题应是什么，前端需要哪项信息才能指出具体问题。

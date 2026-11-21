@@ -1,5 +1,5 @@
 id: program-composition
 label: 软件组织与接口
 order: 40
-summary: 从模块与依赖理解信息隐藏，用接口约定、数据格式和进程间通信说明组件怎样合作。
+summary: 从报表模块、记录读取、笔记导出和预览工具出发，理解组件的依赖、接口约定、数据格式和进程间调用。
 status: active

@@ -5,65 +5,62 @@ order: 20
 title: 表、数据关系与约束
 status: published
 objectives:
-  - 用表、行和列组织记录
-  - 用主键与外键表达记录之间的关系
-  - 解释数据库约束怎样维护所有写入路径的数据规则
+  - 用主键标识书目和订单，用外键关联两者
+  - 从 CREATE TABLE 读出订单表的列及其约束
+  - 根据写入结果判断哪项数据规则生效
 ---
 
-两本书可以同名，一本书也可以改名。订单如果只保存书名，改名之后就难以确定它买的是哪本书。给书一个稳定编号，再让订单保存这个编号，关联就不依赖书名了。
+同名书可以同时在售，书名也可能修改。书店给每本书分配一个唯一编号，订单保存这个编号。改过书名以后，原来的订单仍然指向同一条书目记录。
 
-## 表、行与字段
+## 商品目录和订单表
 
-关系数据库用表组织记录。书表的一行保存一本书，每列分别保存编号、标题、分类、价格和库存；订单表的一行保存一笔订单。
+关系数据库用表组织记录。书表 `books` 的一行代表一种在售书目，各列记录编号、书名、分类、价格和库存。订单表 `orders` 的一行表示一笔订单。这里每笔订单只购买一种书，可以购买多册。
 
-本章用 SQL 操作数据库；SQL 语句描述需要查询或修改什么，由数据库执行。实验使用 SQLite 引擎，预先准备的表和记录见 <LabRef id="catalog" />。每次运行独立单元格都会重建这份数据，同一格内的多条语句则共用一份数据库。
+本章用 SQL 查询和修改数据库，实验使用 SQLite 和预置的 <LabRef id="catalog" /> 数据。每次运行 SQL 单元格都会从初始数据开始，同一单元格里的语句按顺序作用于同一个数据库。
 
 ```sql run id="persistence.relations.tables" fixture="catalog"
 SELECT id, title, category, price, stock
 FROM books
 ORDER BY id;
+
 SELECT id, reference, book_id, quantity
 FROM orders
 ORDER BY id;
 ```
 
-`SELECT` 指定输出的列，`FROM` 指定表，`ORDER BY id` 按编号排序。需要稳定输出顺序时，应像这里一样写出 `ORDER BY`；引擎更换访问路径后，未指定的行顺序可能变化。
+`SELECT` 指定要显示的列，`FROM` 指定读取的表，`ORDER BY id` 按编号排列输出。
 
-## 主键与外键
+每张表的主键（primary key）唯一标识该表里的一行。订单 10 和 11 用不同的 `id` 区分，它们的 `book_id` 都是 1，表示两次购买都指向书 1。这个引用列是外键（foreign key）。书表中的一行可被多个订单引用，也可以暂时没有订单。
 
-主键（primary key）唯一标识表里的一行。`books.id` 是书的主键，`orders.id` 是订单的主键；同一张表不能有两行使用同一个主键。书名可以重复或修改，编号仍能找到原记录。
+## 建表与写入订单
 
-订单中的 `book_id` 是外键（foreign key），引用书表的 `id`。订单 10 和 11 都引用书 1：它们是两笔不同订单，买的是同一本书。外键要求被引用的书存在，不要求每本书都已被购买。
-
-```text
-orders                 books
-id 10 ── book_id 1 ─┐
-                    ├── id 1
-id 11 ── book_id 1 ─┘
-id 12 ── book_id 3 ──── id 3
-```
-
-## 数据库约束
-
-数据库约束规定哪些记录允许写入。预置数据库为订单表声明了这些规则：
-
-| 列与规则 | 拒绝什么 |
-| --- | --- |
-| `id` 是主键 | 重复订单编号 |
-| `reference` 必填且唯一 | 缺失或重复的业务请求编号 |
-| `book_id` 必填并引用书表 | 没有书编号，或引用不存在的书 |
-| `quantity` 必填且大于 0 | 没有数量，或数量不为正 |
-
-创建表时，`NOT NULL` 表示不允许缺失值，`UNIQUE` 表示唯一，`REFERENCES` 声明引用，`CHECK` 检查条件。具体语法见 [SQLite CREATE TABLE 文档](https://www.sqlite.org/lang_createtable.html)。实验表使用严格类型，并已启用外键检查，因此这些规则会在实际写入时检查。
-
-网页表单可以提前检查数量，及时向用户反馈错误。另一个应用、导入脚本或人工操作也可能写入同一张表；数据库约束让这些写入路径都接受相同的检查。
-
-下面尝试新增一笔订单。`INSERT INTO` 列出要写入的表和列，`VALUES` 提供对应的值。先在书表里找到它要引用的编号，再运行；将书编号改为 2、数量改为 0 后，拒绝原因是否相同？
+下面用与 `orders` 相同的列和约束新建一张实验表 `trial_orders`，再写入一笔订单。SQLite 的 `STRICT` 选项要求存入的值符合列声明的类型，预置脚本也为当前连接开启了外键检查。[SQLite 建表文档](https://www.sqlite.org/lang_createtable.html) · [SQLite 严格类型表](https://www.sqlite.org/stricttables.html) · [SQLite 外键文档](https://www.sqlite.org/foreignkeys.html#fk_enable)
 
 ```sql run id="persistence.relations.exercise-reference" fixture="catalog"
-INSERT INTO orders (id, reference, book_id, quantity)
-VALUES (13, 'r13', 9, 1);
-SELECT id, book_id, quantity FROM orders ORDER BY id;
+CREATE TABLE trial_orders (
+    id INTEGER PRIMARY KEY,
+    reference TEXT NOT NULL UNIQUE,
+    book_id INTEGER NOT NULL REFERENCES books(id),
+    quantity INTEGER NOT NULL CHECK (quantity > 0)
+) STRICT;
+
+INSERT INTO trial_orders (id, reference, book_id, quantity)
+VALUES (13, 'r13', 1, 2);
+
+SELECT id, reference, book_id, quantity FROM trial_orders;
 ```
 
-SQL 单元格遇到错误会停下并显示错误。要查看原始数据，可以移除插入语句，只运行查询。用“恢复代码”取回原写法，再次运行时数据库也恢复为预置的初始状态。
+查询得到订单 13，业务请求编号为 `r13`，购买书 1 共两册。建表语句同时规定了接收这笔订单的条件。
+
+| 声明 | 对订单的要求 |
+| --- | --- |
+| `PRIMARY KEY` | 订单编号唯一 |
+| `NOT NULL UNIQUE` | 业务请求编号必填且唯一 |
+| `NOT NULL REFERENCES books(id)` | 必须填写已有书目的编号 |
+| `NOT NULL CHECK (quantity > 0)` | 必须填写正数数量 |
+
+网页表单可以在用户填写时提示数量错误。数据库约束同样会检查来自批量导入和管理脚本的订单，因此每条写入路径都遵循同一规则。
+
+## 练习
+
+把插入语句中的书编号改成 9，再运行。恢复书编号后，把数量改成 0。根据两次 SQLite 错误说明，分别判断写入违反了哪条约束。遇到报错时该单元格会停在出错语句。

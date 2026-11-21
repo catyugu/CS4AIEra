@@ -5,72 +5,82 @@ order: 60
 title: 事务与数据提交
 status: published
 objectives:
-  - 为一次业务操作划定共同提交或撤销的边界
-  - 用 COMMIT 与 ROLLBACK 追踪修改何时生效
-  - 解释语句失败后应用怎样完成事务处理
+  - 为一次结账确定共同提交的数据库修改
+  - 用 COMMIT 与 ROLLBACK 追踪库存和订单的变化
+  - 根据库存不足与写入失败决定如何结束事务
 ---
 
-购买一本书需要扣减库存并创建订单。这两项修改共同组成一次购买：购买成功时，两项都应保存；购买失败时，两项都应撤销。
+结账需要扣库存并创建订单。应用把两次写入放进同一个数据库事务，提交成功后才确认购买。订单写入失败时，应用可以通过撤销事务恢复库存。
 
-## 事务与原子性
+## 提交与撤销
 
-事务（transaction）把一组数据库操作组织为一次提交单位。`BEGIN` 开始事务，`COMMIT` 提交，`ROLLBACK` 撤销尚未提交的修改。
+事务把一组操作组织成一次提交。`BEGIN` 开始事务，`COMMIT` 提交修改，`ROLLBACK` 撤销未提交的修改。一个事务中的修改共同生效或撤销，这个性质叫原子性。
 
-下面先扣库存并创建订单，再主动撤销。可将 `ROLLBACK` 改为 `COMMIT`，比较事务结束后留下的记录：
+下面用 SQLite 演示购买书 1 的过程。预置库存为 3，本次购买一册。两次修改执行后先读出事务内的状态，再撤销并重新查询。
 
 ```sql run id="persistence.transactions.rollback" fixture="catalog"
 BEGIN;
 UPDATE books SET stock = stock - 1 WHERE id = 1;
 INSERT INTO orders (id, reference, book_id, quantity)
 VALUES (13, 'r13', 1, 1);
-SELECT id, stock FROM books WHERE id = 1;
+
+SELECT stock FROM books WHERE id = 1;
+SELECT id, reference FROM orders WHERE id = 13;
+
 ROLLBACK;
-SELECT id, stock FROM books WHERE id = 1;
-SELECT id, reference FROM orders ORDER BY id;
+
+SELECT stock FROM books WHERE id = 1;
+SELECT id, reference FROM orders WHERE id = 13;
 ```
 
-事务内可以看到自己的修改；撤销后，库存回到原值，订单没有加入。将多个修改共同生效或共同撤销的性质称为原子性。
+| 查询时点 | 库存 | 订单 13 |
+| --- | --- | --- |
+| 事务开始前 | 3 | 无记录 |
+| 两次修改执行后 | 2 | 已写入，本连接可读取 |
+| 撤销后 | 3 | 无记录 |
 
-事务把实际执行的修改组合起来，业务判断仍由应用完成。例如条件扣库存影响零行时，应用应停止购买；若继续插入订单再提交，数据库会保存这组实际修改。
+把 `ROLLBACK` 换成 `COMMIT`，最后两次查询会读取提交后的库存和订单。
 
-## 事务回滚
+## 结账失败时回滚
 
-假设库存已扣减，随后订单编号重复，插入失败。应用需要撤销本次购买的事务。SQLite 的许多约束错误只撤销失败语句，先前修改仍留在事务中，见 [SQLite 冲突处理](https://www.sqlite.org/lang_conflict.html)。
+实际结账需要在同一事务里判断扣减是否成功。库存不足时条件更新影响零行，应用应结束事务、返回库存不足。假设扣减成功而订单插入遇到唯一约束错误，SQLite 的默认冲突处理会撤销失败语句，先前的扣减仍留在事务里。应用需要显式回滚才能撤销它。[SQLite 冲突处理文档](https://www.sqlite.org/lang_conflict.html)
 
-下面用 Python 的 SQLite API 明确安排提交和撤销。`execute` 执行语句，`commit` 提交，`rollback` 撤销：
+下面使用 Python 的 SQLite 接口重放业务请求编号重复的情况。内存数据库只建本次演示所需的列。先写入已有记录，再开始新的事务。
 
 ```python run id="persistence.transactions.failure"
 import sqlite3
 
 db = sqlite3.connect(":memory:")
-db.execute("CREATE TABLE stock (id INTEGER PRIMARY KEY, quantity INTEGER)")
-db.execute("CREATE TABLE orders (reference TEXT UNIQUE)")
-db.execute("INSERT INTO stock VALUES (1, 3)")
-db.execute("INSERT INTO orders VALUES ('r1')")
-db.commit()
+db.executescript("""
+    CREATE TABLE books (id INTEGER PRIMARY KEY, stock INTEGER);
+    CREATE TABLE orders (reference TEXT NOT NULL UNIQUE);
+    INSERT INTO books VALUES (1, 3);
+    INSERT INTO orders VALUES ('r10');
+""")
+db.execute("BEGIN")
 try:
-    db.execute("UPDATE stock SET quantity = quantity - 1 WHERE id = 1")
-    db.execute("INSERT INTO orders VALUES ('r1')")
+    db.execute("UPDATE books SET stock = stock - 1 WHERE id = 1")
+    db.execute("INSERT INTO orders VALUES ('r10')")
     db.commit()
-except sqlite3.IntegrityError as failure:
-    print(type(failure).__name__)
+except sqlite3.IntegrityError:
     db.rollback()
-print(db.execute("SELECT quantity FROM stock").fetchall())
+    print("订单请求编号重复")
+
+print("库存", db.execute("SELECT stock FROM books WHERE id = 1").fetchone()[0])
 db.close()
 ```
 
-订单插入触发 `IntegrityError`，异常处理执行 `rollback()`，因此最终库存仍为 3。把错误报告给调用方之前，应用先把本次购买留下的数据库状态处理完整。
+`execute` 遇到约束错误时抛出 `IntegrityError`，由异常处理执行 `rollback()`。程序最终输出库存 3。把 `db.rollback()` 改成 `db.commit()` 再运行，库存会变成 2，订单仍只有原来一笔。
 
-## ACID 与崩溃恢复
+## 提交与崩溃恢复
 
-事务通常用 ACID 概括四种性质：原子性组织共同提交；一致性由约束与正确的业务逻辑维护；隔离性约束并发事务的相互影响；持久性使成功提交的数据在约定故障下可恢复。下一阶段会分析并发更新。
+磁盘数据库要写入多个数据页，中途可能断电。SQLite 的回滚日志保存改写前的数据页，重启后可用它恢复未完成事务改动的页面。使用<Term id="write-ahead-log">预写日志</Term>模式时，SQLite 先将修改写到日志，之后再写回主数据库文件。已提交数据能承受哪些故障，由日志模式、同步配置和存储设备共同决定。[SQLite 原子提交文档](https://www.sqlite.org/atomiccommit.html) · [SQLite WAL 文档](https://www.sqlite.org/wal.html)
 
-数据库实际写入多个数据块，可能在中途崩溃。日志记录恢复所需信息，使重新启动的数据库能够恢复已提交修改、处理未完成事务。<Term id="write-ahead-log">预写日志</Term>机制要求相应数据块写回之前先保存恢复所需日志。SQLite 的具体机制见 [原子提交](https://www.sqlite.org/atomiccommit.html)。这里的内存数据库实验只展示事务语义，断电恢复还依赖磁盘、同步配置与硬件。
-
-数据库事务的范围是本次数据库操作。邮件发送等外部动作由其他系统完成；它们与数据库怎样协调，将在应用故障恢复中讨论。
+结账后的确认邮件由邮件服务发送。数据库事务管理的是自己的写入，通知如何与提交后的订单协调会在应用系统章讨论。
 
 ## 练习
 
-在失败实验中，把 `db.rollback()` 换成 `db.commit()`。先预测库存，再运行。订单插入失败时，哪项修改仍留在事务里？
+库存只剩一册。分别追踪下面两次独立的结账请求，写出应提交还是撤销、用户收到什么结果，以及最终库存和订单状态。
 
-一次购买先检查扣库存的受影响行数，再创建订单。分别为库存足够、库存不足、订单插入失败三种情况，写出应提交还是撤销，并说明最终应留下哪些记录。
+1. 用户购买两册，条件更新影响零行。
+2. 用户购买一册，库存扣减成功，随后订单写入失败。

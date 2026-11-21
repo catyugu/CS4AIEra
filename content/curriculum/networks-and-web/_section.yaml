@@ -1,5 +1,5 @@
 id: networks-and-web
 label: 网络与 Web 应用
 order: 50
-summary: 从应用组成进入网络通信与 HTTP，追踪前端、后端和页面生成，再沿请求定位性能与运行问题。
+summary: 沿协作笔记的一次读写，理解网络连接、HTTP 报文、浏览器界面、后端业务处理和线上服务入口。
 status: active

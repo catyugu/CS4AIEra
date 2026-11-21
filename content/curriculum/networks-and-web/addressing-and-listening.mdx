@@ -2,23 +2,18 @@
 id: networks-and-web.addressing-and-listening
 slug: /networks-and-web/addressing-and-listening
 order: 30
-title: HTTP 请求与响应
+title: HTTP 报文、方法与状态码
 status: published
 objectives:
-  - 从 HTTP 报文读出方法、目标、状态码与正文
-  - 说明内容类型怎样帮助接收方解释数据
-  - 用操作效果解释安全方法与幂等性
-  - 解释缓存新鲜期与条件请求如何减少重复传输
+  - 从 HTTP 报文读出方法、目标、状态码和正文格式
+  - 根据业务动作选择 HTTP 方法并解释幂等性
+  - 说明条件请求如何复用浏览器已有的响应
 ---
 
-连接将字节交给对方，HTTP 则规定浏览器和服务端怎样表达请求与响应。读取一组完整报文，可以把网址、操作、返回数据和处理结果连起来。
-
-## HTTP 请求与响应
-
-下面是一组构造的 HTTP/1.1 报文，供阅读。客户端请求笔记，服务器返回 JSON：
+浏览器与笔记服务的入口建立通信后，要告诉对方读哪条笔记、希望收到何种数据。下面是一组构造的 HTTP/1.1 报文。为便于阅读，省略身份凭据等字段，响应正文按 UTF-8 编码且末尾没有换行。
 
 ```http
-GET /notes/7 HTTP/1.1
+GET /api/notes/7 HTTP/1.1
 Host: notes.example
 Accept: application/json
 
@@ -27,42 +22,30 @@ Accept: application/json
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
+Content-Length: 44
 
-{"id":7,"title":"reading"}
+{"id":7,"title":"读书","body":"第一章"}
 ```
 
-请求中的 `GET` 是方法，`/notes/7` 是目标。响应中的 `200` 是状态码。首部字段说明内容类型等信息，空行之后是正文。实际 HTTP/1.1 还按协议规则界定正文长度；这里省略成帧细节，只观察报文含义。
+请求行的 `GET` 是方法，`/api/notes/7` 是请求目标。响应行的 `200` 是状态码。后面是首部字段，空行之后是正文。请求的 `Accept` 表示客户端希望收到的格式，响应的 `Content-Type` 声明实际的格式。这里 `Content-Length` 计的是字节，本例的汉字各占三个字节，参见 <CrossRef id="program-composition.serialization-and-compatibility" />。
 
-常见方法包括取得表示的 `GET`、提交内容进行处理的 `POST`、创建或替换目标状态的 `PUT`，以及删除目标的 `DELETE`。例如，创建笔记可以用 `POST /notes`，内容放在 JSON 正文中。
+## 怎样表达读写操作
 
-`200` 通常表示成功，`201` 表示已创建，`404` 表示找不到可提供的目标，`500` 表示服务端处理遇到意外错误。`202` 表示已接纳但尚未完成。方法和状态的准确含义见 [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html)。
-
-
-## 内容类型与消息正文
-
-返回 JSON 时，`Content-Type: application/json` 告诉接收方按 JSON 解释正文；HTML 页面则使用 `text/html`。客户端应先判断状态和预期格式，再处理内容。例如，查询失败时服务可能返回 HTML 错误页，直接当成 JSON 解析就会出错。
-
-请求也可以包含正文。创建笔记时，`POST /notes` 的正文可以携带标题和内容；服务端解析这些数据，执行创建，再返回新编号。
-
-## HTTP 方法与幂等性
-
-`GET` 用于读取，属于安全方法。`PUT` 和 `DELETE` 具有<Term id="idempotence">幂等性</Term>语义：重复相同请求的预期效果与执行一次相同。把标题设为“reading”，执行两次仍是这个标题；把阅读次数加一，执行两次则增加两次。
-
-幂等性约束操作效果，两次响应可以不同。例如首次删除成功，第二次可以报告目标已经不存在。`POST` 没有一般的幂等保证。方法的定义见 [RFC 9110：方法的共同属性](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.2)。
-
-## HTTP 缓存与条件请求
-
-浏览器反复读取同一条笔记时，可以在规则允许的期限内复用先前收到的响应。服务器可用 `Cache-Control: max-age=60` 指定新鲜期；过期后，客户端可以带上此前取得的 `ETag` 发出验证请求。
-
-| 服务器判断 | 返回结果 | 客户端动作 |
+| 笔记操作 | 方法与路径 | 可能的成功响应 |
 | --- | --- | --- |
-| 内容未变 | `304 Not Modified` | 继续使用原正文 |
-| 内容已变 | 新的响应正文与标记 | 替换缓存内容 |
+| 读取笔记 | `GET /api/notes/7` | `200 OK`，正文是笔记 JSON |
+| 新建笔记 | `POST /api/notes` | `201 Created`，告知新笔记的地址 |
+| 替换标题 | `PUT /api/notes/7/title` | `204 No Content`，保存成功，无正文 |
+| 删除笔记 | `DELETE /api/notes/7` | `204 No Content`，删除成功，无正文 |
 
-验证省去未变化正文的传输，仍需要通信。用户专属数据还要限制共享缓存的使用。具体指令见 [RFC 9111：HTTP 缓存](https://www.rfc-editor.org/rfc/rfc9111.html)。应用内部缓存的更新问题见 <CrossRef id="software-systems.caches-and-object-storage" />。
+创建笔记时，请求也可以带正文。客户端在其中提交标题和内容，并用 `Content-Type` 声明格式。结果不成功时，状态码给出第一条线索，正文可以提供具体原因。例如 `404` 表示服务器找不到可提供的目标，`403` 表示服务器拒绝当前请求，`500` 表示遇到意外的服务端故障。接到 `202 Accepted` 表示处理已受理。应用若提供进度接口，客户端可以按响应告知的地址继续查询。
+
+HTTP 的安全方法以读取为预期语义，例如 `GET`。服务端可能为读取操作写访问日志，但客户端不应靠发送 `GET` 来要求改变笔记。<Term id="idempotence">幂等性</Term>关心相同请求重复执行的预期效果。把标题设为“读书”两次，结果仍是“读书”；为每个提交创建一条新笔记，则会多出一条记录。重复删除的状态码可以不同，最终都只剩下“原笔记已不存在”这一结果。方法和状态码的完整语义见 [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html)。
+
+## 重读未修改的笔记
+
+服务器可以用 `ETag` 给响应附上版本标记。浏览器手上有一份旧响应，再读取时可以带 `If-None-Match`。如果当前内容仍匹配标记，服务端返回 `304 Not Modified`，浏览器继续用旧正文。如果内容变了，服务端返回新的正文和标记。条件请求省去未修改正文的传输，仍需通信。对于允许浏览器保留、但每次都须重新验证的私人笔记，可以使用 `Cache-Control: private, no-cache`。服务端应先核对本次请求的访问权限，再判断能否返回 304。具体字段见 [RFC 9111](https://www.rfc-editor.org/rfc/rfc9111.html)。
 
 ## 练习
 
-一份请求使用 `GET /notes/7`，响应状态为 200、内容类型为 JSON。分别指出哪一部分表示要读哪条记录、哪一部分表示处理结果、哪一部分规定正文格式。
-
-比较“将计数设为 10”和“将计数加 1”。各重复执行两次，最终状态是什么？据此判断它们的操作效果是否幂等。
+前端保存标题后收到 `204`，解析 JSON 时却报错。指出状态码与报错分别说明什么，再决定界面应在哪一步显示“已保存”。

@@ -10,11 +10,11 @@ objectives:
   - 解释格式转换可能丢失哪些程序内信息
 ---
 
-笔记程序要把一条记录发给另一个进程。发送 Python 字典的内存地址无法让接收方取得内容：两个进程使用各自的地址空间，字典的内部结构也属于 Python 运行时。双方需要约定可以保存或传输的表示。
+笔记程序把一条记录导出成文件，另一台计算机再读入。导出的字节需要同时约定两件事：怎么从字节读出文字，以及怎么从文字还原记录。下面用 JSON 和 UTF-8 走一遍这个过程。
 
 ## 序列化与反序列化
 
-<Term id="serialization">序列化</Term>把程序中的值转换成可保存或传输的表示；反序列化按约定的格式恢复值。JSON 是常用的文本格式，可以表达名称到值的结构、数组、字符串、数值、布尔值和 `null`。
+<Term id="serialization">序列化</Term>把程序中的值转换成可保存或传输的表示；反序列化按约定的格式恢复值。JSON 是一种文本格式。此处用 JSON 对象保存字段名和相应的值，值还可以是数组、字符串、数值、布尔值或 `null`。
 
 下面让一条记录完成往返。`json.dumps` 生成 JSON 字符串，`encode` 将字符串编码为字节；接收方先解码，再用 `json.loads` 解析：
 
@@ -33,7 +33,7 @@ print("restored:", restored)
 print("same values:", restored == note)
 ```
 
-`ensure_ascii=False` 让 JSON 文本直接包含中文；`encode("utf-8")` 再将文本转换成字节。接收方必须先按相同编码还原文本，再解析 JSON。JSON 对象的字段名为字符串，跨系统交换的 JSON 使用 UTF-8，见 [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259.html#section-8.1)。
+`ensure_ascii=False` 让 JSON 文本直接包含中文；`encode("utf-8")` 再将文本转换成字节。接收方必须先按相同编码还原文本，再解析 JSON。JSON 对象的字段名为字符串，开放系统之间交换的 JSON 使用 UTF-8，见 [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259.html#section-8.1)。
 
 | 阶段 | 本例的对象 | 使用的规则 |
 | --- | --- | --- |
@@ -42,7 +42,7 @@ print("same values:", restored == note)
 | 保存或传输 | 字节序列 | UTF-8 字符编码 |
 | 接收方内部 | 新建的字典 | JSON 解析与 Python 类型映射 |
 
-接收方创建了新的对象。两份记录可以具有相同的字段值，但修改接收方字典不会自动改动发送方的字典。
+接收方根据文件内容创建自己的字典，可以独立修改。
 
 ## 字符数与字节数
 
@@ -56,7 +56,7 @@ print("byte length:", len(data))
 print("decoded:", data.decode("utf-8"))
 ```
 
-这里 `len(text)` 统计 Unicode 码点，`len(data)` 统计字节，见 [Python Unicode 指南](https://docs.python.org/3/howto/unicode.html#encodings)。设置消息的字节长度、限制文件大小时，应计数编码后的数据。解码也必须使用发送方采用的编码，否则可能报错或出现乱码。
+这里 `len(text)` 统计 Unicode 码点，`len(data)` 统计字节，见 [Python Unicode 指南](https://docs.python.org/3/howto/unicode.html#encodings)。设置消息的字节长度、限制文件大小时，应计数编码后的数据。读取时采用与导出相同的编码，才能还原原文。
 
 ## 数据模式与字段语义
 
@@ -64,11 +64,9 @@ print("decoded:", data.decode("utf-8"))
 
 例如，两方都成功解析 `{"duration": 8000}`，一方把数值当秒，另一方当毫秒，解释出的时间就相差一千倍。可以在接口中明确规定统一单位，也可以增加受约束的单位字段，如 `{"duration": 8000, "unit": "ms"}`。无论选择哪种形式，接收方都要验证字段类型、允许值与单位约定。
 
-二进制格式也需要这些约定，只是用字节位置、长度或字段编号表达结构。选择格式时，可以比较可读性、编码大小、解析成本以及已有工具支持。
-
 ## 类型转换与信息保留
 
-JSON 不能直接保留任意 Python 类型。把坐标元组编码为 JSON 数组，解析后得到列表，见 [Python json 类型转换表](https://docs.python.org/3/library/json.html#encoders-and-decoders)。
+把 Python 的坐标元组写成 JSON 时，文件里保存的是一个数组。读入 Python 时，数组解析成列表，见 [Python json 类型转换表](https://docs.python.org/3/library/json.html#encoders-and-decoders)。
 
 ```python run id="program-composition.serialization-and-compatibility.types"
 import json
@@ -79,7 +77,7 @@ print(point, type(point).__name__)
 print(restored, type(restored).__name__)
 ```
 
-如果接口只要求两个坐标数值，转换成列表仍符合需求；调用方若依赖元组类型，就要在读取后恢复。普通 JSON 也不保留对象地址或共享引用关系，因此结构化数据的往返与内存对象的完整复制是两回事。
+如果接口只要求两个坐标数值，转换成列表仍符合需求；调用方若依赖元组类型，就要在读取后恢复。接口应写清文件格式保留哪些值，以及接收方需要重建哪些结构。
 
 格式随版本变化时，新旧读写方还要相互配合。完整的兼容检查与发布安排见 <CrossRef id="change-and-review.compatibility-and-migration" />。
 
