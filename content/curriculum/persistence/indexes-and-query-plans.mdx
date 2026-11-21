@@ -10,11 +10,11 @@ objectives:
   - 根据读取频率和写入成本判断是否值得建立索引
 ---
 
-目录首页要显示 history 分类中价格最低的十本书。逐行读取全表时，数据库要找出属于这个分类的记录，再按价格挑出头十条。有了按分类和价格编排的索引，数据库可以先找到 history 分类，再沿着已排好的顺序读取。
+目录首页要取出 history 分类中最便宜的十本书。没有合适的索引时，数据库可能要扫描表，再为匹配结果排序。
 
-## 复合索引与查询计划
+## B 树与复合索引
 
-索引保存供查找的键与定位原记录所需的信息。SQLite 的有序索引按键组织记录，查找时可以跳到满足条件的范围起点。复合索引 `(category, price)` 先按分类排，相同分类下再按价格排。history 对应一段连续范围，其中价格已经有序。
+B 树按键组织多层节点，查找时逐层定位键范围。索引 `(category, price)` 先按分类排、再按价格排。history 占一段连续范围，可以从范围起点直接按价格读取。只按价格筛选时，匹配项可能分散在不同分类段。
 
 用扩展目录 <LabRef id="catalog-indexes" /> 查看 SQLite 的查询计划。这份数据有 2000 行，十分之一属于 history 分类。两次 `EXPLAIN QUERY PLAN` 查看同一条查询，第二次是在建立索引之后。同价书目按编号排列，`LIMIT 10` 只取前十行。
 
@@ -36,13 +36,11 @@ WHERE category = 'history' ORDER BY price, id LIMIT 10;
 | `USE TEMP B-TREE FOR ORDER BY` | 用临时结构完成排序 |
 | `SEARCH entries ... (category=?)` | 利用索引定位 history 范围 |
 
-此处的 `id` 是 SQLite 的整数主键，索引项自带该编号，同价记录也能按编号读出。建立索引后，可以查看计划采用的索引名称，以及排序步骤是否还在。计划描述引擎选用的访问方式。想估算上线后的响应时间，还需要用接近实际的数据量和访问条件测量。[SQLite 查询规划文档](https://www.sqlite.org/queryplanner.html) · [SQLite 查询计划文档](https://www.sqlite.org/eqp.html)
+这里 `id` 是 SQLite 整数主键，索引项也保存该编号，可以按编号排列同价结果。这条查询的列都能从索引取得时，称为覆盖索引。查询计划给出访问方法，响应时间需要在实际负载下测量。[SQLite 查询规划](https://www.sqlite.org/queryplanner.html) · [SQLite 查询计划](https://www.sqlite.org/eqp.html)
 
-## 索引的查询收益与维护成本
+## 索引的收益与成本
 
-如果筛选条件只选中少量记录，索引可以跳过大量无关行。如果条件覆盖几乎所有记录，且查询还需要逐条读表取得索引以外的列，直接扫描可能成本更低。查询优化器会估计候选路径各步骤产生的行数，即<Term id="cardinality">基数</Term>，据此比较成本。数据量和分布变化后，可以重新查看计划。
-
-增加索引还会占用空间，并给新增、删除和改价增加维护工作。给高频分类列表建立索引时，可以将查询节省的工作与目录更新额外付出的成本一起评估。索引和预处理的共同思路见 <CrossRef id="data-algorithms-and-scale.representation-preprocessing-and-indexes" />。
+优化器估计候选行的数量，即<Term id="cardinality">基数</Term>，再比较扫描、查索引、回表与排序的成本。若几乎所有记录都匹配，且需要从表读取额外列，直接扫描可能更便宜。增加索引还会占用空间，并给插入、删除和改价增加维护工作。见 <CrossRef id="data-algorithms-and-scale.representation-preprocessing-and-indexes" />。
 
 ## 练习
 

@@ -10,7 +10,7 @@ objectives:
   - 根据受影响行数判断库存扣减是否完成
 ---
 
-管理后台允许补录订单和调整价格。修改前先确认目标记录，执行后用同样的查询查看状态。下面每格都从 SQLite 的 <LabRef id="catalog" /> 数据开始。
+以下 SQLite 单元格使用 <LabRef id="catalog" />。每次修改前后用同一条查询核对记录。
 
 ## 插入与删除
 
@@ -29,11 +29,7 @@ DELETE FROM orders WHERE id = 13;
 SELECT id, reference, book_id, quantity FROM orders WHERE id = 13;
 ```
 
-| 查询时点 | 结果 |
-| --- | --- |
-| 新增前 | 空结果 |
-| 新增后 | 订单 13，请求编号 `r13`，书 1，共 2 册 |
-| 删除后 | 空结果 |
+三次查询依次返回空结果、订单 13、空结果。
 
 ## 按条件修改记录
 
@@ -46,13 +42,6 @@ UPDATE books SET price = 70 WHERE id = 1;
 
 SELECT id, price FROM books ORDER BY id;
 ```
-
-| id | 改价前 | 改价后 |
-| --- | --- | --- |
-| 1 | 80 | 70 |
-| 2 | `NULL` | `NULL` |
-| 3 | 50 | 50 |
-| 4 | 50 | 50 |
 
 ## 条件更新与受影响行数
 
@@ -69,7 +58,7 @@ SELECT id, stock FROM books WHERE id = 1;
 
 初始库存为 3，更新影响一行，库存减至 1。把数量改为 100 时，`SET` 和 `WHERE` 都要改，结果是影响零行，库存仍为 3。对后端来说，零行表示本次扣减未完成。要区分书目不存在和库存不足，可以再查该书目。
 
-扣库存和创建订单要一起提交，由 <CrossRef id="persistence.transactions-and-recovery" /> 继续讨论。
+扣减成功后，应用应在同一事务中创建订单。若扣减和订单分别提交，订单写入失败时可能留下已扣的库存。见 <CrossRef id="persistence.transactions-and-recovery" />。
 
 ## 练习
 

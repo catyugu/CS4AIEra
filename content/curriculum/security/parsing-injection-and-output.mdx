@@ -1,7 +1,7 @@
 ---
 id: security.parsing-injection-and-output
 slug: /security/parsing-injection-and-output
-order: 50
+order: 30
 title: SQL 注入与跨站脚本
 status: published
 objectives:
@@ -11,6 +11,10 @@ objectives:
 ---
 
 同事创建了一篇标题为 `Ada's draft` 的笔记，又在正文里写了 `<draft>` 这个词。搜索时，引号应当是标题的一部分。打开笔记时，浏览器应当原样显示尖括号。开发者需要在数据库查询和页面渲染这两处明确告诉接收方，哪些内容是程序结构，哪些是普通数据。
+
+## 输入验证与解析上下文
+
+输入验证回答「这个值符合业务规则吗」。例如标题需要是限定长度内的字符串。解析上下文则决定这个值会被当作什么。合法标题中的单引号、正文中的尖括号，都应当作为数据交给下一层。数据库参数绑定和浏览器文本节点分别保留这两处边界。
 
 ## SQL 注入与参数绑定
 
@@ -34,14 +38,26 @@ print(matches)
 db.close()
 ```
 
-第一次运行会查到笔记 7。把查找值改为 `"Daily log"` 会取得笔记 8，改为 `"Missing"` 会得到空列表。排序功能若允许选择标题或创建时间，应用可以把页面选项映射到预先写好的 SQL 排序方式，继续绑定搜索值。参见 [Python sqlite3 参数占位符](https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders)和 [OWASP SQL 注入防护指南](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html#primary-defenses)。
+第一次运行会查到笔记 7。把查找值改为 `"Daily log"` 会取得笔记 8，改为 `"Missing"` 会得到空列表。值占位符出现在 SQL 允许值表达式的位置。将列名作为参数绑定只会得到一个字符串值，查询仍按原先解析出的结构执行。排序功能若允许选择标题或创建时间，应用可以把页面选项映射到预先写好的 SQL 排序方式，继续绑定搜索值。参见 [Python sqlite3 参数占位符](https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders)和 [OWASP SQL 注入防护指南](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html#primary-defenses)。
+
+对参数化查询做回归测试时，可以准备一个原样包含引号的标题，再核对匹配到的编号及条数。测试结果应包含该记录的原始标题。若还支持前缀检索，需要单独确定匹配语义。数据库参数绑定负责保留语法和值的分离，查询规则仍由应用选择。
 
 ## 跨站脚本与输出处理
 
 应用将笔记返回浏览器后，页面代码把普通正文写入文本节点。例如在前端 JavaScript 中，`noteBody.textContent = body` 让浏览器在对应元素显示 `body` 的字符，尖括号也会照常显示。如果页面将保存的正文当作 HTML 解析，其中的标记就有机会引入页面行为。外部内容由此在应用网页的环境中执行脚本，属于<Term id="xss">跨站脚本</Term>（XSS）。数据库保存的是原始文本，显示规则在输出到页面时生效。
 
-若笔记支持富文本，浏览器需要解析受限的 HTML，应用应当在输出前用维护中的 HTML 清洗器，只保留允许的元素和属性。服务端模板则使用模板引擎对相应输出位置提供的处理。URL、HTML 属性与普通正文各有自己的语法，需要采用适用的接口。参见 [MDN 对 textContent 的说明](https://developer.mozilla.org/en-US/docs/Web/API/Node/textContent)和 [OWASP XSS 防护指南](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)。
+若笔记支持富文本，浏览器需要解析受限的 HTML，应用应当在输出前用维护中的 HTML 清洗器，只保留允许的元素和属性。服务端模板输出普通正文时，使用模板引擎对 HTML 文本位置提供的转义。HTML 属性和 URL 还有各自的规则，例如链接目标需要核对允许的 URL 方案。允许用户写富文本时，由清洗器保留获准的结构，用途与转义普通文字不同。参见 [MDN 对 textContent 的说明](https://developer.mozilla.org/en-US/docs/Web/API/Node/textContent)和 [OWASP XSS 防护指南](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)。
+
+| 页面需要的内容 | 可采用的输出方式 |
+| --- | --- |
+| 普通标题或笔记正文 | 客户端设置 `textContent`，服务端模板按 HTML 文本转义 |
+| 可点击的外部链接 | 核对 URL 方案，再用相应的属性接口输出 |
+| 允许加粗、列表等结构的富文本 | 先通过维护中的 HTML 清洗器限制元素和属性，再输出结构 |
+
+这些方式对应不同的解析位置。输入长度合法与页面怎样解释它是两项检查，验收时分别验证。
 
 ## 练习
 
 给标题搜索和正文显示各选一个正常、但含有引号或尖括号的输入。先写下读者应该看到的结果，再指出应用在哪个接口把输入作为数据交给数据库或浏览器。
+
+为「按标题或创建时间排序」列出两个允许的选项及其对应的固定 SQL 排序规则。说明哪个位置放排序列，哪个位置用参数传入待搜索的标题。

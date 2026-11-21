@@ -10,7 +10,7 @@ objectives:
   - 根据 NULL 的含义判断哪些行通过筛选、哪些值参与统计
 ---
 
-书店首页要按编号列出有货书目，显示书名和剩余库存。查询从 `books` 取出库存大于零的行，再选择页面需要的三列。
+书店首页要按编号显示有货书目的书名和库存。
 
 ```sql run id="persistence.queries.available" fixture="catalog"
 SELECT id, title, stock
@@ -19,13 +19,7 @@ WHERE stock > 0
 ORDER BY id;
 ```
 
-| id | title | stock |
-| --- | --- | --- |
-| 1 | 程序与状态 | 3 |
-| 3 | 历史资料 | 5 |
-| 4 | 历史索引 | 2 |
-
-`WHERE` 决定哪些行进入结果，`SELECT` 决定显示哪些列，`ORDER BY` 规定结果的顺序。需要稳定排序的页面应在查询中写明排序列。数据库选择怎样读取记录，访问路径在 <CrossRef id="persistence.indexes-and-query-plans" /> 展开。
+`WHERE` 决定哪些行进入结果，`SELECT` 决定显示哪些列，`ORDER BY` 规定结果的顺序。数据库怎样读取记录，见 <CrossRef id="persistence.indexes-and-query-plans" />。
 
 ## 查询、排序与去重
 
@@ -48,12 +42,7 @@ GROUP BY category
 ORDER BY category;
 ```
 
-| category | titles | priced_titles | average_price |
-| --- | --- | --- | --- |
-| computing | 2 | 1 | 80 |
-| history | 2 | 2 | 50 |
-
-computing 组两本书的价格分别是 80 和 `NULL`。这里的 `NULL` 表示待定价。`COUNT(*)` 数所有行，`COUNT(price)` 只数价格有值的行，`AVG(price)` 也只用有值的价格计算。已知价格为 0 时，该行会同时计入书目数和已定价书目数，0 也会参与均价计算。[SQLite 聚合函数](https://www.sqlite.org/lang_aggfunc.html)
+computing 的两本书价格为 80 和 `NULL`，所以 `COUNT(*)` 得到 2，`COUNT(price)` 得到 1，`AVG(price)` 得到 80。零元是已知价格，仍参与计数和均价。[SQLite 聚合函数](https://www.sqlite.org/lang_aggfunc.html)
 
 ## NULL 与缺失值
 
@@ -78,3 +67,5 @@ FROM books
 WHERE price <= 60
 ORDER BY id;
 ```
+
+把报表中的 `COUNT(price)` 标为「书目总数」，再把一条已定价记录的价格改成 `NULL`。分别预测书目总数、已定价数和平均价格的变化。若改为 0，哪些结果会不同？

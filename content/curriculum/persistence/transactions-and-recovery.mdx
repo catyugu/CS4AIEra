@@ -10,13 +10,13 @@ objectives:
   - 根据库存不足与写入失败决定如何结束事务
 ---
 
-结账需要扣库存并创建订单。应用把两次写入放进同一个数据库事务，提交成功后才确认购买。订单写入失败时，应用可以通过撤销事务恢复库存。
+结账要扣减库存并创建订单，两次写入应当一起生效。
 
 ## 事务提交与原子性
 
 事务把一组操作组织成一次提交。`BEGIN` 开始事务，`COMMIT` 提交修改，`ROLLBACK` 撤销未提交的修改。一个事务中的修改共同生效或撤销，这个性质叫原子性。
 
-下面用 SQLite 演示购买书 1 的过程。预置库存为 3，本次购买一册。两次修改执行后先读出事务内的状态，再撤销并重新查询。
+下面用 SQLite 购买一册书，初始库存为 3。修改后在事务内查询，再撤销并重新查询。
 
 ```sql run id="persistence.transactions.rollback" fixture="catalog"
 BEGIN;
@@ -43,9 +43,9 @@ SELECT id, reference FROM orders WHERE id = 13;
 
 ## 回滚与异常处理
 
-实际结账需要在同一事务里判断扣减是否成功。库存不足时条件更新影响零行，应用应结束事务、返回库存不足。假设扣减成功而订单插入遇到唯一约束错误，SQLite 的默认冲突处理会撤销失败语句，先前的扣减仍留在事务里。应用需要显式回滚才能撤销它。[SQLite 冲突处理文档](https://www.sqlite.org/lang_conflict.html)
+扣减成功后，插入订单可能触发唯一约束。SQLite 默认撤销失败语句，先前的扣减仍留在事务里，应用应显式回滚。[SQLite 冲突处理文档](https://www.sqlite.org/lang_conflict.html)
 
-下面使用 Python 的 SQLite 接口重放业务请求编号重复的情况。内存数据库只建本次演示所需的列。先写入已有记录，再开始新的事务。
+下面用 Python 重放请求编号重复的情况。
 
 ```python run id="persistence.transactions.failure"
 import sqlite3
@@ -72,11 +72,22 @@ db.close()
 
 `execute` 遇到约束错误时抛出 `IntegrityError`，由异常处理执行 `rollback()`。程序最终输出库存 3。把 `db.rollback()` 改成 `db.commit()` 再运行，库存会变成 2，订单仍只有原来一笔。
 
+## ACID
+
+| 性质 | 在结账中的作用 |
+| --- | --- |
+| 原子性（Atomicity） | 库存扣减和订单写入共同提交，或一同撤销 |
+| 一致性（Consistency） | 事务按约束与正确的业务逻辑维护数据规则，例如库存非负、订单引用有效书目 |
+| 隔离性（Isolation） | 约定并发购买能观察到哪些数据，以及冲突时怎样处理 |
+| 持久性（Durability） | 提交成功的修改在数据库承诺的故障条件下可以恢复 |
+
+条件扣减影响零行时，应结束事务并报告库存不足。若继续插入订单，数据库可能成功提交实际发生的写入。并发情形见 <CrossRef id="persistence.concurrent-updates-and-isolation" />。
+
 ## 持久性与崩溃恢复
 
-持久性关心已提交的修改能否在故障后恢复。数据库用日志区分已提交的修改和中途停止的写入。以 SQLite 为例，回滚日志保存改写前的数据页，重启后可用它恢复未完成事务改动的页面。使用<Term id="write-ahead-log">预写日志</Term>模式时，SQLite 先将修改写到日志，之后再写回主数据库文件。已提交数据能承受哪些故障，由日志模式、同步配置和存储设备共同决定。[SQLite 原子提交文档](https://www.sqlite.org/atomiccommit.html) · [SQLite WAL 文档](https://www.sqlite.org/wal.html)
+SQLite 的回滚日志保存改写前的数据页，供恢复未完成事务。采用<Term id="write-ahead-log">预写日志</Term>模式时，SQLite 先把修改写到日志，再写回主库。故障后能恢复哪些提交，取决于日志模式、同步设置和存储设备。[SQLite 原子提交文档](https://www.sqlite.org/atomiccommit.html) · [SQLite WAL 文档](https://www.sqlite.org/wal.html)
 
-结账后的确认邮件由邮件服务发送。数据库事务管理的是自己的写入，通知如何与提交后的订单协调，见 <CrossRef id="software-systems.delivery-and-recovery" />。
+事务外的邮件等动作要另外协调，见 <CrossRef id="software-systems.delivery-and-recovery" />。
 
 ## 练习
 

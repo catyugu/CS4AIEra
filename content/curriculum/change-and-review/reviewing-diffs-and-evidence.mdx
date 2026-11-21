@@ -7,6 +7,7 @@ status: published
 objectives:
   - 从新增的调用追踪数据范围和已有组件的约定
   - 写出会暴露漏导出的输入与预期结果
+  - 为新增的缓存命中路径设计权限变更测试
 ---
 
 代码审查把一次改动放回它的调用关系和需求中检查。书目导出复用了已经通过测试的列表查询。要判断这次复用是否正确，先从新增调用追到列表查询的输入和返回范围。
@@ -37,6 +38,48 @@ objectives:
 > 在测试库中准备编号 1–21 的 21 本 computing 类书目，再点击导出。当前文件只有编号 1–20 的记录，验收要求包含 21 本。请补一条跨分页边界的测试，并调整导出查询。
 
 合并请求更新后，检查新增测试的输入确实超过 20 条，再看实际文件中是否恰好包含这 21 本书。保留另一分类的一本书还可以一并检查分类筛选。
+
+## 访问路径、权限与缓存
+
+代码审查也要核对新增的返回路径。文档服务将正文缓存后，依然需要根据当前访问权限决定能否返回。一种做法是先从权威记录核对权限，再使用缓存中的正文。这样缓存可以省去正文读取，权限判断仍使用当前状态。
+
+| 要核对的规则 | 设置与观察 |
+| --- | --- |
+| 正常授权 | 所有者读取文档并得到正文 |
+| 缓存命中也需要授权 | 所有者再次读取，确认授权检查仍然执行 |
+| 权限变更立即生效 | 先填充缓存，再转移所有者，旧所有者随后读取时应被拒绝 |
+
+缓存键包含用户编号时可以区分各用户的条目。若条目命中同时意味着复用旧授权结果，还要考虑权限发生变化时怎样使旧决定失效。下面的防御性测试把正文缓存和权限判断分开，用内存字典模拟业务状态。
+
+```python run id="change-and-review.reviewing-diffs-and-evidence.cached-permission"
+owners = {7: "Ada"}
+documents = {7: "private"}
+cache = {}
+
+
+def read_document(user_id, document_id):
+    if owners.get(document_id) != user_id:
+        raise PermissionError("not allowed")
+    if document_id not in cache:
+        cache[document_id] = documents[document_id]
+    return cache[document_id]
+
+
+assert read_document("Ada", 7) == "private"
+assert 7 in cache
+owners[7] = "Lin"
+
+try:
+    read_document("Ada", 7)
+except PermissionError:
+    print("原所有者已被拒绝")
+else:
+    raise AssertionError("撤销后仍允许读取")
+
+assert read_document("Lin", 7) == "private"
+```
+
+三个检查依次建立缓存、验证撤销生效、确认新所有者可以读取。在真实服务里，测试还应查清授权数据的来源，以及权限更新后实际使用的是哪一份记录。详见 <CrossRef id="security.identity-authorization-and-sessions" />。
 
 ## 练习
 
